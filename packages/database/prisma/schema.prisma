@@ -1,0 +1,24 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+model ClerkUser {
+  id         BigInt   @id @default(autoincrement())
+  user_id    String   @unique
+  name       String
+  email      String   @unique
+  image      String?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([user_id], name: "clerk_user_index_on_user_id")
+}

@@ -1,0 +1,24 @@
+{
+  "name": "@repo/database",
+  "version": "0.0.1",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "db:create-migration": "bin/create-migration.sh",
+    "db:deploy": "prisma migrate status; prisma migrate deploy && npm run db:dump-schema",
+    "db:dump-schema": "bin/dump-schema.sh",
+    "db:generate": "prisma generate --no-hints",
+    "db:push": "prisma db push --skip-generate",
+    "db:rollback": "bin/rollback-migration.sh -d && npm run db:dump-schema",
+    "db:status": "prisma migrate status",
+    "pgcli": "sh -c 'source .env && pgcli $DATABASE_URL'"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.6.0"
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0",
+    "prisma": "^6.6.0"
+  }
+}

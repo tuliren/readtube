@@ -1,0 +1,10 @@
+{
+  "name": "@repo/typescript-config",
+  "version": "0.0.1",
+  "private": true,
+  "license": "MIT",
+  "packageManager": "yarn@4.9.1",
+  "publishConfig": {
+    "access": "public"
+  }
+}

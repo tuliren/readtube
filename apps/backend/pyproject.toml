@@ -1,0 +1,60 @@
+[tool.poetry]
+name = "repo-backend"
+version = "0.1.0"
+description = "A FastAPI server backend"
+authors = ["Liren Tu"]
+readme = "README.md"
+packages = [
+    { include = "app" }
+]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+fastapi = "^0.115.12"
+uvicorn = "^0.34.0"
+pydantic = "^2.11.1"
+pytest = "^8.3.5"
+pytest-asyncio = "^0.26.0"
+flake8 = "^7.2.0"
+pylint = "^3.3.6"
+mypy = "^1.15.0"
+black = "^25.1.0"
+isort = "^6.0.1"
+fastapi-cli = "^0.0.7"
+pytest-cov = "^6.1.0"
+httpx = "^0.28.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 88
+target-version = ["py38"]
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+line_length = 88
+multi_line_output = 3
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+
+[tool.pylint.messages_control]
+disable = [
+    "missing-docstring",
+    "invalid-name",
+]
+
+[tool.pylint.format]
+max-line-length = 88
+
+[tool.pytest.ini_options]
+testpaths = ["app/**/__tests__"]
+python_files = "*_test.py"
+python_functions = "test_*"

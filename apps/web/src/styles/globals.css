@@ -1,0 +1,11 @@
+body {
+  /* https://omatsuri.app/gradient-generator */
+  /*background-image: linear-gradient(148deg, rgba(0, 97, 182, 0.07) 12%, rgba(251, 157, 60, 0.04) 90%);*/
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  /*background-image: linear-gradient(150deg, #ecedee, transparent 10%),*/
+  /*radial-gradient(circle at 50% 30%, #e9f2ff 10%, transparent 95%),*/
+  /*linear-gradient(225deg, #fef7e0, #fef2f5, #eff7ee, #d7e6e9);*/
+}

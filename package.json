@@ -1,0 +1,45 @@
+{
+  "name": "turbo-template",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,sql}\" --log-level=warn",
+    "format:write": "prettier --write \"**/*.{ts,tsx,js,jsx,json,sql}\" --log-level=warn",
+    "postinstall": "husky",
+    "integrationTest": "turbo run integrationTest",
+    "lint": "turbo lint",
+    "prepare": "husky",
+    "test": "turbo test",
+    "typecheck": "turbo typecheck"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx,json,mdx}": "prettier --write",
+    "*.sql": "prettier --write --plugin=prettier-plugin-sql --language=postgresql",
+    "*.py": [
+      "isort",
+      "black"
+    ]
+  },
+  "devDependencies": {
+    "@repo/eslint-config": "*",
+    "@repo/typescript-config": "*",
+    "@trivago/prettier-plugin-sort-imports": "^4.3.0",
+    "eslint": "^9.0.0",
+    "eslint-config-prettier": "^9.1.0",
+    "husky": "^9.1.5",
+    "lint-staged": "^15.2.10",
+    "prettier": "^3.5.3",
+    "prettier-plugin-packagejson": "^2.5.2",
+    "prettier-plugin-sql": "^0.18.1",
+    "turbo": "^2.1.0"
+  },
+  "packageManager": "yarn@4.9.1",
+  "engines": {
+    "node": ">=20"
+  }
+}

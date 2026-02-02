@@ -1,0 +1,15 @@
+{
+  "name": "@repo/jest-presets",
+  "version": "0.0.1",
+  "private": true,
+  "license": "MIT",
+  "files": [
+    "node/jest-preset.js"
+  ],
+  "dependencies": {
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.1",
+    "typescript": "^5.5.4"
+  },
+  "packageManager": "yarn@4.9.1"
+}

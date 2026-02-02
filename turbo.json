@@ -1,0 +1,42 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": ["**/.env.*local"],
+  "globalEnv": ["NEXT_PUBLIC_VERCEL_ENV", "DATABASE_URL", "NODE_ENV", "SCRIPT_ENV"],
+  "tasks": {
+    "typecheck": {
+      "dependsOn": ["^typecheck"]
+    },
+    "lint": {
+      "dependsOn": ["^lint"]
+    },
+    "test": {},
+    "integrationTest": {
+      "dependsOn": ["^db:generate"]
+    },
+    "db:generate": {
+      "cache": false
+    },
+    "db:deploy": {
+      "cache": false,
+      "env": ["DATABASE_URL"]
+    },
+    "dev": {
+      "dependsOn": ["^db:generate"],
+      "env": ["NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY", "CLERK_SECRET_KEY"],
+      "cache": false,
+      "persistent": true
+    },
+    "build": {
+      "dependsOn": ["^build", "^db:generate"],
+      "env": ["NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY", "CLERK_SECRET_KEY"],
+      "inputs": ["$TURBO_DEFAULT$", "!**/*.stories.{ts,tsx,jsx,mdx}"],
+      "outputs": [".next/**", "!.next/cache/**", "storybook-static/**"]
+    },
+    "format:check": {
+      "cache": false
+    },
+    "format:write": {
+      "cache": false
+    }
+  }
+}
