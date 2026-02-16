@@ -24,6 +24,7 @@
     "@mantine/hooks": "^7.17.3",
     "@repo/lib": "*",
     "@tailwindcss/postcss": "^4.0.12",
+    "@vercel/analytics": "^1.6.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dayjs": "^1.11.13",

@@ -1,5 +1,6 @@
 import { ClerkProvider } from '@clerk/nextjs';
 import { MantineProvider } from '@mantine/core';
+import { Analytics } from '@vercel/analytics/next';
 import { clsx } from 'clsx';
 import { type Metadata } from 'next';
 import PlausibleProvider from 'next-plausible';
@@ -8,7 +9,7 @@ import { ReactNode } from 'react';
 
 import Footer from '@/components/Footer';
 import Header from '@/components/Header';
-import { DESCRIPTION, DOMAIN, DOMAIN_URL, MAIN_COLOR, TITLE } from '@/constants';
+import { DESCRIPTION, DOMAIN, DOMAIN_URL, TITLE } from '@/constants';
 import '@/styles/globals.css';
 import '@/styles/tailwind.css';
 
@@ -96,6 +97,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         </main>
 
         <Footer />
+        <Analytics />
       </body>
     </html>
   );
