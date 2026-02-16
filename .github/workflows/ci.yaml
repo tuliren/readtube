@@ -47,17 +47,8 @@ jobs:
         with:
           node-version: 20
           cache: yarn
-      - name: Install poetry
-        run: pipx install poetry
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: 'poetry'
       - name: Install dependencies
-        run: |
-          yarn install --frozen-lockfile
-          cd apps/backend && yarn dev:init
+        run: yarn install --frozen-lockfile
       - name: Lint code
         run: |
           yarn lint
