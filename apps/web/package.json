@@ -77,7 +77,8 @@
     "ts-jest": "^29.3.1",
     "tsx": "^4.19.4",
     "typescript": "^5",
-    "webpack": "^5"
+    "webpack": "^5",
+    "youtubei.js": "^16.0.1"
   },
   "packageManager": "yarn@4.9.1"
 }
