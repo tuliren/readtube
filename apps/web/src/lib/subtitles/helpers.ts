@@ -102,7 +102,7 @@ export function parseCaptionTracks(playerResponse: Record<string, unknown>): Cap
     return {
       baseUrl: t.baseUrl as string,
       languageCode: t.languageCode as string,
-      name: (nameObj?.simpleText ?? nameObj?.runs?.[0]) as string,
+      name: (nameObj?.simpleText ?? (nameObj?.runs as unknown[] | undefined)?.[0]) as string,
       kind: t.kind as string | undefined,
     };
   });
