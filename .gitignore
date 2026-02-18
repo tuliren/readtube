@@ -144,3 +144,9 @@ build
 
 # Storybook
 storybook-static
+
+# Claude
+.claude/
+
+# Script
+**/scripts/output/
