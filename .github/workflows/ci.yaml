@@ -107,6 +107,7 @@ jobs:
             "npx wait-on tcp:127.0.0.1:6006 && yarn test:storybook"
       - name: Run chromatic
         uses: chromaui/action@latest
+        if: ${{ secrets.CHROMATIC_PROJECT_TOKEN != '' }}
         with:
           projectToken: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
           workingDir: apps/web
