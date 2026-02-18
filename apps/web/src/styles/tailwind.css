@@ -1,10 +1,6 @@
-@layer theme, base, components, mantine, utilities;
+@layer theme, base, components, utilities;
 
 @import "tailwindcss";
-
-@layer mantine {
-  @import '@mantine/core/styles.layer.css';
-}
 
 @plugin "tailwindcss-animate";
 @plugin "@tailwindcss/typography";
