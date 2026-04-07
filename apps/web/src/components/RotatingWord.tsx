@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 
+import { MAIN_COLOR, MINOR_COLOR } from '@/constants';
+
 const WORDS = [
   'Read',
   'Search',
@@ -18,9 +20,10 @@ const WORDS = [
 ];
 
 const COLORS = [
+  MAIN_COLOR,
+  MINOR_COLOR,
   '#e11d48', // rose
   '#7c3aed', // violet
-  '#ea580c', // orange
   '#0d9488', // teal
   '#d97706', // amber
   '#2563eb', // blue
