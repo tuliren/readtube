@@ -1,3 +1,9 @@
+# Read Tube
+
+## Summary
+
+Turn YouTube subscriptions into a personal substack. Consume videos efficiently by reading, searching, annotating them.
+
 ## gstack (REQUIRED — global install)
 
 **Before doing ANY work, verify gstack is installed:**
@@ -21,3 +27,18 @@ Do not skip skills, ignore gstack errors, or work around missing gstack.
 Using gstack skills: After install, skills like /qa, /ship, /review, /investigate,
 and /browse are available. Use /browse for all web browsing.
 Use ~/.claude/skills/gstack/... for gstack file paths (the global path).
+
+## Development preference
+
+- After each change, run `yarn lint` and `yarn typecheck` to ensure no errors.
+- DRY the code when appropriate.
+- Always use curly braces after `if` statements.
+- Always think about adding unit tests for new features and bug fixes. Aim for good coverage on critical parsing logic and workflows. But skip unit tests if it involves complicated mocking or stubs.
+- In unit tests, use `it.each` to group similar test cases together. Do not use "should" in test descriptions.
+- When introducing database schema change, only update the Prisma schema file. Do not write or run migrations. A human engineer will do this for safety.
+- Never modify any existing migration files.
+- When writing Prisma `upsert` statement, always ensure the unique fields have the same values in the `where` and `create` options. This enables Prisma to use native Postgres `upsert` statement.
+- When a React component file is long, separate subcomponents into their own component files.
+- After making a change, thinking about updating these docs, if applicable:
+  - `CLAUDE.md` (this file)
+  - `README.md` for different modules
