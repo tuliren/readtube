@@ -1,0 +1,78 @@
+name: Storybook
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    paths:
+      - 'apps/web/**'
+      - 'packages/lib/**'
+      - '.github/workflows/storybook.yaml'
+      - 'package-lock.json'
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+      - review_requested
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  TURBO_TELEMETRY_DISABLED: 1
+  NEXT_TELEMETRY_DISABLED: 1
+  HUSKY: 0
+  CI: 1
+
+jobs:
+  storybook:
+    if: ${{ !github.event.pull_request.draft || github.event.pull_request.requested_reviewers[0] || github.event.pull_request.requested_teams[0] }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Enable corepack
+        run: corepack enable
+      - name: Setup node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: yarn
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+      - name: Cache playwright
+        uses: actions/cache@v5
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-1.56.1
+      - name: Install playwright
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps
+      - name: Set up main database
+        working-directory: packages/database
+        run: yarn db:generate
+      - name: Build storybook
+        working-directory: apps/web
+        run: yarn build-storybook --stats-json
+      - name: Serve storybook and run tests
+        working-directory: apps/web
+        run: |
+          npx concurrently -k -s first -n "SB,TEST" -c "green,blue" \
+            "npx http-server storybook-static -p 6006" \
+            "npx wait-on tcp:127.0.0.1:6006 && npm run test:storybook"
+      - name: Run chromatic
+        uses: chromaui/action@latest
+        with:
+          projectToken: ${{ vars.CHROMATIC_PROJECT_TOKEN }}
+          workingDir: apps/web
+          onlyChanged: true
+          storybookBuildDir: storybook-static
+          exitOnceUploaded: true
+          autoAcceptChanges: main
