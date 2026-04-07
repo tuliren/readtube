@@ -1,10 +1,10 @@
-export const MAIN_COLOR = '#0b5394';
-export const MINOR_COLOR = '#6fa8dc';
+export const MAIN_COLOR = 'rgba(0,83,194,0.77)';
+export const MINOR_COLOR = 'rgba(255,122,40,0.84)';
 
-export const TITLE = 'Template';
+export const TITLE = 'ReadTube';
 export const DESCRIPTION =
-  'This is a Turbo monorepo project template including everything you need to build your dream project.';
-export const DOMAIN = 'template.liren.dev';
+  'Turn YouTube subscriptions into a personal newsletter. Reclaim focus in a world engineered for distraction.';
+export const DOMAIN = 'readtube.app';
 export const DOMAIN_URL = `https://${DOMAIN}`;
 export const CONTACT_EMAIL = `contact@${DOMAIN}`;
 

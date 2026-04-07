@@ -9,9 +9,9 @@ import { Logo } from '@/components/Logo';
 import { TITLE } from '@/constants';
 
 const navigation = [
-  { name: 'Features', href: '#features' },
-  { name: 'Pricing', href: '#pricing' },
-  { name: 'FAQs', href: '#faqs' },
+  { name: 'Home', href: '/' },
+  // { name: 'Pricing', href: '#pricing' },
+  // { name: 'FAQs', href: '#faqs' },
 ];
 
 export default function Header() {
