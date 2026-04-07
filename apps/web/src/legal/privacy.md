@@ -2,7 +2,7 @@
 
 Last Updated: September 16th, 2024
 
-Welcome to ${WebsiteDomain} ("${WebsiteDomain}", "Starfish", "we", "us", or "our"). This Privacy Policy explains how we collect, use, disclose, and protect information about you through our website located at https://${WebsiteDomain} (the "Site") and any related services, applications, or features offered by Starfish Software LLC (collectively, the "Services").
+Welcome to ReadTube ("https://read.tube", "Starfish", "we", "us", or "our"). This Privacy Policy explains how we collect, use, disclose, and protect information about you through our website located at https://read.tube (the "Site") and any related services, applications, or features offered by Starfish Software LLC (collectively, the "Services").
 
 By accessing or using our Services, you agree to this Privacy Policy. If you do not agree with our policies and practices, please do not use our Services.
 

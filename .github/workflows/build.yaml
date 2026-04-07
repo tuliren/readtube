@@ -1,0 +1,57 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    paths:
+      - 'apps/**'
+      - 'packages/database/**'
+      - '.github/workflows/build.yaml'
+      - 'yarn.lock'
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+      - review_requested
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  TURBO_TELEMETRY_DISABLED: 1
+  NEXT_TELEMETRY_DISABLED: 1
+  CI: 1
+
+jobs:
+  verify:
+    if: ${{ !github.event.pull_request.draft || github.event.pull_request.requested_reviewers[0] || github.event.pull_request.requested_teams[0] }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+      - name: Enable corepack
+        run: corepack enable
+      - name: Setup node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: yarn
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+      - name: Generate database client
+        working-directory: packages/database
+        run: yarn db:generate
+      - name: Lint code
+        run: |
+          yarn typecheck
+          yarn lint
+          yarn format:check
+      - name: Run tests
+        run: yarn test
+      - name: Run integration tests
+        run: yarn integrationTest

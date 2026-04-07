@@ -2,7 +2,7 @@
 
 Last Updated: September 16th, 2024
 
-Welcome to ${WebsiteDomain} ("${WebsiteDomain}", "Starfish", "we", "us", or "our"). These Terms and Conditions ("Terms") govern your access to and use of our website located at https://${WebsiteDomain} (the "Site") and any related services, applications, or features offered by Starfish Software LLC (collectively, the "Services").
+Welcome to ReadTube ("https://read.tube", "Starfish", "we", "us", or "our"). These Terms and Conditions ("Terms") govern your access to and use of our website located at https://read.tube (the "Site") and any related services, applications, or features offered by Starfish Software LLC (collectively, the "Services").
 
 By accessing or using our Services, you agree to be bound by these Terms. If you do not agree with our policies and practices, please do not use our Services.
 

@@ -14,8 +14,6 @@ export function Logo({ size = 'text-5xl', ...props }: LogoProps) {
       {...props}
       style={{
         background: `linear-gradient(to right, ${MAIN_COLOR}, ${MINOR_COLOR})`,
-        WebkitBackgroundClip: 'text' as any,
-        WebkitTextFillColor: 'transparent',
         backgroundClip: 'text',
         color: 'transparent',
       }}
