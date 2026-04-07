@@ -9,7 +9,7 @@ on:
       - 'apps/web/**'
       - 'packages/lib/**'
       - '.github/workflows/storybook.yaml'
-      - 'package-lock.json'
+      - 'yarn.json'
     types:
       - opened
       - reopened
