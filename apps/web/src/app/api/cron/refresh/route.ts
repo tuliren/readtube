@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
           },
           update: {
             title: video.title,
-            description: video.description,
+            ...(video.description ? { description: video.description } : {}),
           },
         });
         totalNew++;
