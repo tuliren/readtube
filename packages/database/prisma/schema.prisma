@@ -35,8 +35,8 @@ model Channel {
   user       ClerkUser @relation(fields: [user_id], references: [user_id])
   videos     Video[]
 
-  @@unique([user_id, channel_id])
-  @@index([channel_id])
+  @@unique([user_id, channel_id], name: "channel_unique_user_channel")
+  @@index([channel_id], name: "channel_index_on_channel_id")
 }
 
 model Video {
@@ -51,8 +51,9 @@ model Video {
   channel      Channel      @relation(fields: [channel_id], references: [id], onDelete: Cascade)
   transcripts  Transcript[]
 
-  @@unique([channel_id, video_id])
-  @@index([channel_id, published_at])
+  @@unique([channel_id, video_id], name: "video_unique_channel_video")
+  @@index([channel_id, published_at], name: "video_index_on_channel_published_at")
+  @@index([video_id], name: "video_index_on_video_id")
 }
 
 model Transcript {
@@ -64,5 +65,5 @@ model Transcript {
   created_at DateTime @default(now())
   video      Video    @relation(fields: [video_id], references: [id], onDelete: Cascade)
 
-  @@index([video_id])
+  @@index([video_id], name: "transcript_index_on_video_id")
 }
