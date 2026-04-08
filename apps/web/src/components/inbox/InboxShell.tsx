@@ -10,7 +10,13 @@ import AddChannelModal from './AddChannelModal';
 import ChannelSection from './ChannelSection';
 import VideoList from './VideoList';
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
+const fetcher = (url: string) =>
+  fetch(url).then((r) => {
+    if (!r.ok) {
+      throw new Error(`Fetch error: ${r.status}`);
+    }
+    return r.json();
+  });
 
 interface Props {
   initialChannels: ChannelData[];
