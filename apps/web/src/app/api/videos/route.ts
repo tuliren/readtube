@@ -32,18 +32,17 @@ export async function GET(request: NextRequest) {
     ? { channel_id: channelIdParam, channel: { user_id: userId } }
     : { channel_id: { in: channelIds } };
 
-  // Unread first (read_at null), then read, each sorted by published_at DESC
   const videos = await prisma.video.findMany({
     where: scopedWhere,
     select: {
       id: true,
-      video_id: true,
+      source_id: true,
       title: true,
       description: true,
       published_at: true,
       read_at: true,
       channel_id: true,
-      channel: { select: { id: true, name: true, channel_id: true } },
+      channel: { select: { id: true, name: true, source_id: true } },
     },
     orderBy: [{ read_at: 'asc' }, { published_at: 'desc' }],
   });
@@ -55,19 +54,17 @@ export async function GET(request: NextRequest) {
     .filter((v) => v.read_at !== null)
     .sort((a, b) => b.published_at.getTime() - a.published_at.getTime());
 
-  const sorted = [...unread, ...read];
-
   return NextResponse.json(
-    sorted.map((v) => ({
+    [...unread, ...read].map((v) => ({
       id: v.id,
-      videoId: v.video_id,
+      sourceId: v.source_id,
       title: v.title,
       description: v.description,
       publishedAt: v.published_at,
       readAt: v.read_at,
       channelId: v.channel_id,
       channelName: v.channel.name,
-      channelYtId: v.channel.channel_id,
+      channelSourceId: v.channel.source_id,
     }))
   );
 }

@@ -26,13 +26,13 @@ export default async function VideoPage({ params, searchParams }: Props) {
     where: { id: videoDbId, channel: { user_id: userId } },
     select: {
       id: true,
-      video_id: true,
+      source_id: true,
       title: true,
       description: true,
       published_at: true,
       read_at: true,
       channel_id: true,
-      channel: { select: { name: true, channel_id: true } },
+      channel: { select: { name: true, source_id: true } },
     },
   });
 
@@ -50,22 +50,21 @@ export default async function VideoPage({ params, searchParams }: Props) {
 
   const videoData: VideoData = {
     id: video.id,
-    videoId: video.video_id,
+    sourceId: video.source_id,
     title: video.title,
     description: video.description,
     publishedAt: video.published_at.toISOString(),
     readAt: video.read_at ? video.read_at.toISOString() : new Date().toISOString(),
     channelId: video.channel_id,
     channelName: video.channel.name,
-    channelYtId: video.channel.channel_id,
+    channelSourceId: video.channel.source_id,
   };
 
-  // Fetch channels with unread counts for sidebar
   const channelRows = await prisma.channel.findMany({
     where: { user_id: userId },
     select: {
       id: true,
-      channel_id: true,
+      source_id: true,
       name: true,
       rss_url: true,
       created_at: true,
@@ -76,7 +75,7 @@ export default async function VideoPage({ params, searchParams }: Props) {
 
   const channels: ChannelData[] = channelRows.map((c) => ({
     id: c.id,
-    channelId: c.channel_id,
+    sourceId: c.source_id,
     name: c.name,
     rssUrl: c.rss_url,
     createdAt: c.created_at.toISOString(),
@@ -95,13 +94,13 @@ export default async function VideoPage({ params, searchParams }: Props) {
           where: whereClause,
           select: {
             id: true,
-            video_id: true,
+            source_id: true,
             title: true,
             description: true,
             published_at: true,
             read_at: true,
             channel_id: true,
-            channel: { select: { name: true, channel_id: true } },
+            channel: { select: { name: true, source_id: true } },
           },
         })
       : [];
@@ -115,14 +114,14 @@ export default async function VideoPage({ params, searchParams }: Props) {
 
   const sidebarVideos: VideoData[] = [...unread, ...read].map((v) => ({
     id: v.id,
-    videoId: v.video_id,
+    sourceId: v.source_id,
     title: v.title,
     description: v.description,
     publishedAt: v.published_at.toISOString(),
     readAt: v.read_at ? v.read_at.toISOString() : null,
     channelId: v.channel_id,
     channelName: v.channel.name,
-    channelYtId: v.channel.channel_id,
+    channelSourceId: v.channel.source_id,
   }));
 
   return (

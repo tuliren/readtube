@@ -7,7 +7,7 @@ import { formatTimestamp, groupTranscriptSegments } from '@/lib/youtube/transcri
 
 interface Props {
   videoDbId: string;
-  videoId: string;
+  sourceId: string;
 }
 
 function TranscriptSkeleton() {
@@ -26,7 +26,7 @@ function TranscriptSkeleton() {
   );
 }
 
-export default function TranscriptReader({ videoDbId, videoId }: Props) {
+export default function TranscriptReader({ videoDbId, sourceId }: Props) {
   const [segments, setSegments] = useState<TranscriptSegment[] | null>(null);
   const [error, setError] = useState(false);
 
@@ -51,7 +51,7 @@ export default function TranscriptReader({ videoDbId, videoId }: Props) {
       <div className="py-8 text-center text-sm text-gray-400">
         Transcript unavailable.{' '}
         <a
-          href={`https://youtube.com/watch?v=${videoId}`}
+          href={`https://youtube.com/watch?v=${sourceId}`}
           target="_blank"
           rel="noopener noreferrer"
           className="text-blue-600 hover:underline"
@@ -73,7 +73,7 @@ export default function TranscriptReader({ videoDbId, videoId }: Props) {
       <div className="py-8 text-center text-sm text-gray-400">
         Transcript unavailable.{' '}
         <a
-          href={`https://youtube.com/watch?v=${videoId}`}
+          href={`https://youtube.com/watch?v=${sourceId}`}
           target="_blank"
           rel="noopener noreferrer"
           className="text-blue-600 hover:underline"
@@ -88,7 +88,7 @@ export default function TranscriptReader({ videoDbId, videoId }: Props) {
     <div className="space-y-5">
       {paragraphs.map((para, i) => {
         const startSeconds = Math.floor(para.startMs / 1000);
-        const youtubeUrl = `https://youtube.com/watch?v=${videoId}&t=${startSeconds}`;
+        const youtubeUrl = `https://youtube.com/watch?v=${sourceId}&t=${startSeconds}`;
 
         return (
           <div key={i} className="flex gap-4">

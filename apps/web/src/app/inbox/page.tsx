@@ -18,12 +18,11 @@ export default async function InboxPage({ searchParams }: Props) {
   const { channel: channelParam } = await searchParams;
   const selectedChannelId = channelParam ?? null;
 
-  // Fetch channels with unread counts
   const channelRows = await prisma.channel.findMany({
     where: { user_id: userId },
     select: {
       id: true,
-      channel_id: true,
+      source_id: true,
       name: true,
       rss_url: true,
       created_at: true,
@@ -34,14 +33,13 @@ export default async function InboxPage({ searchParams }: Props) {
 
   const channels: ChannelData[] = channelRows.map((c) => ({
     id: c.id,
-    channelId: c.channel_id,
+    sourceId: c.source_id,
     name: c.name,
     rssUrl: c.rss_url,
     createdAt: c.created_at.toISOString(),
     unreadCount: c._count.videos,
   }));
 
-  // Fetch videos scoped to user's channels
   const userChannelIds = channelRows.map((c) => c.id);
 
   const whereClause =
@@ -55,13 +53,13 @@ export default async function InboxPage({ searchParams }: Props) {
           where: whereClause,
           select: {
             id: true,
-            video_id: true,
+            source_id: true,
             title: true,
             description: true,
             published_at: true,
             read_at: true,
             channel_id: true,
-            channel: { select: { name: true, channel_id: true } },
+            channel: { select: { name: true, source_id: true } },
           },
           orderBy: [{ read_at: 'asc' }, { published_at: 'desc' }],
         })
@@ -76,14 +74,14 @@ export default async function InboxPage({ searchParams }: Props) {
 
   const videos: VideoData[] = [...unread, ...read].map((v) => ({
     id: v.id,
-    videoId: v.video_id,
+    sourceId: v.source_id,
     title: v.title,
     description: v.description,
     publishedAt: v.published_at.toISOString(),
     readAt: v.read_at ? v.read_at.toISOString() : null,
     channelId: v.channel_id,
     channelName: v.channel.name,
-    channelYtId: v.channel.channel_id,
+    channelSourceId: v.channel.source_id,
   }));
 
   return (

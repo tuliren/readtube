@@ -24,7 +24,7 @@ export default function VideoReader({ video }: Props) {
   const searchParams = useSearchParams();
   const channelParam = searchParams.get('channel');
   const backHref = channelParam ? `/inbox?channel=${channelParam}` : '/inbox';
-  const watchUrl = `https://youtube.com/watch?v=${video.videoId}`;
+  const watchUrl = `https://youtube.com/watch?v=${video.sourceId}`;
 
   return (
     <div className="flex flex-col overflow-y-auto">
@@ -69,7 +69,7 @@ export default function VideoReader({ video }: Props) {
 
         {/* Transcript */}
         <div className="mt-8">
-          <TranscriptReader videoDbId={video.id} videoId={video.videoId} />
+          <TranscriptReader videoDbId={video.id} sourceId={video.sourceId} />
         </div>
       </article>
     </div>

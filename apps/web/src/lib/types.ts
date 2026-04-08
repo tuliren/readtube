@@ -1,6 +1,6 @@
 export interface ChannelData {
   id: string;
-  channelId: string;
+  sourceId: string;
   name: string;
   rssUrl: string;
   createdAt: string;
@@ -9,12 +9,12 @@ export interface ChannelData {
 
 export interface VideoData {
   id: string;
-  videoId: string;
+  sourceId: string;
   title: string;
   description: string | null;
   publishedAt: string;
   readAt: string | null;
   channelId: string;
   channelName: string;
-  channelYtId: string;
+  channelSourceId: string;
 }

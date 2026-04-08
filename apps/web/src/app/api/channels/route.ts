@@ -15,7 +15,7 @@ export async function GET() {
     where: { user_id: userId },
     select: {
       id: true,
-      channel_id: true,
+      source_id: true,
       name: true,
       rss_url: true,
       created_at: true,
@@ -27,7 +27,7 @@ export async function GET() {
   return NextResponse.json(
     channels.map((c) => ({
       id: c.id,
-      channelId: c.channel_id,
+      sourceId: c.source_id,
       name: c.name,
       rssUrl: c.rss_url,
       createdAt: c.created_at,
@@ -54,7 +54,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Missing URL' }, { status: 400 });
   }
 
-  // Build the YouTube channel URL to scrape
   let channelPageUrl: string | null = null;
 
   const handle = extractHandle(input);
@@ -88,33 +87,32 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const channelId = scraped.channelId;
+  const sourceId = scraped.channelId;
 
   // Check duplicate
   const existing = await prisma.channel.findFirst({
-    where: { user_id: userId, channel_id: channelId },
+    where: { user_id: userId, source_id: sourceId },
   });
   if (existing) {
     return NextResponse.json({ error: 'You already follow this channel.' }, { status: 409 });
   }
 
   const now = new Date();
-  const rssUrl = buildRssUrl(channelId);
+  const rssUrl = buildRssUrl(sourceId);
 
-  // Create channel + backfill videos (all marked as read — only future cron videos show as unread)
   const channel = await prisma.channel.create({
     data: {
       user_id: userId,
-      channel_id: channelId,
+      source_id: sourceId,
       name: scraped.name,
       rss_url: rssUrl,
       videos: {
         create: scraped.videos.map((v) => ({
-          video_id: v.videoId,
+          source_id: v.videoId,
           title: v.title,
           description: v.description,
           published_at: v.publishedAt,
-          read_at: now, // backfill: start fresh
+          read_at: now,
         })),
       },
     },
@@ -126,7 +124,7 @@ export async function POST(request: NextRequest) {
   return NextResponse.json(
     {
       id: channel.id,
-      channelId: channel.channel_id,
+      sourceId: channel.source_id,
       name: channel.name,
       rssUrl: channel.rss_url,
       createdAt: channel.created_at,

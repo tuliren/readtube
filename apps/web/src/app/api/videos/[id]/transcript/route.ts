@@ -18,7 +18,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     where: { id: videoId, channel: { user_id: userId } },
     select: {
       id: true,
-      video_id: true,
+      source_id: true,
       transcripts: {
         orderBy: { created_at: 'desc' },
         take: 1,
@@ -39,7 +39,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   // Cache miss: fetch from service
   let result;
   try {
-    result = await fetchSubtitleViaYoutubei(video.video_id);
+    result = await fetchSubtitleViaYoutubei(video.source_id);
   } catch {
     return NextResponse.json({ error: 'Transcript unavailable' }, { status: 404 });
   }
