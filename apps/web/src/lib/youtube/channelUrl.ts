@@ -45,7 +45,7 @@ export function extractHandle(input: string): string | null {
     if (!url.hostname.includes('youtube.com')) {
       return null;
     }
-    const match = url.pathname.match(/^\/@([\w.-]+)$/);
+    const match = url.pathname.match(/^\/@([\w.-]+)\/?$/);
     return match ? match[1] : null;
   } catch {
     return null;
