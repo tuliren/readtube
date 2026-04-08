@@ -36,7 +36,7 @@ model Channel {
   videos     Video[]
 
   @@unique([user_id, channel_id])
-  @@index([user_id])
+  @@index([channel_id])
 }
 
 model Video {
