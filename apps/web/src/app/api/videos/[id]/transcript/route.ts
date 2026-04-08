@@ -49,9 +49,10 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     data: {
       video_id: video.id,
       text: JSON.stringify(result.segments),
+      language: result.language,
       fetched_at: new Date(),
     },
   });
 
-  return NextResponse.json({ segments: result.segments });
+  return NextResponse.json({ segments: result.segments, language: result.language });
 }
