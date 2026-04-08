@@ -12,7 +12,7 @@ generator client {
 }
 
 model ClerkUser {
-  id         BigInt   @id @default(autoincrement())
+  id         String   @id @default(cuid())
   user_id    String   @unique
   name       String
   email      String   @unique
@@ -24,7 +24,7 @@ model ClerkUser {
 }
 
 model Channel {
-  id        BigInt   @id @default(autoincrement())
+  id        String   @id @default(cuid())
   userId    String
   channelId String
   name      String
@@ -38,8 +38,8 @@ model Channel {
 }
 
 model Video {
-  id                  BigInt    @id @default(autoincrement())
-  channelId           BigInt
+  id                  String    @id @default(cuid())
+  channelId           String
   videoId             String
   title               String
   description         String?
