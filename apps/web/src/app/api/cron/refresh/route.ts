@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { timingSafeEqual } from 'node:crypto';
 
 import { prisma } from '@/lib/db';
-import { fetchRssFeed } from '@/lib/youtube/rss';
+import { scrapeChannel } from '@/lib/youtube/scrapeChannel';
 
 function verifyToken(request: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
   }
 
   const channels = await prisma.channel.findMany({
-    select: { id: true, rssUrl: true, userId: true },
+    select: { id: true, channelId: true, rssUrl: true, userId: true },
   });
 
   let totalNew = 0;
@@ -42,9 +42,10 @@ export async function POST(request: NextRequest) {
 
   for (const channel of channels) {
     try {
-      const feed = await fetchRssFeed(channel.rssUrl);
+      const channelPageUrl = `https://www.youtube.com/channel/${channel.channelId}`;
+      const scraped = await scrapeChannel(channelPageUrl);
 
-      for (const video of feed.videos) {
+      for (const video of scraped.videos) {
         await prisma.video.upsert({
           where: {
             channelId_videoId: {
