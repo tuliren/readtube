@@ -22,3 +22,34 @@ model ClerkUser {
 
   @@index([user_id], name: "clerk_user_index_on_user_id")
 }
+
+model Channel {
+  id        BigInt   @id @default(autoincrement())
+  userId    String
+  channelId String
+  name      String
+  rssUrl    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  videos    Video[]
+
+  @@unique([userId, channelId])
+  @@index([userId])
+}
+
+model Video {
+  id                  BigInt    @id @default(autoincrement())
+  channelId           BigInt
+  videoId             String
+  title               String
+  description         String?
+  publishedAt         DateTime
+  readAt              DateTime?
+  transcriptText      String?
+  transcriptFetchedAt DateTime?
+  createdAt           DateTime  @default(now())
+  channel             Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, videoId])
+  @@index([channelId, publishedAt])
+}
