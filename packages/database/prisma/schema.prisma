@@ -27,7 +27,7 @@ model ClerkUser {
 model Channel {
   id         String    @id @default(cuid())
   user_id    String
-  channel_id String
+  source_id  String
   name       String
   rss_url    String
   created_at DateTime  @default(now())
@@ -35,14 +35,14 @@ model Channel {
   user       ClerkUser @relation(fields: [user_id], references: [user_id])
   videos     Video[]
 
-  @@unique([user_id, channel_id], name: "channel_unique_user_channel")
-  @@index([channel_id], name: "channel_index_on_channel_id")
+  @@unique([user_id, source_id], name: "channel_unique_user_source")
+  @@index([source_id], name: "channel_index_on_source_id")
 }
 
 model Video {
   id           String       @id @default(cuid())
   channel_id   String
-  video_id     String
+  source_id    String
   title        String
   description  String?
   published_at DateTime
@@ -51,9 +51,9 @@ model Video {
   channel      Channel      @relation(fields: [channel_id], references: [id], onDelete: Cascade)
   transcripts  Transcript[]
 
-  @@unique([channel_id, video_id], name: "video_unique_channel_video")
+  @@unique([channel_id, source_id], name: "video_unique_channel_source")
   @@index([channel_id, published_at], name: "video_index_on_channel_published_at")
-  @@index([video_id], name: "video_index_on_video_id")
+  @@index([source_id], name: "video_index_on_source_id")
 }
 
 model Transcript {
