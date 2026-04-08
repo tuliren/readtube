@@ -13,11 +13,11 @@ export async function DELETE(
   }
 
   const { id } = await params;
-  const channelId = BigInt(id);
+  const channelId = id;
 
   // IDOR check: ensure channel belongs to this user
   const channel = await prisma.channel.findFirst({
-    where: { id: channelId, userId },
+    where: { id: channelId, user_id: userId },
   });
   if (!channel) {
     return NextResponse.json({ error: 'Channel not found' }, { status: 404 });

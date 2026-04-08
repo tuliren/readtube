@@ -11,35 +11,46 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   }
 
   const { id } = await params;
-  const videoId = BigInt(id);
+  const videoId = id;
 
   // IDOR check: ensure video belongs to a channel owned by this user
   const video = await prisma.video.findFirst({
-    where: { id: videoId, channel: { userId } },
-    select: { id: true, videoId: true, transcriptText: true, transcriptFetchedAt: true },
+    where: { id: videoId, channel: { user_id: userId } },
+    select: {
+      id: true,
+      video_id: true,
+      transcripts: {
+        orderBy: { created_at: 'desc' },
+        take: 1,
+        select: { text: true, language: true },
+      },
+    },
   });
   if (!video) {
     return NextResponse.json({ error: 'Video not found' }, { status: 404 });
   }
 
-  // Cache hit
-  if (video.transcriptText !== null) {
-    return NextResponse.json({ segments: JSON.parse(video.transcriptText) });
+  // Cache hit: return most recent transcript
+  const cached = video.transcripts[0];
+  if (cached) {
+    return NextResponse.json({ segments: JSON.parse(cached.text), language: cached.language });
   }
 
   // Cache miss: fetch from service
   let result;
   try {
-    result = await fetchSubtitleViaYoutubei(video.videoId);
+    result = await fetchSubtitleViaYoutubei(video.video_id);
   } catch {
     return NextResponse.json({ error: 'Transcript unavailable' }, { status: 404 });
   }
 
   // Cache in DB
-  const transcriptText = JSON.stringify(result.segments);
-  await prisma.video.update({
-    where: { id: videoId },
-    data: { transcriptText, transcriptFetchedAt: new Date() },
+  await prisma.transcript.create({
+    data: {
+      video_id: video.id,
+      text: JSON.stringify(result.segments),
+      fetched_at: new Date(),
+    },
   });
 
   return NextResponse.json({ segments: result.segments });

@@ -10,22 +10,22 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
   }
 
   const { id } = await params;
-  const videoId = BigInt(id);
+  const videoId = id;
 
   // IDOR check: ensure video belongs to a channel owned by this user
   const video = await prisma.video.findFirst({
-    where: { id: videoId, channel: { userId } },
-    select: { id: true, readAt: true },
+    where: { id: videoId, channel: { user_id: userId } },
+    select: { id: true, read_at: true },
   });
   if (!video) {
     return NextResponse.json({ error: 'Video not found' }, { status: 404 });
   }
 
-  // Idempotent: only set readAt if not already read
-  if (video.readAt === null) {
+  // Idempotent: only set read_at if not already read
+  if (video.read_at === null) {
     await prisma.video.update({
       where: { id: videoId },
-      data: { readAt: new Date() },
+      data: { read_at: new Date() },
     });
   }
 

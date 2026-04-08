@@ -12,25 +12,25 @@ export async function GET() {
   }
 
   const channels = await prisma.channel.findMany({
-    where: { userId },
+    where: { user_id: userId },
     select: {
       id: true,
-      channelId: true,
+      channel_id: true,
       name: true,
-      rssUrl: true,
-      createdAt: true,
-      _count: { select: { videos: { where: { readAt: null } } } },
+      rss_url: true,
+      created_at: true,
+      _count: { select: { videos: { where: { read_at: null } } } },
     },
     orderBy: { name: 'asc' },
   });
 
   return NextResponse.json(
     channels.map((c) => ({
-      id: c.id.toString(),
-      channelId: c.channelId,
+      id: c.id,
+      channelId: c.channel_id,
       name: c.name,
-      rssUrl: c.rssUrl,
-      createdAt: c.createdAt,
+      rssUrl: c.rss_url,
+      createdAt: c.created_at,
       unreadCount: c._count.videos,
     }))
   );
@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
 
   // Check duplicate
   const existing = await prisma.channel.findFirst({
-    where: { userId, channelId },
+    where: { user_id: userId, channel_id: channelId },
   });
   if (existing) {
     return NextResponse.json({ error: 'You already follow this channel.' }, { status: 409 });
@@ -104,32 +104,32 @@ export async function POST(request: NextRequest) {
   // Create channel + backfill videos (all marked as read — only future cron videos show as unread)
   const channel = await prisma.channel.create({
     data: {
-      userId,
-      channelId,
+      user_id: userId,
+      channel_id: channelId,
       name: scraped.name,
-      rssUrl,
+      rss_url: rssUrl,
       videos: {
         create: scraped.videos.map((v) => ({
-          videoId: v.videoId,
+          video_id: v.videoId,
           title: v.title,
           description: v.description,
-          publishedAt: v.publishedAt,
-          readAt: now, // backfill: start fresh
+          published_at: v.publishedAt,
+          read_at: now, // backfill: start fresh
         })),
       },
     },
     include: {
-      _count: { select: { videos: { where: { readAt: null } } } },
+      _count: { select: { videos: { where: { read_at: null } } } },
     },
   });
 
   return NextResponse.json(
     {
-      id: channel.id.toString(),
-      channelId: channel.channelId,
+      id: channel.id,
+      channelId: channel.channel_id,
       name: channel.name,
-      rssUrl: channel.rssUrl,
-      createdAt: channel.createdAt,
+      rssUrl: channel.rss_url,
+      createdAt: channel.created_at,
       unreadCount: 0,
     },
     { status: 201 }

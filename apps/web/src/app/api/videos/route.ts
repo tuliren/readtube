@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
 
   // Get all channels for this user (for scoping)
   const userChannels = await prisma.channel.findMany({
-    where: { userId },
+    where: { user_id: userId },
     select: { id: true },
   });
   const channelIds = userChannels.map((c) => c.id);
@@ -22,55 +22,52 @@ export async function GET(request: NextRequest) {
     return NextResponse.json([]);
   }
 
-  const whereClause = channelIdParam
-    ? { channelId: BigInt(channelIdParam), userId: undefined }
-    : {};
+  // If channelId filter is specified, verify it belongs to this user
+  if (channelIdParam && !channelIds.includes(channelIdParam)) {
+    return NextResponse.json({ error: 'Channel not found' }, { status: 404 });
+  }
 
   // Scoped to user's channels
   const scopedWhere = channelIdParam
-    ? { channelId: BigInt(channelIdParam), channel: { userId } }
-    : { channelId: { in: channelIds } };
+    ? { channel_id: channelIdParam, channel: { user_id: userId } }
+    : { channel_id: { in: channelIds } };
 
-  // Unread first (readAt null), then read, each sorted by publishedAt DESC
+  // Unread first (read_at null), then read, each sorted by published_at DESC
   const videos = await prisma.video.findMany({
     where: scopedWhere,
     select: {
       id: true,
-      videoId: true,
+      video_id: true,
       title: true,
       description: true,
-      publishedAt: true,
-      readAt: true,
-      channelId: true,
-      channel: { select: { id: true, name: true, channelId: true } },
+      published_at: true,
+      read_at: true,
+      channel_id: true,
+      channel: { select: { id: true, name: true, channel_id: true } },
     },
-    orderBy: [{ readAt: 'asc' }, { publishedAt: 'desc' }],
+    orderBy: [{ read_at: 'asc' }, { published_at: 'desc' }],
   });
 
-  // Null readAt sorts first with 'asc' — this is correct (unread before read).
-  // Re-sort to ensure: all unread (readAt null) by publishedAt desc, then all read by publishedAt desc.
   const unread = videos
-    .filter((v) => v.readAt === null)
-    .sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime());
+    .filter((v) => v.read_at === null)
+    .sort((a, b) => b.published_at.getTime() - a.published_at.getTime());
   const read = videos
-    .filter((v) => v.readAt !== null)
-    .sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime());
+    .filter((v) => v.read_at !== null)
+    .sort((a, b) => b.published_at.getTime() - a.published_at.getTime());
 
   const sorted = [...unread, ...read];
 
-  void whereClause;
-
   return NextResponse.json(
     sorted.map((v) => ({
-      id: v.id.toString(),
-      videoId: v.videoId,
+      id: v.id,
+      videoId: v.video_id,
       title: v.title,
       description: v.description,
-      publishedAt: v.publishedAt,
-      readAt: v.readAt,
-      channelId: v.channelId.toString(),
+      publishedAt: v.published_at,
+      readAt: v.read_at,
+      channelId: v.channel_id,
       channelName: v.channel.name,
-      channelYtId: v.channel.channelId,
+      channelYtId: v.channel.channel_id,
     }))
   );
 }

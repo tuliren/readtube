@@ -20,24 +20,24 @@ export default async function InboxPage({ searchParams }: Props) {
 
   // Fetch channels with unread counts
   const channelRows = await prisma.channel.findMany({
-    where: { userId },
+    where: { user_id: userId },
     select: {
       id: true,
-      channelId: true,
+      channel_id: true,
       name: true,
-      rssUrl: true,
-      createdAt: true,
-      _count: { select: { videos: { where: { readAt: null } } } },
+      rss_url: true,
+      created_at: true,
+      _count: { select: { videos: { where: { read_at: null } } } },
     },
     orderBy: { name: 'asc' },
   });
 
   const channels: ChannelData[] = channelRows.map((c) => ({
-    id: c.id.toString(),
-    channelId: c.channelId,
+    id: c.id,
+    channelId: c.channel_id,
     name: c.name,
-    rssUrl: c.rssUrl,
-    createdAt: c.createdAt.toISOString(),
+    rssUrl: c.rss_url,
+    createdAt: c.created_at.toISOString(),
     unreadCount: c._count.videos,
   }));
 
@@ -45,9 +45,9 @@ export default async function InboxPage({ searchParams }: Props) {
   const userChannelIds = channelRows.map((c) => c.id);
 
   const whereClause =
-    selectedChannelId && userChannelIds.some((id) => id.toString() === selectedChannelId)
-      ? { channelId: BigInt(selectedChannelId) }
-      : { channelId: { in: userChannelIds } };
+    selectedChannelId && userChannelIds.includes(selectedChannelId)
+      ? { channel_id: selectedChannelId }
+      : { channel_id: { in: userChannelIds } };
 
   const videoRows =
     userChannelIds.length > 0
@@ -55,35 +55,35 @@ export default async function InboxPage({ searchParams }: Props) {
           where: whereClause,
           select: {
             id: true,
-            videoId: true,
+            video_id: true,
             title: true,
             description: true,
-            publishedAt: true,
-            readAt: true,
-            channelId: true,
-            channel: { select: { name: true, channelId: true } },
+            published_at: true,
+            read_at: true,
+            channel_id: true,
+            channel: { select: { name: true, channel_id: true } },
           },
-          orderBy: [{ readAt: 'asc' }, { publishedAt: 'desc' }],
+          orderBy: [{ read_at: 'asc' }, { published_at: 'desc' }],
         })
       : [];
 
   const unread = videoRows
-    .filter((v) => v.readAt === null)
-    .sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime());
+    .filter((v) => v.read_at === null)
+    .sort((a, b) => b.published_at.getTime() - a.published_at.getTime());
   const read = videoRows
-    .filter((v) => v.readAt !== null)
-    .sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime());
+    .filter((v) => v.read_at !== null)
+    .sort((a, b) => b.published_at.getTime() - a.published_at.getTime());
 
   const videos: VideoData[] = [...unread, ...read].map((v) => ({
-    id: v.id.toString(),
-    videoId: v.videoId,
+    id: v.id,
+    videoId: v.video_id,
     title: v.title,
     description: v.description,
-    publishedAt: v.publishedAt.toISOString(),
-    readAt: v.readAt ? v.readAt.toISOString() : null,
-    channelId: v.channelId.toString(),
+    publishedAt: v.published_at.toISOString(),
+    readAt: v.read_at ? v.read_at.toISOString() : null,
+    channelId: v.channel_id,
     channelName: v.channel.name,
-    channelYtId: v.channel.channelId,
+    channelYtId: v.channel.channel_id,
   }));
 
   return (

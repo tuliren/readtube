@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
   }
 
   const channels = await prisma.channel.findMany({
-    select: { id: true, channelId: true, rssUrl: true, userId: true },
+    select: { id: true, channel_id: true, rss_url: true, user_id: true },
   });
 
   let totalNew = 0;
@@ -42,24 +42,24 @@ export async function POST(request: NextRequest) {
 
   for (const channel of channels) {
     try {
-      const channelPageUrl = `https://www.youtube.com/channel/${channel.channelId}`;
+      const channelPageUrl = `https://www.youtube.com/channel/${channel.channel_id}`;
       const scraped = await scrapeChannel(channelPageUrl);
 
       for (const video of scraped.videos) {
         await prisma.video.upsert({
           where: {
-            channelId_videoId: {
-              channelId: channel.id,
-              videoId: video.videoId,
+            channel_id_video_id: {
+              channel_id: channel.id,
+              video_id: video.videoId,
             },
           },
           create: {
-            channelId: channel.id,
-            videoId: video.videoId,
+            channel_id: channel.id,
+            video_id: video.videoId,
             title: video.title,
             description: video.description,
-            publishedAt: video.publishedAt,
-            readAt: null, // new videos from cron are unread
+            published_at: video.publishedAt,
+            read_at: null, // new videos from cron are unread
           },
           update: {
             title: video.title,
