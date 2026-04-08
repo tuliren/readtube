@@ -12,44 +12,57 @@ generator client {
 }
 
 model ClerkUser {
-  id         String   @id @default(cuid())
-  user_id    String   @unique
+  id         String    @id @default(cuid())
+  user_id    String    @unique
   name       String
-  email      String   @unique
+  email      String    @unique
   image      String?
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  channels   Channel[]
 
   @@index([user_id], name: "clerk_user_index_on_user_id")
 }
 
 model Channel {
-  id        String   @id @default(cuid())
-  userId    String
-  channelId String
-  name      String
-  rssUrl    String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  videos    Video[]
+  id         String    @id @default(cuid())
+  user_id    String
+  channel_id String
+  name       String
+  rss_url    String
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  user       ClerkUser @relation(fields: [user_id], references: [user_id])
+  videos     Video[]
 
-  @@unique([userId, channelId])
-  @@index([userId])
+  @@unique([user_id, channel_id])
+  @@index([user_id])
 }
 
 model Video {
-  id                  String    @id @default(cuid())
-  channelId           String
-  videoId             String
-  title               String
-  description         String?
-  publishedAt         DateTime
-  readAt              DateTime?
-  transcriptText      String?
-  transcriptFetchedAt DateTime?
-  createdAt           DateTime  @default(now())
-  channel             Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  id           String       @id @default(cuid())
+  channel_id   String
+  video_id     String
+  title        String
+  description  String?
+  published_at DateTime
+  read_at      DateTime?
+  created_at   DateTime     @default(now())
+  channel      Channel      @relation(fields: [channel_id], references: [id], onDelete: Cascade)
+  transcripts  Transcript[]
 
-  @@unique([channelId, videoId])
-  @@index([channelId, publishedAt])
+  @@unique([channel_id, video_id])
+  @@index([channel_id, published_at])
+}
+
+model Transcript {
+  id         String   @id @default(cuid())
+  video_id   String
+  language   String?
+  text       String
+  fetched_at DateTime
+  created_at DateTime @default(now())
+  video      Video    @relation(fields: [video_id], references: [id], onDelete: Cascade)
+
+  @@index([video_id])
 }
