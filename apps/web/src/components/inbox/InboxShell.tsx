@@ -1,5 +1,6 @@
 'use client';
 
+import { UserButton } from '@clerk/nextjs';
 import { useState } from 'react';
 import useSWR from 'swr';
 
@@ -56,8 +57,9 @@ export default function InboxShell({
       {/* Sidebar */}
       <aside className="flex w-72 shrink-0 flex-col border-r border-gray-200 bg-gray-50">
         {/* Logo / topbar */}
-        <div className="flex h-14 shrink-0 items-center border-b border-gray-200 px-5">
+        <div className="flex h-14 shrink-0 items-center justify-between border-b border-gray-200 px-5">
           <span className="text-base font-bold text-gray-900">ReadTube</span>
+          <UserButton />
         </div>
 
         <div className="flex flex-1 flex-col overflow-y-auto">

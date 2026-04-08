@@ -1,4 +1,4 @@
-import { buildRssUrl, extractChannelId } from '../youtube/channelUrl';
+import { buildRssUrl, extractChannelId, extractHandle } from '../youtube/channelUrl';
 
 const VALID_CHANNEL_ID = 'UCVHFbw7woebytA3UMoHJSNw';
 
@@ -21,7 +21,6 @@ describe('extractChannelId', () => {
   });
 
   it.each([
-    ['handle URL', 'https://youtube.com/@MrBeast'],
     ['watch URL', 'https://youtube.com/watch?v=abc123'],
     ['non-youtube URL', 'https://vimeo.com/channel/UC123'],
     ['empty string', ''],
@@ -30,6 +29,25 @@ describe('extractChannelId', () => {
     ['short channel ID', 'UCabc'],
   ])('returns null for %s', (_label, input) => {
     expect(extractChannelId(input)).toBeNull();
+  });
+});
+
+describe('extractHandle', () => {
+  it.each([
+    ['handle URL', 'https://youtube.com/@MrBeast', 'MrBeast'],
+    ['handle URL with www', 'https://www.youtube.com/@HealthyGamerGG', 'HealthyGamerGG'],
+    ['handle with dots', 'https://youtube.com/@some.channel.123', 'some.channel.123'],
+  ])('extracts handle from %s', (_label, input, expected) => {
+    expect(extractHandle(input)).toBe(expected);
+  });
+
+  it.each([
+    ['channel URL', `https://youtube.com/channel/${VALID_CHANNEL_ID}`],
+    ['bare channel ID', VALID_CHANNEL_ID],
+    ['non-youtube URL', 'https://vimeo.com/@handle'],
+    ['empty string', ''],
+  ])('returns null for %s', (_label, input) => {
+    expect(extractHandle(input)).toBeNull();
   });
 });
 

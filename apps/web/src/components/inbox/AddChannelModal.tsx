@@ -85,15 +85,16 @@ export default function AddChannelModal({ isOpen, onClose, onChannelAdded }: Pro
                 type="text"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://youtube.com/channel/UCxxxxxx"
+                placeholder="https://youtube.com/@ChannelName"
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 disabled={loading}
                 autoFocus
               />
               <p className="mt-1.5 text-xs text-gray-500">
-                Supported formats:{' '}
-                <code className="rounded bg-gray-100 px-1">youtube.com/channel/UCxxxxx</code> or a
-                bare channel ID starting with <code className="rounded bg-gray-100 px-1">UC</code>
+                Paste any YouTube channel URL:{' '}
+                <code className="rounded bg-gray-100 px-1">youtube.com/@handle</code>,{' '}
+                <code className="rounded bg-gray-100 px-1">youtube.com/channel/UCxxxxx</code>, or a
+                bare <code className="rounded bg-gray-100 px-1">UC...</code> channel ID
               </p>
             </div>
 

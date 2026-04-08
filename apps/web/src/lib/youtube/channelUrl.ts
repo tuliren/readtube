@@ -1,12 +1,6 @@
 /**
- * Resolves a YouTube channel URL or ID to a channelId (UC... format).
- *
- * Supported formats:
- *   - https://youtube.com/channel/UCxxx
- *   - UCxxx (bare channel ID)
- *
- * /@handle format requires an API call to resolve — not supported in v1.
- * Returns null for unsupported or invalid inputs.
+ * Extracts a UC... channel ID from a direct channel URL or bare ID.
+ * Returns null for /@handle URLs (use resolveHandleToChannelId for those).
  */
 export function extractChannelId(input: string): string | null {
   if (!input || typeof input !== 'string') {
@@ -33,15 +27,52 @@ export function extractChannelId(input: string): string | null {
       return channelMatch[1];
     }
 
-    // /@handle — not supported in v1, needs YouTube Data API resolution
-    if (url.pathname.startsWith('/@')) {
-      return null;
-    }
-
     return null;
   } catch {
     return null;
   }
+}
+
+/**
+ * Returns the handle (without @) if the input is a /@handle URL, else null.
+ */
+export function extractHandle(input: string): string | null {
+  if (!input || typeof input !== 'string') {
+    return null;
+  }
+  try {
+    const url = new URL(input.trim());
+    if (!url.hostname.includes('youtube.com')) {
+      return null;
+    }
+    const match = url.pathname.match(/^\/@([\w.-]+)$/);
+    return match ? match[1] : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetches a YouTube /@handle page and extracts the UC... channel ID from the
+ * RSS <link> tag in the page's <head>. No API key required.
+ */
+export async function resolveHandleToChannelId(handle: string): Promise<string | null> {
+  const response = await fetch(`https://www.youtube.com/@${handle}`, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (compatible; ReadTube/1.0; +https://readtube.app)',
+    },
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const html = await response.text();
+
+  // YouTube includes this in <head>:
+  // <link rel="alternate" type="application/rss+xml" href="https://www.youtube.com/feeds/videos.xml?channel_id=UCxxx">
+  const rssMatch = html.match(/feeds\/videos\.xml\?channel_id=(UC[\w-]{20,})/);
+  return rssMatch ? rssMatch[1] : null;
 }
 
 export function buildRssUrl(channelId: string): string {

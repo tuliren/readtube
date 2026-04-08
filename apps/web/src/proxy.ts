@@ -1,6 +1,12 @@
-import { clerkMiddleware } from '@clerk/nextjs/server';
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 
-export default clerkMiddleware();
+const isInboxRoute = createRouteMatcher(['/inbox(.*)', '/inbox']);
+
+export default clerkMiddleware(async (auth, req) => {
+  if (isInboxRoute(req)) {
+    await auth.protect();
+  }
+});
 
 export const config = {
   matcher: [

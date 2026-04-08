@@ -58,6 +58,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body className="flex h-full flex-col">
         <PlausibleProvider domain={DOMAIN} enabled={enableAnalytics} />
         <ClerkProvider
+          afterSignInUrl="/inbox"
+          afterSignUpUrl="/inbox"
           appearance={{
             layout: {
               privacyPageUrl: '/privacy',

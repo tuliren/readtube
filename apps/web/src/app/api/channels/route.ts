@@ -2,7 +2,12 @@ import { auth } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { prisma } from '@/lib/db';
-import { buildRssUrl, extractChannelId } from '@/lib/youtube/channelUrl';
+import {
+  buildRssUrl,
+  extractChannelId,
+  extractHandle,
+  resolveHandleToChannelId,
+} from '@/lib/youtube/channelUrl';
 import { fetchRssFeed } from '@/lib/youtube/rss';
 
 export async function GET() {
@@ -54,12 +59,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Missing URL' }, { status: 400 });
   }
 
-  const channelId = extractChannelId(input);
+  let channelId = extractChannelId(input);
+
+  // /@handle URL — resolve to UC channel ID by fetching the channel page
+  if (!channelId) {
+    const handle = extractHandle(input);
+    if (handle) {
+      channelId = await resolveHandleToChannelId(handle);
+    }
+  }
+
   if (!channelId) {
     return NextResponse.json(
       {
         error:
-          'Invalid channel URL. Paste a URL in the format youtube.com/channel/UC... or a channel ID starting with UC.',
+          'Invalid channel URL. Paste a URL like youtube.com/@handle, youtube.com/channel/UC..., or a bare UC... channel ID.',
       },
       { status: 400 }
     );
