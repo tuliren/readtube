@@ -1,5 +1,5 @@
-export const MAIN_COLOR = 'rgba(0,83,194,0.9)';
-export const MINOR_COLOR = 'rgba(255,122,40,0.8)';
+export const MAIN_COLOR = '#515ada';
+export const MINOR_COLOR = '#76ABDF';
 
 export const TITLE = 'ReadTube';
 export const DESCRIPTION =
