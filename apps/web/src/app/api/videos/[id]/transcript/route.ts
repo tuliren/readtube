@@ -2,7 +2,7 @@ import { auth } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { prisma } from '@/lib/db';
-import { fetchSubtitleViaYoutubei } from '@/lib/subtitles';
+import { fetchSubtitleViaTranscriptApi } from '@/lib/subtitles';
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { userId } = await auth();
@@ -39,7 +39,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   // Cache miss: fetch from service
   let result;
   try {
-    result = await fetchSubtitleViaYoutubei(video.source_id);
+    result = await fetchSubtitleViaTranscriptApi(video.source_id);
   } catch {
     return NextResponse.json({ error: 'Transcript unavailable' }, { status: 404 });
   }
