@@ -1,7 +1,14 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "globalDependencies": ["**/.env.*local"],
-  "globalEnv": ["NEXT_PUBLIC_VERCEL_ENV", "DATABASE_URL", "NODE_ENV", "SCRIPT_ENV", "CRON_SECRET"],
+  "globalEnv": [
+    "NEXT_PUBLIC_VERCEL_ENV",
+    "DATABASE_URL",
+    "NODE_ENV",
+    "SCRIPT_ENV",
+    "CRON_SECRET",
+    "CLERK_WEBHOOK_SECRET"
+  ],
   "tasks": {
     "typecheck": {
       "dependsOn": ["^typecheck"]
