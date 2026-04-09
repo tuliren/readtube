@@ -6,16 +6,12 @@ import { MAIN_COLOR, MINOR_COLOR } from '@/constants';
 
 const WORDS = [
   'Read',
+  'Skim',
   'Search',
-  'Annotate',
-  'Study',
   'Summarize',
   'Contemplate',
-  'Explore',
   'Digest',
-  'Highlight',
   'Revisit',
-  'Transcribe',
   'Organize',
 ];
 
