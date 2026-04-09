@@ -4,6 +4,7 @@ import { notFound, redirect } from 'next/navigation';
 import InboxShell from '@/components/inbox/InboxShell';
 import VideoReader from '@/components/reader/VideoReader';
 import { prisma } from '@/lib/db';
+import { ensureUserExists } from '@/lib/db/user';
 import type { ChannelData, VideoData } from '@/lib/types';
 
 interface Props {
@@ -16,6 +17,8 @@ export default async function VideoPage({ params, searchParams }: Props) {
   if (!userId) {
     redirect('/');
   }
+
+  await ensureUserExists(userId);
 
   const { videoId: videoDbId } = await params;
   const { channel: channelParam } = await searchParams;

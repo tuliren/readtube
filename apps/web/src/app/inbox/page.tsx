@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 
 import InboxShell from '@/components/inbox/InboxShell';
 import { prisma } from '@/lib/db';
+import { ensureUserExists } from '@/lib/db/user';
 import type { ChannelData, VideoData } from '@/lib/types';
 
 interface Props {
@@ -14,6 +15,8 @@ export default async function InboxPage({ searchParams }: Props) {
   if (!userId) {
     redirect('/');
   }
+
+  await ensureUserExists(userId);
 
   const { channel: channelParam } = await searchParams;
   const selectedChannelId = channelParam ?? null;

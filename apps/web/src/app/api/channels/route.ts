@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { prisma } from '@/lib/db';
+import { ensureUserExists } from '@/lib/db/user';
 import { buildRssUrl, extractChannelId, extractHandle } from '@/lib/youtube/channelUrl';
 import { scrapeChannel } from '@/lib/youtube/scrapeChannel';
 
@@ -88,6 +89,9 @@ export async function POST(request: NextRequest) {
   }
 
   const sourceId = scraped.channelId;
+
+  // Ensure user exists in DB before writing FK reference
+  await ensureUserExists(userId);
 
   // Check duplicate
   const existing = await prisma.channel.findFirst({

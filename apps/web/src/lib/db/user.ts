@@ -1,4 +1,5 @@
-import type { UserJSON } from '@clerk/nextjs/server';
+import { clerkClient } from '@clerk/nextjs/server';
+import type { User, UserJSON } from '@clerk/nextjs/server';
 
 import { prisma } from '@/lib/db';
 
@@ -42,4 +43,40 @@ export async function upsertClerkUser(user: UserJSON): Promise<void> {
 export async function deleteClerkUser(userId: string): Promise<void> {
   await prisma.clerkUser.delete({ where: { user_id: userId } });
   console.info(`Deleted ClerkUser for ${userId}`);
+}
+
+/**
+ * Ensures a ClerkUser row exists in the database, fetching from Clerk if needed.
+ * Call this on login entry points and before any write that has a user_id FK.
+ */
+export async function ensureUserExists(userId: string): Promise<void> {
+  const existing = await prisma.clerkUser.findUnique({
+    where: { user_id: userId },
+    select: { user_id: true },
+  });
+
+  if (existing) {
+    return;
+  }
+
+  const client = await clerkClient();
+  const user: User = await client.users.getUser(userId);
+
+  const parts = [user.firstName, user.lastName].filter(Boolean);
+  const name = parts.length > 0 ? parts.join(' ') : 'Unknown';
+  const primaryEmail = user.emailAddresses.find((e) => e.id === user.primaryEmailAddressId);
+  const email = primaryEmail?.emailAddress ?? null;
+
+  if (!email) {
+    console.warn(`No primary email found for user ${userId}, skipping upsert`);
+    return;
+  }
+
+  await prisma.clerkUser.upsert({
+    where: { user_id: userId },
+    create: { user_id: userId, name, email, image: user.imageUrl || null },
+    update: { name, email, image: user.imageUrl || null },
+  });
+
+  console.info(`Upserted ClerkUser for ${email} (${userId}) via fallback`);
 }
