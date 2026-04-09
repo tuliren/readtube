@@ -27,6 +27,7 @@ model ClerkUser {
 model Channel {
   id         String    @id @default(cuid())
   user_id    String
+  // source platform channel id
   source_id  String
   name       String
   rss_url    String
@@ -42,6 +43,7 @@ model Channel {
 model Video {
   id           String       @id @default(cuid())
   channel_id   String
+  // source platform video id
   source_id    String
   title        String
   description  String?
