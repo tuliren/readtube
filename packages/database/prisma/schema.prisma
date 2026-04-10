@@ -19,46 +19,54 @@ enum VideoPlatformType {
   YOUTUBE
 }
 
+enum ArticleStyle {
+  NARRATIVE
+  DIALOG
+}
+
 model User {
-  id            String             @id @default(cuid())
-  source_type   UserSourceType     @default(CLERK)
+  id          String         @id @default(cuid())
+  source_type UserSourceType @default(CLERK)
   // clerk user id
-  source_id     String             @unique
-  name          String
-  email         String             @unique
-  image         String?
-  created_at    DateTime           @default(now())
-  updated_at    DateTime           @updatedAt
+  source_id   String         @unique
+  name        String
+  email       String         @unique
+  image       String?
+  created_at  DateTime       @default(now())
+  updated_at  DateTime       @updatedAt
+
   subscriptions UserSubscription[]
 }
 
 model Channel {
-  id            String             @id @default(cuid())
-  source_type   VideoPlatformType  @default(YOUTUBE)
+  id          String            @id @default(cuid())
+  source_type VideoPlatformType @default(YOUTUBE)
   // source platform channel id
-  source_id     String             @unique
-  name          String
-  rss_url       String
-  created_at    DateTime           @default(now())
-  updated_at    DateTime           @updatedAt
+  source_id   String            @unique
+  name        String
+  rss_url     String
+  created_at  DateTime          @default(now())
+  updated_at  DateTime          @updatedAt
+
   videos        Video[]
   subscriptions UserSubscription[]
 }
 
 model UserSubscription {
-  id         String    @id @default(cuid())
+  id         String   @id @default(cuid())
   user_id    String
   channel_id String
-  created_at DateTime  @default(now())
-  user       User      @relation(fields: [user_id], references: [source_id])
-  channel    Channel   @relation(fields: [channel_id], references: [id], onDelete: Cascade)
+  created_at DateTime @default(now())
+
+  user    User    @relation(fields: [user_id], references: [source_id])
+  channel Channel @relation(fields: [channel_id], references: [id], onDelete: Cascade)
 
   @@unique([user_id, channel_id], name: "subscription_unique_user_channel")
   @@index([channel_id], name: "subscription_index_on_channel_id")
 }
 
 model Video {
-  id           String       @id @default(cuid())
+  id           String    @id @default(cuid())
   channel_id   String
   // source platform video id
   source_id    String
@@ -66,9 +74,10 @@ model Video {
   description  String?
   published_at DateTime
   read_at      DateTime?
-  created_at   DateTime     @default(now())
-  channel      Channel      @relation(fields: [channel_id], references: [id], onDelete: Cascade)
-  transcripts  Transcript[]
+  created_at   DateTime  @default(now())
+
+  channel     Channel      @relation(fields: [channel_id], references: [id], onDelete: Cascade)
+  transcripts Transcript[]
 
   @@unique([channel_id, source_id], name: "video_unique_channel_source")
   @@index([channel_id, published_at], name: "video_index_on_channel_published_at")
@@ -84,5 +93,44 @@ model Transcript {
   created_at DateTime @default(now())
   video      Video    @relation(fields: [video_id], references: [id], onDelete: Cascade)
 
+  articles Article[]
+  summary  Summary?
+
   @@index([video_id], name: "transcript_index_on_video_id")
+}
+
+model Article {
+  id             String       @id @default(cuid())
+  transcript_id  String
+  style          ArticleStyle
+  // bump when the prompt body changes — new generations get fresh rows
+  prompt_version String
+  // model identifier, e.g. "anthropic/claude-sonnet-4.5"
+  model          String
+  content        String
+  // token usage from the AI SDK result.usage promise
+  usage          Json?
+  generated_at   DateTime     @default(now())
+
+  transcript Transcript @relation(fields: [transcript_id], references: [id], onDelete: Cascade)
+
+  @@unique([transcript_id, style, prompt_version], name: "article_unique_transcript_style_version")
+}
+
+model Summary {
+  id             String   @id @default(cuid())
+  transcript_id  String   @unique
+  // one sentence, title-like, includes key info if present
+  headline       String?
+  // one paragraph, skimmable in 10-20 seconds
+  short          String?
+  // several paragraphs — a condensed re-write preserving logic flow and arguments
+  full           String?
+  prompt_version String
+  model          String
+  // { headline: {inputTokens, outputTokens}, short: {...}, full: {...} }
+  usage          Json?
+  generated_at   DateTime @default(now())
+
+  transcript Transcript @relation(fields: [transcript_id], references: [id], onDelete: Cascade)
 }
