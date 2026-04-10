@@ -21,7 +21,11 @@ beforeAll(async () => {
 
   global.testPrisma = prisma;
 
-  execSync('yarn db:deploy', {
+  // Apply migrations directly. We deliberately do NOT call `yarn db:deploy`
+  // here: that script also runs `prisma migrate status` (noisy) and
+  // `db:dump-schema` (mutates source-controlled `prisma/schema_dump.sql`
+  // and races between parallel jest workers on a hard-coded temp file path).
+  execSync('npx prisma migrate deploy', {
     cwd: '../../packages/database',
     env: { ...process.env, DATABASE_URL: databaseUrl },
     stdio: 'inherit',
