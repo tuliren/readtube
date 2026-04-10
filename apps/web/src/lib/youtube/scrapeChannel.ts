@@ -68,13 +68,25 @@ function parseRelativeTime(text: string | undefined): Date {
 }
 
 /**
- * Fetches a YouTube channel page and extracts the channel ID, name, and
- * recent videos from the embedded ytInitialData JSON. No API key required.
+ * Fetches a YouTube channel's Videos tab and extracts the channel ID, name,
+ * and most recent uploads from the embedded ytInitialData JSON. No API key
+ * required.
+ *
+ * We deliberately fetch the `/videos` sub-path rather than the channel root
+ * because the channel root (Home tab) only exposes curated/featured shelves
+ * (Popular, Interviews, Featured Video) — not chronological uploads. The
+ * Videos tab returns the latest uploads in published-at-descending order via
+ * a richGridRenderer, which is what we need for the inbox + the
+ * `recent_n_new` initial subscription mode.
  *
  * Accepts either a /@handle or /channel/UCxxx URL path.
  */
 export async function scrapeChannel(channelUrl: string): Promise<ScrapedChannel> {
-  const response = await fetch(channelUrl, {
+  const videosUrl = channelUrl.replace(/\/+$/, '').endsWith('/videos')
+    ? channelUrl
+    : `${channelUrl.replace(/\/+$/, '')}/videos`;
+
+  const response = await fetch(videosUrl, {
     headers: { 'User-Agent': YT_USER_AGENT },
   });
 
@@ -115,82 +127,72 @@ export async function scrapeChannel(channelUrl: string): Promise<ScrapedChannel>
 
 type YtData = Record<string, unknown>;
 
+const MAX_VIDEOS = 15;
+
+/**
+ * Walks the selected tab's `richGridRenderer.contents` array. When we fetch
+ * `/videos`, the Videos tab is the selected tab, and its rich grid contains
+ * the channel's uploads in chronological (newest-first) order, each wrapped
+ * as `richItemRenderer.content.videoRenderer`.
+ */
 function extractVideosFromInitialData(data: YtData): ScrapedVideo[] {
   const tabs = ((data.contents as YtData)?.twoColumnBrowseResultsRenderer as YtData)?.tabs as
     | YtData[]
     | undefined;
-
   if (!tabs) {
     return [];
   }
 
-  const seen = new Set<string>();
+  // Find the tab YouTube marked as selected. Since we fetched /videos, this
+  // is the Videos tab. Falls back to a title match if `selected` is missing.
+  const selectedTab = tabs.find((tab) => {
+    const renderer = (tab as YtData).tabRenderer as YtData | undefined;
+    if (renderer == null) {
+      return false;
+    }
+    if (renderer.selected === true) {
+      return true;
+    }
+    return renderer.title === 'Videos';
+  });
+  if (selectedTab == null) {
+    return [];
+  }
+
+  const richGridContents = (((selectedTab as YtData).tabRenderer as YtData)?.content as YtData)
+    ?.richGridRenderer as YtData | undefined;
+  const items = (richGridContents?.contents as YtData[]) ?? [];
+
   const videos: ScrapedVideo[] = [];
-
-  // Walk the Home tab's sections to find all video renderers
-  const homeTab = tabs[0];
-  const sections = (((homeTab as YtData)?.tabRenderer as YtData)?.content as YtData)
-    ?.sectionListRenderer as YtData;
-  const contents = (sections?.contents as YtData[]) ?? [];
-
-  for (const section of contents) {
-    const sectionContents = ((section as YtData).itemSectionRenderer as YtData)
-      ?.contents as YtData[];
-    if (!sectionContents) {
+  for (const item of items) {
+    if (videos.length >= MAX_VIDEOS) {
+      break;
+    }
+    const richItem = (item as YtData).richItemRenderer as YtData | undefined;
+    const v = (richItem?.content as YtData)?.videoRenderer as YtData | undefined;
+    if (v?.videoId == null) {
+      // Skip continuationItemRenderer, ad slots, etc.
       continue;
     }
 
-    for (const renderer of sectionContents) {
-      // Featured video at top of channel
-      const featured = renderer.channelVideoPlayerRenderer as YtData | undefined;
-      if (featured?.videoId) {
-        const videoId = featured.videoId as string;
-        if (!seen.has(videoId)) {
-          seen.add(videoId);
-          const titleRuns = (featured.title as YtData)?.runs as YtData[] | undefined;
-          const descRuns = (featured.description as YtData)?.runs as YtData[] | undefined;
-          videos.push({
-            videoId,
-            title: (titleRuns?.[0]?.text as string) ?? '',
-            description: descRuns?.map((r) => r.text as string).join('') ?? '',
-            publishedAt: parseRelativeTime(
-              ((featured.publishedTimeText as YtData)?.runs as YtData[])?.[0]?.text as string
-            ),
-          });
-        }
-      }
+    const videoId = v.videoId as string;
 
-      // Shelf sections (Interviews, Popular, etc.)
-      const shelf = renderer.shelfRenderer as YtData | undefined;
-      const items = ((shelf?.content as YtData)?.horizontalListRenderer as YtData)?.items as
-        | YtData[]
-        | undefined;
-      if (items) {
-        for (const item of items) {
-          const v = item.gridVideoRenderer as YtData | undefined;
-          if (!v?.videoId) {
-            continue;
-          }
-          const videoId = v.videoId as string;
-          if (seen.has(videoId)) {
-            continue;
-          }
-          seen.add(videoId);
-          videos.push({
-            videoId,
-            title:
-              ((v.title as YtData)?.simpleText as string) ??
-              (((v.title as YtData)?.runs as YtData[])?.[0]?.text as string) ??
-              '',
-            description: '',
-            publishedAt: parseRelativeTime((v.publishedTimeText as YtData)?.simpleText as string),
-          });
-        }
-      }
-    }
+    const titleRuns = (v.title as YtData)?.runs as YtData[] | undefined;
+    const titleSimple = (v.title as YtData)?.simpleText as string | undefined;
+    const title = (titleRuns?.[0]?.text as string) ?? titleSimple ?? '';
+
+    const descSnippetRuns = (v.descriptionSnippet as YtData)?.runs as YtData[] | undefined;
+    const description = descSnippetRuns?.map((r) => r.text as string).join('') ?? '';
+
+    const publishedText = (v.publishedTimeText as YtData)?.simpleText as string | undefined;
+
+    videos.push({
+      videoId,
+      title,
+      description,
+      publishedAt: parseRelativeTime(publishedText),
+    });
   }
 
-  // Sort by publishedAt descending, take most recent 15
-  videos.sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime());
-  return videos.slice(0, 15);
+  return videos;
 }

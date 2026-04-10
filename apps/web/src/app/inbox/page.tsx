@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import InboxShell from '@/components/inbox/InboxShell';
 import { prisma } from '@/lib/db';
 import { ensureUserExists } from '@/lib/db/user';
+import { getSubscribedChannelsWithUnread } from '@/lib/subscriptions';
 import type { ChannelData, VideoData } from '@/lib/types';
 
 interface Props {
@@ -21,54 +22,25 @@ export default async function InboxPage({ searchParams }: Props) {
   const { channel: channelParam } = await searchParams;
   const selectedChannelId = channelParam ?? null;
 
-  const subscriptions = await prisma.userSubscription.findMany({
-    where: { user_id: userId },
-    select: {
-      read_at: true,
-      channel: {
-        select: {
-          id: true,
-          source_id: true,
-          name: true,
-          rss_url: true,
-          created_at: true,
-        },
-      },
-    },
-  });
+  // Single SQL query: subscriptions + channel metadata + per-channel unread
+  // counts (with watermark + consumption filter), all in one round-trip.
+  const subscriptionRows = await getSubscribedChannelsWithUnread(prisma, userId);
 
-  // Per-channel watermark map for the video list mapper.
+  // Per-channel watermark map for the video list mapper below.
   const watermarkByChannelId = new Map<string, Date | null>(
-    subscriptions.map((s) => [s.channel.id, s.read_at])
+    subscriptionRows.map((row) => [row.channel_id, row.read_at])
   );
 
-  // Per-subscription unread counts (the watermark differs per row, so we
-  // can't use Prisma's _count aggregation here).
-  const channelsWithCounts = await Promise.all(
-    subscriptions.map(async (sub) => {
-      const unreadCount = await prisma.video.count({
-        where: {
-          channel_id: sub.channel.id,
-          consumptions: { none: { user_id: userId } },
-          ...(sub.read_at != null ? { published_at: { gt: sub.read_at } } : {}),
-        },
-      });
-      return { ...sub.channel, unreadCount };
-    })
-  );
-
-  const channelRows = channelsWithCounts.sort((a, b) => a.name.localeCompare(b.name));
-
-  const channels: ChannelData[] = channelRows.map((c) => ({
-    id: c.id,
-    sourceId: c.source_id,
-    name: c.name,
-    rssUrl: c.rss_url,
-    createdAt: c.created_at.toISOString(),
-    unreadCount: c.unreadCount,
+  const channels: ChannelData[] = subscriptionRows.map((row) => ({
+    id: row.channel_id,
+    sourceId: row.source_id,
+    name: row.name,
+    rssUrl: row.rss_url,
+    createdAt: row.created_at.toISOString(),
+    unreadCount: row.unread_count,
   }));
 
-  const userChannelIds = channelRows.map((c) => c.id);
+  const userChannelIds = subscriptionRows.map((row) => row.channel_id);
 
   const whereClause =
     selectedChannelId && userChannelIds.includes(selectedChannelId)

@@ -62,6 +62,80 @@ export async function countUnreadVideos(
 }
 
 /**
+ * The shape returned by `getSubscribedChannelsWithUnread`. One row per
+ * subscription, denormalized to include channel metadata, the user's
+ * watermark, and the unread count — all computed in a single SQL query.
+ */
+export interface SubscribedChannelWithUnread {
+  channel_id: string;
+  read_at: Date | null;
+  source_id: string;
+  name: string;
+  rss_url: string;
+  created_at: Date;
+  unread_count: number;
+}
+
+/**
+ * Single-query alternative to fetching subscriptions and then issuing one
+ * `prisma.video.count()` per channel. Joins UserSubscription, Channel, and
+ * Video in one statement, returning per-channel unread counts that respect
+ * both the per-subscription `read_at` watermark and individual
+ * UserVideoConsumption rows.
+ *
+ * Returns rows sorted by channel name (case-insensitive).
+ */
+export async function getSubscribedChannelsWithUnread(
+  prisma: PrismaClient,
+  userId: string
+): Promise<SubscribedChannelWithUnread[]> {
+  // COUNT(*) returns BIGINT in Postgres, which Prisma surfaces as `bigint`.
+  // We convert to `number` below — channel video counts will never overflow.
+  const rows = await prisma.$queryRaw<
+    Array<{
+      channel_id: string;
+      read_at: Date | null;
+      source_id: string;
+      name: string;
+      rss_url: string;
+      created_at: Date;
+      unread_count: bigint;
+    }>
+  >`
+    SELECT
+      us."channel_id"  AS channel_id,
+      us."read_at"     AS read_at,
+      c."source_id"    AS source_id,
+      c."name"         AS name,
+      c."rss_url"      AS rss_url,
+      c."created_at"   AS created_at,
+      COUNT(v."id")    AS unread_count
+    FROM "UserSubscription" us
+    JOIN "Channel" c ON c."id" = us."channel_id"
+    LEFT JOIN "Video" v ON v."channel_id" = us."channel_id"
+      AND (us."read_at" IS NULL OR v."published_at" > us."read_at")
+      AND NOT EXISTS (
+        SELECT 1
+        FROM "UserVideoConsumption" k
+        WHERE k."video_id" = v."id" AND k."user_id" = us."user_id"
+      )
+    WHERE us."user_id" = ${userId}
+    GROUP BY us."channel_id", us."read_at", c."source_id", c."name", c."rss_url", c."created_at"
+    ORDER BY LOWER(c."name") ASC
+  `;
+
+  return rows.map((row) => ({
+    channel_id: row.channel_id,
+    read_at: row.read_at,
+    source_id: row.source_id,
+    name: row.name,
+    rss_url: row.rss_url,
+    created_at: row.created_at,
+    unread_count: Number(row.unread_count),
+  }));
+}
+
+/**
  * Bulk-mark videos as read for a user by bumping the per-subscription
  * watermark(s). When `channelId` is provided, only that channel's
  * subscription is updated; otherwise every subscription for the user is

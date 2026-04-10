@@ -4,7 +4,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { ensureUserExists } from '@/lib/db/user';
 import { isEmptyString } from '@/lib/string';
-import { computeInitialReadAt, countUnreadVideos } from '@/lib/subscriptions';
+import {
+  computeInitialReadAt,
+  countUnreadVideos,
+  getSubscribedChannelsWithUnread,
+} from '@/lib/subscriptions';
 import { buildRssUrl, extractChannelId, extractHandle } from '@/lib/youtube/channelUrl';
 import { scrapeChannel } from '@/lib/youtube/scrapeChannel';
 
@@ -14,42 +18,18 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const subscriptions = await prisma.userSubscription.findMany({
-    where: { user_id: userId },
-    select: {
-      read_at: true,
-      channel: {
-        select: {
-          id: true,
-          source_id: true,
-          name: true,
-          rss_url: true,
-          created_at: true,
-        },
-      },
-    },
-  });
-
-  // Per-subscription counts respect the per-subscription read_at watermark.
-  // We can't use Prisma's `_count` aggregation here because the filter must
-  // reference the parent row's read_at, which `_count` doesn't support.
-  const channelsWithCounts = await Promise.all(
-    subscriptions.map(async (sub) => {
-      const unreadCount = await countUnreadVideos(prisma, userId, sub.channel.id, sub.read_at);
-      return { ...sub.channel, unreadCount };
-    })
-  );
-
-  const sorted = channelsWithCounts.sort((a, b) => a.name.localeCompare(b.name));
+  // Single SQL query: subscriptions + channel metadata + per-channel unread
+  // counts (with watermark + consumption filter), all in one round-trip.
+  const rows = await getSubscribedChannelsWithUnread(prisma, userId);
 
   return NextResponse.json(
-    sorted.map((c) => ({
-      id: c.id,
-      sourceId: c.source_id,
-      name: c.name,
-      rssUrl: c.rss_url,
-      createdAt: c.created_at,
-      unreadCount: c.unreadCount,
+    rows.map((row) => ({
+      id: row.channel_id,
+      sourceId: row.source_id,
+      name: row.name,
+      rssUrl: row.rss_url,
+      createdAt: row.created_at,
+      unreadCount: row.unread_count,
     }))
   );
 }

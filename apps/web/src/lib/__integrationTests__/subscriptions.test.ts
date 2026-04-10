@@ -1,6 +1,11 @@
 import '@tests/integration-tests';
 
-import { computeInitialReadAt, countUnreadVideos, markAllReadForUser } from '@/lib/subscriptions';
+import {
+  computeInitialReadAt,
+  countUnreadVideos,
+  getSubscribedChannelsWithUnread,
+  markAllReadForUser,
+} from '@/lib/subscriptions';
 
 // Helper: create a user, a channel, and N videos with descending published_at.
 // `oldestFirstOffsetMs` is the gap between consecutive videos.
@@ -400,5 +405,176 @@ describe('markAllReadForUser', () => {
       where: { user_id: 'u_consume', video_id: recentVideo.id },
     });
     expect(consumption).not.toBeNull();
+  });
+});
+
+describe('getSubscribedChannelsWithUnread', () => {
+  it('returns an empty array when the user has no subscriptions', async () => {
+    await global.testPrisma.user.create({
+      data: { source_id: 'u_empty', email: 'u_empty@example.com', name: 'Empty' },
+    });
+
+    const result = await getSubscribedChannelsWithUnread(global.testPrisma, 'u_empty');
+    expect(result).toEqual([]);
+  });
+
+  it('returns subscribed channels with unread counts respecting the watermark', async () => {
+    const { channelId } = await setupChannelWithVideos({
+      userSourceId: 'u_basic',
+      channelSourceId: 'ch_basic',
+      videoCount: 5,
+    });
+
+    // No watermark yet — all 5 videos are unread.
+    let result = await getSubscribedChannelsWithUnread(global.testPrisma, 'u_basic');
+    expect(result.length).toBe(1);
+    expect(result[0].channel_id).toBe(channelId);
+    expect(result[0].source_id).toBe('ch_basic');
+    expect(result[0].name).toBe('Channel ch_basic');
+    expect(result[0].read_at).toBeNull();
+    expect(result[0].unread_count).toBe(5);
+
+    // After mark-all-read, the count drops to 0.
+    await markAllReadForUser(global.testPrisma, 'u_basic', channelId);
+    result = await getSubscribedChannelsWithUnread(global.testPrisma, 'u_basic');
+    expect(result[0].read_at).not.toBeNull();
+    expect(result[0].unread_count).toBe(0);
+  });
+
+  it('returns 0 unread for a channel with no videos', async () => {
+    await global.testPrisma.user.create({
+      data: { source_id: 'u_none', email: 'u_none@example.com', name: 'None' },
+    });
+    const channel = await global.testPrisma.channel.create({
+      data: {
+        source_id: 'ch_none',
+        name: 'Empty Channel',
+        rss_url: 'https://example.com/none.xml',
+      },
+    });
+    await global.testPrisma.userSubscription.create({
+      data: { user_id: 'u_none', channel_id: channel.id },
+    });
+
+    const result = await getSubscribedChannelsWithUnread(global.testPrisma, 'u_none');
+    expect(result.length).toBe(1);
+    expect(result[0].channel_id).toBe(channel.id);
+    expect(result[0].unread_count).toBe(0);
+  });
+
+  it('returns multiple subscriptions in alphabetical order, each with its own count', async () => {
+    await global.testPrisma.user.create({
+      data: { source_id: 'u_multi', email: 'u_multi@example.com', name: 'Multi' },
+    });
+
+    // Three channels with different unread counts. Names chosen so the
+    // alphabetical sort order is Beta, Charlie, Zebra.
+    const baseMs = new Date('2026-01-01T00:00:00Z').getTime();
+    const oneHourMs = 60 * 60 * 1000;
+    const setupChannel = async (sourceId: string, name: string, videoCount: number) => {
+      const channel = await global.testPrisma.channel.create({
+        data: { source_id: sourceId, name, rss_url: `https://example.com/${sourceId}.xml` },
+      });
+      for (let i = 0; i < videoCount; i++) {
+        await global.testPrisma.video.create({
+          data: {
+            channel_id: channel.id,
+            source_id: `${sourceId}_video_${i}`,
+            title: `${name} ${i}`,
+            published_at: new Date(baseMs - i * oneHourMs),
+          },
+        });
+      }
+      await global.testPrisma.userSubscription.create({
+        data: { user_id: 'u_multi', channel_id: channel.id },
+      });
+      return channel;
+    };
+
+    await setupChannel('ch_zebra', 'Zebra', 3);
+    await setupChannel('ch_beta', 'Beta', 5);
+    await setupChannel('ch_charlie', 'Charlie', 0);
+
+    const result = await getSubscribedChannelsWithUnread(global.testPrisma, 'u_multi');
+    expect(result.map((r) => r.name)).toEqual(['Beta', 'Charlie', 'Zebra']);
+    expect(result.map((r) => r.unread_count)).toEqual([5, 0, 3]);
+  });
+
+  it('subtracts UserVideoConsumption rows from the unread count', async () => {
+    const { channelId } = await setupChannelWithVideos({
+      userSourceId: 'u_consume2',
+      channelSourceId: 'ch_consume2',
+      videoCount: 5,
+    });
+
+    const videos = await global.testPrisma.video.findMany({
+      where: { channel_id: channelId },
+      orderBy: { published_at: 'desc' },
+      take: 2,
+    });
+    // Mark the two most recent as consumed.
+    await global.testPrisma.userVideoConsumption.createMany({
+      data: videos.map((v) => ({ user_id: 'u_consume2', video_id: v.id })),
+    });
+
+    const result = await getSubscribedChannelsWithUnread(global.testPrisma, 'u_consume2');
+    expect(result[0].unread_count).toBe(3);
+  });
+
+  it('combines watermark and consumption: a video covered by either is read', async () => {
+    const { channelId } = await setupChannelWithVideos({
+      userSourceId: 'u_combo',
+      channelSourceId: 'ch_combo',
+      videoCount: 5,
+    });
+
+    // Set the watermark to the 3rd-most-recent video's published_at.
+    // That covers videos 2, 3, 4 (0-indexed) → only videos 0, 1 remain unread.
+    const cutoffVideo = await global.testPrisma.video.findFirstOrThrow({
+      where: { channel_id: channelId },
+      orderBy: { published_at: 'desc' },
+      skip: 2,
+      take: 1,
+    });
+    await global.testPrisma.userSubscription.update({
+      where: {
+        subscription_unique_user_channel: { user_id: 'u_combo', channel_id: channelId },
+      },
+      data: { read_at: cutoffVideo.published_at },
+    });
+
+    let result = await getSubscribedChannelsWithUnread(global.testPrisma, 'u_combo');
+    expect(result[0].unread_count).toBe(2);
+
+    // Now also mark the most recent (video 0) as consumed.
+    const newest = await global.testPrisma.video.findFirstOrThrow({
+      where: { channel_id: channelId },
+      orderBy: { published_at: 'desc' },
+    });
+    await global.testPrisma.userVideoConsumption.create({
+      data: { user_id: 'u_combo', video_id: newest.id },
+    });
+
+    result = await getSubscribedChannelsWithUnread(global.testPrisma, 'u_combo');
+    expect(result[0].unread_count).toBe(1);
+  });
+
+  it('does not return rows for other users', async () => {
+    // User A has a subscribed channel; user B does not.
+    await setupChannelWithVideos({
+      userSourceId: 'u_a_iso',
+      channelSourceId: 'ch_a_iso',
+      videoCount: 4,
+    });
+    await global.testPrisma.user.create({
+      data: { source_id: 'u_b_iso', email: 'u_b_iso@example.com', name: 'B' },
+    });
+
+    const aResult = await getSubscribedChannelsWithUnread(global.testPrisma, 'u_a_iso');
+    expect(aResult.length).toBe(1);
+    expect(aResult[0].unread_count).toBe(4);
+
+    const bResult = await getSubscribedChannelsWithUnread(global.testPrisma, 'u_b_iso');
+    expect(bResult).toEqual([]);
   });
 });
