@@ -82,14 +82,11 @@ export default async function InboxPage({ searchParams }: Props) {
   type VideoRow = (typeof videoRows)[number];
   const readAtFor = (v: VideoRow): Date | null => v.consumptions[0]?.read_at ?? null;
 
-  const unread = videoRows
-    .filter((v) => readAtFor(v) === null)
-    .sort((a, b) => b.published_at.getTime() - a.published_at.getTime());
-  const read = videoRows
-    .filter((v) => readAtFor(v) !== null)
-    .sort((a, b) => b.published_at.getTime() - a.published_at.getTime());
+  const sortedRows = [...videoRows].sort(
+    (a, b) => b.published_at.getTime() - a.published_at.getTime()
+  );
 
-  const videos: VideoData[] = [...unread, ...read].map((v) => {
+  const videos: VideoData[] = sortedRows.map((v) => {
     const readAt = readAtFor(v);
     return {
       id: v.id,

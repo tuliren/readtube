@@ -53,15 +53,10 @@ export async function GET(request: NextRequest) {
   type VideoRow = (typeof videos)[number];
   const readAtFor = (v: VideoRow): Date | null => v.consumptions[0]?.read_at ?? null;
 
-  const unread = videos
-    .filter((v) => readAtFor(v) === null)
-    .sort((a, b) => b.published_at.getTime() - a.published_at.getTime());
-  const read = videos
-    .filter((v) => readAtFor(v) !== null)
-    .sort((a, b) => b.published_at.getTime() - a.published_at.getTime());
+  const sorted = [...videos].sort((a, b) => b.published_at.getTime() - a.published_at.getTime());
 
   return NextResponse.json(
-    [...unread, ...read].map((v) => ({
+    sorted.map((v) => ({
       id: v.id,
       sourceId: v.source_id,
       title: v.title,

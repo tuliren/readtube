@@ -8,6 +8,7 @@ import type { ChannelData, VideoData } from '@/lib/types';
 
 import AddChannelModal from './AddChannelModal';
 import ChannelSection from './ChannelSection';
+import InboxHeader from './InboxHeader';
 import VideoList from './VideoList';
 
 const fetcher = (url: string) =>
@@ -58,6 +59,11 @@ export default function InboxShell({
 
   const showEmptyState = channels.length === 0;
 
+  const selectedChannel =
+    selectedChannelId != null ? (channels.find((c) => c.id === selectedChannelId) ?? null) : null;
+  const headerName = selectedChannel != null ? selectedChannel.name : 'All unread';
+  const headerUnread = selectedChannel != null ? selectedChannel.unreadCount : totalUnread;
+
   return (
     <div className="flex h-full min-h-0">
       {/* Sidebar */}
@@ -103,9 +109,16 @@ export default function InboxShell({
             </button>
           </div>
         ) : (
-          // List mode: show video list
-          <div className="flex flex-1 overflow-y-auto flex-col">
-            <VideoList videos={videos} selectedVideoId={selectedVideoId} />
+          // List mode: show video list with a header toolbar
+          <div className="flex flex-1 flex-col overflow-hidden">
+            <InboxHeader
+              channelId={selectedChannelId}
+              channelName={headerName}
+              unreadCount={headerUnread}
+            />
+            <div className="flex-1 overflow-y-auto">
+              <VideoList videos={videos} selectedVideoId={selectedVideoId} />
+            </div>
           </div>
         )}
       </div>

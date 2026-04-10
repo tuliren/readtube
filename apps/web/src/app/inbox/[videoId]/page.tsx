@@ -129,14 +129,11 @@ export default async function VideoPage({ params, searchParams }: Props) {
   type SidebarRow = (typeof videoRows)[number];
   const readAtFor = (v: SidebarRow): Date | null => v.consumptions[0]?.read_at ?? null;
 
-  const unread = videoRows
-    .filter((v) => readAtFor(v) === null)
-    .sort((a, b) => b.published_at.getTime() - a.published_at.getTime());
-  const read = videoRows
-    .filter((v) => readAtFor(v) !== null)
-    .sort((a, b) => b.published_at.getTime() - a.published_at.getTime());
+  const sortedRows = [...videoRows].sort(
+    (a, b) => b.published_at.getTime() - a.published_at.getTime()
+  );
 
-  const sidebarVideos: VideoData[] = [...unread, ...read].map((v) => {
+  const sidebarVideos: VideoData[] = sortedRows.map((v) => {
     const readAt = readAtFor(v);
     return {
       id: v.id,
