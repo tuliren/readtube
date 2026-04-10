@@ -1,3 +1,5 @@
+import { isEmptyString } from '@/lib/string';
+
 import type { TranscriptSegment } from './types';
 
 interface TranscriptApiSegment {
@@ -16,7 +18,7 @@ export async function fetchSubtitleViaTranscriptApi(
   videoId: string
 ): Promise<{ segments: TranscriptSegment[]; language: string }> {
   const apiKey = process.env.TRANSCRIPT_API_KEY;
-  if (apiKey == null || apiKey === '') {
+  if (isEmptyString(apiKey)) {
     throw new Error('TRANSCRIPT_API_KEY is not set');
   }
 

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { prisma } from '@/lib/db';
 import { ensureUserExists } from '@/lib/db/user';
+import { isEmptyString } from '@/lib/string';
 import { buildRssUrl, extractChannelId, extractHandle } from '@/lib/youtube/channelUrl';
 import { scrapeChannel } from '@/lib/youtube/scrapeChannel';
 
@@ -56,7 +57,7 @@ export async function POST(request: NextRequest) {
   }
 
   const input = body.url?.trim() ?? '';
-  if (input === '') {
+  if (isEmptyString(input)) {
     return NextResponse.json({ error: 'Missing URL' }, { status: 400 });
   }
 

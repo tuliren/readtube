@@ -2,6 +2,7 @@ import { clerkClient } from '@clerk/nextjs/server';
 import type { User as ClerkUser, UserJSON } from '@clerk/nextjs/server';
 
 import { prisma } from '@/lib/db';
+import { isEmptyString } from '@/lib/string';
 
 function extractName(user: UserJSON): string {
   const parts = [user.first_name, user.last_name].filter(Boolean);
@@ -17,7 +18,7 @@ export async function upsertUser(user: UserJSON): Promise<void> {
   const name = extractName(user);
   const email = extractPrimaryEmail(user);
 
-  if (email == null) {
+  if (isEmptyString(email)) {
     console.warn(`No primary email found for user ${user.id}, skipping upsert`);
     return;
   }
@@ -67,7 +68,7 @@ export async function ensureUserExists(userId: string): Promise<void> {
   const primaryEmail = user.emailAddresses.find((e) => e.id === user.primaryEmailAddressId);
   const email = primaryEmail?.emailAddress ?? null;
 
-  if (email == null) {
+  if (isEmptyString(email)) {
     console.warn(`No primary email found for user ${userId}, skipping upsert`);
     return;
   }

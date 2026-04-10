@@ -3,10 +3,11 @@ import { headers } from 'next/headers';
 import { Webhook } from 'svix';
 
 import { deleteUser, upsertUser } from '@/lib/db/user';
+import { isEmptyString } from '@/lib/string';
 
 export async function POST(req: Request) {
   const secret = process.env.CLERK_WEBHOOK_SECRET;
-  if (secret == null || secret === '') {
+  if (isEmptyString(secret)) {
     console.error('CLERK_WEBHOOK_SECRET is not set');
     return new Response('Webhook secret not configured', { status: 500 });
   }
@@ -16,7 +17,7 @@ export async function POST(req: Request) {
   const svixTimestamp = headerPayload.get('svix-timestamp');
   const svixSignature = headerPayload.get('svix-signature');
 
-  if (svixId == null || svixTimestamp == null || svixSignature == null) {
+  if (isEmptyString(svixId) || isEmptyString(svixTimestamp) || isEmptyString(svixSignature)) {
     return new Response('Missing svix headers', { status: 400 });
   }
 
@@ -49,7 +50,7 @@ export async function POST(req: Request) {
     }
     case 'user.deleted': {
       const { id } = event.data;
-      if (id == null) {
+      if (isEmptyString(id)) {
         console.warn('Received user.deleted with no user id, ignoring');
         return new Response('Webhook received', { status: 200 });
       }
