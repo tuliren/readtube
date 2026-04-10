@@ -42,7 +42,7 @@ export async function upsertUser(user: UserJSON): Promise<void> {
 }
 
 export async function deleteUser(userId: string): Promise<void> {
-  await prisma.user.delete({ where: { source_id: userId } });
+  await prisma.user.deleteMany({ where: { source_id: userId } });
   console.info(`Deleted User for ${userId}`);
 }
 
