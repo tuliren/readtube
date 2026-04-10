@@ -1,44 +1,30 @@
+/*
+Warnings:
+
+- You are about to drop the `ClerkUser` table. If the table is not empty, all the data it contains will be lost.
+
+*/
 -- CreateEnum
 CREATE TYPE "UserSourceType" AS ENUM('CLERK');
 
 -- CreateEnum
 CREATE TYPE "VideoPlatformType" AS ENUM('YOUTUBE');
 
--- Rename ClerkUser table to User
-ALTER TABLE "ClerkUser"
-RENAME TO "User";
+-- DropTable
+DROP TABLE "ClerkUser";
 
--- Rename primary key index
-ALTER INDEX "ClerkUser_pkey"
-RENAME TO "User_pkey";
-
--- Convert id from BIGSERIAL to TEXT
-ALTER TABLE "User"
-ALTER COLUMN "id"
-DROP DEFAULT;
-
-ALTER TABLE "User"
-ALTER COLUMN "id"
-SET DATA TYPE TEXT USING id::TEXT;
-
-DROP SEQUENCE "ClerkUser_id_seq";
-
--- Rename user_id column to source_id
-ALTER TABLE "User"
-RENAME COLUMN "user_id" TO "source_id";
-
--- Rename indexes to match new table and column names
-ALTER INDEX "ClerkUser_user_id_key"
-RENAME TO "User_source_id_key";
-
-ALTER INDEX "ClerkUser_email_key"
-RENAME TO "User_email_key";
-
-DROP INDEX "clerk_user_index_on_user_id";
-
--- Add source_type column
-ALTER TABLE "User"
-ADD COLUMN "source_type" "UserSourceType" NOT NULL DEFAULT 'CLERK';
+-- CreateTable
+CREATE TABLE "User" (
+  "id" TEXT NOT NULL,
+  "source_type" "UserSourceType" NOT NULL DEFAULT 'CLERK',
+  "source_id" TEXT NOT NULL,
+  "name" TEXT NOT NULL,
+  "email" TEXT NOT NULL,
+  "image" TEXT,
+  "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" TIMESTAMP(3) NOT NULL,
+  CONSTRAINT "User_pkey" PRIMARY KEY ("id")
+);
 
 -- CreateTable
 CREATE TABLE "Channel" (
