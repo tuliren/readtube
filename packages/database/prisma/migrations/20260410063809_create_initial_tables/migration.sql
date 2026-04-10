@@ -1,17 +1,8 @@
-/*
-Warnings:
-
-- You are about to drop the `ClerkUser` table. If the table is not empty, all the data it contains will be lost.
-
-*/
 -- CreateEnum
 CREATE TYPE "UserSourceType" AS ENUM ('CLERK');
 
 -- CreateEnum
 CREATE TYPE "VideoPlatformType" AS ENUM ('YOUTUBE');
-
--- DropTable
-DROP TABLE "ClerkUser";
 
 -- CreateTable
 CREATE TABLE "User"
@@ -24,6 +15,7 @@ CREATE TABLE "User"
     "image"       TEXT,
     "created_at"  TIMESTAMP(3)     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at"  TIMESTAMP(3)     NOT NULL,
+
     CONSTRAINT "User_pkey" PRIMARY KEY ("id")
 );
 
@@ -37,6 +29,7 @@ CREATE TABLE "Channel"
     "rss_url"     TEXT                NOT NULL,
     "created_at"  TIMESTAMP(3)        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at"  TIMESTAMP(3)        NOT NULL,
+
     CONSTRAINT "Channel_pkey" PRIMARY KEY ("id")
 );
 
@@ -47,6 +40,7 @@ CREATE TABLE "UserSubscription"
     "user_id"    TEXT         NOT NULL,
     "channel_id" TEXT         NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
     CONSTRAINT "UserSubscription_pkey" PRIMARY KEY ("id")
 );
 
@@ -61,6 +55,7 @@ CREATE TABLE "Video"
     "published_at" TIMESTAMP(3) NOT NULL,
     "read_at"      TIMESTAMP(3),
     "created_at"   TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
     CONSTRAINT "Video_pkey" PRIMARY KEY ("id")
 );
 
@@ -73,6 +68,7 @@ CREATE TABLE "Transcript"
     "text"       TEXT         NOT NULL,
     "fetched_at" TIMESTAMP(3) NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
     CONSTRAINT "Transcript_pkey" PRIMARY KEY ("id")
 );
 
