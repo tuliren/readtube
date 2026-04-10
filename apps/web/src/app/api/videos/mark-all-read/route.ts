@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { prisma } from '@/lib/db';
+import { markAllReadForUser } from '@/lib/subscriptions';
 
 export async function POST(request: NextRequest) {
   const { userId } = await auth();
@@ -20,28 +21,9 @@ export async function POST(request: NextRequest) {
     // Empty body — fall through to "all subscribed channels"
   }
 
-  const now = new Date();
-
-  if (channelId != null) {
-    // Single channel: validate ownership, then bump that subscription's watermark.
-    const sub = await prisma.userSubscription.findFirst({
-      where: { user_id: userId, channel_id: channelId },
-      select: { id: true },
-    });
-    if (sub == null) {
-      return NextResponse.json({ error: 'Channel not found' }, { status: 404 });
-    }
-    await prisma.userSubscription.update({
-      where: { id: sub.id },
-      data: { read_at: now },
-    });
-    return NextResponse.json({ ok: true });
+  const result = await markAllReadForUser(prisma, userId, channelId);
+  if (result == null) {
+    return NextResponse.json({ error: 'Channel not found' }, { status: 404 });
   }
-
-  // All subscribed channels: bump every watermark in one statement.
-  const result = await prisma.userSubscription.updateMany({
-    where: { user_id: userId },
-    data: { read_at: now },
-  });
-  return NextResponse.json({ ok: true, channels: result.count });
+  return NextResponse.json({ ok: true, channels: result.channels });
 }

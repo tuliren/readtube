@@ -4,52 +4,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { ensureUserExists } from '@/lib/db/user';
 import { isEmptyString } from '@/lib/string';
-import { NEW_SUBSCRIPTION_MODE, RECENT_NEW_VIDEO_COUNT } from '@/lib/subscriptionConfig';
+import { computeInitialReadAt, countUnreadVideos } from '@/lib/subscriptions';
 import { buildRssUrl, extractChannelId, extractHandle } from '@/lib/youtube/channelUrl';
 import { scrapeChannel } from '@/lib/youtube/scrapeChannel';
-
-/**
- * Compute the initial value for `UserSubscription.read_at` for a brand-new
- * subscription, based on `NEW_SUBSCRIPTION_MODE`.
- */
-async function computeInitialReadAt(channelId: string): Promise<Date | null> {
-  if (NEW_SUBSCRIPTION_MODE === 'all_new') {
-    return null;
-  }
-  if (NEW_SUBSCRIPTION_MODE === 'none_new') {
-    return new Date();
-  }
-  // recent_n_new: find the (N+1)th most recent video. Anything older or equal
-  // to its published_at is read; the N most recent stay unread. If the channel
-  // has fewer than (N+1) videos, fall through to "all unread" (read_at = null).
-  const cutoff = await prisma.video.findMany({
-    where: { channel_id: channelId },
-    select: { published_at: true },
-    orderBy: { published_at: 'desc' },
-    skip: RECENT_NEW_VIDEO_COUNT,
-    take: 1,
-  });
-  return cutoff[0]?.published_at ?? null;
-}
-
-/**
- * Count unread videos for a (user, channel) given the user's watermark.
- * A video is unread iff there's no UserVideoConsumption row for this user
- * AND it was published after the watermark (or there's no watermark).
- */
-async function countUnreadVideos(
-  userId: string,
-  channelId: string,
-  readAt: Date | null
-): Promise<number> {
-  return prisma.video.count({
-    where: {
-      channel_id: channelId,
-      consumptions: { none: { user_id: userId } },
-      ...(readAt != null ? { published_at: { gt: readAt } } : {}),
-    },
-  });
-}
 
 export async function GET() {
   const { userId } = await auth();
@@ -78,7 +35,7 @@ export async function GET() {
   // reference the parent row's read_at, which `_count` doesn't support.
   const channelsWithCounts = await Promise.all(
     subscriptions.map(async (sub) => {
-      const unreadCount = await countUnreadVideos(userId, sub.channel.id, sub.read_at);
+      const unreadCount = await countUnreadVideos(prisma, userId, sub.channel.id, sub.read_at);
       return { ...sub.channel, unreadCount };
     })
   );
@@ -188,7 +145,7 @@ export async function POST(request: NextRequest) {
   // Compute the initial read watermark per the configured subscription mode
   // (all_new / none_new / recent_n_new). Done after the channel + its videos
   // have been created above so the videos are queryable.
-  const initialReadAt = await computeInitialReadAt(channel.id);
+  const initialReadAt = await computeInitialReadAt(prisma, channel.id);
 
   // Subscribe user to channel. Use upsert to gracefully handle the race window
   // between the existingSub check above and this write — if two concurrent
@@ -214,7 +171,7 @@ export async function POST(request: NextRequest) {
       created_at: true,
     },
   });
-  const unreadCount = await countUnreadVideos(userId, channel.id, initialReadAt);
+  const unreadCount = await countUnreadVideos(prisma, userId, channel.id, initialReadAt);
 
   return NextResponse.json(
     {
