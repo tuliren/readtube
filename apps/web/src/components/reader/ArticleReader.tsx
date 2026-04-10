@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import rehypeExternalLinks from 'rehype-external-links';
 import rehypeSanitize from 'rehype-sanitize';
@@ -10,12 +10,48 @@ interface Props {
   videoDbId: string;
 }
 
-type Status = 'idle' | 'streaming' | 'done' | 'error';
+type Status = 'checking' | 'idle' | 'streaming' | 'done' | 'error';
+
+const STYLE = 'NARRATIVE';
 
 export default function ArticleReader({ videoDbId }: Props) {
-  const [status, setStatus] = useState<Status>('idle');
+  const [status, setStatus] = useState<Status>('checking');
   const [markdown, setMarkdown] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setStatus('checking');
+    setMarkdown('');
+    setErrorMessage(null);
+
+    fetch(`/api/videos/${videoDbId}/article?style=${STYLE}`)
+      .then(async (res) => {
+        if (cancelled) {
+          return;
+        }
+        if (res.status === 404) {
+          setStatus('idle');
+          return;
+        }
+        if (!res.ok) {
+          setStatus('idle');
+          return;
+        }
+        const data = (await res.json()) as { content: string };
+        setMarkdown(data.content);
+        setStatus('done');
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setStatus('idle');
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [videoDbId]);
 
   async function handleGenerate() {
     setStatus('streaming');
@@ -23,7 +59,11 @@ export default function ArticleReader({ videoDbId }: Props) {
     setErrorMessage(null);
 
     try {
-      const res = await fetch(`/api/videos/${videoDbId}/article`, { method: 'POST' });
+      const res = await fetch(`/api/videos/${videoDbId}/article`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ style: STYLE }),
+      });
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({ error: 'Failed to generate article.' }));
@@ -63,6 +103,16 @@ export default function ArticleReader({ videoDbId }: Props) {
       setErrorMessage(err instanceof Error ? err.message : 'Failed to generate article.');
       setStatus('error');
     }
+  }
+
+  if (status === 'checking') {
+    return (
+      <div className="animate-pulse space-y-4 py-4">
+        {[100, 80, 95, 70, 85].map((w, i) => (
+          <div key={i} className="h-4 rounded bg-gray-200" style={{ width: `${w}%` }} />
+        ))}
+      </div>
+    );
   }
 
   if (status === 'idle') {
