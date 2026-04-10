@@ -20,47 +20,28 @@ export async function POST(request: NextRequest) {
     // Empty body — fall through to "all subscribed channels"
   }
 
-  // Find the set of channels the user is subscribed to.
-  const userSubs = await prisma.userSubscription.findMany({
-    where: { user_id: userId },
-    select: { channel_id: true },
-  });
-  const userChannelIds = userSubs.map((s) => s.channel_id);
+  const now = new Date();
 
-  if (userChannelIds.length === 0) {
-    return NextResponse.json({ marked: 0 });
-  }
-
-  // If channelId was provided, validate ownership and scope to it.
-  let scopeChannelIds: string[];
   if (channelId != null) {
-    if (!userChannelIds.includes(channelId)) {
+    // Single channel: validate ownership, then bump that subscription's watermark.
+    const sub = await prisma.userSubscription.findFirst({
+      where: { user_id: userId, channel_id: channelId },
+      select: { id: true },
+    });
+    if (sub == null) {
       return NextResponse.json({ error: 'Channel not found' }, { status: 404 });
     }
-    scopeChannelIds = [channelId];
-  } else {
-    scopeChannelIds = userChannelIds;
+    await prisma.userSubscription.update({
+      where: { id: sub.id },
+      data: { read_at: now },
+    });
+    return NextResponse.json({ ok: true });
   }
 
-  // Find all videos in scope that don't have a consumption row for this user.
-  const unreadVideos = await prisma.video.findMany({
-    where: {
-      channel_id: { in: scopeChannelIds },
-      consumptions: { none: { user_id: userId } },
-    },
-    select: { id: true },
+  // All subscribed channels: bump every watermark in one statement.
+  const result = await prisma.userSubscription.updateMany({
+    where: { user_id: userId },
+    data: { read_at: now },
   });
-
-  if (unreadVideos.length === 0) {
-    return NextResponse.json({ marked: 0 });
-  }
-
-  // skipDuplicates guards against the race window where another mark-read
-  // request inserts a row between our findMany and createMany.
-  const result = await prisma.userVideoConsumption.createMany({
-    data: unreadVideos.map((v) => ({ user_id: userId, video_id: v.id })),
-    skipDuplicates: true,
-  });
-
-  return NextResponse.json({ marked: result.count });
+  return NextResponse.json({ ok: true, channels: result.count });
 }

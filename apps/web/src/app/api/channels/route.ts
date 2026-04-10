@@ -4,8 +4,52 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { ensureUserExists } from '@/lib/db/user';
 import { isEmptyString } from '@/lib/string';
+import { NEW_SUBSCRIPTION_MODE, RECENT_NEW_VIDEO_COUNT } from '@/lib/subscriptionConfig';
 import { buildRssUrl, extractChannelId, extractHandle } from '@/lib/youtube/channelUrl';
 import { scrapeChannel } from '@/lib/youtube/scrapeChannel';
+
+/**
+ * Compute the initial value for `UserSubscription.read_at` for a brand-new
+ * subscription, based on `NEW_SUBSCRIPTION_MODE`.
+ */
+async function computeInitialReadAt(channelId: string): Promise<Date | null> {
+  if (NEW_SUBSCRIPTION_MODE === 'all_new') {
+    return null;
+  }
+  if (NEW_SUBSCRIPTION_MODE === 'none_new') {
+    return new Date();
+  }
+  // recent_n_new: find the (N+1)th most recent video. Anything older or equal
+  // to its published_at is read; the N most recent stay unread. If the channel
+  // has fewer than (N+1) videos, fall through to "all unread" (read_at = null).
+  const cutoff = await prisma.video.findMany({
+    where: { channel_id: channelId },
+    select: { published_at: true },
+    orderBy: { published_at: 'desc' },
+    skip: RECENT_NEW_VIDEO_COUNT,
+    take: 1,
+  });
+  return cutoff[0]?.published_at ?? null;
+}
+
+/**
+ * Count unread videos for a (user, channel) given the user's watermark.
+ * A video is unread iff there's no UserVideoConsumption row for this user
+ * AND it was published after the watermark (or there's no watermark).
+ */
+async function countUnreadVideos(
+  userId: string,
+  channelId: string,
+  readAt: Date | null
+): Promise<number> {
+  return prisma.video.count({
+    where: {
+      channel_id: channelId,
+      consumptions: { none: { user_id: userId } },
+      ...(readAt != null ? { published_at: { gt: readAt } } : {}),
+    },
+  });
+}
 
 export async function GET() {
   const { userId } = await auth();
@@ -16,6 +60,7 @@ export async function GET() {
   const subscriptions = await prisma.userSubscription.findMany({
     where: { user_id: userId },
     select: {
+      read_at: true,
       channel: {
         select: {
           id: true,
@@ -23,24 +68,31 @@ export async function GET() {
           name: true,
           rss_url: true,
           created_at: true,
-          _count: {
-            select: { videos: { where: { consumptions: { none: { user_id: userId } } } } },
-          },
         },
       },
     },
   });
 
-  const channels = subscriptions.map((s) => s.channel).sort((a, b) => a.name.localeCompare(b.name));
+  // Per-subscription counts respect the per-subscription read_at watermark.
+  // We can't use Prisma's `_count` aggregation here because the filter must
+  // reference the parent row's read_at, which `_count` doesn't support.
+  const channelsWithCounts = await Promise.all(
+    subscriptions.map(async (sub) => {
+      const unreadCount = await countUnreadVideos(userId, sub.channel.id, sub.read_at);
+      return { ...sub.channel, unreadCount };
+    })
+  );
+
+  const sorted = channelsWithCounts.sort((a, b) => a.name.localeCompare(b.name));
 
   return NextResponse.json(
-    channels.map((c) => ({
+    sorted.map((c) => ({
       id: c.id,
       sourceId: c.source_id,
       name: c.name,
       rssUrl: c.rss_url,
       createdAt: c.created_at,
-      unreadCount: c._count.videos,
+      unreadCount: c.unreadCount,
     }))
   );
 }
@@ -133,35 +185,45 @@ export async function POST(request: NextRequest) {
     update: {},
   });
 
+  // Compute the initial read watermark per the configured subscription mode
+  // (all_new / none_new / recent_n_new). Done after the channel + its videos
+  // have been created above so the videos are queryable.
+  const initialReadAt = await computeInitialReadAt(channel.id);
+
   // Subscribe user to channel. Use upsert to gracefully handle the race window
   // between the existingSub check above and this write — if two concurrent
   // requests from the same user both pass the check, the second one becomes a
-  // no-op instead of failing with a unique-constraint violation.
+  // no-op instead of failing with a unique-constraint violation. The watermark
+  // is set on create only; the update branch is intentionally empty so a
+  // re-subscription race doesn't reset an existing user's read state.
   await prisma.userSubscription.upsert({
     where: {
       subscription_unique_user_channel: { user_id: userId, channel_id: channel.id },
     },
-    create: { user_id: userId, channel_id: channel.id },
+    create: { user_id: userId, channel_id: channel.id, read_at: initialReadAt },
     update: {},
   });
 
-  const channelWithCount = await prisma.channel.findUniqueOrThrow({
+  const channelRow = await prisma.channel.findUniqueOrThrow({
     where: { id: channel.id },
-    include: {
-      _count: {
-        select: { videos: { where: { consumptions: { none: { user_id: userId } } } } },
-      },
+    select: {
+      id: true,
+      source_id: true,
+      name: true,
+      rss_url: true,
+      created_at: true,
     },
   });
+  const unreadCount = await countUnreadVideos(userId, channel.id, initialReadAt);
 
   return NextResponse.json(
     {
-      id: channelWithCount.id,
-      sourceId: channelWithCount.source_id,
-      name: channelWithCount.name,
-      rssUrl: channelWithCount.rss_url,
-      createdAt: channelWithCount.created_at,
-      unreadCount: channelWithCount._count.videos,
+      id: channelRow.id,
+      sourceId: channelRow.source_id,
+      name: channelRow.name,
+      rssUrl: channelRow.rss_url,
+      createdAt: channelRow.created_at,
+      unreadCount,
     },
     { status: 201 }
   );

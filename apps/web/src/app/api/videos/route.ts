@@ -11,12 +11,15 @@ export async function GET(request: NextRequest) {
 
   const channelIdParam = request.nextUrl.searchParams.get('channelId');
 
-  // Get all channels user is subscribed to
+  // Get all channels user is subscribed to (with watermarks for read state)
   const userSubs = await prisma.userSubscription.findMany({
     where: { user_id: userId },
-    select: { channel_id: true },
+    select: { channel_id: true, read_at: true },
   });
   const channelIds = userSubs.map((s) => s.channel_id);
+  const watermarkByChannelId = new Map<string, Date | null>(
+    userSubs.map((s) => [s.channel_id, s.read_at])
+  );
 
   if (channelIds.length === 0) {
     return NextResponse.json([]);
@@ -51,7 +54,19 @@ export async function GET(request: NextRequest) {
   });
 
   type VideoRow = (typeof videos)[number];
-  const readAtFor = (v: VideoRow): Date | null => v.consumptions[0]?.read_at ?? null;
+  // A video is "read" if either an explicit consumption row exists OR the
+  // user's per-subscription watermark covers it.
+  const readAtFor = (v: VideoRow): Date | null => {
+    const explicit = v.consumptions[0]?.read_at;
+    if (explicit != null) {
+      return explicit;
+    }
+    const watermark = watermarkByChannelId.get(v.channel_id);
+    if (watermark != null && v.published_at.getTime() <= watermark.getTime()) {
+      return watermark;
+    }
+    return null;
+  };
 
   const sorted = [...videos].sort((a, b) => b.published_at.getTime() - a.published_at.getTime());
 

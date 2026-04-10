@@ -24,6 +24,7 @@ export default async function InboxPage({ searchParams }: Props) {
   const subscriptions = await prisma.userSubscription.findMany({
     where: { user_id: userId },
     select: {
+      read_at: true,
       channel: {
         select: {
           id: true,
@@ -31,16 +32,32 @@ export default async function InboxPage({ searchParams }: Props) {
           name: true,
           rss_url: true,
           created_at: true,
-          _count: {
-            select: { videos: { where: { consumptions: { none: { user_id: userId } } } } },
-          },
         },
       },
     },
   });
-  const channelRows = subscriptions
-    .map((s) => s.channel)
-    .sort((a, b) => a.name.localeCompare(b.name));
+
+  // Per-channel watermark map for the video list mapper.
+  const watermarkByChannelId = new Map<string, Date | null>(
+    subscriptions.map((s) => [s.channel.id, s.read_at])
+  );
+
+  // Per-subscription unread counts (the watermark differs per row, so we
+  // can't use Prisma's _count aggregation here).
+  const channelsWithCounts = await Promise.all(
+    subscriptions.map(async (sub) => {
+      const unreadCount = await prisma.video.count({
+        where: {
+          channel_id: sub.channel.id,
+          consumptions: { none: { user_id: userId } },
+          ...(sub.read_at != null ? { published_at: { gt: sub.read_at } } : {}),
+        },
+      });
+      return { ...sub.channel, unreadCount };
+    })
+  );
+
+  const channelRows = channelsWithCounts.sort((a, b) => a.name.localeCompare(b.name));
 
   const channels: ChannelData[] = channelRows.map((c) => ({
     id: c.id,
@@ -48,7 +65,7 @@ export default async function InboxPage({ searchParams }: Props) {
     name: c.name,
     rssUrl: c.rss_url,
     createdAt: c.created_at.toISOString(),
-    unreadCount: c._count.videos,
+    unreadCount: c.unreadCount,
   }));
 
   const userChannelIds = channelRows.map((c) => c.id);
@@ -80,7 +97,20 @@ export default async function InboxPage({ searchParams }: Props) {
       : [];
 
   type VideoRow = (typeof videoRows)[number];
-  const readAtFor = (v: VideoRow): Date | null => v.consumptions[0]?.read_at ?? null;
+  // A video is "read" if either:
+  //   1. there's an explicit UserVideoConsumption row, OR
+  //   2. the user's subscription watermark covers it (published_at <= watermark).
+  const readAtFor = (v: VideoRow): Date | null => {
+    const explicit = v.consumptions[0]?.read_at;
+    if (explicit != null) {
+      return explicit;
+    }
+    const watermark = watermarkByChannelId.get(v.channel_id);
+    if (watermark != null && v.published_at.getTime() <= watermark.getTime()) {
+      return watermark;
+    }
+    return null;
+  };
 
   const sortedRows = [...videoRows].sort(
     (a, b) => b.published_at.getTime() - a.published_at.getTime()
