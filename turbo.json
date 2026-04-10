@@ -13,7 +13,7 @@
   ],
   "tasks": {
     "typecheck": {
-      "dependsOn": ["^typecheck"]
+      "dependsOn": ["^typecheck", "^db:generate"]
     },
     "lint": {
       "dependsOn": ["^lint"]
