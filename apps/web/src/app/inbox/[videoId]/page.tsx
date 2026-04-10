@@ -14,7 +14,7 @@ interface Props {
 
 export default async function VideoPage({ params, searchParams }: Props) {
   const { userId } = await auth();
-  if (!userId) {
+  if (userId == null) {
     redirect('/');
   }
 

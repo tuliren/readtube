@@ -8,7 +8,7 @@ import { scrapeChannel } from '@/lib/youtube/scrapeChannel';
 
 export async function GET() {
   const { userId } = await auth();
-  if (!userId) {
+  if (userId == null) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -44,7 +44,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   const { userId } = await auth();
-  if (!userId) {
+  if (userId == null) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -56,23 +56,23 @@ export async function POST(request: NextRequest) {
   }
 
   const input = body.url?.trim() ?? '';
-  if (!input) {
+  if (input === '') {
     return NextResponse.json({ error: 'Missing URL' }, { status: 400 });
   }
 
   let channelPageUrl: string | null = null;
 
   const handle = extractHandle(input);
-  if (handle) {
+  if (handle != null) {
     channelPageUrl = `https://www.youtube.com/@${handle}`;
   } else {
     const bareId = extractChannelId(input);
-    if (bareId) {
+    if (bareId != null) {
       channelPageUrl = `https://www.youtube.com/channel/${bareId}`;
     }
   }
 
-  if (!channelPageUrl) {
+  if (channelPageUrl == null) {
     return NextResponse.json(
       {
         error:
@@ -109,27 +109,29 @@ export async function POST(request: NextRequest) {
   const now = new Date();
   const rssUrl = buildRssUrl(sourceId);
 
-  // Find or create the channel
-  let channel = await prisma.channel.findUnique({ where: { source_id: sourceId } });
-
-  if (!channel) {
-    channel = await prisma.channel.create({
-      data: {
-        source_id: sourceId,
-        name: scraped.name,
-        rss_url: rssUrl,
-        videos: {
-          create: scraped.videos.map((v) => ({
-            source_id: v.videoId,
-            title: v.title,
-            description: v.description,
-            published_at: v.publishedAt,
-            read_at: now,
-          })),
-        },
+  // Upsert the channel atomically — avoids a race condition where two users
+  // concurrently subscribe to the same brand-new channel. On create, also
+  // pre-seed the existing videos so new subscribers don't get a flood of
+  // unread items. On update (channel already exists), do nothing — another
+  // user already created it and we just want to piggyback on it.
+  const channel = await prisma.channel.upsert({
+    where: { source_id: sourceId },
+    create: {
+      source_id: sourceId,
+      name: scraped.name,
+      rss_url: rssUrl,
+      videos: {
+        create: scraped.videos.map((v) => ({
+          source_id: v.videoId,
+          title: v.title,
+          description: v.description,
+          published_at: v.publishedAt,
+          read_at: now,
+        })),
       },
-    });
-  }
+    },
+    update: {},
+  });
 
   // Subscribe user to channel
   await prisma.userSubscription.create({

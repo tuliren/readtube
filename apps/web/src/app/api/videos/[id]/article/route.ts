@@ -16,7 +16,7 @@ const MODEL = 'google/gemini-2.5-flash';
 const DEFAULT_STYLE: ArticleStyle = ArticleStyle.NARRATIVE;
 
 function parseStyle(raw: string | null | undefined): ArticleStyle | null {
-  if (!raw) {
+  if (raw == null) {
     return DEFAULT_STYLE;
   }
   if (raw in ArticleStyle) {
@@ -53,7 +53,7 @@ ${transcript}`;
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { userId } = await auth();
-  if (!userId) {
+  if (userId == null) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -108,7 +108,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { userId } = await auth();
-  if (!userId) {
+  if (userId == null) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

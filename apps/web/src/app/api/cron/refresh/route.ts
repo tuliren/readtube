@@ -6,12 +6,12 @@ import { scrapeChannel } from '@/lib/youtube/scrapeChannel';
 
 function verifyToken(request: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
-  if (!secret) {
+  if (secret == null || secret === '') {
     return false;
   }
 
   const authHeader = request.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
+  if (authHeader == null || !authHeader.startsWith('Bearer ')) {
     return false;
   }
 

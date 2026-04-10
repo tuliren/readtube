@@ -6,7 +6,7 @@ import { fetchSubtitleViaTranscriptApi } from '@/lib/subtitles';
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { userId } = await auth();
-  if (!userId) {
+  if (userId == null) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -38,7 +38,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { userId } = await auth();
-  if (!userId) {
+  if (userId == null) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

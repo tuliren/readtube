@@ -5,7 +5,7 @@ import { prisma } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   const { userId } = await auth();
-  if (!userId) {
+  if (userId == null) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

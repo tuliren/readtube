@@ -17,7 +17,7 @@ export async function upsertUser(user: UserJSON): Promise<void> {
   const name = extractName(user);
   const email = extractPrimaryEmail(user);
 
-  if (!email) {
+  if (email == null) {
     console.warn(`No primary email found for user ${user.id}, skipping upsert`);
     return;
   }
@@ -28,12 +28,12 @@ export async function upsertUser(user: UserJSON): Promise<void> {
       source_id: user.id,
       name,
       email,
-      image: user.image_url || null,
+      image: user.image_url ?? null,
     },
     update: {
       name,
       email,
-      image: user.image_url || null,
+      image: user.image_url ?? null,
     },
   });
 
@@ -67,15 +67,15 @@ export async function ensureUserExists(userId: string): Promise<void> {
   const primaryEmail = user.emailAddresses.find((e) => e.id === user.primaryEmailAddressId);
   const email = primaryEmail?.emailAddress ?? null;
 
-  if (!email) {
+  if (email == null) {
     console.warn(`No primary email found for user ${userId}, skipping upsert`);
     return;
   }
 
   await prisma.user.upsert({
     where: { source_id: userId },
-    create: { source_id: userId, name, email, image: user.imageUrl || null },
-    update: { name, email, image: user.imageUrl || null },
+    create: { source_id: userId, name, email, image: user.imageUrl ?? null },
+    update: { name, email, image: user.imageUrl ?? null },
   });
 
   console.info(`Upserted User for ${email} (${userId}) via fallback`);

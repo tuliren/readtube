@@ -12,7 +12,7 @@ interface Props {
 
 export default async function InboxPage({ searchParams }: Props) {
   const { userId } = await auth();
-  if (!userId) {
+  if (userId == null) {
     redirect('/');
   }
 

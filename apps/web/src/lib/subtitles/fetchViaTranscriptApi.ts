@@ -16,7 +16,7 @@ export async function fetchSubtitleViaTranscriptApi(
   videoId: string
 ): Promise<{ segments: TranscriptSegment[]; language: string }> {
   const apiKey = process.env.TRANSCRIPT_API_KEY;
-  if (!apiKey) {
+  if (apiKey == null || apiKey === '') {
     throw new Error('TRANSCRIPT_API_KEY is not set');
   }
 

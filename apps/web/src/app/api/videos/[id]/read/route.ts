@@ -5,7 +5,7 @@ import { prisma } from '@/lib/db';
 
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { userId } = await auth();
-  if (!userId) {
+  if (userId == null) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
