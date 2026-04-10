@@ -11,33 +11,50 @@ generator client {
   output   = "../generated/prisma"
 }
 
-model ClerkUser {
-  id         String    @id @default(cuid())
-  user_id    String    @unique
-  name       String
-  email      String    @unique
-  image      String?
-  created_at DateTime  @default(now())
-  updated_at DateTime  @updatedAt
-  channels   Channel[]
+enum UserSourceType {
+  CLERK
+}
 
-  @@index([user_id], name: "clerk_user_index_on_user_id")
+enum VideoPlatformType {
+  YOUTUBE
+}
+
+model ClerkUser {
+  id            String             @id @default(cuid())
+  source_type   UserSourceType     @default(CLERK)
+  // clerk user id
+  source_id     String             @unique
+  name          String
+  email         String             @unique
+  image         String?
+  created_at    DateTime           @default(now())
+  updated_at    DateTime           @updatedAt
+  subscriptions UserSubscription[]
 }
 
 model Channel {
+  id            String             @id @default(cuid())
+  source_type   VideoPlatformType  @default(YOUTUBE)
+  // source platform channel id
+  source_id     String             @unique
+  name          String
+  rss_url       String
+  created_at    DateTime           @default(now())
+  updated_at    DateTime           @updatedAt
+  videos        Video[]
+  subscriptions UserSubscription[]
+}
+
+model UserSubscription {
   id         String    @id @default(cuid())
   user_id    String
-  // source platform channel id
-  source_id  String
-  name       String
-  rss_url    String
+  channel_id String
   created_at DateTime  @default(now())
-  updated_at DateTime  @updatedAt
-  user       ClerkUser @relation(fields: [user_id], references: [user_id])
-  videos     Video[]
+  user       ClerkUser @relation(fields: [user_id], references: [source_id])
+  channel    Channel   @relation(fields: [channel_id], references: [id], onDelete: Cascade)
 
-  @@unique([user_id, source_id], name: "channel_unique_user_source")
-  @@index([source_id], name: "channel_index_on_source_id")
+  @@unique([user_id, channel_id], name: "subscription_unique_user_channel")
+  @@index([channel_id], name: "subscription_index_on_channel_id")
 }
 
 model Video {
