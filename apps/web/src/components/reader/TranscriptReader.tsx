@@ -8,45 +8,88 @@ import { formatTimestamp, groupTranscriptSegments } from '@/lib/youtube/transcri
 interface Props {
   videoDbId: string;
   sourceId: string;
+  onFetched?: () => void;
 }
+
+type Status = 'checking' | 'notCached' | 'fetching' | 'loaded' | 'error';
 
 function TranscriptSkeleton() {
   return (
     <div className="animate-pulse space-y-4">
       {[100, 80, 95, 70, 85, 90, 75].map((w, i) => (
         <div key={i} className="space-y-2">
-          <div className={`h-4 rounded bg-gray-200`} style={{ width: `${w}%` }} />
-          <div
-            className={`h-4 rounded bg-gray-200`}
-            style={{ width: `${Math.max(w - 20, 40)}%` }}
-          />
+          <div className="h-4 rounded bg-gray-200" style={{ width: `${w}%` }} />
+          <div className="h-4 rounded bg-gray-200" style={{ width: `${Math.max(w - 20, 40)}%` }} />
         </div>
       ))}
     </div>
   );
 }
 
-export default function TranscriptReader({ videoDbId, sourceId }: Props) {
+export default function TranscriptReader({ videoDbId, sourceId, onFetched }: Props) {
   const [segments, setSegments] = useState<TranscriptSegment[] | null>(null);
-  const [error, setError] = useState(false);
+  const [status, setStatus] = useState<Status>('checking');
 
   useEffect(() => {
+    setStatus('checking');
     setSegments(null);
-    setError(false);
 
     fetch(`/api/videos/${videoDbId}/transcript`)
       .then(async (res) => {
+        if (res.status === 404) {
+          setStatus('notCached');
+          return;
+        }
         if (!res.ok) {
-          setError(true);
+          setStatus('error');
           return;
         }
         const data = (await res.json()) as { segments: TranscriptSegment[] };
         setSegments(data.segments);
+        setStatus('loaded');
       })
-      .catch(() => setError(true));
+      .catch(() => setStatus('error'));
   }, [videoDbId]);
 
-  if (error) {
+  async function handleFetch() {
+    setStatus('fetching');
+    try {
+      const res = await fetch(`/api/videos/${videoDbId}/transcript`, { method: 'POST' });
+      if (!res.ok) {
+        setStatus('error');
+        return;
+      }
+      const data = (await res.json()) as { segments: TranscriptSegment[] };
+      setSegments(data.segments);
+      setStatus('loaded');
+      onFetched?.();
+    } catch {
+      setStatus('error');
+    }
+  }
+
+  if (status === 'checking') {
+    return <TranscriptSkeleton />;
+  }
+
+  if (status === 'notCached') {
+    return (
+      <div className="py-8 text-center">
+        <button
+          onClick={handleFetch}
+          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+        >
+          Fetch transcript
+        </button>
+      </div>
+    );
+  }
+
+  if (status === 'fetching') {
+    return <TranscriptSkeleton />;
+  }
+
+  if (status === 'error') {
     return (
       <div className="py-8 text-center text-sm text-gray-400">
         Transcript unavailable.{' '}
@@ -62,11 +105,7 @@ export default function TranscriptReader({ videoDbId, sourceId }: Props) {
     );
   }
 
-  if (segments === null) {
-    return <TranscriptSkeleton />;
-  }
-
-  const paragraphs = groupTranscriptSegments(segments);
+  const paragraphs = segments ? groupTranscriptSegments(segments) : [];
 
   if (paragraphs.length === 0) {
     return (
