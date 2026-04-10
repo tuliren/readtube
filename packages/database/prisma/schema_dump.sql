@@ -49,9 +49,17 @@ CREATE TABLE "Video" (
   "title" TEXT NOT NULL,
   "description" TEXT,
   "published_at" TIMESTAMP(3) NOT NULL,
-  "read_at" TIMESTAMP(3),
   "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "Video_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "UserVideoConsumption" (
+  "id" TEXT NOT NULL,
+  "user_id" TEXT NOT NULL,
+  "video_id" TEXT NOT NULL,
+  "read_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "UserVideoConsumption_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -117,6 +125,12 @@ CREATE INDEX "video_index_on_source_id" ON "Video" ("source_id");
 CREATE UNIQUE INDEX "Video_channel_id_source_id_key" ON "Video" ("channel_id", "source_id");
 
 -- CreateIndex
+CREATE INDEX "user_video_consumption_index_on_video_id" ON "UserVideoConsumption" ("video_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "UserVideoConsumption_user_id_video_id_key" ON "UserVideoConsumption" ("user_id", "video_id");
+
+-- CreateIndex
 CREATE INDEX "transcript_index_on_video_id" ON "Transcript" ("video_id");
 
 -- CreateIndex
@@ -136,6 +150,14 @@ ADD CONSTRAINT "UserSubscription_user_id_fkey" FOREIGN KEY ("user_id") REFERENCE
 -- AddForeignKey
 ALTER TABLE "Video"
 ADD CONSTRAINT "Video_channel_id_fkey" FOREIGN KEY ("channel_id") REFERENCES "Channel" ("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "UserVideoConsumption"
+ADD CONSTRAINT "UserVideoConsumption_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "User" ("source_id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "UserVideoConsumption"
+ADD CONSTRAINT "UserVideoConsumption_video_id_fkey" FOREIGN KEY ("video_id") REFERENCES "Video" ("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Transcript"
