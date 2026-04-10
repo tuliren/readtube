@@ -1,5 +1,5 @@
 module.exports = {
-  preset: '@repo/jest-presets/node',
+  preset: '@readtube/jest-presets/node',
   setupFilesAfterEnv: ['<rootDir>/jest.integration.setup.ts'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',

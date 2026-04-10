@@ -1,4 +1,4 @@
-const nextConfig = require('@repo/eslint-config/next.js');
+const nextConfig = require('@readtube/eslint-config/next.js');
 const globals = require('globals');
 
 /** @type {import('eslint').Linter.Config[]} */

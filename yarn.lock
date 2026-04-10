@@ -4016,9 +4016,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@repo/database@npm:*, @repo/database@workspace:packages/database":
+"@readtube/database@npm:*, @readtube/database@workspace:packages/database":
   version: 0.0.0-use.local
-  resolution: "@repo/database@workspace:packages/database"
+  resolution: "@readtube/database@workspace:packages/database"
   dependencies:
     "@prisma/client": "npm:^6.6.0"
     eslint: "npm:^9.0.0"
@@ -4026,13 +4026,13 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@repo/docs@workspace:apps/docs":
+"@readtube/docs@workspace:apps/docs":
   version: 0.0.0-use.local
-  resolution: "@repo/docs@workspace:apps/docs"
+  resolution: "@readtube/docs@workspace:apps/docs"
   dependencies:
     "@next/eslint-plugin-next": "npm:^14.1.1"
-    "@repo/eslint-config": "npm:*"
-    "@repo/typescript-config": "npm:*"
+    "@readtube/eslint-config": "npm:*"
+    "@readtube/typescript-config": "npm:*"
     "@tabler/icons-react": "npm:^3.31.0"
     "@types/node": "npm:22.13.10"
     "@types/react": "npm:^18.2.61"
@@ -4048,9 +4048,9 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@repo/eslint-config@npm:*, @repo/eslint-config@workspace:packages/eslint-config":
+"@readtube/eslint-config@npm:*, @readtube/eslint-config@workspace:packages/eslint-config":
   version: 0.0.0-use.local
-  resolution: "@repo/eslint-config@workspace:packages/eslint-config"
+  resolution: "@readtube/eslint-config@workspace:packages/eslint-config"
   dependencies:
     "@eslint/js": "npm:^9.0.0"
     "@typescript-eslint/eslint-plugin": "npm:^8.18.2"
@@ -4070,9 +4070,9 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@repo/jest-presets@npm:*, @repo/jest-presets@workspace:packages/jest-presets":
+"@readtube/jest-presets@npm:*, @readtube/jest-presets@workspace:packages/jest-presets":
   version: 0.0.0-use.local
-  resolution: "@repo/jest-presets@workspace:packages/jest-presets"
+  resolution: "@readtube/jest-presets@workspace:packages/jest-presets"
   dependencies:
     jest: "npm:^29.7.0"
     ts-jest: "npm:^29.1.1"
@@ -4080,13 +4080,13 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@repo/lib@npm:*, @repo/lib@workspace:packages/lib":
+"@readtube/lib@npm:*, @readtube/lib@workspace:packages/lib":
   version: 0.0.0-use.local
-  resolution: "@repo/lib@workspace:packages/lib"
+  resolution: "@readtube/lib@workspace:packages/lib"
   dependencies:
-    "@repo/eslint-config": "npm:*"
-    "@repo/jest-presets": "npm:*"
-    "@repo/typescript-config": "npm:*"
+    "@readtube/eslint-config": "npm:*"
+    "@readtube/jest-presets": "npm:*"
+    "@readtube/typescript-config": "npm:*"
     "@turbo/gen": "npm:^1.12.4"
     "@types/eslint": "npm:^8.56.5"
     "@types/jest": "npm:^29.5.14"
@@ -4102,15 +4102,15 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@repo/typescript-config@npm:*, @repo/typescript-config@workspace:packages/typescript-config":
+"@readtube/typescript-config@npm:*, @readtube/typescript-config@workspace:packages/typescript-config":
   version: 0.0.0-use.local
-  resolution: "@repo/typescript-config@workspace:packages/typescript-config"
+  resolution: "@readtube/typescript-config@workspace:packages/typescript-config"
   languageName: unknown
   linkType: soft
 
-"@repo/web@workspace:apps/web":
+"@readtube/web@workspace:apps/web":
   version: 0.0.0-use.local
-  resolution: "@repo/web@workspace:apps/web"
+  resolution: "@readtube/web@workspace:apps/web"
   dependencies:
     "@babel/core": "npm:^7.24.5"
     "@chromatic-com/storybook": "npm:^4.1.3"
@@ -4118,11 +4118,11 @@ __metadata:
     "@headlessui/react": "npm:^2.1.3"
     "@heroicons/react": "npm:^2.1.5"
     "@next/eslint-plugin-next": "npm:^14.1.1"
-    "@repo/database": "npm:*"
-    "@repo/eslint-config": "npm:*"
-    "@repo/jest-presets": "npm:*"
-    "@repo/lib": "npm:*"
-    "@repo/typescript-config": "npm:*"
+    "@readtube/database": "npm:*"
+    "@readtube/eslint-config": "npm:*"
+    "@readtube/jest-presets": "npm:*"
+    "@readtube/lib": "npm:*"
+    "@readtube/typescript-config": "npm:*"
     "@storybook/addon-docs": "npm:^10.1.2"
     "@storybook/addon-links": "npm:^10.1.2"
     "@storybook/nextjs": "npm:^10.1.2"
@@ -21744,8 +21744,8 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "turbo-template@workspace:."
   dependencies:
-    "@repo/eslint-config": "npm:*"
-    "@repo/typescript-config": "npm:*"
+    "@readtube/eslint-config": "npm:*"
+    "@readtube/typescript-config": "npm:*"
     "@trivago/prettier-plugin-sort-imports": "npm:^4.3.0"
     eslint: "npm:^9.0.0"
     eslint-config-prettier: "npm:^9.1.0"

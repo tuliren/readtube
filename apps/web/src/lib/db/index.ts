@@ -1,4 +1,4 @@
-import { prisma } from '@repo/database';
+import { prisma } from '@readtube/database';
 
 export { prisma };
 

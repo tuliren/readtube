@@ -1,5 +1,5 @@
 import { auth } from '@clerk/nextjs/server';
-import { ArticleStyle } from '@repo/database';
+import { ArticleStyle } from '@readtube/database';
 import { streamText } from 'ai';
 import { NextRequest, NextResponse } from 'next/server';
 
