@@ -19,7 +19,7 @@ enum VideoPlatformType {
   YOUTUBE
 }
 
-model ClerkUser {
+model User {
   id            String             @id @default(cuid())
   source_type   UserSourceType     @default(CLERK)
   // clerk user id
@@ -50,7 +50,7 @@ model UserSubscription {
   user_id    String
   channel_id String
   created_at DateTime  @default(now())
-  user       ClerkUser @relation(fields: [user_id], references: [source_id])
+  user       User      @relation(fields: [user_id], references: [source_id])
   channel    Channel   @relation(fields: [channel_id], references: [id], onDelete: Cascade)
 
   @@unique([user_id, channel_id], name: "subscription_unique_user_channel")
