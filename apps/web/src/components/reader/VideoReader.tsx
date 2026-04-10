@@ -8,13 +8,14 @@ import { useState } from 'react';
 import type { VideoData } from '@/lib/types';
 
 import ArticleReader from './ArticleReader';
+import SummaryReader from './SummaryReader';
 import TranscriptReader from './TranscriptReader';
 
 interface Props {
   video: VideoData;
 }
 
-type Tab = 'transcript' | 'article';
+type Tab = 'summary' | 'transcript' | 'article';
 
 function relativeDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString(undefined, {
@@ -79,6 +80,16 @@ export default function VideoReader({ video }: Props) {
         <div className="mt-8 border-b border-gray-200">
           <div className="flex gap-6">
             <button
+              onClick={() => setActiveTab('summary')}
+              className={`-mb-px border-b-2 px-1 py-3 text-sm font-medium transition-colors ${
+                activeTab === 'summary'
+                  ? 'border-gray-900 text-gray-900'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Summary
+            </button>
+            <button
               onClick={() => setActiveTab('transcript')}
               className={`-mb-px border-b-2 px-1 py-3 text-sm font-medium transition-colors ${
                 activeTab === 'transcript'
@@ -103,6 +114,9 @@ export default function VideoReader({ video }: Props) {
 
         {/* Tab content */}
         <div className="mt-6">
+          <div className={activeTab === 'summary' ? '' : 'hidden'}>
+            <SummaryReader videoDbId={video.id} />
+          </div>
           <div className={activeTab === 'transcript' ? '' : 'hidden'}>
             <TranscriptReader
               videoDbId={video.id}

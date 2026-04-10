@@ -11,8 +11,8 @@ interface TranscriptSegment {
   text: string;
 }
 
-const PROMPT_VERSION = 'v1';
-const MODEL = 'anthropic/claude-sonnet-4.5';
+const PROMPT_VERSION = 'v2';
+const MODEL = 'google/gemini-2.5-flash';
 const DEFAULT_STYLE: ArticleStyle = ArticleStyle.NARRATIVE;
 
 function parseStyle(raw: string | null | undefined): ArticleStyle | null {
@@ -42,6 +42,7 @@ ${styleGuidance}
 - Do not invent facts that aren't in the transcript.
 - Do not include the video title as a top-level heading — it will be shown separately.
 - Start directly with the article content. No preamble like "Here is the article".
+- Write in the same language as the transcript. Do not translate — if the transcript is in Chinese, write in Chinese; if Spanish, write in Spanish; and so on.
 
 Video title: ${title}
 Channel: ${channelName}
