@@ -2,7 +2,7 @@ import type { WebhookEvent } from '@clerk/nextjs/server';
 import { headers } from 'next/headers';
 import { Webhook } from 'svix';
 
-import { deleteClerkUser, upsertClerkUser } from '@/lib/db/user';
+import { deleteUser, upsertUser } from '@/lib/db/user';
 
 export async function POST(req: Request) {
   const secret = process.env.CLERK_WEBHOOK_SECRET;
@@ -40,7 +40,7 @@ export async function POST(req: Request) {
     case 'user.updated': {
       console.info(`Received Clerk webhook ${event.type} for user ${event.data.id}`);
       try {
-        await upsertClerkUser(event.data);
+        await upsertUser(event.data);
       } catch (err) {
         console.error(`Failed to process user ${event.data.id}:`, err);
         return new Response('Failed to process user', { status: 500 });
@@ -55,7 +55,7 @@ export async function POST(req: Request) {
       }
       console.info(`Received Clerk webhook user.deleted for user ${id}`);
       try {
-        await deleteClerkUser(id);
+        await deleteUser(id);
       } catch (err) {
         console.error(`Failed to delete user ${id}:`, err);
         return new Response('Failed to delete user', { status: 500 });

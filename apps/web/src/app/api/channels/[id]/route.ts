@@ -15,15 +15,15 @@ export async function DELETE(
   const { id } = await params;
   const channelId = id;
 
-  // IDOR check: ensure channel belongs to this user
-  const channel = await prisma.channel.findFirst({
-    where: { id: channelId, user_id: userId },
+  // IDOR check: ensure user is subscribed to this channel
+  const sub = await prisma.userSubscription.findFirst({
+    where: { channel_id: channelId, user_id: userId },
   });
-  if (!channel) {
+  if (!sub) {
     return NextResponse.json({ error: 'Channel not found' }, { status: 404 });
   }
 
-  await prisma.channel.delete({ where: { id: channelId } });
+  await prisma.userSubscription.delete({ where: { id: sub.id } });
 
   return new NextResponse(null, { status: 204 });
 }

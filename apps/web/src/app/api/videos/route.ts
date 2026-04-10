@@ -11,12 +11,12 @@ export async function GET(request: NextRequest) {
 
   const channelIdParam = request.nextUrl.searchParams.get('channelId');
 
-  // Get all channels for this user (for scoping)
-  const userChannels = await prisma.channel.findMany({
+  // Get all channels user is subscribed to
+  const userSubs = await prisma.userSubscription.findMany({
     where: { user_id: userId },
-    select: { id: true },
+    select: { channel_id: true },
   });
-  const channelIds = userChannels.map((c) => c.id);
+  const channelIds = userSubs.map((s) => s.channel_id);
 
   if (channelIds.length === 0) {
     return NextResponse.json([]);
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
 
   // Scoped to user's channels
   const scopedWhere = channelIdParam
-    ? { channel_id: channelIdParam, channel: { user_id: userId } }
+    ? { channel_id: channelIdParam }
     : { channel_id: { in: channelIds } };
 
   const videos = await prisma.video.findMany({

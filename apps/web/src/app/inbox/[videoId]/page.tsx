@@ -26,7 +26,7 @@ export default async function VideoPage({ params, searchParams }: Props) {
 
   // Fetch the video with IDOR check
   const video = await prisma.video.findFirst({
-    where: { id: videoDbId, channel: { user_id: userId } },
+    where: { id: videoDbId, channel: { subscriptions: { some: { user_id: userId } } } },
     select: {
       id: true,
       source_id: true,
@@ -63,18 +63,24 @@ export default async function VideoPage({ params, searchParams }: Props) {
     channelSourceId: video.channel.source_id,
   };
 
-  const channelRows = await prisma.channel.findMany({
+  const channelSubs = await prisma.userSubscription.findMany({
     where: { user_id: userId },
     select: {
-      id: true,
-      source_id: true,
-      name: true,
-      rss_url: true,
-      created_at: true,
-      _count: { select: { videos: { where: { read_at: null } } } },
+      channel: {
+        select: {
+          id: true,
+          source_id: true,
+          name: true,
+          rss_url: true,
+          created_at: true,
+          _count: { select: { videos: { where: { read_at: null } } } },
+        },
+      },
     },
-    orderBy: { name: 'asc' },
   });
+  const channelRows = channelSubs
+    .map((s) => s.channel)
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   const channels: ChannelData[] = channelRows.map((c) => ({
     id: c.id,

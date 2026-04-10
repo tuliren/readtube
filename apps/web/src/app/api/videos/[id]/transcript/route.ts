@@ -13,9 +13,9 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   const { id } = await params;
   const videoId = id;
 
-  // IDOR check: ensure video belongs to a channel owned by this user
+  // IDOR check: ensure video belongs to a channel the user is subscribed to
   const video = await prisma.video.findFirst({
-    where: { id: videoId, channel: { user_id: userId } },
+    where: { id: videoId, channel: { subscriptions: { some: { user_id: userId } } } },
     select: {
       id: true,
       source_id: true,

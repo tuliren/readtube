@@ -12,18 +12,23 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const channels = await prisma.channel.findMany({
+  const subscriptions = await prisma.userSubscription.findMany({
     where: { user_id: userId },
     select: {
-      id: true,
-      source_id: true,
-      name: true,
-      rss_url: true,
-      created_at: true,
-      _count: { select: { videos: { where: { read_at: null } } } },
+      channel: {
+        select: {
+          id: true,
+          source_id: true,
+          name: true,
+          rss_url: true,
+          created_at: true,
+          _count: { select: { videos: { where: { read_at: null } } } },
+        },
+      },
     },
-    orderBy: { name: 'asc' },
   });
+
+  const channels = subscriptions.map((s) => s.channel).sort((a, b) => a.name.localeCompare(b.name));
 
   return NextResponse.json(
     channels.map((c) => ({
@@ -93,46 +98,57 @@ export async function POST(request: NextRequest) {
   // Ensure user exists in DB before writing FK reference
   await ensureUserExists(userId);
 
-  // Check duplicate
-  const existing = await prisma.channel.findFirst({
-    where: { user_id: userId, source_id: sourceId },
+  // Check if user already subscribed to this channel
+  const existingSub = await prisma.userSubscription.findFirst({
+    where: { user_id: userId, channel: { source_id: sourceId } },
   });
-  if (existing) {
+  if (existingSub) {
     return NextResponse.json({ error: 'You already follow this channel.' }, { status: 409 });
   }
 
   const now = new Date();
   const rssUrl = buildRssUrl(sourceId);
 
-  const channel = await prisma.channel.create({
-    data: {
-      user_id: userId,
-      source_id: sourceId,
-      name: scraped.name,
-      rss_url: rssUrl,
-      videos: {
-        create: scraped.videos.map((v) => ({
-          source_id: v.videoId,
-          title: v.title,
-          description: v.description,
-          published_at: v.publishedAt,
-          read_at: now,
-        })),
+  // Find or create the channel
+  let channel = await prisma.channel.findUnique({ where: { source_id: sourceId } });
+
+  if (!channel) {
+    channel = await prisma.channel.create({
+      data: {
+        source_id: sourceId,
+        name: scraped.name,
+        rss_url: rssUrl,
+        videos: {
+          create: scraped.videos.map((v) => ({
+            source_id: v.videoId,
+            title: v.title,
+            description: v.description,
+            published_at: v.publishedAt,
+            read_at: now,
+          })),
+        },
       },
-    },
-    include: {
-      _count: { select: { videos: { where: { read_at: null } } } },
-    },
+    });
+  }
+
+  // Subscribe user to channel
+  await prisma.userSubscription.create({
+    data: { user_id: userId, channel_id: channel.id },
+  });
+
+  const channelWithCount = await prisma.channel.findUniqueOrThrow({
+    where: { id: channel.id },
+    include: { _count: { select: { videos: { where: { read_at: null } } } } },
   });
 
   return NextResponse.json(
     {
-      id: channel.id,
-      sourceId: channel.source_id,
-      name: channel.name,
-      rssUrl: channel.rss_url,
-      createdAt: channel.created_at,
-      unreadCount: 0,
+      id: channelWithCount.id,
+      sourceId: channelWithCount.source_id,
+      name: channelWithCount.name,
+      rssUrl: channelWithCount.rss_url,
+      createdAt: channelWithCount.created_at,
+      unreadCount: channelWithCount._count.videos,
     },
     { status: 201 }
   );

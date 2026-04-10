@@ -1,5 +1,5 @@
 import { clerkClient } from '@clerk/nextjs/server';
-import type { User, UserJSON } from '@clerk/nextjs/server';
+import type { User as ClerkUser, UserJSON } from '@clerk/nextjs/server';
 
 import { prisma } from '@/lib/db';
 
@@ -13,7 +13,7 @@ function extractPrimaryEmail(user: UserJSON): string | null {
   return primary?.email_address ?? null;
 }
 
-export async function upsertClerkUser(user: UserJSON): Promise<void> {
+export async function upsertUser(user: UserJSON): Promise<void> {
   const name = extractName(user);
   const email = extractPrimaryEmail(user);
 
@@ -22,10 +22,10 @@ export async function upsertClerkUser(user: UserJSON): Promise<void> {
     return;
   }
 
-  await prisma.clerkUser.upsert({
-    where: { user_id: user.id },
+  await prisma.user.upsert({
+    where: { source_id: user.id },
     create: {
-      user_id: user.id,
+      source_id: user.id,
       name,
       email,
       image: user.image_url || null,
@@ -37,22 +37,22 @@ export async function upsertClerkUser(user: UserJSON): Promise<void> {
     },
   });
 
-  console.info(`Upserted ClerkUser for ${email} (${user.id})`);
+  console.info(`Upserted User for ${email} (${user.id})`);
 }
 
-export async function deleteClerkUser(userId: string): Promise<void> {
-  await prisma.clerkUser.delete({ where: { user_id: userId } });
-  console.info(`Deleted ClerkUser for ${userId}`);
+export async function deleteUser(userId: string): Promise<void> {
+  await prisma.user.delete({ where: { source_id: userId } });
+  console.info(`Deleted User for ${userId}`);
 }
 
 /**
- * Ensures a ClerkUser row exists in the database, fetching from Clerk if needed.
+ * Ensures a User row exists in the database, fetching from Clerk if needed.
  * Call this on login entry points and before any write that has a user_id FK.
  */
 export async function ensureUserExists(userId: string): Promise<void> {
-  const existing = await prisma.clerkUser.findUnique({
-    where: { user_id: userId },
-    select: { user_id: true },
+  const existing = await prisma.user.findUnique({
+    where: { source_id: userId },
+    select: { source_id: true },
   });
 
   if (existing) {
@@ -60,7 +60,7 @@ export async function ensureUserExists(userId: string): Promise<void> {
   }
 
   const client = await clerkClient();
-  const user: User = await client.users.getUser(userId);
+  const user: ClerkUser = await client.users.getUser(userId);
 
   const parts = [user.firstName, user.lastName].filter(Boolean);
   const name = parts.length > 0 ? parts.join(' ') : 'Unknown';
@@ -72,11 +72,11 @@ export async function ensureUserExists(userId: string): Promise<void> {
     return;
   }
 
-  await prisma.clerkUser.upsert({
-    where: { user_id: userId },
-    create: { user_id: userId, name, email, image: user.imageUrl || null },
+  await prisma.user.upsert({
+    where: { source_id: userId },
+    create: { source_id: userId, name, email, image: user.imageUrl || null },
     update: { name, email, image: user.imageUrl || null },
   });
 
-  console.info(`Upserted ClerkUser for ${email} (${userId}) via fallback`);
+  console.info(`Upserted User for ${email} (${userId}) via fallback`);
 }

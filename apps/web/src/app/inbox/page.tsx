@@ -21,18 +21,24 @@ export default async function InboxPage({ searchParams }: Props) {
   const { channel: channelParam } = await searchParams;
   const selectedChannelId = channelParam ?? null;
 
-  const channelRows = await prisma.channel.findMany({
+  const subscriptions = await prisma.userSubscription.findMany({
     where: { user_id: userId },
     select: {
-      id: true,
-      source_id: true,
-      name: true,
-      rss_url: true,
-      created_at: true,
-      _count: { select: { videos: { where: { read_at: null } } } },
+      channel: {
+        select: {
+          id: true,
+          source_id: true,
+          name: true,
+          rss_url: true,
+          created_at: true,
+          _count: { select: { videos: { where: { read_at: null } } } },
+        },
+      },
     },
-    orderBy: { name: 'asc' },
   });
+  const channelRows = subscriptions
+    .map((s) => s.channel)
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   const channels: ChannelData[] = channelRows.map((c) => ({
     id: c.id,

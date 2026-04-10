@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
   }
 
   const channels = await prisma.channel.findMany({
-    select: { id: true, source_id: true, rss_url: true, user_id: true },
+    select: { id: true, source_id: true, rss_url: true },
   });
 
   let totalNew = 0;
