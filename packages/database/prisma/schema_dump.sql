@@ -131,7 +131,7 @@ ADD CONSTRAINT "UserSubscription_channel_id_fkey" FOREIGN KEY ("channel_id") REF
 
 -- AddForeignKey
 ALTER TABLE "UserSubscription"
-ADD CONSTRAINT "UserSubscription_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "User" ("source_id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ADD CONSTRAINT "UserSubscription_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "User" ("source_id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Video"
