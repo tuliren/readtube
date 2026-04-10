@@ -57,7 +57,7 @@ model UserSubscription {
   channel_id String
   created_at DateTime @default(now())
 
-  user    User    @relation(fields: [user_id], references: [source_id])
+  user    User    @relation(fields: [user_id], references: [source_id], onDelete: Cascade)
   channel Channel @relation(fields: [channel_id], references: [id], onDelete: Cascade)
 
   @@unique([user_id, channel_id], name: "subscription_unique_user_channel")
