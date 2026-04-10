@@ -133,9 +133,16 @@ export async function POST(request: NextRequest) {
     update: {},
   });
 
-  // Subscribe user to channel
-  await prisma.userSubscription.create({
-    data: { user_id: userId, channel_id: channel.id },
+  // Subscribe user to channel. Use upsert to gracefully handle the race window
+  // between the existingSub check above and this write — if two concurrent
+  // requests from the same user both pass the check, the second one becomes a
+  // no-op instead of failing with a unique-constraint violation.
+  await prisma.userSubscription.upsert({
+    where: {
+      subscription_unique_user_channel: { user_id: userId, channel_id: channel.id },
+    },
+    create: { user_id: userId, channel_id: channel.id },
+    update: {},
   });
 
   const channelWithCount = await prisma.channel.findUniqueOrThrow({

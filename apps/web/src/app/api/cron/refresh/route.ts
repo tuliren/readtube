@@ -63,7 +63,10 @@ export async function POST(request: NextRequest) {
           },
           update: {
             title: video.title,
-            ...(video.description ? { description: video.description } : {}),
+            // Only update description if the scraper produced a non-empty value.
+            // Shelf-scraped videos hardcode description to '', and we don't want
+            // to clobber a real description that was captured earlier.
+            ...(isEmptyString(video.description) ? {} : { description: video.description }),
           },
         });
         totalNew++;
