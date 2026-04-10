@@ -56,7 +56,14 @@ model UserSubscription {
   id         String   @id @default(cuid())
   user_id    String
   channel_id String
-  created_at DateTime @default(now())
+  // Per-subscription "read watermark". Videos in this channel whose
+  // published_at is <= read_at are considered read by this user, even if
+  // there is no explicit UserVideoConsumption row. Used for cheap bulk
+  // mark-as-read (one UPDATE replaces N inserts) and for the configurable
+  // initial subscription state (mark recent N videos as new, etc.).
+  // null means no watermark — read state comes purely from consumptions.
+  read_at    DateTime?
+  created_at DateTime  @default(now())
 
   user    User    @relation(fields: [user_id], references: [source_id], onDelete: Cascade)
   channel Channel @relation(fields: [channel_id], references: [id], onDelete: Cascade)
