@@ -1,18 +1,18 @@
 -- DropForeignKey
 ALTER TABLE "UserSubscription"
-DROP CONSTRAINT "UserSubscription_user_id_fkey";
+    DROP CONSTRAINT "UserSubscription_user_id_fkey";
 
 -- DropForeignKey
 ALTER TABLE "UserSubscription"
-DROP CONSTRAINT "UserSubscription_channel_id_fkey";
+    DROP CONSTRAINT "UserSubscription_channel_id_fkey";
 
 -- DropForeignKey
 ALTER TABLE "Video"
-DROP CONSTRAINT "Video_channel_id_fkey";
+    DROP CONSTRAINT "Video_channel_id_fkey";
 
 -- DropForeignKey
 ALTER TABLE "Transcript"
-DROP CONSTRAINT "Transcript_video_id_fkey";
+    DROP CONSTRAINT "Transcript_video_id_fkey";
 
 -- DropTable
 DROP TABLE "User";
@@ -36,15 +36,16 @@ DROP TYPE "UserSourceType";
 DROP TYPE "VideoPlatformType";
 
 -- CreateTable
-CREATE TABLE "ClerkUser" (
-  "user_id" TEXT NOT NULL,
-  "name" TEXT NOT NULL,
-  "email" TEXT NOT NULL,
-  "image" TEXT,
-  "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updated_at" TIMESTAMP(3) NOT NULL,
-  "id" BIGSERIAL NOT NULL,
-  CONSTRAINT "ClerkUser_pkey" PRIMARY KEY ("id")
+CREATE TABLE "ClerkUser"
+(
+    "user_id"    TEXT         NOT NULL,
+    "name"       TEXT         NOT NULL,
+    "email"      TEXT         NOT NULL,
+    "image"      TEXT,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+    "id"         BIGSERIAL    NOT NULL,
+    CONSTRAINT "ClerkUser_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex

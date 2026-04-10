@@ -5,70 +5,75 @@ Warnings:
 
 */
 -- CreateEnum
-CREATE TYPE "UserSourceType" AS ENUM('CLERK');
+CREATE TYPE "UserSourceType" AS ENUM ('CLERK');
 
 -- CreateEnum
-CREATE TYPE "VideoPlatformType" AS ENUM('YOUTUBE');
+CREATE TYPE "VideoPlatformType" AS ENUM ('YOUTUBE');
 
 -- DropTable
 DROP TABLE "ClerkUser";
 
 -- CreateTable
-CREATE TABLE "User" (
-  "id" TEXT NOT NULL,
-  "source_type" "UserSourceType" NOT NULL DEFAULT 'CLERK',
-  "source_id" TEXT NOT NULL,
-  "name" TEXT NOT NULL,
-  "email" TEXT NOT NULL,
-  "image" TEXT,
-  "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updated_at" TIMESTAMP(3) NOT NULL,
-  CONSTRAINT "User_pkey" PRIMARY KEY ("id")
+CREATE TABLE "User"
+(
+    "id"          TEXT             NOT NULL,
+    "source_type" "UserSourceType" NOT NULL DEFAULT 'CLERK',
+    "source_id"   TEXT             NOT NULL,
+    "name"        TEXT             NOT NULL,
+    "email"       TEXT             NOT NULL,
+    "image"       TEXT,
+    "created_at"  TIMESTAMP(3)     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at"  TIMESTAMP(3)     NOT NULL,
+    CONSTRAINT "User_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "Channel" (
-  "id" TEXT NOT NULL,
-  "source_type" "VideoPlatformType" NOT NULL DEFAULT 'YOUTUBE',
-  "source_id" TEXT NOT NULL,
-  "name" TEXT NOT NULL,
-  "rss_url" TEXT NOT NULL,
-  "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updated_at" TIMESTAMP(3) NOT NULL,
-  CONSTRAINT "Channel_pkey" PRIMARY KEY ("id")
+CREATE TABLE "Channel"
+(
+    "id"          TEXT                NOT NULL,
+    "source_type" "VideoPlatformType" NOT NULL DEFAULT 'YOUTUBE',
+    "source_id"   TEXT                NOT NULL,
+    "name"        TEXT                NOT NULL,
+    "rss_url"     TEXT                NOT NULL,
+    "created_at"  TIMESTAMP(3)        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at"  TIMESTAMP(3)        NOT NULL,
+    CONSTRAINT "Channel_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "UserSubscription" (
-  "id" TEXT NOT NULL,
-  "user_id" TEXT NOT NULL,
-  "channel_id" TEXT NOT NULL,
-  "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT "UserSubscription_pkey" PRIMARY KEY ("id")
+CREATE TABLE "UserSubscription"
+(
+    "id"         TEXT         NOT NULL,
+    "user_id"    TEXT         NOT NULL,
+    "channel_id" TEXT         NOT NULL,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "UserSubscription_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "Video" (
-  "id" TEXT NOT NULL,
-  "channel_id" TEXT NOT NULL,
-  "source_id" TEXT NOT NULL,
-  "title" TEXT NOT NULL,
-  "description" TEXT,
-  "published_at" TIMESTAMP(3) NOT NULL,
-  "read_at" TIMESTAMP(3),
-  "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT "Video_pkey" PRIMARY KEY ("id")
+CREATE TABLE "Video"
+(
+    "id"           TEXT         NOT NULL,
+    "channel_id"   TEXT         NOT NULL,
+    "source_id"    TEXT         NOT NULL,
+    "title"        TEXT         NOT NULL,
+    "description"  TEXT,
+    "published_at" TIMESTAMP(3) NOT NULL,
+    "read_at"      TIMESTAMP(3),
+    "created_at"   TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "Video_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "Transcript" (
-  "id" TEXT NOT NULL,
-  "video_id" TEXT NOT NULL,
-  "language" TEXT,
-  "text" TEXT NOT NULL,
-  "fetched_at" TIMESTAMP(3) NOT NULL,
-  "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT "Transcript_pkey" PRIMARY KEY ("id")
+CREATE TABLE "Transcript"
+(
+    "id"         TEXT         NOT NULL,
+    "video_id"   TEXT         NOT NULL,
+    "language"   TEXT,
+    "text"       TEXT         NOT NULL,
+    "fetched_at" TIMESTAMP(3) NOT NULL,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "Transcript_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
@@ -100,16 +105,16 @@ CREATE INDEX "transcript_index_on_video_id" ON "Transcript" ("video_id");
 
 -- AddForeignKey
 ALTER TABLE "UserSubscription"
-ADD CONSTRAINT "UserSubscription_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "User" ("source_id") ON DELETE RESTRICT ON UPDATE CASCADE;
+    ADD CONSTRAINT "UserSubscription_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "User" ("source_id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "UserSubscription"
-ADD CONSTRAINT "UserSubscription_channel_id_fkey" FOREIGN KEY ("channel_id") REFERENCES "Channel" ("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    ADD CONSTRAINT "UserSubscription_channel_id_fkey" FOREIGN KEY ("channel_id") REFERENCES "Channel" ("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Video"
-ADD CONSTRAINT "Video_channel_id_fkey" FOREIGN KEY ("channel_id") REFERENCES "Channel" ("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    ADD CONSTRAINT "Video_channel_id_fkey" FOREIGN KEY ("channel_id") REFERENCES "Channel" ("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Transcript"
-ADD CONSTRAINT "Transcript_video_id_fkey" FOREIGN KEY ("video_id") REFERENCES "Video" ("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    ADD CONSTRAINT "Transcript_video_id_fkey" FOREIGN KEY ("video_id") REFERENCES "Video" ("id") ON DELETE CASCADE ON UPDATE CASCADE;
