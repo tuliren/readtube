@@ -7,6 +7,10 @@ interface Props {
   videoDbId: string;
 }
 
+type SummaryField = 'headline' | 'short' | 'full';
+
+const ALL_FIELDS: readonly SummaryField[] = ['headline', 'short', 'full'] as const;
+
 interface SummaryData {
   headline: string | null;
   short: string | null;
@@ -25,9 +29,24 @@ function SummarySkeleton() {
   );
 }
 
+function RegenerateButton({ onClick, disabled }: { onClick: () => void; disabled?: boolean }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title="Regenerate"
+      className="inline-flex shrink-0 items-center gap-1 text-xs text-gray-400 hover:text-gray-700 disabled:opacity-50 disabled:hover:text-gray-400"
+    >
+      <ArrowPathIcon className="h-3.5 w-3.5" />
+      Regenerate
+    </button>
+  );
+}
+
 export default function SummaryReader({ videoDbId }: Props) {
   const [status, setStatus] = useState<Status>('checking');
   const [summary, setSummary] = useState<SummaryData | null>(null);
+  const [regeneratingFields, setRegeneratingFields] = useState<SummaryField[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -35,17 +54,14 @@ export default function SummaryReader({ videoDbId }: Props) {
     setStatus('checking');
     setSummary(null);
     setErrorMessage(null);
+    setRegeneratingFields([]);
 
     fetch(`/api/videos/${videoDbId}/summary`)
       .then(async (res) => {
         if (cancelled) {
           return;
         }
-        if (res.status === 404) {
-          setStatus('idle');
-          return;
-        }
-        if (!res.ok) {
+        if (res.status === 404 || !res.ok) {
           setStatus('idle');
           return;
         }
@@ -64,30 +80,47 @@ export default function SummaryReader({ videoDbId }: Props) {
     };
   }, [videoDbId]);
 
-  async function handleGenerate() {
+  async function handleGenerate(targetFields?: SummaryField[]) {
+    const fields = targetFields ?? [...ALL_FIELDS];
     setStatus('generating');
-    setSummary({ headline: '', short: '', full: '' });
+    setRegeneratingFields(fields);
     setErrorMessage(null);
 
+    // Clear only the fields being regenerated; keep the others visible.
+    setSummary((prev) => {
+      const base: SummaryData = prev ?? { headline: null, short: null, full: null };
+      const next = { ...base };
+      for (const f of fields) {
+        next[f] = '';
+      }
+      return next;
+    });
+
     try {
-      const res = await fetch(`/api/videos/${videoDbId}/summary`, { method: 'POST' });
+      const res = await fetch(`/api/videos/${videoDbId}/summary`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields }),
+      });
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({ error: 'Failed to generate summary.' }));
         setErrorMessage(body.error ?? 'Failed to generate summary.');
         setStatus('error');
+        setRegeneratingFields([]);
         return;
       }
 
       if (!res.body) {
         setErrorMessage('No response body from server.');
         setStatus('error');
+        setRegeneratingFields([]);
         return;
       }
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
-      const accumulated = { headline: '', short: '', full: '' };
+      const accumulated: Record<SummaryField, string> = { headline: '', short: '', full: '' };
       let buffer = '';
       let fieldError: string | null = null;
 
@@ -98,7 +131,6 @@ export default function SummaryReader({ videoDbId }: Props) {
         }
         buffer += decoder.decode(value, { stream: true });
 
-        // NDJSON — split on newlines, keep any incomplete trailing chunk in buffer.
         const lines = buffer.split('\n');
         buffer = lines.pop() ?? '';
 
@@ -108,7 +140,7 @@ export default function SummaryReader({ videoDbId }: Props) {
             continue;
           }
           let event: {
-            field?: 'headline' | 'short' | 'full';
+            field?: SummaryField;
             delta?: string;
             error?: string;
             type?: string;
@@ -124,7 +156,14 @@ export default function SummaryReader({ videoDbId }: Props) {
           }
           if (event.field && typeof event.delta === 'string') {
             accumulated[event.field] += event.delta;
-            setSummary({ ...accumulated });
+            const fieldName = event.field;
+            const fieldValue = accumulated[event.field];
+            setSummary((prev) => ({
+              headline: prev?.headline ?? null,
+              short: prev?.short ?? null,
+              full: prev?.full ?? null,
+              [fieldName]: fieldValue,
+            }));
           } else if (event.field && event.error) {
             fieldError = event.error;
           }
@@ -134,21 +173,25 @@ export default function SummaryReader({ videoDbId }: Props) {
       if (fieldError) {
         setErrorMessage(fieldError);
         setStatus('error');
+        setRegeneratingFields([]);
         return;
       }
 
-      if (!accumulated.headline.trim() && !accumulated.short.trim() && !accumulated.full.trim()) {
+      const anyContent = fields.some((f) => accumulated[f].trim().length > 0);
+      if (!anyContent) {
         setErrorMessage('No content was generated. Please try again.');
         setStatus('error');
+        setRegeneratingFields([]);
         return;
       }
 
-      setSummary(accumulated);
       setStatus('done');
+      setRegeneratingFields([]);
     } catch (err) {
       console.error('[SummaryReader] generate error:', err);
       setErrorMessage(err instanceof Error ? err.message : 'Failed to generate summary.');
       setStatus('error');
+      setRegeneratingFields([]);
     }
   }
 
@@ -160,10 +203,10 @@ export default function SummaryReader({ videoDbId }: Props) {
     return (
       <div className="py-8 text-center">
         <p className="mb-4 text-sm text-gray-500">
-          Generate a headline, a quick paragraph, and a full recap of this video.
+          Generate a headline, a quick paragraph, and a compact recap of this video.
         </p>
         <button
-          onClick={handleGenerate}
+          onClick={() => handleGenerate()}
           className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
         >
           Generate summary
@@ -177,7 +220,7 @@ export default function SummaryReader({ videoDbId }: Props) {
       <div className="py-8 text-center">
         <p className="mb-4 text-sm text-gray-400">{errorMessage}</p>
         <button
-          onClick={handleGenerate}
+          onClick={() => handleGenerate()}
           className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
         >
           Try again
@@ -190,21 +233,38 @@ export default function SummaryReader({ videoDbId }: Props) {
     return null;
   }
 
-  const fullParagraphs = summary.full?.split(/\n\n+/).filter((p) => p.trim().length > 0) ?? [];
   const isStreaming = status === 'generating';
+  const isRegenerating = (field: SummaryField) => regeneratingFields.includes(field);
+  const fullParagraphs = summary.full?.split(/\n\n+/).filter((p) => p.trim().length > 0) ?? [];
 
   return (
     <div className="space-y-8">
-      {summary.headline ? (
-        <h2 className="text-xl leading-snug font-semibold text-gray-900">{summary.headline}</h2>
-      ) : isStreaming ? (
-        <div className="h-6 w-3/4 animate-pulse rounded bg-gray-200" />
-      ) : null}
+      {/* Headline */}
+      <div className="flex items-start justify-between gap-4">
+        {summary.headline ? (
+          <h2 className="flex-1 text-xl leading-snug font-semibold text-gray-900">
+            {summary.headline}
+          </h2>
+        ) : isRegenerating('headline') ? (
+          <div className="h-6 flex-1 animate-pulse rounded bg-gray-200" />
+        ) : (
+          <div className="flex-1 text-sm text-gray-400 italic">No headline yet.</div>
+        )}
+        {!isRegenerating('headline') && (
+          <RegenerateButton onClick={() => handleGenerate(['headline'])} disabled={isStreaming} />
+        )}
+      </div>
 
+      {/* Short */}
       <div>
-        <h3 className="mb-2 text-xs font-medium tracking-wide text-gray-400 uppercase">
-          Quick summary
-        </h3>
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="text-xs font-medium tracking-wide text-gray-400 uppercase">
+            Quick summary
+          </h3>
+          {!isRegenerating('short') && (
+            <RegenerateButton onClick={() => handleGenerate(['short'])} disabled={isStreaming} />
+          )}
+        </div>
         {summary.short ? (
           <p
             className="leading-relaxed text-gray-700"
@@ -212,19 +272,27 @@ export default function SummaryReader({ videoDbId }: Props) {
           >
             {summary.short}
           </p>
-        ) : isStreaming ? (
+        ) : isRegenerating('short') ? (
           <div className="space-y-2">
             <div className="h-4 w-full animate-pulse rounded bg-gray-200" />
             <div className="h-4 w-11/12 animate-pulse rounded bg-gray-200" />
             <div className="h-4 w-10/12 animate-pulse rounded bg-gray-200" />
           </div>
-        ) : null}
+        ) : (
+          <div className="text-sm text-gray-400 italic">No quick summary yet.</div>
+        )}
       </div>
 
+      {/* Full */}
       <div>
-        <h3 className="mb-2 text-xs font-medium tracking-wide text-gray-400 uppercase">
-          Full summary
-        </h3>
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="text-xs font-medium tracking-wide text-gray-400 uppercase">
+            Full summary
+          </h3>
+          {!isRegenerating('full') && (
+            <RegenerateButton onClick={() => handleGenerate(['full'])} disabled={isStreaming} />
+          )}
+        </div>
         {fullParagraphs.length > 0 ? (
           <div
             className="space-y-4 leading-relaxed text-gray-800"
@@ -234,7 +302,7 @@ export default function SummaryReader({ videoDbId }: Props) {
               <p key={i}>{para}</p>
             ))}
           </div>
-        ) : isStreaming ? (
+        ) : isRegenerating('full') ? (
           <div className="space-y-2">
             {[100, 95, 90, 85, 75].map((w, i) => (
               <div
@@ -244,23 +312,15 @@ export default function SummaryReader({ videoDbId }: Props) {
               />
             ))}
           </div>
-        ) : null}
+        ) : (
+          <div className="text-sm text-gray-400 italic">No full summary yet.</div>
+        )}
       </div>
 
-      {isStreaming ? (
+      {isStreaming && (
         <div className="flex items-center gap-2 text-xs text-gray-400">
           <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-blue-500" />
           Generating…
-        </div>
-      ) : (
-        <div className="flex justify-end">
-          <button
-            onClick={handleGenerate}
-            className="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-700"
-          >
-            <ArrowPathIcon className="h-3.5 w-3.5" />
-            Regenerate
-          </button>
         </div>
       )}
     </div>

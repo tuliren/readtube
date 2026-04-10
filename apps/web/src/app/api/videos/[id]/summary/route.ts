@@ -10,7 +10,7 @@ interface TranscriptSegment {
   text: string;
 }
 
-const SUMMARY_PROMPT_VERSION = 'v2';
+const SUMMARY_PROMPT_VERSION = 'v3';
 const MODEL = 'google/gemini-2.5-flash';
 
 const LANGUAGE_RULE = `Write in the same language as the transcript below. Do not translate — if the transcript is in Chinese, write in Chinese; if Spanish, write in Spanish; and so on.`;
@@ -27,10 +27,10 @@ Output only the title itself, nothing else.`,
 - 1-2 more sentences: the most important supporting context.
 - Plain prose. No headings, no lists, no preamble.
 - ${LANGUAGE_RULE}`,
-  full: `Write a condensed re-write of this video as several paragraphs. Rules:
-- Preserve the logic flow, main arguments, and key supporting details.
-- No headings or lists — just prose that lets someone understand the video without watching it.
-- Length should scale with the source: longer for dense videos, shorter for simple ones.
+  full: `Write a compact summary of this video — at most 2-3 short paragraphs (not more). Rules:
+- Focus only on the main arguments and conclusions. Cut examples, tangents, and non-essential details.
+- Favor density over completeness. A reader should get the gist in under a minute.
+- No headings or lists — just prose.
 - ${LANGUAGE_RULE}`,
 } as const;
 
@@ -100,13 +100,31 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   });
 }
 
-export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const { id } = await params;
+
+  // Optional body: { fields?: SummaryField[] } — defaults to all three.
+  let requestedFields: SummaryField[] | null = null;
+  try {
+    const body = (await request.json()) as { fields?: unknown };
+    if (Array.isArray(body.fields)) {
+      const valid = body.fields.filter((f): f is SummaryField =>
+        SUMMARY_FIELDS.includes(f as SummaryField)
+      );
+      if (valid.length === 0) {
+        return NextResponse.json({ error: 'No valid fields to generate' }, { status: 400 });
+      }
+      requestedFields = valid;
+    }
+  } catch {
+    // Empty body — fall through to generating all fields
+  }
+  const fieldsToGenerate: SummaryField[] = requestedFields ?? [...SUMMARY_FIELDS];
 
   const video = await prisma.video.findFirst({
     where: { id, channel: { subscriptions: { some: { user_id: userId } } } },
@@ -136,8 +154,8 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
   const segments = JSON.parse(transcript.text) as TranscriptSegment[];
   const transcriptText = segments.map((s) => s.text).join(' ');
 
-  // Kick off all three streams in parallel.
-  const generations = SUMMARY_FIELDS.map((field) => {
+  // Kick off streams for the requested fields in parallel.
+  const generations = fieldsToGenerate.map((field) => {
     const result = streamText({
       model: MODEL,
       prompt: buildPrompt(field, video.title, video.channel.name, transcriptText),
@@ -198,27 +216,43 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
 
       await Promise.all(pumps);
 
-      // Only persist if all three fields completed successfully.
+      // Only persist if all requested fields completed successfully.
       const allSuccessful =
         Object.keys(fieldErrors).length === 0 &&
-        SUMMARY_FIELDS.every((f) => accumulated[f].trim().length > 0);
+        fieldsToGenerate.every((f) => accumulated[f].trim().length > 0);
 
       if (allSuccessful) {
         try {
           const usages = await Promise.all(generations.map((g) => g.result.usage));
-          const usage = {
-            headline: serializeUsage(usages[0]),
-            short: serializeUsage(usages[1]),
-            full: serializeUsage(usages[2]),
+
+          // Merge with any existing row so non-regenerated fields stay intact.
+          const existing = await prisma.summary.findUnique({
+            where: { transcript_id: transcriptId },
+            select: { headline: true, short: true, full: true, usage: true },
+          });
+
+          const mergedUsageObj: Record<string, unknown> = {
+            ...((existing?.usage as Record<string, unknown> | null) ?? {}),
           };
+          for (let i = 0; i < generations.length; i++) {
+            mergedUsageObj[generations[i].field] = serializeUsage(usages[i]);
+          }
+          // Round-trip through JSON so Prisma's InputJsonValue type is happy.
+          const mergedUsage = JSON.parse(JSON.stringify(mergedUsageObj));
 
           const summaryData = {
-            headline: accumulated.headline.trim(),
-            short: accumulated.short.trim(),
-            full: accumulated.full.trim(),
+            headline: fieldsToGenerate.includes('headline')
+              ? accumulated.headline.trim()
+              : (existing?.headline ?? null),
+            short: fieldsToGenerate.includes('short')
+              ? accumulated.short.trim()
+              : (existing?.short ?? null),
+            full: fieldsToGenerate.includes('full')
+              ? accumulated.full.trim()
+              : (existing?.full ?? null),
             prompt_version: SUMMARY_PROMPT_VERSION,
             model: MODEL,
-            usage,
+            usage: mergedUsage,
           };
 
           await prisma.summary.upsert({

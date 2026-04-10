@@ -37,7 +37,7 @@ export default function VideoReader({ video }: Props) {
     <div className="flex flex-1 flex-col overflow-y-auto">
       {/* Back nav */}
       <div className="sticky top-0 z-10 border-b border-gray-100 bg-white px-6 py-3">
-        <div className="mx-auto w-full max-w-2xl">
+        <div className="mx-auto w-full max-w-3xl">
           <Link
             href={backHref}
             className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700"
@@ -49,7 +49,7 @@ export default function VideoReader({ video }: Props) {
       </div>
 
       {/* Article */}
-      <article className="mx-auto w-full max-w-2xl px-6 py-8">
+      <article className="mx-auto w-full max-w-3xl px-6 py-8">
         {/* Meta: video title */}
         <h1 className="text-2xl font-bold leading-tight text-gray-900">{video.title}</h1>
 
