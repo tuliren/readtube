@@ -40,18 +40,24 @@ export async function GET(request: NextRequest) {
       title: true,
       description: true,
       published_at: true,
-      read_at: true,
       channel_id: true,
       channel: { select: { id: true, name: true, source_id: true } },
+      consumptions: {
+        where: { user_id: userId },
+        select: { read_at: true },
+        take: 1,
+      },
     },
-    orderBy: [{ read_at: 'asc' }, { published_at: 'desc' }],
   });
 
+  type VideoRow = (typeof videos)[number];
+  const readAtFor = (v: VideoRow): Date | null => v.consumptions[0]?.read_at ?? null;
+
   const unread = videos
-    .filter((v) => v.read_at === null)
+    .filter((v) => readAtFor(v) === null)
     .sort((a, b) => b.published_at.getTime() - a.published_at.getTime());
   const read = videos
-    .filter((v) => v.read_at !== null)
+    .filter((v) => readAtFor(v) !== null)
     .sort((a, b) => b.published_at.getTime() - a.published_at.getTime());
 
   return NextResponse.json(
@@ -61,7 +67,7 @@ export async function GET(request: NextRequest) {
       title: v.title,
       description: v.description,
       publishedAt: v.published_at,
-      readAt: v.read_at,
+      readAt: readAtFor(v),
       channelId: v.channel_id,
       channelName: v.channel.name,
       channelSourceId: v.channel.source_id,

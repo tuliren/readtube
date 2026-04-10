@@ -60,7 +60,6 @@ export async function POST(request: NextRequest) {
             title: video.title,
             description: video.description,
             published_at: video.publishedAt,
-            read_at: null,
           },
           update: {
             title: video.title,

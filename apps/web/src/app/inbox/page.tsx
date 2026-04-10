@@ -31,7 +31,9 @@ export default async function InboxPage({ searchParams }: Props) {
           name: true,
           rss_url: true,
           created_at: true,
-          _count: { select: { videos: { where: { read_at: null } } } },
+          _count: {
+            select: { videos: { where: { consumptions: { none: { user_id: userId } } } } },
+          },
         },
       },
     },
@@ -66,32 +68,41 @@ export default async function InboxPage({ searchParams }: Props) {
             title: true,
             description: true,
             published_at: true,
-            read_at: true,
             channel_id: true,
             channel: { select: { name: true, source_id: true } },
+            consumptions: {
+              where: { user_id: userId },
+              select: { read_at: true },
+              take: 1,
+            },
           },
-          orderBy: [{ read_at: 'asc' }, { published_at: 'desc' }],
         })
       : [];
 
+  type VideoRow = (typeof videoRows)[number];
+  const readAtFor = (v: VideoRow): Date | null => v.consumptions[0]?.read_at ?? null;
+
   const unread = videoRows
-    .filter((v) => v.read_at === null)
+    .filter((v) => readAtFor(v) === null)
     .sort((a, b) => b.published_at.getTime() - a.published_at.getTime());
   const read = videoRows
-    .filter((v) => v.read_at !== null)
+    .filter((v) => readAtFor(v) !== null)
     .sort((a, b) => b.published_at.getTime() - a.published_at.getTime());
 
-  const videos: VideoData[] = [...unread, ...read].map((v) => ({
-    id: v.id,
-    sourceId: v.source_id,
-    title: v.title,
-    description: v.description,
-    publishedAt: v.published_at.toISOString(),
-    readAt: v.read_at ? v.read_at.toISOString() : null,
-    channelId: v.channel_id,
-    channelName: v.channel.name,
-    channelSourceId: v.channel.source_id,
-  }));
+  const videos: VideoData[] = [...unread, ...read].map((v) => {
+    const readAt = readAtFor(v);
+    return {
+      id: v.id,
+      sourceId: v.source_id,
+      title: v.title,
+      description: v.description,
+      publishedAt: v.published_at.toISOString(),
+      readAt: readAt ? readAt.toISOString() : null,
+      channelId: v.channel_id,
+      channelName: v.channel.name,
+      channelSourceId: v.channel.source_id,
+    };
+  });
 
   return (
     <InboxShell

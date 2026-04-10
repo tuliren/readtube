@@ -23,7 +23,9 @@ export async function GET() {
           name: true,
           rss_url: true,
           created_at: true,
-          _count: { select: { videos: { where: { read_at: null } } } },
+          _count: {
+            select: { videos: { where: { consumptions: { none: { user_id: userId } } } } },
+          },
         },
       },
     },
@@ -107,14 +109,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'You already follow this channel.' }, { status: 409 });
   }
 
-  const now = new Date();
   const rssUrl = buildRssUrl(sourceId);
 
   // Upsert the channel atomically — avoids a race condition where two users
-  // concurrently subscribe to the same brand-new channel. On create, also
-  // pre-seed the existing videos so new subscribers don't get a flood of
-  // unread items. On update (channel already exists), do nothing — another
-  // user already created it and we just want to piggyback on it.
+  // concurrently subscribe to the same brand-new channel. New videos are created
+  // with no UserVideoConsumption rows, so they appear unread for everyone until
+  // the user actually opens them.
   const channel = await prisma.channel.upsert({
     where: { source_id: sourceId },
     create: {
@@ -127,7 +127,6 @@ export async function POST(request: NextRequest) {
           title: v.title,
           description: v.description,
           published_at: v.publishedAt,
-          read_at: now,
         })),
       },
     },
@@ -148,7 +147,11 @@ export async function POST(request: NextRequest) {
 
   const channelWithCount = await prisma.channel.findUniqueOrThrow({
     where: { id: channel.id },
-    include: { _count: { select: { videos: { where: { read_at: null } } } } },
+    include: {
+      _count: {
+        select: { videos: { where: { consumptions: { none: { user_id: userId } } } } },
+      },
+    },
   });
 
   return NextResponse.json(

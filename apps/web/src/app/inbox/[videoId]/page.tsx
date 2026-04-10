@@ -33,31 +33,37 @@ export default async function VideoPage({ params, searchParams }: Props) {
       title: true,
       description: true,
       published_at: true,
-      read_at: true,
       channel_id: true,
       channel: { select: { name: true, source_id: true } },
+      consumptions: {
+        where: { user_id: userId },
+        select: { read_at: true },
+        take: 1,
+      },
     },
   });
 
-  if (!video) {
+  if (video == null) {
     notFound();
   }
 
-  // Mark as read immediately (idempotent)
-  if (video.read_at === null) {
-    await prisma.video.update({
-      where: { id: video.id },
-      data: { read_at: new Date() },
-    });
-  }
+  // Mark as consumed immediately — upsert is idempotent.
+  await prisma.userVideoConsumption.upsert({
+    where: {
+      user_video_consumption_unique_user_video: { user_id: userId, video_id: video.id },
+    },
+    create: { user_id: userId, video_id: video.id },
+    update: {},
+  });
 
+  const existingReadAt = video.consumptions[0]?.read_at;
   const videoData: VideoData = {
     id: video.id,
     sourceId: video.source_id,
     title: video.title,
     description: video.description,
     publishedAt: video.published_at.toISOString(),
-    readAt: video.read_at ? video.read_at.toISOString() : new Date().toISOString(),
+    readAt: existingReadAt ? existingReadAt.toISOString() : new Date().toISOString(),
     channelId: video.channel_id,
     channelName: video.channel.name,
     channelSourceId: video.channel.source_id,
@@ -73,7 +79,9 @@ export default async function VideoPage({ params, searchParams }: Props) {
           name: true,
           rss_url: true,
           created_at: true,
-          _count: { select: { videos: { where: { read_at: null } } } },
+          _count: {
+            select: { videos: { where: { consumptions: { none: { user_id: userId } } } } },
+          },
         },
       },
     },
@@ -107,31 +115,41 @@ export default async function VideoPage({ params, searchParams }: Props) {
             title: true,
             description: true,
             published_at: true,
-            read_at: true,
             channel_id: true,
             channel: { select: { name: true, source_id: true } },
+            consumptions: {
+              where: { user_id: userId },
+              select: { read_at: true },
+              take: 1,
+            },
           },
         })
       : [];
 
+  type SidebarRow = (typeof videoRows)[number];
+  const readAtFor = (v: SidebarRow): Date | null => v.consumptions[0]?.read_at ?? null;
+
   const unread = videoRows
-    .filter((v) => v.read_at === null)
+    .filter((v) => readAtFor(v) === null)
     .sort((a, b) => b.published_at.getTime() - a.published_at.getTime());
   const read = videoRows
-    .filter((v) => v.read_at !== null)
+    .filter((v) => readAtFor(v) !== null)
     .sort((a, b) => b.published_at.getTime() - a.published_at.getTime());
 
-  const sidebarVideos: VideoData[] = [...unread, ...read].map((v) => ({
-    id: v.id,
-    sourceId: v.source_id,
-    title: v.title,
-    description: v.description,
-    publishedAt: v.published_at.toISOString(),
-    readAt: v.read_at ? v.read_at.toISOString() : null,
-    channelId: v.channel_id,
-    channelName: v.channel.name,
-    channelSourceId: v.channel.source_id,
-  }));
+  const sidebarVideos: VideoData[] = [...unread, ...read].map((v) => {
+    const readAt = readAtFor(v);
+    return {
+      id: v.id,
+      sourceId: v.source_id,
+      title: v.title,
+      description: v.description,
+      publishedAt: v.published_at.toISOString(),
+      readAt: readAt ? readAt.toISOString() : null,
+      channelId: v.channel_id,
+      channelName: v.channel.name,
+      channelSourceId: v.channel.source_id,
+    };
+  });
 
   return (
     <InboxShell

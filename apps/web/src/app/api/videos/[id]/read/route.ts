@@ -15,19 +15,20 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
   // IDOR check: ensure video belongs to a channel the user is subscribed to
   const video = await prisma.video.findFirst({
     where: { id: videoId, channel: { subscriptions: { some: { user_id: userId } } } },
-    select: { id: true, read_at: true },
+    select: { id: true },
   });
-  if (!video) {
+  if (video == null) {
     return NextResponse.json({ error: 'Video not found' }, { status: 404 });
   }
 
-  // Idempotent: only set read_at if not already read
-  if (video.read_at === null) {
-    await prisma.video.update({
-      where: { id: videoId },
-      data: { read_at: new Date() },
-    });
-  }
+  // Idempotent — upsert is a no-op if a consumption row already exists.
+  await prisma.userVideoConsumption.upsert({
+    where: {
+      user_video_consumption_unique_user_video: { user_id: userId, video_id: video.id },
+    },
+    create: { user_id: userId, video_id: video.id },
+    update: {},
+  });
 
   return new NextResponse(null, { status: 204 });
 }
