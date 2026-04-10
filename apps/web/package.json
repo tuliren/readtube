@@ -23,6 +23,7 @@
     "@repo/lib": "*",
     "@tailwindcss/postcss": "^4.0.12",
     "@vercel/analytics": "^1.6.1",
+    "ai": "^6.0.156",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "fast-xml-parser": "^5.5.10",
@@ -42,7 +43,8 @@
     "swr": "^2.4.1",
     "tailwind-merge": "^3.0.2",
     "tailwindcss": "^4.0.12",
-    "tailwindcss-animate": "^1.0.7"
+    "tailwindcss-animate": "^1.0.7",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@babel/core": "^7.24.5",

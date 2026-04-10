@@ -7,6 +7,7 @@ import { useState } from 'react';
 
 import type { VideoData } from '@/lib/types';
 
+import ArticleReader from './ArticleReader';
 import TranscriptReader from './TranscriptReader';
 
 interface Props {
@@ -110,7 +111,7 @@ export default function VideoReader({ video }: Props) {
             />
           </div>
           <div className={activeTab === 'article' ? '' : 'hidden'}>
-            <div className="py-8 text-center text-sm text-gray-400">Article not yet generated.</div>
+            <ArticleReader videoDbId={video.id} />
           </div>
         </div>
       </article>

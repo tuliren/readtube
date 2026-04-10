@@ -8,7 +8,8 @@
     "SCRIPT_ENV",
     "CRON_SECRET",
     "CLERK_WEBHOOK_SECRET",
-    "TRANSCRIPT_API_KEY"
+    "TRANSCRIPT_API_KEY",
+    "AI_GATEWAY_API_KEY"
   ],
   "tasks": {
     "typecheck": {
