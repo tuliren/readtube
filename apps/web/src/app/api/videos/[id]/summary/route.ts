@@ -3,11 +3,7 @@ import { prisma } from '@readtube/database';
 import { streamText } from 'ai';
 import { NextRequest, NextResponse } from 'next/server';
 
-interface TranscriptSegment {
-  startMs: number;
-  endMs: number;
-  text: string;
-}
+import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
 
 const SUMMARY_PROMPT_VERSION = 'v4';
 const MODEL = 'google/gemini-2.5-flash';
@@ -130,33 +126,39 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
   const fieldsToGenerate: SummaryField[] = requestedFields ?? [...SUMMARY_FIELDS];
 
+  // Look up title + channel name first; ensureTranscript will do
+  // its own IDOR check + transcript resolution.
   const video = await prisma.video.findFirst({
     where: { id, channel: { subscriptions: { some: { user_id: userId } } } },
     select: {
       id: true,
       title: true,
       channel: { select: { name: true } },
-      transcripts: {
-        orderBy: { created_at: 'desc' },
-        take: 1,
-        select: { id: true, text: true },
-      },
     },
   });
   if (!video) {
     return NextResponse.json({ error: 'Video not found' }, { status: 404 });
   }
 
-  const transcript = video.transcripts[0];
-  if (!transcript) {
+  // Auto-fetch the transcript if it isn't already cached. The single
+  // ensureTranscript call replaces "expect transcript or 400" — the
+  // user clicks Generate once and the route transparently ensures
+  // there's something to feed the model. If the upstream provider
+  // can't deliver captions, ensureTranscript flips the sticky
+  // transcript_unavailable flag on the Video so we don't waste a
+  // round-trip on the next click.
+  const ensured = await ensureTranscript(prisma, userId, id);
+  if (!ensured.ok) {
+    if (ensured.reason === 'not-found') {
+      return NextResponse.json({ error: 'Video not found' }, { status: 404 });
+    }
     return NextResponse.json(
-      { error: 'Transcript not available. Fetch the transcript first.' },
-      { status: 400 }
+      { error: 'Transcript unavailable for this video.', code: 'unavailable' },
+      { status: 410 }
     );
   }
-
-  const segments = JSON.parse(transcript.text) as TranscriptSegment[];
-  const transcriptText = segments.map((s) => s.text).join(' ');
+  const transcript = ensured.transcript;
+  const transcriptText = transcript.segments.map((s) => s.text).join(' ');
 
   // Kick off streams for the requested fields in parallel.
   const generations = fieldsToGenerate.map((field) => {

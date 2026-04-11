@@ -18,6 +18,7 @@ interface Props {
 }
 
 type Tab = 'summary' | 'article' | 'transcript';
+export type TranscriptStatus = 'unknown' | 'present' | 'unavailable';
 const TABS: { key: Tab; label: string }[] = [
   { key: 'summary', label: 'Summary' },
   { key: 'article', label: 'Article' },
@@ -43,6 +44,18 @@ export default function VideoReader({ video }: Props) {
   // landed on the densest, longest content first.
   const [activeTab, setActiveTab] = useState<Tab>('summary');
   const durationLabel = formatDurationSeconds(video.durationSeconds);
+
+  // Shared transcript availability state across all three tabs.
+  // Seeded from the SSR-rendered VideoData so a video that was already
+  // marked transcript_unavailable in a previous session opens straight
+  // into the unavailable state without retrying. The three children
+  // call setTranscriptStatus when their own requests reveal the
+  // status: TranscriptReader's GET, and either auto-fetch (Summary /
+  // Article generate buttons) running through ensureTranscript on
+  // the server.
+  const [transcriptStatus, setTranscriptStatus] = useState<TranscriptStatus>(
+    video.transcriptUnavailable ? 'unavailable' : 'unknown'
+  );
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
@@ -124,17 +137,26 @@ export default function VideoReader({ video }: Props) {
         {/* Tab content */}
         <div className="mt-6">
           <div className={activeTab === 'summary' ? '' : 'hidden'}>
-            <SummaryReader videoDbId={video.id} />
+            <SummaryReader
+              videoDbId={video.id}
+              transcriptStatus={transcriptStatus}
+              onTranscriptStatusChange={setTranscriptStatus}
+            />
+          </div>
+          <div className={activeTab === 'article' ? '' : 'hidden'}>
+            <ArticleReader
+              videoDbId={video.id}
+              transcriptStatus={transcriptStatus}
+              onTranscriptStatusChange={setTranscriptStatus}
+            />
           </div>
           <div className={activeTab === 'transcript' ? '' : 'hidden'}>
             <TranscriptReader
               videoDbId={video.id}
               sourceId={video.sourceId}
-              onFetched={() => setActiveTab('transcript')}
+              transcriptStatus={transcriptStatus}
+              onTranscriptStatusChange={setTranscriptStatus}
             />
-          </div>
-          <div className={activeTab === 'article' ? '' : 'hidden'}>
-            <ArticleReader videoDbId={video.id} />
           </div>
         </div>
       </article>

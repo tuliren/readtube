@@ -7,8 +7,17 @@ import rehypeExternalLinks from 'rehype-external-links';
 import rehypeSanitize from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
 
+import type { TranscriptStatus } from './VideoReader';
+
 interface Props {
   videoDbId: string;
+  /** Shared transcript availability lifted from VideoReader. The
+   *  three reader tabs share one source of truth so that auto-
+   *  fetch results in the Summary tab also disable Generate in
+   *  Article and switch the Transcript tab to its unavailable
+   *  state without an extra round-trip. */
+  transcriptStatus: TranscriptStatus;
+  onTranscriptStatusChange: (next: TranscriptStatus) => void;
 }
 
 type SummaryField = 'headline' | 'short' | 'full';
@@ -47,7 +56,11 @@ function RegenerateButton({ onClick, disabled }: { onClick: () => void; disabled
   );
 }
 
-export default function SummaryReader({ videoDbId }: Props) {
+export default function SummaryReader({
+  videoDbId,
+  transcriptStatus,
+  onTranscriptStatusChange,
+}: Props) {
   const [status, setStatus] = useState<Status>('checking');
   const [summary, setSummary] = useState<SummaryData | null>(null);
   const [regeneratingFields, setRegeneratingFields] = useState<SummaryField[]>([]);
@@ -108,6 +121,17 @@ export default function SummaryReader({ videoDbId }: Props) {
       });
 
       if (!res.ok) {
+        // 410 from the server means ensureTranscript flagged this
+        // video as transcript-unavailable. Flip the shared status so
+        // Article and Transcript tabs immediately render their
+        // unavailable state too — no extra fetches needed.
+        if (res.status === 410) {
+          onTranscriptStatusChange('unavailable');
+          setErrorMessage('Transcript unavailable for this video.');
+          setStatus('error');
+          setRegeneratingFields([]);
+          return;
+        }
         const body = await res.json().catch(() => ({ error: 'Failed to generate summary.' }));
         setErrorMessage(body.error ?? 'Failed to generate summary.');
         setStatus('error');
@@ -204,6 +228,17 @@ export default function SummaryReader({ videoDbId }: Props) {
   }
 
   if (status === 'idle') {
+    // Sticky-unavailable: hide the Generate affordance entirely so the
+    // user isn't tempted to click into a guaranteed-failure state. The
+    // server already returns 410 for this case but eliminating the
+    // button is the kinder UX.
+    if (transcriptStatus === 'unavailable') {
+      return (
+        <div className="py-8 text-center text-sm text-gray-500">
+          No transcript is available for this video, so a summary can&rsquo;t be generated.
+        </div>
+      );
+    }
     return (
       <div className="py-8 text-center">
         <p className="mb-4 text-sm text-gray-500">
@@ -270,12 +305,7 @@ export default function SummaryReader({ videoDbId }: Props) {
           )}
         </div>
         {summary.short ? (
-          <p
-            className="leading-relaxed text-gray-700"
-            style={{ fontFamily: 'Georgia, serif', fontSize: '17px', lineHeight: '1.8' }}
-          >
-            {summary.short}
-          </p>
+          <p className="font-sans text-[17px] leading-[1.8] text-gray-700">{summary.short}</p>
         ) : isRegenerating('short') ? (
           <div className="space-y-2">
             <div className="h-4 w-full animate-pulse rounded bg-gray-200" />
@@ -303,10 +333,7 @@ export default function SummaryReader({ videoDbId }: Props) {
           // Markdown lists. Sanitized + external-link safety mirrors
           // ArticleReader so we don't ship two different sanitization
           // policies for AI-generated content.
-          <article
-            className="prose prose-gray max-w-none"
-            style={{ fontFamily: 'Georgia, serif', fontSize: '17px', lineHeight: '1.8' }}
-          >
+          <article className="prose prose-gray max-w-none font-sans text-[17px] leading-[1.8]">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               rehypePlugins={[

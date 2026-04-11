@@ -6,15 +6,25 @@ import rehypeExternalLinks from 'rehype-external-links';
 import rehypeSanitize from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
 
+import type { TranscriptStatus } from './VideoReader';
+
 interface Props {
   videoDbId: string;
+  /** Shared transcript availability lifted from VideoReader. See the
+   *  matching prop on SummaryReader for the longer explanation. */
+  transcriptStatus: TranscriptStatus;
+  onTranscriptStatusChange: (next: TranscriptStatus) => void;
 }
 
 type Status = 'checking' | 'idle' | 'streaming' | 'done' | 'error';
 
 const STYLE = 'NARRATIVE';
 
-export default function ArticleReader({ videoDbId }: Props) {
+export default function ArticleReader({
+  videoDbId,
+  transcriptStatus,
+  onTranscriptStatusChange,
+}: Props) {
   const [status, setStatus] = useState<Status>('checking');
   const [markdown, setMarkdown] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -66,6 +76,16 @@ export default function ArticleReader({ videoDbId }: Props) {
       });
 
       if (!res.ok) {
+        // 410 from the server means ensureTranscript flagged this
+        // video as transcript-unavailable. Flip the shared status so
+        // Summary and Transcript tabs immediately render their
+        // unavailable state too.
+        if (res.status === 410) {
+          onTranscriptStatusChange('unavailable');
+          setErrorMessage('Transcript unavailable for this video.');
+          setStatus('error');
+          return;
+        }
         const body = await res.json().catch(() => ({ error: 'Failed to generate article.' }));
         setErrorMessage(body.error ?? 'Failed to generate article.');
         setStatus('error');
@@ -116,6 +136,13 @@ export default function ArticleReader({ videoDbId }: Props) {
   }
 
   if (status === 'idle') {
+    if (transcriptStatus === 'unavailable') {
+      return (
+        <div className="py-8 text-center text-sm text-gray-500">
+          No transcript is available for this video, so an article can&rsquo;t be generated.
+        </div>
+      );
+    }
     return (
       <div className="py-8 text-center">
         <p className="mb-4 text-sm text-gray-500">
@@ -147,10 +174,7 @@ export default function ArticleReader({ videoDbId }: Props) {
 
   return (
     <div>
-      <article
-        className="prose prose-gray max-w-none"
-        style={{ fontFamily: 'Georgia, serif', fontSize: '17px', lineHeight: '1.8' }}
-      >
+      <article className="prose prose-gray max-w-none font-sans text-[17px] leading-[1.8]">
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           rehypePlugins={[
