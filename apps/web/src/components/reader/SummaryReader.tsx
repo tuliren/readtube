@@ -7,6 +7,8 @@ import rehypeExternalLinks from 'rehype-external-links';
 import rehypeSanitize from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
 
+import { isProduction } from '@/lib/vercelEnv';
+
 import type { TranscriptStatus } from './VideoReader';
 
 interface Props {
@@ -283,6 +285,10 @@ export default function SummaryReader({
   const isStreaming = status === 'generating';
   const isRegenerating = (field: SummaryField) => regeneratingFields.includes(field);
   const fullMarkdown = summary.full?.trim() ?? '';
+  // Regenerate is a dev-only escape hatch — costs tokens, can produce
+  // worse output than a cached run, and shouldn't be exposed to end
+  // users in production.
+  const showRegenerate = !isProduction();
 
   return (
     <div className="space-y-8">
@@ -297,7 +303,7 @@ export default function SummaryReader({
         ) : (
           <div className="flex-1 text-sm text-gray-400 italic">No headline yet.</div>
         )}
-        {!isRegenerating('headline') && (
+        {showRegenerate && !isRegenerating('headline') && (
           <RegenerateButton onClick={() => handleGenerate(['headline'])} disabled={isStreaming} />
         )}
       </div>
@@ -308,7 +314,7 @@ export default function SummaryReader({
           <h3 className="text-xs font-medium tracking-wide text-gray-400 uppercase">
             Quick summary
           </h3>
-          {!isRegenerating('short') && (
+          {showRegenerate && !isRegenerating('short') && (
             <RegenerateButton onClick={() => handleGenerate(['short'])} disabled={isStreaming} />
           )}
         </div>
@@ -331,7 +337,7 @@ export default function SummaryReader({
           <h3 className="text-xs font-medium tracking-wide text-gray-400 uppercase">
             Full summary
           </h3>
-          {!isRegenerating('full') && (
+          {showRegenerate && !isRegenerating('full') && (
             <RegenerateButton onClick={() => handleGenerate(['full'])} disabled={isStreaming} />
           )}
         </div>
