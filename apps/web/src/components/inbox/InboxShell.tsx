@@ -1,10 +1,12 @@
 'use client';
 
 import { UserButton } from '@clerk/nextjs';
-import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { useMemo, useState } from 'react';
 import useSWR from 'swr';
 
 import { Toaster } from '@/components/ui/sonner';
+import { encodeInboxQuery, parseInboxQuery } from '@/lib/inbox/filter';
 import type { ChannelData, VideoData } from '@/lib/types';
 
 import AddChannelModal from './AddChannelModal';
@@ -38,11 +40,21 @@ export default function InboxShell({
   children,
 }: Props) {
   const [modalOpen, setModalOpen] = useState(false);
+  const searchParams = useSearchParams();
 
   const channelsUrl = '/api/channels';
-  const videosUrl = selectedChannelId
-    ? `/api/videos?channelId=${selectedChannelId}`
-    : '/api/videos';
+  // Build the videos fetch URL from the full InboxQuery (including filter
+  // chips, search text, saved views). We round-trip through the canonical
+  // codec so the client request matches what the server parses.
+  const videosUrl = useMemo(() => {
+    const query = parseInboxQuery(searchParams);
+    if (query.channelId == null && selectedChannelId != null) {
+      query.channelId = selectedChannelId;
+    }
+    const params = encodeInboxQuery(query);
+    const qs = params.toString();
+    return qs.length > 0 ? `/api/videos?${qs}` : '/api/videos';
+  }, [searchParams, selectedChannelId]);
 
   const { data: channels = initialChannels, mutate: mutateChannels } = useSWR<ChannelData[]>(
     channelsUrl,
