@@ -7,7 +7,7 @@
     "build-storybook": "storybook build --webpack-stats-json",
     "dev": "next dev",
     "integrationTest": "jest --config jest.integration.config.cjs --coverage",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings 0",
     "script": "scripts/runScriptWithEnv.sh development",
     "script:prod": "scripts/runScriptWithEnv.sh production",
     "start": "next start",
