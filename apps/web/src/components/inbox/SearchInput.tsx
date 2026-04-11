@@ -1,6 +1,6 @@
 'use client';
 
-import { Search, X } from 'lucide-react';
+import { CornerDownLeft, Search, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import { Input } from '@/components/ui/input';
@@ -80,12 +80,24 @@ export default function SearchInput() {
             inputRef.current?.blur();
           }
         }}
-        placeholder="Search videos (press Enter)…"
+        placeholder="Search videos…"
         title={isDirty ? 'Press Enter to search' : undefined}
-        className={`h-7 w-72 rounded-full pl-7 pr-7 text-xs ${
+        className={`h-7 w-72 rounded-full pl-7 pr-14 text-xs ${
           isDirty ? 'border-blue-400 ring-1 ring-blue-200' : ''
         }`}
       />
+      {/*
+        Dirty affordance: a subtle ⏎ badge appears when local !== query.q
+        so the 'press Enter to commit' hint shows up exactly when it's
+        actionable, instead of baked into the placeholder where it reads
+        as instruction-noise on an empty input.
+      */}
+      {isDirty && (
+        <span className="pointer-events-none absolute right-8 flex items-center text-[10px] font-medium uppercase tracking-wider text-gray-400">
+          <CornerDownLeft className="mr-0.5 h-3 w-3" />
+          enter
+        </span>
+      )}
       {local.length > 0 && (
         <button
           type="button"
