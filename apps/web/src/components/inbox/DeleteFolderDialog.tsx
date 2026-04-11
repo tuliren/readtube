@@ -73,7 +73,12 @@ export default function DeleteFolderDialog({ target, onClose }: Props) {
     <AlertDialog
       open={target != null}
       onOpenChange={(open) => {
-        if (!open) {
+        // Block dismiss while a delete is in flight. Without this guard
+        // the user could press Escape (or click the backdrop) mid-
+        // request, the dialog would unmount, and a subsequent failure
+        // would surface only as a toast — losing the inline retry path.
+        // Mirrors RenameFolderDialog's `if (!open && !busy)` gate.
+        if (!open && !busy) {
           onClose();
         }
       }}
