@@ -1,7 +1,7 @@
 'use client';
 
 import { useDraggable } from '@dnd-kit/core';
-import { Check, CircleDashed, FolderIcon, FolderInput, MoreHorizontal, Radio } from 'lucide-react';
+import { Check, CircleDashed, FolderIcon, FolderInput, MoreHorizontal } from 'lucide-react';
 import Link from 'next/link';
 
 import {
@@ -13,6 +13,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { displayChannelName } from '@/lib/inbox/channelName';
 import type { ChannelData, FolderData } from '@/lib/types';
 
 import { SidebarBadge, SidebarRowContent, sidebarRowClass } from './SidebarRow';
@@ -55,8 +56,7 @@ export default function DraggableChannelLink({ channel, isSelected, folders, onM
           title="Click to open · drag to move to a folder"
         >
           <SidebarRowContent
-            icon={Radio}
-            label={channel.name}
+            label={displayChannelName(channel.name)}
             trailing={<SidebarBadge count={channel.unreadCount} />}
           />
         </Link>

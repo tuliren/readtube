@@ -11,7 +11,7 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { FolderInput, FolderPlus } from 'lucide-react';
+import { FolderPlus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 import { displayChannelName } from '@/lib/inbox/channelName';
@@ -217,7 +217,6 @@ export default function FolderSection({ channels, selectedChannelId }: Props) {
       <DragOverlay dropAnimation={null}>
         {activeChannel != null ? (
           <div className="flex cursor-grabbing items-center justify-between gap-2 rounded-md border border-blue-300 bg-white px-3 py-1.5 text-sm font-medium text-blue-700 shadow-lg ring-2 ring-blue-200">
-            <FolderInput className="h-3.5 w-3.5 shrink-0 text-blue-400" />
             <span className="truncate">{displayChannelName(activeChannel.name)}</span>
             {activeChannel.unreadCount > 0 && (
               <span className="ml-auto shrink-0 rounded-full bg-blue-600 px-1.5 py-0.5 text-xs font-medium text-white">

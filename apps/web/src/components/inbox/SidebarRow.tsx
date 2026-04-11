@@ -50,7 +50,10 @@ export function SidebarBadge({ count }: { count: number }) {
 }
 
 interface ContentProps {
-  icon: LucideIcon;
+  /** Optional leading icon. Channel rows omit this — the visual list is
+   *  cleaner without per-row icons fighting the folder/category labels
+   *  for attention. View rows and folder headers still pass one. */
+  icon?: LucideIcon;
   label: string;
   /** Optional trailing slot — usually a SidebarBadge, but callers can pass
    *  custom nodes (e.g. a priority dot). Rendered on the right edge and
@@ -59,14 +62,14 @@ interface ContentProps {
 }
 
 /**
- * Standard row body: icon on the left at `h-4 w-4`, label that truncates,
- * and an optional trailing slot. Callers wrap this in whatever interactive
- * element (Link / button / li) they need.
+ * Standard row body: optional icon on the left at `h-4 w-4`, label that
+ * truncates, and an optional trailing slot. Callers wrap this in whatever
+ * interactive element (Link / button / li) they need.
  */
 export function SidebarRowContent({ icon: Icon, label, trailing }: ContentProps) {
   return (
     <>
-      <Icon className="h-4 w-4 shrink-0" />
+      {Icon != null && <Icon className="h-4 w-4 shrink-0" />}
       <span className="truncate">{label}</span>
       {trailing}
     </>
