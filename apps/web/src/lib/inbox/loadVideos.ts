@@ -94,6 +94,20 @@ export async function loadInboxVideos(
         select: { read_at: true },
         take: 1,
       },
+      // Latest Transcript row (if any) plus minimal presence-check
+      // payloads for its Summary and Articles. We only need the
+      // existence answers to render the artifact badges in VideoRow,
+      // so each child select picks the cheapest possible columns:
+      // a single Summary field via the unique transcript_id, and
+      // a single Article id with take: 1.
+      transcripts: {
+        orderBy: { created_at: 'desc' },
+        take: 1,
+        select: {
+          summary: { select: { transcript_id: true } },
+          articles: { take: 1, select: { id: true } },
+        },
+      },
     },
     take: 500,
   });

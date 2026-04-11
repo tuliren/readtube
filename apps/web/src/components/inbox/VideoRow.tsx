@@ -9,6 +9,66 @@ import type { VideoData } from '@/lib/types';
 
 import { useTriage } from './useTriage';
 
+/**
+ * Tiny presence badges for the AI artifacts attached to a video.
+ *
+ * Three single-letter pills (T = Transcript, S = Summary, A = Article)
+ * sit in the metadata line. Each one is one of three states:
+ *
+ *   - present  → solid blue, stating the artifact has been generated
+ *   - absent   → muted gray outline, indicating "not yet"
+ *   - n/a      → only the T pill: the whole row collapses to a single
+ *                "No transcript" note when transcript_unavailable is
+ *                true, since the other two artifacts are gated on
+ *                having a transcript at all
+ *
+ * The badges are wrapped in spans (not buttons) — they're status,
+ * not interactive — and they sit inside the row's `<Link>` so
+ * clicking them follows the same navigation as the row body.
+ */
+function ArtifactBadges({ video }: { video: VideoData }) {
+  if (video.transcriptUnavailable) {
+    return (
+      <span
+        className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0 text-[10px] font-medium text-amber-700"
+        title="This video has no captions, so no transcript / summary / article can be produced."
+      >
+        No transcript
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1">
+      <ArtifactDot label="T" present={video.hasTranscript} title="Transcript" />
+      <ArtifactDot label="S" present={video.hasSummary} title="Summary" />
+      <ArtifactDot label="A" present={video.hasArticle} title="Article" />
+    </span>
+  );
+}
+
+function ArtifactDot({
+  label,
+  present,
+  title,
+}: {
+  label: string;
+  present: boolean;
+  title: string;
+}) {
+  const presentClasses = 'border-blue-200 bg-blue-50 text-blue-700';
+  const absentClasses = 'border-gray-200 bg-white text-gray-300';
+  return (
+    <span
+      title={`${title}: ${present ? 'generated' : 'not generated yet'}`}
+      className={`inline-flex h-4 w-4 items-center justify-center rounded-full border text-[9px] font-semibold ${
+        present ? presentClasses : absentClasses
+      }`}
+    >
+      {label}
+    </span>
+  );
+}
+
 interface Props {
   video: VideoData;
   isSelected: boolean;
@@ -97,16 +157,19 @@ export default function VideoRow({ video, isSelected, isChecked, onToggleChecked
             >
               {video.title}
             </p>
-            <p className="mt-0.5 text-xs text-gray-400">
-              {video.channelName} · {relativeTime(video.publishedAt)}
-              {(() => {
-                const duration = formatDurationSeconds(video.durationSeconds);
-                return duration != null ? ` · ${duration}` : null;
-              })()}
-              {video.noteCount > 0
-                ? ` · ${video.noteCount} note${video.noteCount === 1 ? '' : 's'}`
-                : null}
-            </p>
+            <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-gray-400">
+              <span>
+                {video.channelName} · {relativeTime(video.publishedAt)}
+                {(() => {
+                  const duration = formatDurationSeconds(video.durationSeconds);
+                  return duration != null ? ` · ${duration}` : null;
+                })()}
+                {video.noteCount > 0
+                  ? ` · ${video.noteCount} note${video.noteCount === 1 ? '' : 's'}`
+                  : null}
+              </span>
+              <ArtifactBadges video={video} />
+            </div>
             {video.description != null && (
               <p className="mt-1 line-clamp-1 text-xs text-gray-400">{video.description}</p>
             )}

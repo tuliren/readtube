@@ -37,6 +37,14 @@ export interface VideoData {
   // reader to skip retry attempts and to disable Generate buttons in
   // Summary / Article when there's nothing to feed them.
   transcriptUnavailable: boolean;
+  // Whether the latest transcript fetch produced cached segments (i.e.
+  // there's at least one Transcript row for the video). Used by
+  // VideoRow to render the artifact-presence badges.
+  hasTranscript: boolean;
+  // Whether a Summary row exists for the latest transcript.
+  hasSummary: boolean;
+  // Whether at least one Article row exists for the latest transcript.
+  hasArticle: boolean;
   channelId: string;
   channelName: string;
   channelSourceId: string;

@@ -49,6 +49,18 @@ export default async function VideoPage({ params, searchParams }: Props) {
         select: { read_at: true },
         take: 1,
       },
+      // Same artifact-presence shape that loadInboxVideos uses, kept
+      // in sync so this single-video select decorates correctly via
+      // decorateVideo (which derives hasTranscript / hasSummary /
+      // hasArticle from this exact relation shape).
+      transcripts: {
+        orderBy: { created_at: 'desc' },
+        take: 1,
+        select: {
+          summary: { select: { transcript_id: true } },
+          articles: { take: 1, select: { id: true } },
+        },
+      },
     },
   });
 
