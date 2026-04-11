@@ -37,7 +37,7 @@ Use ~/.claude/skills/gstack/... for gstack file paths (the global path).
 - When checking whether a value exists or is absent, use `if (x == null)` or `if (x != null)` instead of `if (!x)` or `if (!!x)`. This avoids implicit type coercion, which can mask bugs when `x` is a valid falsy value like `0`, `""`, or `false`.
   - For review agent, it's fine to not always following this rule, especially for existing code.
 - In unit tests, use `it.each` to group similar test cases together. Do not use "should" in test descriptions.
-- When introducing database schema change, only update the Prisma schema file. Do not write or run migrations. A human engineer will do this for safety.
+- When introducing a database schema change, follow the workflow in `packages/database/README.md`. The short version: edit `packages/database/prisma/schema.prisma`, run `yarn db:create-migration` (which creates both an up and a down migration via the custom `bin/create-migration.sh` wrapper), inspect the generated SQL — Prisma's diff doesn't fully understand the `Unsupported("tsvector")` generated column or the raw-SQL ANN/GIN indexes, so you may need to delete spurious DROP/RECREATE INDEX statements by hand — and then apply with `yarn db:deploy`.
   - For review agent, it is fine to see migration files in a PR. Those files are added by human engineer.
 - Never modify any existing migration files.
 - When writing Prisma `upsert` statement, always ensure the unique fields have the same values in the `where` and `create` options. This enables Prisma to use native Postgres `upsert` statement.
