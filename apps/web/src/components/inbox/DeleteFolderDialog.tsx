@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import {
   AlertDialog,
@@ -35,6 +35,22 @@ interface Props {
 export default function DeleteFolderDialog({ target, onClose }: Props) {
   const { remove } = useFolders();
   const [busy, setBusy] = useState(false);
+
+  // Reset busy whenever a new target arrives. The component is always
+  // mounted (only `target != null` toggles the dialog), so without this
+  // a stuck busy state from one open/close cycle would carry over to
+  // the next. The normal flow already clears busy in handleConfirm,
+  // but if the user dismisses via Escape or backdrop click mid-delete
+  // (the AlertDialogCancel button is disabled while busy, but Radix's
+  // built-in dismiss paths aren't), the dialog closes with busy=true
+  // and the next folder would open showing "Deleting…" until the
+  // background request finally settles. Mirrors RenameFolderDialog's
+  // pattern.
+  useEffect(() => {
+    if (target != null) {
+      setBusy(false);
+    }
+  }, [target]);
 
   async function handleConfirm() {
     if (target == null || busy) {
