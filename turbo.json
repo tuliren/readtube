@@ -9,7 +9,9 @@
     "CRON_SECRET",
     "CLERK_WEBHOOK_SECRET",
     "TRANSCRIPT_API_KEY",
-    "AI_GATEWAY_API_KEY"
+    "AI_GATEWAY_API_KEY",
+    "HTTPS_PROXY",
+    "https_proxy"
   ],
   "tasks": {
     "typecheck": {

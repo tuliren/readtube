@@ -4171,6 +4171,7 @@ __metadata:
     ts-jest: "npm:^29.3.1"
     tsx: "npm:^4.19.4"
     typescript: "npm:^5"
+    undici: "npm:^8.0.2"
     webpack: "npm:^5"
     youtubei.js: "npm:^16.0.1"
     zod: "npm:^4.3.6"
@@ -22037,6 +22038,13 @@ __metadata:
   version: 7.16.0
   resolution: "undici@npm:7.16.0"
   checksum: 10c0/efd867792e9f233facf9efa0a087e2d9c3e4415c0b234061b9b40307ca4fa01d945fee4d43c7b564e1b80e0d519bcc682f9f6e0de13c717146c00a80e2f1fb0f
+  languageName: node
+  linkType: hard
+
+"undici@npm:^8.0.2":
+  version: 8.0.2
+  resolution: "undici@npm:8.0.2"
+  checksum: 10c0/4f833ab3a154ea11e2c53b272592f62269ecc7040a8bae5147c56ec1ccf67ccdf50d93abb84a48f0ba29947cca78d99d8ca873cacf53924c4b884c7d9bf783f9
   languageName: node
   linkType: hard
 
