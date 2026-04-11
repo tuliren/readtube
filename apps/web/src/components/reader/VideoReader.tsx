@@ -38,18 +38,24 @@ export default function VideoReader({ video }: Props) {
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
-      {/* Back nav + triage actions */}
-      <div className="sticky top-0 z-10 border-b border-gray-100 bg-white px-6 py-3">
-        <div className="mx-auto flex w-full max-w-3xl items-center justify-between">
-          <Link
-            href={backHref}
-            className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700"
-          >
-            <ArrowLeftIcon className="h-4 w-4" />
-            Back
-          </Link>
-          <VideoReaderActions video={video} />
-        </div>
+      {/*
+        Back nav + triage actions. The header bar deliberately bypasses
+        the article's `mx-auto max-w-3xl` indent and uses px-3 directly,
+        matching the Channels-section header on the sidebar — both
+        category headers should hug the pane edge with the same
+        12px-from-the-edge action rail. Without this the Back link and
+        the action buttons sat indented to match the article body and
+        floated in a sea of whitespace.
+      */}
+      <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-100 bg-white px-3 py-3">
+        <Link
+          href={backHref}
+          className="inline-flex items-center gap-1.5 px-2 text-sm text-gray-500 hover:text-gray-700"
+        >
+          <ArrowLeftIcon className="h-4 w-4" />
+          Back
+        </Link>
+        <VideoReaderActions video={video} />
       </div>
 
       {/* Article */}
