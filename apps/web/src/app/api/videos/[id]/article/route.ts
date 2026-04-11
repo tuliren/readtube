@@ -1,9 +1,8 @@
 import { auth } from '@clerk/nextjs/server';
 import { ArticleStyle } from '@readtube/database';
+import { prisma } from '@readtube/database';
 import { streamText } from 'ai';
 import { NextRequest, NextResponse } from 'next/server';
-
-import { prisma } from '@/lib/db';
 
 interface TranscriptSegment {
   startMs: number;

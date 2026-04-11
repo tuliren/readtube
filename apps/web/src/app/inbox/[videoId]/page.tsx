@@ -1,9 +1,9 @@
 import { auth } from '@clerk/nextjs/server';
+import { prisma } from '@readtube/database';
 import { notFound, redirect } from 'next/navigation';
 
 import InboxShell from '@/components/inbox/InboxShell';
 import VideoReader from '@/components/reader/VideoReader';
-import { prisma } from '@/lib/db';
 import { ensureUserExists } from '@/lib/db/user';
 import { decorateVideo, loadTriageContext } from '@/lib/inbox/triage';
 import { getSubscribedChannelsWithUnread } from '@/lib/subscriptions';

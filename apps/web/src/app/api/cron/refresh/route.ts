@@ -1,7 +1,7 @@
+import { prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 import { timingSafeEqual } from 'node:crypto';
 
-import { prisma } from '@/lib/db';
 import { isEmptyString } from '@/lib/string';
 import { scrapeChannel } from '@/lib/youtube/scrapeChannel';
 

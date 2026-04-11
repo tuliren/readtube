@@ -1,7 +1,7 @@
+import { prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { requireUserId } from '@/lib/auth';
-import { prisma } from '@/lib/db';
 import { type BulkAction, applyBulk } from '@/lib/inbox/triageActions';
 
 interface Body {

@@ -1,7 +1,7 @@
+import { prisma } from '@readtube/database';
 import { NextResponse } from 'next/server';
 
 import { requireUserId } from '@/lib/auth';
-import { prisma } from '@/lib/db';
 import { archiveVideo, assertUserCanTouchVideo, unarchiveVideo } from '@/lib/inbox/triageActions';
 
 interface Params {

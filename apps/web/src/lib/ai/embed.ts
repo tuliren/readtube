@@ -1,7 +1,6 @@
+import { prisma } from '@readtube/database';
 import { embed } from 'ai';
 import { randomUUID } from 'node:crypto';
-
-import { prisma } from '@/lib/db';
 
 /**
  * Version stamp for the embedding input recipe. Bump whenever the text we

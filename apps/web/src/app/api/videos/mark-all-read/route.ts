@@ -1,7 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
+import { prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 
-import { prisma } from '@/lib/db';
 import { markAllReadForUser } from '@/lib/subscriptions';
 
 export async function POST(request: NextRequest) {
