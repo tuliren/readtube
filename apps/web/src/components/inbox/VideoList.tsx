@@ -15,7 +15,7 @@ interface Props {
 
 export default function VideoList({ videos, selectedVideoId }: Props) {
   const searchParams = useSearchParams();
-  const channelParam = searchParams.get('channel');
+  const channelParam = searchParams.get('channelId');
 
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
 
@@ -76,7 +76,7 @@ export default function VideoList({ videos, selectedVideoId }: Props) {
           const isSelected = selectedVideoId === video.id;
           const href =
             channelParam != null
-              ? `/inbox/${video.id}?channel=${channelParam}`
+              ? `/inbox/${video.id}?channelId=${channelParam}`
               : `/inbox/${video.id}`;
 
           return (

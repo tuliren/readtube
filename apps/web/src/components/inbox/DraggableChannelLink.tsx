@@ -51,7 +51,7 @@ export default function DraggableChannelLink({ channel, isSelected, folders, onM
           ref={setNodeRef}
           {...attributes}
           {...listeners}
-          href={`/inbox?channel=${channel.id}`}
+          href={`/inbox?channelId=${channel.id}`}
           className={`${sidebarRowClass(isSelected)} flex-1 cursor-grab active:cursor-grabbing`}
           title="Click to open · drag to move to a folder"
         >

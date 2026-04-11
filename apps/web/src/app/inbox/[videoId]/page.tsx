@@ -11,7 +11,9 @@ import type { ChannelData, VideoData } from '@/lib/types';
 
 interface Props {
   params: Promise<{ videoId: string }>;
-  searchParams: Promise<{ channel?: string }>;
+  // `channelId` (not `channel`) so the SSR-side key matches the client
+  // InboxQuery codec — see the matching comment in /inbox/page.tsx.
+  searchParams: Promise<{ channelId?: string }>;
 }
 
 export default async function VideoPage({ params, searchParams }: Props) {
@@ -23,7 +25,7 @@ export default async function VideoPage({ params, searchParams }: Props) {
   await ensureUserExists(userId);
 
   const { videoId: videoDbId } = await params;
-  const { channel: channelParam } = await searchParams;
+  const { channelId: channelParam } = await searchParams;
   const selectedChannelId = channelParam ?? null;
 
   // Fetch the video with IDOR check
