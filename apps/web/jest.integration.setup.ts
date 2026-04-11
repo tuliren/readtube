@@ -6,7 +6,10 @@ let container: StartedPostgreSqlContainer;
 let prisma: PrismaClient;
 
 beforeAll(async () => {
-  container = await new PostgreSqlContainer('postgres:15').start();
+  // pgvector/pgvector:pg17 is the official image with the pgvector extension
+  // preinstalled on Postgres 17 — matches our Neon prod version so migration
+  // syntax and query planner behavior stay consistent between CI and prod.
+  container = await new PostgreSqlContainer('pgvector/pgvector:pg17').start();
 
   const databaseUrl = container.getConnectionUri();
   process.env.DATABASE_URL = databaseUrl;

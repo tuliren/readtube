@@ -30,6 +30,9 @@ export async function GET() {
       rssUrl: row.rss_url,
       createdAt: row.created_at,
       unreadCount: row.unread_count,
+      folderId: row.folder_id,
+      priority: row.priority,
+      muteUntil: row.mute_until,
     }))
   );
 }
@@ -161,6 +164,9 @@ export async function POST(request: NextRequest) {
       rssUrl: channelRow.rss_url,
       createdAt: channelRow.created_at,
       unreadCount,
+      folderId: null,
+      priority: 0,
+      muteUntil: null,
     },
     { status: 201 }
   );

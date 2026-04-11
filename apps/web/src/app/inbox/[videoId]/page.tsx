@@ -5,6 +5,7 @@ import InboxShell from '@/components/inbox/InboxShell';
 import VideoReader from '@/components/reader/VideoReader';
 import { prisma } from '@/lib/db';
 import { ensureUserExists } from '@/lib/db/user';
+import { decorateVideo, loadTriageContext } from '@/lib/inbox/triage';
 import { getSubscribedChannelsWithUnread } from '@/lib/subscriptions';
 import type { ChannelData, VideoData } from '@/lib/types';
 
@@ -58,17 +59,8 @@ export default async function VideoPage({ params, searchParams }: Props) {
   });
 
   const existingReadAt = video.consumptions[0]?.read_at;
-  const videoData: VideoData = {
-    id: video.id,
-    sourceId: video.source_id,
-    title: video.title,
-    description: video.description,
-    publishedAt: video.published_at.toISOString(),
-    readAt: existingReadAt ? existingReadAt.toISOString() : new Date().toISOString(),
-    channelId: video.channel_id,
-    channelName: video.channel.name,
-    channelSourceId: video.channel.source_id,
-  };
+  const readerTriage = await loadTriageContext(prisma, userId, [video.id]);
+  const videoData: VideoData = decorateVideo(video, readerTriage, existingReadAt ?? new Date());
 
   // Single SQL query: subscriptions + channel metadata + per-channel unread
   // counts (with watermark + consumption filter), all in one round-trip.
@@ -85,6 +77,9 @@ export default async function VideoPage({ params, searchParams }: Props) {
     rssUrl: row.rss_url,
     createdAt: row.created_at.toISOString(),
     unreadCount: row.unread_count,
+    folderId: row.folder_id,
+    priority: row.priority,
+    muteUntil: row.mute_until != null ? row.mute_until.toISOString() : null,
   }));
 
   const userChannelIds = subscriptionRows.map((row) => row.channel_id);
@@ -131,20 +126,27 @@ export default async function VideoPage({ params, searchParams }: Props) {
     (a, b) => b.published_at.getTime() - a.published_at.getTime()
   );
 
-  const sidebarVideos: VideoData[] = sortedRows.map((v) => {
-    const readAt = readAtFor(v);
-    return {
-      id: v.id,
-      sourceId: v.source_id,
-      title: v.title,
-      description: v.description,
-      publishedAt: v.published_at.toISOString(),
-      readAt: readAt ? readAt.toISOString() : null,
-      channelId: v.channel_id,
-      channelName: v.channel.name,
-      channelSourceId: v.channel.source_id,
-    };
+  const sidebarTriage = await loadTriageContext(
+    prisma,
+    userId,
+    sortedRows.map((v) => v.id)
+  );
+
+  const now = new Date();
+  const visibleRows = sortedRows.filter((v) => {
+    if (sidebarTriage.archivedIds.has(v.id)) {
+      return false;
+    }
+    const snoozeUntil = sidebarTriage.snoozeById.get(v.id);
+    if (snoozeUntil != null && snoozeUntil.getTime() > now.getTime()) {
+      return false;
+    }
+    return true;
   });
+
+  const sidebarVideos: VideoData[] = visibleRows.map((v) =>
+    decorateVideo(v, sidebarTriage, readAtFor(v))
+  );
 
   return (
     <InboxShell

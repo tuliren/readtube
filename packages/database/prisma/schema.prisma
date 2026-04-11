@@ -2,12 +2,14 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
 }
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 enum UserSourceType {
@@ -23,6 +25,18 @@ enum ArticleStyle {
   DIALOG
 }
 
+enum VideoTagSource {
+  MANUAL
+  AUTO_RULE
+  AUTO_AI
+}
+
+enum HighlightSource {
+  TRANSCRIPT
+  SUMMARY
+  ARTICLE
+}
+
 model User {
   id          String         @id @default(cuid())
   source_type UserSourceType @default(CLERK)
@@ -36,6 +50,19 @@ model User {
 
   subscriptions      UserSubscription[]
   video_consumptions UserVideoConsumption[]
+  folders            Folder[]
+  tags               Tag[]
+  video_tags         VideoTag[]
+  stars              VideoStar[]
+  saves              VideoSave[]
+  snoozes            VideoSnooze[]
+  archives           VideoArchive[]
+  notes              Note[]
+  highlights         Highlight[]
+  rules              Rule[]
+  saved_views        SavedView[]
+  preference         UserPreference?
+  digest_runs        DigestRun[]
 }
 
 model Channel {
@@ -63,13 +90,22 @@ model UserSubscription {
   // initial subscription state (mark recent N videos as new, etc.).
   // null means no watermark — read state comes purely from consumptions.
   read_at    DateTime?
+  // null = "Inbox root" (no folder). When a folder is deleted, subscriptions
+  // fall back to root via SetNull.
+  folder_id  String?
+  // -1 = low, 0 = normal, 1 = priority
+  priority   Int       @default(0)
+  // When set, videos from this channel are hidden until this time passes.
+  mute_until DateTime?
   created_at DateTime  @default(now())
 
   user    User    @relation(fields: [user_id], references: [source_id], onDelete: Cascade)
   channel Channel @relation(fields: [channel_id], references: [id], onDelete: Cascade)
+  folder  Folder? @relation(fields: [folder_id], references: [id], onDelete: SetNull)
 
   @@unique([user_id, channel_id], name: "subscription_unique_user_channel")
   @@index([channel_id], name: "subscription_index_on_channel_id")
+  @@index([user_id, folder_id], name: "subscription_index_on_user_folder")
 }
 
 model Video {
@@ -81,10 +117,23 @@ model Video {
   description  String?
   published_at DateTime
   created_at   DateTime @default(now())
+  // Full-text search vector over title + description. Backed by a STORED
+  // GENERATED column — the migration SQL creates it with to_tsvector +
+  // setweight. Prisma sees it as Unsupported, which is fine for writes
+  // (generated) and for raw-SQL reads.
+  search_tsv   Unsupported("tsvector")?
 
   channel      Channel                @relation(fields: [channel_id], references: [id], onDelete: Cascade)
   transcripts  Transcript[]
   consumptions UserVideoConsumption[]
+  tags         VideoTag[]
+  stars        VideoStar[]
+  saves        VideoSave[]
+  snoozes      VideoSnooze[]
+  archives     VideoArchive[]
+  notes        Note[]
+  highlights   Highlight[]
+  embedding    VideoEmbedding?
 
   @@unique([channel_id, source_id], name: "video_unique_channel_source")
   @@index([channel_id, published_at], name: "video_index_on_channel_published_at")
@@ -153,4 +202,233 @@ model Summary {
   generated_at   DateTime @default(now())
 
   transcript Transcript @relation(fields: [transcript_id], references: [id], onDelete: Cascade)
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Inbox feature expansion — organization, triage, notes, rules, digest, AI
+// ───────────────────────────────────────────────────────────────────────────
+
+// User-defined channel groupings in the sidebar. Sort order is manual.
+model Folder {
+  id         String   @id @default(cuid())
+  user_id    String
+  name       String
+  sort_order Int      @default(0)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  user          User               @relation(fields: [user_id], references: [source_id], onDelete: Cascade)
+  subscriptions UserSubscription[]
+
+  @@index([user_id], name: "folder_index_on_user_id")
+}
+
+// User-owned tags. Scoped per user so two users can have independent taxonomies.
+model Tag {
+  id         String   @id @default(cuid())
+  user_id    String
+  name       String
+  color      String?
+  created_at DateTime @default(now())
+
+  user       User       @relation(fields: [user_id], references: [source_id], onDelete: Cascade)
+  video_tags VideoTag[]
+
+  @@unique([user_id, name], name: "tag_unique_user_name")
+  @@index([user_id], name: "tag_index_on_user_id")
+}
+
+// Junction: a user tags a video. Source lets us distinguish manual vs auto.
+model VideoTag {
+  id         String         @id @default(cuid())
+  user_id    String
+  video_id   String
+  tag_id     String
+  source     VideoTagSource @default(MANUAL)
+  created_at DateTime       @default(now())
+
+  user  User  @relation(fields: [user_id], references: [source_id], onDelete: Cascade)
+  video Video @relation(fields: [video_id], references: [id], onDelete: Cascade)
+  tag   Tag   @relation(fields: [tag_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, video_id, tag_id], name: "video_tag_unique_user_video_tag")
+  @@index([video_id], name: "video_tag_index_on_video_id")
+  @@index([tag_id], name: "video_tag_index_on_tag_id")
+}
+
+// Starred videos (favorites).
+model VideoStar {
+  id         String   @id @default(cuid())
+  user_id    String
+  video_id   String
+  created_at DateTime @default(now())
+
+  user  User  @relation(fields: [user_id], references: [source_id], onDelete: Cascade)
+  video Video @relation(fields: [video_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, video_id], name: "video_star_unique_user_video")
+  @@index([video_id], name: "video_star_index_on_video_id")
+}
+
+// "Read later" queue — saved but not yet consumed.
+model VideoSave {
+  id         String   @id @default(cuid())
+  user_id    String
+  video_id   String
+  created_at DateTime @default(now())
+
+  user  User  @relation(fields: [user_id], references: [source_id], onDelete: Cascade)
+  video Video @relation(fields: [video_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, video_id], name: "video_save_unique_user_video")
+  @@index([video_id], name: "video_save_index_on_video_id")
+}
+
+// Hidden from inbox until snooze_until passes. Index on snooze_until so a
+// cheap cron can "wake" snoozed videos back into the inbox.
+model VideoSnooze {
+  id           String   @id @default(cuid())
+  user_id      String
+  video_id     String
+  snooze_until DateTime
+  created_at   DateTime @default(now())
+
+  user  User  @relation(fields: [user_id], references: [source_id], onDelete: Cascade)
+  video Video @relation(fields: [video_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, video_id], name: "video_snooze_unique_user_video")
+  @@index([snooze_until], name: "video_snooze_index_on_snooze_until")
+}
+
+// Archived videos — removed from inbox but kept in history.
+model VideoArchive {
+  id          String   @id @default(cuid())
+  user_id     String
+  video_id    String
+  archived_at DateTime @default(now())
+
+  user  User  @relation(fields: [user_id], references: [source_id], onDelete: Cascade)
+  video Video @relation(fields: [video_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, video_id], name: "video_archive_unique_user_video")
+  @@index([video_id], name: "video_archive_index_on_video_id")
+}
+
+// Per-video notes. timestamp_ms is optional: null = general note, set = pinned
+// to a transcript timestamp.
+model Note {
+  id           String   @id @default(cuid())
+  user_id      String
+  video_id     String
+  body         String
+  timestamp_ms Int?
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  user  User  @relation(fields: [user_id], references: [source_id], onDelete: Cascade)
+  video Video @relation(fields: [video_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, video_id], name: "note_index_on_user_video")
+}
+
+// Text highlights — char-offset anchor into transcript, summary, or article.
+model Highlight {
+  id           String          @id @default(cuid())
+  user_id      String
+  video_id     String
+  source       HighlightSource
+  anchor_start Int
+  anchor_end   Int
+  text         String
+  created_at   DateTime        @default(now())
+
+  user  User  @relation(fields: [user_id], references: [source_id], onDelete: Cascade)
+  video Video @relation(fields: [video_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, video_id], name: "highlight_index_on_user_video")
+}
+
+// Auto-rules: run on new video ingest + on demand via run-once.
+// conditions: { field, op, value }[] — implicit AND (no OR/nested yet).
+// actions: { type, payload? }[] — each action applies to every match.
+model Rule {
+  id         String   @id @default(cuid())
+  user_id    String
+  name       String
+  enabled    Boolean  @default(true)
+  conditions Json
+  actions    Json
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  user User @relation(fields: [user_id], references: [source_id], onDelete: Cascade)
+
+  @@index([user_id], name: "rule_index_on_user_id")
+}
+
+// Persisted filter state ("Unread tech", "Starred + last 7d", etc.).
+// query is the serialized InboxQuery object — see apps/web/src/lib/inbox/filter.ts.
+model SavedView {
+  id         String   @id @default(cuid())
+  user_id    String
+  name       String
+  query      Json
+  created_at DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [source_id], onDelete: Cascade)
+
+  @@index([user_id], name: "saved_view_index_on_user_id")
+}
+
+// Per-user preferences: theme, density, digest opt-in, digest hour.
+model UserPreference {
+  id              String   @id @default(cuid())
+  user_id         String   @unique
+  // "light" | "dark" | "system"
+  theme           String   @default("system")
+  // "comfortable" | "compact"
+  density         String   @default("comfortable")
+  digest_enabled  Boolean  @default(false)
+  // 0..23 UTC hour when the daily digest is sent
+  digest_hour_utc Int      @default(13)
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  user User @relation(fields: [user_id], references: [source_id], onDelete: Cascade)
+}
+
+// Audit trail of digest emails sent (one row per user per send attempt).
+model DigestRun {
+  id           String   @id @default(cuid())
+  user_id      String
+  sent_at      DateTime @default(now())
+  // string[] of Video.id that were included in the digest
+  video_ids    Json
+  // "sent" | "failed" | "skipped"
+  email_status String
+  error        String?
+
+  user User @relation(fields: [user_id], references: [source_id], onDelete: Cascade)
+
+  @@index([user_id, sent_at], name: "digest_run_index_on_user_sent_at")
+}
+
+// pgvector embedding per video. 1536 dims matches OpenAI's
+// text-embedding-3-small (the model configured in apps/web/src/lib/ai/embed.ts).
+// We use OpenAI for embeddings even though generation uses Google Gemini —
+// they're routed independently through the Vercel AI Gateway. If you swap
+// to a model with a different output size, bump EMBEDDING_PROMPT_VERSION
+// and add a follow-up migration that ALTERs the column + rebuilds the
+// HNSW index.
+model VideoEmbedding {
+  id             String                      @id @default(cuid())
+  video_id       String                      @unique
+  embedding      Unsupported("vector(1536)")
+  // e.g. "openai/text-embedding-3-small"
+  model          String
+  // bump when the embedding input recipe (title + summary etc.) changes
+  prompt_version String
+  generated_at   DateTime                    @default(now())
+
+  video Video @relation(fields: [video_id], references: [id], onDelete: Cascade)
 }

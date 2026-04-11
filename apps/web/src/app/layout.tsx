@@ -6,6 +6,7 @@ import PlausibleProvider from 'next-plausible';
 import { Inter, Lexend } from 'next/font/google';
 import { ReactNode } from 'react';
 
+import { ThemeProvider } from '@/components/providers/ThemeProvider';
 import { DESCRIPTION, DOMAIN, DOMAIN_URL, TITLE } from '@/constants';
 import '@/styles/globals.css';
 import '@/styles/tailwind.css';
@@ -49,6 +50,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={clsx(
         'h-full scroll-smooth bg-transparent antialiased',
         inter.variable,
@@ -57,18 +59,20 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     >
       <body className="flex h-full flex-col">
         <PlausibleProvider domain={DOMAIN} enabled={enableAnalytics} />
-        <ClerkProvider
-          signInFallbackRedirectUrl="/inbox"
-          signUpFallbackRedirectUrl="/inbox"
-          appearance={{
-            layout: {
-              privacyPageUrl: '/privacy',
-              termsPageUrl: '/terms',
-            },
-          }}
-        >
-          {children}
-        </ClerkProvider>
+        <ThemeProvider>
+          <ClerkProvider
+            signInFallbackRedirectUrl="/inbox"
+            signUpFallbackRedirectUrl="/inbox"
+            appearance={{
+              layout: {
+                privacyPageUrl: '/privacy',
+                termsPageUrl: '/terms',
+              },
+            }}
+          >
+            {children}
+          </ClerkProvider>
+        </ThemeProvider>
         <Analytics />
       </body>
     </html>

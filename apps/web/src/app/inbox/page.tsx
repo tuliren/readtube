@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import InboxShell from '@/components/inbox/InboxShell';
 import { prisma } from '@/lib/db';
 import { ensureUserExists } from '@/lib/db/user';
+import { decorateVideo, loadTriageContext } from '@/lib/inbox/triage';
 import { getSubscribedChannelsWithUnread } from '@/lib/subscriptions';
 import type { ChannelData, VideoData } from '@/lib/types';
 
@@ -38,6 +39,9 @@ export default async function InboxPage({ searchParams }: Props) {
     rssUrl: row.rss_url,
     createdAt: row.created_at.toISOString(),
     unreadCount: row.unread_count,
+    folderId: row.folder_id,
+    priority: row.priority,
+    muteUntil: row.mute_until != null ? row.mute_until.toISOString() : null,
   }));
 
   const userChannelIds = subscriptionRows.map((row) => row.channel_id);
@@ -88,20 +92,28 @@ export default async function InboxPage({ searchParams }: Props) {
     (a, b) => b.published_at.getTime() - a.published_at.getTime()
   );
 
-  const videos: VideoData[] = sortedRows.map((v) => {
-    const readAt = readAtFor(v);
-    return {
-      id: v.id,
-      sourceId: v.source_id,
-      title: v.title,
-      description: v.description,
-      publishedAt: v.published_at.toISOString(),
-      readAt: readAt ? readAt.toISOString() : null,
-      channelId: v.channel_id,
-      channelName: v.channel.name,
-      channelSourceId: v.channel.source_id,
-    };
+  // Load triage (star/save/archive/snooze/tags/notes) in one batched pass.
+  // Filter out snoozed videos whose snooze_until hasn't passed — they're
+  // hidden from the inbox until they wake up.
+  const triage = await loadTriageContext(
+    prisma,
+    userId,
+    sortedRows.map((v) => v.id)
+  );
+
+  const now = new Date();
+  const visibleRows = sortedRows.filter((v) => {
+    if (triage.archivedIds.has(v.id)) {
+      return false;
+    }
+    const snoozeUntil = triage.snoozeById.get(v.id);
+    if (snoozeUntil != null && snoozeUntil.getTime() > now.getTime()) {
+      return false;
+    }
+    return true;
   });
+
+  const videos: VideoData[] = visibleRows.map((v) => decorateVideo(v, triage, readAtFor(v)));
 
   return (
     <InboxShell

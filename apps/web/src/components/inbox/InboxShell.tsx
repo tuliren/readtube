@@ -8,7 +8,9 @@ import type { ChannelData, VideoData } from '@/lib/types';
 
 import AddChannelModal from './AddChannelModal';
 import ChannelSection from './ChannelSection';
+import { CommandPaletteProvider } from './CommandPalette';
 import InboxHeader from './InboxHeader';
+import { KeyboardShortcutsProvider } from './KeyboardShortcutsProvider';
 import VideoList from './VideoList';
 
 const fetcher = (url: string) =>
@@ -64,6 +66,58 @@ export default function InboxShell({
   const headerName = selectedChannel != null ? selectedChannel.name : 'All unread';
   const headerUnread = selectedChannel != null ? selectedChannel.unreadCount : totalUnread;
 
+  return (
+    <KeyboardShortcutsProvider>
+      <CommandPaletteProvider>
+        <InboxShellInner
+          channels={channels}
+          videos={videos}
+          selectedChannelId={selectedChannelId}
+          selectedVideoId={selectedVideoId}
+          totalUnread={totalUnread}
+          headerName={headerName}
+          headerUnread={headerUnread}
+          showEmptyState={showEmptyState}
+          modalOpen={modalOpen}
+          setModalOpen={setModalOpen}
+          handleChannelAdded={handleChannelAdded}
+        >
+          {children}
+        </InboxShellInner>
+      </CommandPaletteProvider>
+    </KeyboardShortcutsProvider>
+  );
+}
+
+interface InnerProps {
+  channels: ChannelData[];
+  videos: VideoData[];
+  selectedChannelId: string | null;
+  selectedVideoId: string | null;
+  totalUnread: number;
+  headerName: string;
+  headerUnread: number;
+  showEmptyState: boolean;
+  modalOpen: boolean;
+  setModalOpen: (open: boolean) => void;
+  handleChannelAdded: (channel: ChannelData) => void;
+  children?: React.ReactNode;
+}
+
+function InboxShellInner({
+  channels,
+  videos,
+  selectedChannelId,
+  selectedVideoId,
+  totalUnread,
+  headerName,
+  headerUnread,
+  showEmptyState,
+  modalOpen,
+  setModalOpen,
+  handleChannelAdded,
+  children,
+}: InnerProps) {
   return (
     <div className="flex h-full min-h-0">
       {/* Sidebar */}
