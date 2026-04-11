@@ -62,9 +62,29 @@ export default function InboxShell({
     { fallbackData: initialChannels }
   );
 
-  const { data: videos = initialVideos } = useSWR<VideoData[]>(videosUrl, fetcher, {
-    fallbackData: initialVideos,
+  // Capture the videosUrl that matched server-side rendering on mount.
+  // We can only safely fall back to `initialVideos` for that exact key —
+  // otherwise SWR will hand the SSR-rendered list back as the "fallback"
+  // for any new key (every filter chip toggle, search edit, saved view
+  // click) and the user briefly sees the old, wrong list flash before
+  // the correct fetch resolves. Pre-PR this only fired on channel
+  // switch; the filter system makes the videosUrl change on nearly
+  // every interaction.
+  const [ssrVideosUrl] = useState(videosUrl);
+  const videosFallback = videosUrl === ssrVideosUrl ? initialVideos : undefined;
+
+  // No destructuring default — we explicitly want `videos` to be
+  // undefined while a non-SSR key is loading so the consumer can
+  // render an empty placeholder instead of stale wrong content. We
+  // deliberately do NOT pass keepPreviousData, because the previous
+  // key's data would be just as wrong as the SSR fallback for the
+  // user's freshly-toggled filter (e.g., toggling Starred would show
+  // the old unfiltered list briefly, which is exactly the regression
+  // this fix is closing).
+  const { data: videos } = useSWR<VideoData[]>(videosUrl, fetcher, {
+    fallbackData: videosFallback,
   });
+  const videoList = videos ?? [];
 
   const totalUnread = channels.reduce((sum, c) => sum + c.unreadCount, 0);
 
@@ -84,7 +104,7 @@ export default function InboxShell({
       <CommandPaletteProvider>
         <InboxShellInner
           channels={channels}
-          videos={videos}
+          videos={videoList}
           selectedChannelId={selectedChannelId}
           selectedVideoId={selectedVideoId}
           totalUnread={totalUnread}
