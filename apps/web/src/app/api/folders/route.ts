@@ -1,4 +1,4 @@
-import { prisma } from '@readtube/database';
+import { Prisma, prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { requireUserId } from '@/lib/auth';
@@ -52,10 +52,21 @@ export async function POST(request: NextRequest) {
   });
   const nextOrder = (max._max.sort_order ?? -1) + 1;
 
-  const row = await prisma.folder.create({
-    data: { user_id: userId, name, sort_order: nextOrder },
-    select: { id: true, name: true, sort_order: true },
-  });
-
-  return NextResponse.json(toFolderData(row), { status: 201 });
+  try {
+    const row = await prisma.folder.create({
+      data: { user_id: userId, name, sort_order: nextOrder },
+      select: { id: true, name: true, sort_order: true },
+    });
+    return NextResponse.json(toFolderData(row), { status: 201 });
+  } catch (err) {
+    // P2002 = unique constraint violation. Caught here so the folder_unique_
+    // user_name index surfaces as a friendly 409 instead of a generic 500.
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      return NextResponse.json(
+        { error: `A folder named "${name}" already exists.` },
+        { status: 409 }
+      );
+    }
+    throw err;
+  }
 }

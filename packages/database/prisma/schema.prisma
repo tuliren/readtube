@@ -220,7 +220,10 @@ model Folder {
   user          User               @relation(fields: [user_id], references: [source_id], onDelete: Cascade)
   subscriptions UserSubscription[]
 
-  @@index([user_id], name: "folder_index_on_user_id")
+  // The composite unique on (user_id, name) doubles as a per-user index —
+  // Postgres uses its leading column for any user-scoped range scan, so
+  // a separate @@index([user_id]) would be redundant.
+  @@unique([user_id, name], name: "folder_unique_user_name")
 }
 
 // User-owned tags. Scoped per user so two users can have independent taxonomies.
