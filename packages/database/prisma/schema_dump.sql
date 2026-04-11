@@ -323,7 +323,7 @@ CREATE UNIQUE INDEX "Article_transcript_id_style_prompt_version_key" ON "Article
 CREATE UNIQUE INDEX "Summary_transcript_id_key" ON "Summary" ("transcript_id");
 
 -- CreateIndex
-CREATE INDEX "folder_index_on_user_id" ON "Folder" ("user_id");
+CREATE UNIQUE INDEX "Folder_user_id_name_key" ON "Folder" ("user_id", "name");
 
 -- CreateIndex
 CREATE INDEX "tag_index_on_user_id" ON "Tag" ("user_id");
