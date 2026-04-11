@@ -14,7 +14,9 @@ describe('parseInboxQuery', () => {
     { url: 'unread=0', expected: { unread: false } },
     { url: 'starred=1&saved=1', expected: { starred: true, saved: true } },
     { url: 'archived=1', expected: { archived: true } },
+    { url: 'snoozed=1', expected: { snoozed: true } },
     { url: 'includeSnoozed=1', expected: { includeSnoozed: true } },
+    { url: 'snoozed=1&includeSnoozed=1', expected: { snoozed: true, includeSnoozed: true } },
     { url: 'tagIds=a,b,c', expected: { tagIds: ['a', 'b', 'c'] } },
     { url: 'tagIds=', expected: {} },
     { url: 'tagIds=x,,y', expected: { tagIds: ['x', 'y'] } },
@@ -37,6 +39,7 @@ describe('encodeInboxQuery', () => {
     { query: { unread: true }, expected: 'unread=1' },
     { query: { unread: false }, expected: '' },
     { query: { starred: true, saved: true }, expected: 'starred=1&saved=1' },
+    { query: { snoozed: true }, expected: 'snoozed=1' },
     { query: { tagIds: ['a', 'b'] }, expected: 'tagIds=a%2Cb' },
     { query: { tagIds: [] }, expected: '' },
     { query: { sort: 'newest' }, expected: '' },
@@ -52,6 +55,7 @@ describe('encodeInboxQuery', () => {
     { tagIds: ['tag-a', 'tag-b'], starred: true },
     { from: '2026-01-01', to: '2026-02-01', sort: 'oldest' },
     { folderId: 'f1', archived: true, includeSnoozed: true },
+    { snoozed: true },
   ])('round-trips %s through encode -> parse', (query) => {
     const encoded = encodeInboxQuery(query);
     const parsed = parseInboxQuery(encoded);

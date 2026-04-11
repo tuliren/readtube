@@ -63,6 +63,11 @@ export interface InboxQuery {
   starred?: boolean;
   saved?: boolean;
   archived?: boolean;
+  // "snoozed=true" means "show ONLY currently-snoozed videos". This is a
+  // different intent from `includeSnoozed`: includeSnoozed=true mixes
+  // snoozed videos back into the main feed, while snoozed=true produces
+  // a dedicated snoozed-only view for the sidebar pseudo-view.
+  snoozed?: boolean;
   includeSnoozed?: boolean;
   from?: string;
   to?: string;

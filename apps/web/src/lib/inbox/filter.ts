@@ -14,7 +14,7 @@ import type { InboxQuery } from '@/lib/types';
  *   encoding, so a "default" view has an empty query string.
  */
 
-const BOOL_KEYS = ['unread', 'starred', 'saved', 'archived', 'includeSnoozed'] as const;
+const BOOL_KEYS = ['unread', 'starred', 'saved', 'archived', 'snoozed', 'includeSnoozed'] as const;
 const STRING_KEYS = ['q', 'channelId', 'folderId', 'from', 'to'] as const;
 type BoolKey = (typeof BOOL_KEYS)[number];
 type StringKey = (typeof STRING_KEYS)[number];

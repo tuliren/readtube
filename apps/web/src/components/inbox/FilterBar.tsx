@@ -1,6 +1,6 @@
 'use client';
 
-import { Archive, Bookmark, Mail, Star } from 'lucide-react';
+import { Archive, Bookmark, Clock, Mail, Star } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import type { InboxQuery } from '@/lib/types';
@@ -8,7 +8,7 @@ import type { InboxQuery } from '@/lib/types';
 import { useInboxQuery } from './useInboxQuery';
 
 interface Chip {
-  key: keyof Pick<InboxQuery, 'unread' | 'starred' | 'saved' | 'archived'>;
+  key: keyof Pick<InboxQuery, 'unread' | 'starred' | 'saved' | 'snoozed' | 'archived'>;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
 }
@@ -17,6 +17,7 @@ const CHIPS: Chip[] = [
   { key: 'unread', label: 'Unread', icon: Mail },
   { key: 'starred', label: 'Starred', icon: Star },
   { key: 'saved', label: 'Read Later', icon: Bookmark },
+  { key: 'snoozed', label: 'Snoozed', icon: Clock },
   { key: 'archived', label: 'Archived', icon: Archive },
 ];
 

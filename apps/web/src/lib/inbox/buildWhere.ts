@@ -14,8 +14,10 @@ import type { InboxQuery } from '@/lib/types';
  * Triage rules:
  * - `archived` defaults to excluding archived videos; set archived=true to
  *   show only archived.
- * - `includeSnoozed` defaults to false — snoozed videos are hidden from the
- *   inbox until their snooze_until has passed.
+ * - `snoozed=true` produces a snoozed-only view (powers the sidebar's
+ *   Snoozed pseudo-view). `includeSnoozed` defaults to false and mixes
+ *   snoozed videos back into the main feed without hiding anything else.
+ *   `snoozed=true` wins over `includeSnoozed` when both are set.
  * - `starred` / `saved` = true restricts to videos with a row in the matching
  *   table for this user.
  * - `unread` filtering is applied in the consumer (where the watermark map
@@ -63,9 +65,18 @@ export function buildVideoWhere(
     where.archives = { none: { user_id: userId } };
   }
 
-  // Snoozed videos are hidden unless explicitly requested or the snooze has
-  // passed. We model "hidden" as NOT (has active snooze for this user).
-  if (query.includeSnoozed !== true) {
+  // Snooze has three modes:
+  //   1. snoozed=true → show ONLY currently-active snoozes (dedicated view)
+  //   2. includeSnoozed=true → show everything, including active snoozes
+  //   3. default → hide active snoozes from the main feed
+  if (query.snoozed === true) {
+    where.snoozes = {
+      some: {
+        user_id: userId,
+        snooze_until: { gt: new Date() },
+      },
+    };
+  } else if (query.includeSnoozed !== true) {
     where.snoozes = {
       none: {
         user_id: userId,

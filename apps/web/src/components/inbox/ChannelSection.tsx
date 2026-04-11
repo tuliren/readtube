@@ -6,6 +6,7 @@ import Link from 'next/link';
 import type { ChannelData } from '@/lib/types';
 
 import FolderSection from './FolderSection';
+import ViewsSection from './ViewsSection';
 
 interface Props {
   channels: ChannelData[];
@@ -43,6 +44,9 @@ export default function ChannelSection({
           )}
         </Link>
       </div>
+
+      {/* Persistent triage views: Starred / Read Later / Snoozed / Archived */}
+      <ViewsSection />
 
       {/* Channels grouped by folder (with drag-and-drop) */}
       <FolderSection channels={channels} selectedChannelId={selectedChannelId} />
