@@ -41,9 +41,16 @@ export default function DeleteFolderDialog({ target, onClose }: Props) {
       return;
     }
     setBusy(true);
-    await remove(target.id);
+    const ok = await remove(target.id);
     setBusy(false);
-    onClose();
+    // Only close on success — on failure useFolders.remove() has already
+    // toasted the error and we leave the dialog open so the user can
+    // retry. Previously this called onClose() unconditionally and the
+    // dialog disappeared on every failed delete with no acknowledgment
+    // beyond the toast.
+    if (ok) {
+      onClose();
+    }
   }
 
   return (
