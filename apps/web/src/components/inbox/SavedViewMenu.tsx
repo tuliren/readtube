@@ -13,8 +13,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { isDefaultQuery } from '@/lib/inbox/filter';
-import type { InboxQuery, SavedViewData } from '@/lib/types';
+import { inboxQueriesEqual, isDefaultQuery } from '@/lib/inbox/filter';
+import type { SavedViewData } from '@/lib/types';
 
 import { useInboxQuery } from './useInboxQuery';
 
@@ -25,10 +25,6 @@ const fetcher = (url: string) =>
     }
     return r.json() as Promise<SavedViewData[]>;
   });
-
-function queryMatches(a: InboxQuery, b: InboxQuery): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
-}
 
 /**
  * Dropdown in the header that lists saved views and lets users save the
@@ -88,7 +84,7 @@ export default function SavedViewMenu() {
           <div className="px-2 py-1 text-xs text-gray-400">No saved views yet</div>
         ) : (
           views.map((view) => {
-            const active = queryMatches(view.query, query);
+            const active = inboxQueriesEqual(view.query, query);
             return (
               <DropdownMenuItem
                 key={view.id}

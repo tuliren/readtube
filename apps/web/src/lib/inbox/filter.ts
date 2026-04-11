@@ -103,3 +103,54 @@ export function encodeInboxQuery(query: InboxQuery): URLSearchParams {
 export function isDefaultQuery(query: InboxQuery): boolean {
   return encodeInboxQuery(query).toString().length === 0;
 }
+
+/**
+ * Order-independent equality for two InboxQuery values. Used by
+ * SavedViewMenu to mark the active saved view with a checkmark.
+ *
+ * The previous implementation compared `JSON.stringify(a) === JSON.stringify(b)`
+ * which is sensitive to property insertion order — and the two sources
+ * being compared insert keys differently:
+ *   • A SavedView's `query` is round-tripped through a JSONB column,
+ *     and PostgreSQL JSONB normalizes keys by length-then-lex order.
+ *   • The current `query` comes from `parseInboxQuery`, which inserts
+ *     keys in `STRING_KEYS` / `BOOL_KEYS` iteration order.
+ * Mixed key sets like `{starred, saved}` round-trip to `{saved, starred}`,
+ * so the active-view checkmark silently failed to render.
+ *
+ * This helper compares each canonical key explicitly. Booleans are
+ * normalized so `false` and `undefined` are treated as the same (matching
+ * how the encoder drops absent/false bools). `tagIds` is compared as a
+ * sorted set so the same set of tags in different order still counts as
+ * equal — that matches user intent (the filter applies to the set, not
+ * the sequence) and protects against any future caller building tagIds
+ * in a non-deterministic order.
+ */
+export function inboxQueriesEqual(a: InboxQuery, b: InboxQuery): boolean {
+  for (const key of STRING_KEYS) {
+    if ((a[key] ?? '') !== (b[key] ?? '')) {
+      return false;
+    }
+  }
+  for (const key of BOOL_KEYS) {
+    if ((a[key] === true) !== (b[key] === true)) {
+      return false;
+    }
+  }
+  const aSort = a.sort ?? 'newest';
+  const bSort = b.sort ?? 'newest';
+  if (aSort !== bSort) {
+    return false;
+  }
+  const aTags = [...(a.tagIds ?? [])].sort();
+  const bTags = [...(b.tagIds ?? [])].sort();
+  if (aTags.length !== bTags.length) {
+    return false;
+  }
+  for (let i = 0; i < aTags.length; i += 1) {
+    if (aTags[i] !== bTags[i]) {
+      return false;
+    }
+  }
+  return true;
+}
