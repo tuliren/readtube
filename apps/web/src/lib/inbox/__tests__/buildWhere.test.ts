@@ -1,6 +1,6 @@
 import type { InboxQuery } from '@/lib/types';
 
-import { buildVideoWhere } from '../buildWhere';
+import { buildUnreadClause, buildVideoWhere } from '../buildWhere';
 
 // Every test uses this stable channel set and user to keep assertions
 // focused on the filter logic rather than scoping boilerplate.
@@ -129,6 +129,56 @@ describe('buildVideoWhere — star + save filters', () => {
     const where = buildVideoWhere({ starred: true, saved: true }, USER_ID, CHANNEL_IDS);
     expect(where.stars).toEqual({ some: { user_id: USER_ID } });
     expect(where.saves).toEqual({ some: { user_id: USER_ID } });
+  });
+});
+
+describe('buildUnreadClause', () => {
+  const watermark = new Date('2026-02-01');
+
+  it('emits a consumption-none guard so videos with a Consumption row drop out', () => {
+    const clause = buildUnreadClause(USER_ID, CHANNEL_IDS, new Map());
+    expect(clause.AND).toEqual(
+      expect.arrayContaining([
+        {
+          consumptions: { none: { user_id: USER_ID } },
+        },
+      ])
+    );
+  });
+
+  it('treats a channel with no watermark as fully unread (no published_at filter)', () => {
+    const clause = buildUnreadClause(USER_ID, ['chan_a'], new Map());
+    const orClause = (clause.AND as unknown as Array<{ OR?: unknown }>).find(
+      (entry) => entry.OR != null
+    );
+    expect(orClause).toEqual({ OR: [{ channel_id: 'chan_a' }] });
+  });
+
+  it('emits per-channel published_at > watermark predicates when the watermark is set', () => {
+    const clause = buildUnreadClause(
+      USER_ID,
+      ['chan_a', 'chan_b'],
+      new Map([
+        ['chan_a', watermark],
+        ['chan_b', null],
+      ])
+    );
+    const orClause = (clause.AND as unknown as Array<{ OR?: unknown }>).find(
+      (entry) => entry.OR != null
+    );
+    expect(orClause).toEqual({
+      OR: [{ channel_id: 'chan_a', published_at: { gt: watermark } }, { channel_id: 'chan_b' }],
+    });
+  });
+
+  it('produces a clause that combines the per-channel OR and consumption guard', () => {
+    const clause = buildUnreadClause(USER_ID, ['chan_a'], new Map([['chan_a', watermark]]));
+    expect(clause).toEqual({
+      AND: [
+        { OR: [{ channel_id: 'chan_a', published_at: { gt: watermark } }] },
+        { consumptions: { none: { user_id: USER_ID } } },
+      ],
+    });
   });
 });
 

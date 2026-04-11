@@ -2,7 +2,7 @@ import { prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { requireUserId } from '@/lib/auth';
-import { buildVideoWhere } from '@/lib/inbox/buildWhere';
+import { buildUnreadClause, buildVideoWhere } from '@/lib/inbox/buildWhere';
 import { parseInboxQuery } from '@/lib/inbox/filter';
 import { decorateVideo, loadTriageContext } from '@/lib/inbox/triage';
 
@@ -62,7 +62,19 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const finalWhere = restrictIds != null ? { ...where, id: { in: restrictIds } } : where;
+  let finalWhere: typeof where =
+    restrictIds != null ? { ...where, id: { in: restrictIds } } : where;
+
+  // Push the unread filter into the DB query (was a JS post-filter
+  // applied AFTER take: 500, which silently dropped genuinely unread
+  // videos beyond the cap whenever the user had a long backlog of read
+  // items mixed in). Wrapping in a top-level AND avoids fighting any
+  // existing AND that buildVideoWhere may have added for tag filters.
+  if (query.unread === true) {
+    finalWhere = {
+      AND: [finalWhere, buildUnreadClause(userId, channelIds, watermarkByChannelId)],
+    };
+  }
 
   const videos = await prisma.video.findMany({
     where: finalWhere,
@@ -97,15 +109,15 @@ export async function GET(request: NextRequest) {
     return null;
   };
 
-  // If unread=true is set, drop videos that have a readAt.
-  const unreadFiltered =
-    query.unread === true ? videos.filter((v) => readAtFor(v) == null) : videos;
-
+  // The unread filter is now applied at the DB layer above via
+  // buildUnreadClause, so by the time we get here `videos` is already
+  // the filtered set. readAtFor is still needed because decorateVideo
+  // wants the read-at timestamp on each row.
   const triage = await loadTriageContext(
     prisma,
     userId,
-    unreadFiltered.map((v) => v.id)
+    videos.map((v) => v.id)
   );
 
-  return NextResponse.json(unreadFiltered.map((v) => decorateVideo(v, triage, readAtFor(v))));
+  return NextResponse.json(videos.map((v) => decorateVideo(v, triage, readAtFor(v))));
 }
