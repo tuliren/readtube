@@ -60,7 +60,7 @@ export default function VideoList({ videos, selectedVideoId }: Props) {
 
   if (videos.length === 0) {
     return (
-      <div className="flex flex-1 items-center justify-center p-8 text-center text-sm text-gray-400">
+      <div className="flex flex-1 items-center justify-center p-8 text-center text-sm text-gray-500">
         No videos yet. New videos will appear here after the next refresh.
       </div>
     );

@@ -181,8 +181,8 @@ function InboxShellInner({
           <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
             <div>
               <p className="text-lg font-semibold text-gray-700">No channels yet</p>
-              <p className="mt-1 text-sm text-gray-400">Add a YouTube channel to get started.</p>
-              <p className="mt-1 text-xs text-gray-400">
+              <p className="mt-1 text-sm text-gray-500">Add a YouTube channel to get started.</p>
+              <p className="mt-1 text-xs text-gray-500">
                 Supported:{' '}
                 <code className="rounded bg-gray-100 px-1">youtube.com/channel/UCxxxxx</code> or{' '}
                 <code className="rounded bg-gray-100 px-1">UCxxxxx</code>

@@ -81,7 +81,7 @@ export default function SavedViewMenu() {
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel>Saved views</DropdownMenuLabel>
         {views.length === 0 ? (
-          <div className="px-2 py-1 text-xs text-gray-400">No saved views yet</div>
+          <div className="px-2 py-1 text-xs text-gray-500">No saved views yet</div>
         ) : (
           views.map((view) => {
             const active = inboxQueriesEqual(view.query, query);

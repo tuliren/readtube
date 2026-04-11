@@ -130,7 +130,7 @@ export default function FolderGroup({
         </ul>
       )}
       {!isCollapsed && channels.length === 0 && (
-        <p className="ml-6 mt-1 px-3 py-1 text-xs text-gray-300">Drop a channel here</p>
+        <p className="ml-6 mt-1 px-3 py-1 text-xs text-gray-500">Drop a channel here</p>
       )}
     </div>
   );
