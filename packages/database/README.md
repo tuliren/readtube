@@ -2,16 +2,20 @@
 
 ### Development
 
+This module equips with a set of scripts on top of Prisma's native db migration commands for better migration management.
+
 Generate dev client
 - Update `prisma.schema`
 - Run `yarn db:generate`
 
 Generate dev migration
 - Update `prisma.schema`
-- Run `yarn db:migrate`
+- Run `yarn db:create-migration`
 - Enter a migration name
-- A migration file will be created based on the difference between the current Prisma schema and the latest database schema
-- The migration will NOT be automatically applied to the database due to the `--create-only` flag
+- Both up and down migration files will be created automatically
+- Update the migration file as needed
+- Apply the migration by `yarn db:deploy`
+- The local schema snapshot will also be updated
 
-Reset dev database
-- Run `yarn db:push`
+Rollback a migration
+- Run `yarn db:rollback` will revert the last migration both locally and in the database
