@@ -6,34 +6,17 @@ import {
   DragOverlay,
   type DragStartEvent,
   PointerSensor,
-  useDraggable,
   useDroppable,
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import {
-  Check,
-  ChevronDown,
-  ChevronRight,
-  FolderIcon,
-  FolderInput,
-  FolderPlus,
-  Inbox,
-  Trash2,
-} from 'lucide-react';
-import Link from 'next/link';
+import { FolderInput, FolderPlus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import type { ChannelData, FolderData } from '@/lib/types';
+import type { ChannelData } from '@/lib/types';
 
+import DraggableChannelLink from './DraggableChannelLink';
+import FolderGroup from './FolderGroup';
 import { useFolders } from './useFolders';
 
 interface Props {
@@ -42,10 +25,10 @@ interface Props {
 }
 
 /**
- * Folder-aware channel list. Channels are grouped under their folder_id; any
- * channel without a folder_id shows up in the "Inbox" (root) group at the
- * top. Drag a channel row onto a folder to move it; drop on "Inbox" to
- * unassign.
+ * Folder-aware channel list. Channels are grouped under their folder_id;
+ * any channel without a folder_id shows up in the "Inbox" (root) group at
+ * the top. Drag a channel row onto a folder to move it; drop on "Inbox"
+ * to unassign. Alternatively, use the per-row Move-to dropdown.
  *
  * Collapsible folders + per-folder unread rollups are local-state only —
  * expand state isn't persisted across reloads yet.
@@ -224,7 +207,7 @@ export default function FolderSection({ channels, selectedChannelId }: Props) {
       */}
       <DragOverlay dropAnimation={null}>
         {activeChannel != null ? (
-          <div className="flex items-center justify-between gap-2 rounded-md border border-blue-300 bg-white px-3 py-1.5 text-sm font-medium text-blue-700 shadow-lg ring-2 ring-blue-200 cursor-grabbing">
+          <div className="flex cursor-grabbing items-center justify-between gap-2 rounded-md border border-blue-300 bg-white px-3 py-1.5 text-sm font-medium text-blue-700 shadow-lg ring-2 ring-blue-200">
             <FolderInput className="h-3.5 w-3.5 shrink-0 text-blue-400" />
             <span className="truncate">{activeChannel.name}</span>
             {activeChannel.unreadCount > 0 && (
@@ -239,188 +222,17 @@ export default function FolderSection({ channels, selectedChannelId }: Props) {
   );
 }
 
+/**
+ * Small inline drop target for the "unfoldered" root bucket. Left in
+ * this file because it's trivially small (~8 lines) and lives alongside
+ * the channel list it wraps; extracting it into its own file would be
+ * more churn than value.
+ */
 function RootDropZone({ children }: { children: React.ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id: 'root' });
   return (
     <div ref={setNodeRef} className={`mt-1 ${isOver ? 'bg-blue-50/60' : ''}`}>
       {children}
     </div>
-  );
-}
-
-interface FolderGroupProps {
-  folder: FolderData;
-  channels: ChannelData[];
-  unread: number;
-  selectedChannelId: string | null;
-  isCollapsed: boolean;
-  onToggle: () => void;
-  onDelete: () => void;
-  folders: FolderData[];
-  onMoveTo: (channelId: string, folderId: string | null) => void;
-}
-
-function FolderGroup({
-  folder,
-  channels,
-  unread,
-  selectedChannelId,
-  isCollapsed,
-  onToggle,
-  onDelete,
-  folders,
-  onMoveTo,
-}: FolderGroupProps) {
-  const { setNodeRef, isOver } = useDroppable({ id: folder.id });
-
-  return (
-    <div className={`mt-2 ${isOver ? 'bg-blue-50/60' : ''}`} ref={setNodeRef}>
-      {/*
-        The `group` class here is what activates `group-hover:opacity-100`
-        on the folder menu button below — without it, the ⋯ button stays
-        invisible at opacity-0 and the Delete action is inaccessible.
-      */}
-      <div className="group flex items-center gap-1 px-3">
-        <button
-          type="button"
-          onClick={onToggle}
-          className="flex flex-1 items-center gap-1 rounded px-1 py-1 text-left text-sm text-gray-700 hover:bg-gray-100"
-        >
-          {isCollapsed ? (
-            <ChevronRight className="h-3.5 w-3.5" />
-          ) : (
-            <ChevronDown className="h-3.5 w-3.5" />
-          )}
-          <FolderIcon className="h-3.5 w-3.5 text-gray-400" />
-          <span className="flex-1 truncate font-medium">{folder.name}</span>
-          {unread > 0 ? (
-            <span className="rounded-full bg-gray-200 px-1.5 py-0.5 text-xs font-medium text-gray-700">
-              {unread}
-            </span>
-          ) : null}
-        </button>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="rounded p-1 text-gray-400 opacity-0 hover:bg-gray-100 hover:text-gray-600 group-hover:opacity-100"
-              aria-label="Folder menu"
-            >
-              <span aria-hidden>⋯</span>
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={onDelete} className="text-red-600">
-              <Trash2 className="mr-2 h-4 w-4" />
-              Delete folder
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
-      {!isCollapsed && channels.length > 0 && (
-        <ul className="ml-5 mt-1 space-y-0.5 border-l border-gray-200 pl-2">
-          {channels.map((channel) => (
-            <DraggableChannelLink
-              key={channel.id}
-              channel={channel}
-              isSelected={selectedChannelId === channel.id}
-              folders={folders}
-              onMoveTo={onMoveTo}
-            />
-          ))}
-        </ul>
-      )}
-      {!isCollapsed && channels.length === 0 && (
-        <p className="ml-6 mt-1 px-2 py-1 text-xs text-gray-300">Drop a channel here</p>
-      )}
-    </div>
-  );
-}
-
-interface DraggableChannelProps {
-  channel: ChannelData;
-  isSelected: boolean;
-  folders: FolderData[];
-  onMoveTo: (channelId: string, folderId: string | null) => void;
-}
-
-function DraggableChannelLink({ channel, isSelected, folders, onMoveTo }: DraggableChannelProps) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: channel.id,
-  });
-
-  // setNodeRef + listeners go on the Link only (not the wrapping li), so the
-  // Move-to dropdown button is a sibling outside the draggable zone. This
-  // means clicking the dropdown never accidentally starts a drag, and we
-  // don't need stopPropagation hacks on the button.
-  return (
-    <li className={`group relative ${isDragging ? 'opacity-40' : ''}`}>
-      <div className="flex items-center">
-        <Link
-          ref={setNodeRef}
-          {...attributes}
-          {...listeners}
-          href={`/inbox?channel=${channel.id}`}
-          className={`flex flex-1 items-center justify-between rounded-md px-3 py-1.5 text-sm cursor-grab active:cursor-grabbing ${
-            isSelected ? 'bg-blue-50 font-medium text-blue-700' : 'text-gray-700 hover:bg-gray-100'
-          }`}
-          title="Click to open · drag to move to a folder"
-        >
-          <span className="truncate">{channel.name}</span>
-          {channel.unreadCount > 0 && (
-            <span className="ml-1 shrink-0 rounded-full bg-blue-600 px-1.5 py-0.5 text-xs font-medium text-white">
-              {channel.unreadCount}
-            </span>
-          )}
-        </Link>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="ml-0.5 rounded p-1 text-gray-400 opacity-0 hover:bg-gray-100 hover:text-gray-600 group-hover:opacity-100 data-[state=open]:opacity-100"
-              aria-label="Move channel to folder"
-              title="Move to…"
-            >
-              <FolderInput className="h-3.5 w-3.5" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-52">
-            <DropdownMenuLabel>Move to</DropdownMenuLabel>
-            <DropdownMenuItem
-              disabled={channel.folderId == null}
-              onSelect={() => onMoveTo(channel.id, null)}
-            >
-              {channel.folderId == null ? (
-                <Check className="mr-2 h-3.5 w-3.5 text-blue-600" />
-              ) : (
-                <Inbox className="mr-2 h-3.5 w-3.5 text-gray-400" />
-              )}
-              Inbox (no folder)
-            </DropdownMenuItem>
-            {folders.length > 0 && <DropdownMenuSeparator />}
-            {folders.map((folder) => {
-              const isCurrent = channel.folderId === folder.id;
-              return (
-                <DropdownMenuItem
-                  key={folder.id}
-                  disabled={isCurrent}
-                  onSelect={() => onMoveTo(channel.id, folder.id)}
-                >
-                  {isCurrent ? (
-                    <Check className="mr-2 h-3.5 w-3.5 text-blue-600" />
-                  ) : (
-                    <FolderIcon className="mr-2 h-3.5 w-3.5 text-gray-400" />
-                  )}
-                  <span className="truncate">{folder.name}</span>
-                </DropdownMenuItem>
-              );
-            })}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-    </li>
   );
 }
