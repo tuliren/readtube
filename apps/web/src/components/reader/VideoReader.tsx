@@ -125,12 +125,13 @@ export default function VideoReader({ video }: Props) {
           // link, so the user has one obvious next step instead of
           // three tabs that all show the same message.
           <div className="mt-8 rounded-md border border-amber-200 bg-amber-50 px-4 py-6 text-center">
-            <p className="text-sm font-medium text-amber-800">
+            <p className="text-base font-medium text-amber-800">
               No transcript is available for this video
             </p>
-            <p className="mt-1 text-xs text-amber-700">
-              Without captions there&rsquo;s nothing for the summary, article, or transcript tabs to
-              work with.
+            <p className="mt-2 text-sm text-amber-700">
+              For now, ReadTube can only generate a summary or article when YouTube provides a
+              native transcript for the video. Support for videos without captions is on the
+              roadmap.
             </p>
             <a
               href={watchUrl}
