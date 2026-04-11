@@ -1,0 +1,145 @@
+import type { PrismaClient } from '@readtube/database';
+
+import type { InboxQuery, VideoData } from '@/lib/types';
+
+import { buildUnreadClause, buildVideoWhere } from './buildWhere';
+import { parseInboxQuery } from './filter';
+import { decorateVideo, loadTriageContext } from './triage';
+
+/**
+ * Single source of truth for "given a user and an InboxQuery, what
+ * videos should the inbox show". Both `/api/videos` and the SSR
+ * pages call into this so the server-rendered initial paint is
+ * always the same set the client-side SWR fetch will return.
+ *
+ * Before this helper, the SSR pages only honored `channelId` and did
+ * archive/snooze filtering in JS after a wide findMany. That meant
+ * landing directly on `/inbox?starred=1` SSR-rendered every video,
+ * and InboxShell used that as `fallbackData` for the filtered key —
+ * the user briefly saw the unfiltered list flash before SWR
+ * resolved. Centralizing the logic eliminates the divergence.
+ *
+ * Capped at `take: 500` to match the API endpoint exactly. The same
+ * Prisma `select` shape is used so the resulting VideoData[] from
+ * SSR is structurally identical to the SWR-fetched payload.
+ */
+export async function loadInboxVideos(
+  prisma: PrismaClient,
+  userId: string,
+  query: InboxQuery
+): Promise<VideoData[]> {
+  const userSubs = await prisma.userSubscription.findMany({
+    where: { user_id: userId },
+    select: { channel_id: true, read_at: true },
+  });
+  const channelIds = userSubs.map((s) => s.channel_id);
+  if (channelIds.length === 0) {
+    return [];
+  }
+  const watermarkByChannelId = new Map<string, Date | null>(
+    userSubs.map((s) => [s.channel_id, s.read_at])
+  );
+
+  // Free-text q goes through Postgres `search_tsv @@ plainto_tsquery`.
+  // Prisma can't express @@ via the generated client, so we resolve a
+  // restricted id set via $queryRaw and AND it into the main findMany.
+  // Mirrors what /api/videos does — kept here verbatim so SSR and API
+  // can never diverge on search semantics.
+  let restrictIds: string[] | null = null;
+  if (query.q != null && query.q.length > 0) {
+    const rows = await prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT "id" FROM "Video"
+      WHERE "search_tsv" @@ plainto_tsquery('english', ${query.q})
+        AND "channel_id" IN (
+          SELECT "channel_id" FROM "UserSubscription" WHERE "user_id" = ${userId}
+        )
+      LIMIT 500
+    `;
+    restrictIds = rows.map((r) => r.id);
+    if (restrictIds.length === 0) {
+      return [];
+    }
+  }
+
+  const baseWhere = buildVideoWhere(query, userId, channelIds);
+  let where: typeof baseWhere =
+    restrictIds != null ? { ...baseWhere, id: { in: restrictIds } } : baseWhere;
+
+  // Push unread into the DB query so the take: 500 cap applies to the
+  // already-filtered set rather than dropping genuinely unread videos
+  // beyond position 500.
+  if (query.unread === true) {
+    where = {
+      AND: [where, buildUnreadClause(userId, channelIds, watermarkByChannelId)],
+    };
+  }
+
+  const sortDirection = query.sort === 'oldest' ? 'asc' : 'desc';
+
+  const videos = await prisma.video.findMany({
+    where,
+    orderBy: { published_at: sortDirection },
+    select: {
+      id: true,
+      source_id: true,
+      title: true,
+      description: true,
+      published_at: true,
+      channel_id: true,
+      channel: { select: { id: true, name: true, source_id: true } },
+      consumptions: {
+        where: { user_id: userId },
+        select: { read_at: true },
+        take: 1,
+      },
+    },
+    take: 500,
+  });
+
+  type VideoRow = (typeof videos)[number];
+  const readAtFor = (v: VideoRow): Date | null => {
+    const explicit = v.consumptions[0]?.read_at;
+    if (explicit != null) {
+      return explicit;
+    }
+    const watermark = watermarkByChannelId.get(v.channel_id);
+    if (watermark != null && v.published_at.getTime() <= watermark.getTime()) {
+      return watermark;
+    }
+    return null;
+  };
+
+  const triage = await loadTriageContext(
+    prisma,
+    userId,
+    videos.map((v) => v.id)
+  );
+
+  return videos.map((v) => decorateVideo(v, triage, readAtFor(v)));
+}
+
+/**
+ * Convert Next.js's `searchParams` object (the awaited shape returned
+ * by an App Router page's `searchParams: Promise<{...}>` prop) into
+ * the URLSearchParams that `parseInboxQuery` expects. SSR pages don't
+ * have a `request.nextUrl.searchParams` to hand off, so this small
+ * adapter keeps both call sites going through the canonical codec.
+ */
+export function searchParamsToInboxQuery(
+  raw: Record<string, string | string[] | undefined>
+): InboxQuery {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(raw)) {
+    if (value == null) {
+      continue;
+    }
+    if (Array.isArray(value)) {
+      for (const v of value) {
+        params.append(key, v);
+      }
+    } else {
+      params.set(key, value);
+    }
+  }
+  return parseInboxQuery(params);
+}

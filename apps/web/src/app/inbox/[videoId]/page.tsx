@@ -5,15 +5,18 @@ import { notFound, redirect } from 'next/navigation';
 import InboxShell from '@/components/inbox/InboxShell';
 import VideoReader from '@/components/reader/VideoReader';
 import { ensureUserExists } from '@/lib/db/user';
+import { loadInboxVideos, searchParamsToInboxQuery } from '@/lib/inbox/loadVideos';
 import { decorateVideo, loadTriageContext } from '@/lib/inbox/triage';
 import { getSubscribedChannelsWithUnread } from '@/lib/subscriptions';
 import type { ChannelData, VideoData } from '@/lib/types';
 
 interface Props {
   params: Promise<{ videoId: string }>;
-  // `channelId` (not `channel`) so the SSR-side key matches the client
-  // InboxQuery codec — see the matching comment in /inbox/page.tsx.
-  searchParams: Promise<{ channelId?: string }>;
+  // Wide Next.js shape — we feed the whole bag through
+  // searchParamsToInboxQuery so the sidebar list reflects every
+  // active filter, not just channelId. See /inbox/page.tsx for the
+  // longer explanation.
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
 export default async function VideoPage({ params, searchParams }: Props) {
@@ -25,8 +28,8 @@ export default async function VideoPage({ params, searchParams }: Props) {
   await ensureUserExists(userId);
 
   const { videoId: videoDbId } = await params;
-  const { channelId: channelParam } = await searchParams;
-  const selectedChannelId = channelParam ?? null;
+  const query = searchParamsToInboxQuery(await searchParams);
+  const selectedChannelId = query.channelId ?? null;
 
   // Fetch the video with IDOR check
   const video = await prisma.video.findFirst({
@@ -68,10 +71,6 @@ export default async function VideoPage({ params, searchParams }: Props) {
   // counts (with watermark + consumption filter), all in one round-trip.
   const subscriptionRows = await getSubscribedChannelsWithUnread(prisma, userId);
 
-  const watermarkByChannelId = new Map<string, Date | null>(
-    subscriptionRows.map((row) => [row.channel_id, row.read_at])
-  );
-
   const channels: ChannelData[] = subscriptionRows.map((row) => ({
     id: row.channel_id,
     sourceId: row.source_id,
@@ -84,71 +83,11 @@ export default async function VideoPage({ params, searchParams }: Props) {
     muteUntil: row.mute_until != null ? row.mute_until.toISOString() : null,
   }));
 
-  const userChannelIds = subscriptionRows.map((row) => row.channel_id);
-  const whereClause =
-    selectedChannelId && userChannelIds.includes(selectedChannelId)
-      ? { channel_id: selectedChannelId }
-      : { channel_id: { in: userChannelIds } };
-
-  const videoRows =
-    userChannelIds.length > 0
-      ? await prisma.video.findMany({
-          where: whereClause,
-          select: {
-            id: true,
-            source_id: true,
-            title: true,
-            description: true,
-            published_at: true,
-            channel_id: true,
-            channel: { select: { name: true, source_id: true } },
-            consumptions: {
-              where: { user_id: userId },
-              select: { read_at: true },
-              take: 1,
-            },
-          },
-        })
-      : [];
-
-  type SidebarRow = (typeof videoRows)[number];
-  const readAtFor = (v: SidebarRow): Date | null => {
-    const explicit = v.consumptions[0]?.read_at;
-    if (explicit != null) {
-      return explicit;
-    }
-    const watermark = watermarkByChannelId.get(v.channel_id);
-    if (watermark != null && v.published_at.getTime() <= watermark.getTime()) {
-      return watermark;
-    }
-    return null;
-  };
-
-  const sortedRows = [...videoRows].sort(
-    (a, b) => b.published_at.getTime() - a.published_at.getTime()
-  );
-
-  const sidebarTriage = await loadTriageContext(
-    prisma,
-    userId,
-    sortedRows.map((v) => v.id)
-  );
-
-  const now = new Date();
-  const visibleRows = sortedRows.filter((v) => {
-    if (sidebarTriage.archivedIds.has(v.id)) {
-      return false;
-    }
-    const snoozeUntil = sidebarTriage.snoozeById.get(v.id);
-    if (snoozeUntil != null && snoozeUntil.getTime() > now.getTime()) {
-      return false;
-    }
-    return true;
-  });
-
-  const sidebarVideos: VideoData[] = visibleRows.map((v) =>
-    decorateVideo(v, sidebarTriage, readAtFor(v))
-  );
+  // Same helper /api/videos uses, so the SSR-rendered sidebar list is
+  // byte-for-byte identical to what SWR would have fetched for this
+  // URL. Replaces the bespoke channel-only where + JS archive/snooze
+  // post-filter that ignored every other InboxQuery key.
+  const sidebarVideos = await loadInboxVideos(prisma, userId, query);
 
   return (
     <InboxShell
