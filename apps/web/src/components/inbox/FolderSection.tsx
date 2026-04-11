@@ -154,7 +154,7 @@ export default function FolderSection({ channels, selectedChannelId }: Props) {
       {/* Root (unfoldered) channels */}
       <RootDropZone>
         {rootChannels.length === 0 ? (
-          <p className="px-5 py-1 text-xs text-gray-300">
+          <p className="px-3 py-1 text-xs text-gray-300">
             Drop channels here for the root Inbox bucket
           </p>
         ) : (
@@ -228,8 +228,14 @@ export default function FolderSection({ channels, selectedChannelId }: Props) {
  */
 function RootDropZone({ children }: { children: React.ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id: 'root' });
+  // The `px-3` here is the same outer padding ViewsSection uses
+  // (`<div className="px-3 pt-4">`) and that the FolderGroup header
+  // uses (`<div className="px-3">`) — without it, root channels would
+  // sit at half the indent of views and folder headers because their
+  // only horizontal padding would come from sidebarRowClass's own
+  // px-3, while views/folders get px-3 + px-3.
   return (
-    <div ref={setNodeRef} className={`mt-1 ${isOver ? 'bg-blue-50/60' : ''}`}>
+    <div ref={setNodeRef} className={`mt-1 px-3 ${isOver ? 'bg-blue-50/60' : ''}`}>
       {children}
     </div>
   );
