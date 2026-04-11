@@ -1,6 +1,14 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import {
   CommandDialog,
@@ -129,9 +137,18 @@ function CommandPaletteDialog() {
 }
 
 /**
- * Register a single command palette entry from a feature component. The
- * registry is idempotent on id, so it's safe to call this from a deeply
- * nested component that may re-mount.
+ * Register a single command palette entry from a feature component.
+ *
+ * Closure safety: the consumer can pass a fresh `run` callback on every
+ * render (e.g. `() => toggleStar(currentVideoId)`) without triggering a
+ * re-registration. Internally we keep the latest handler in a ref and
+ * register a stable wrapper that reads from it, so selecting the command
+ * always invokes the most recent closure — not the one captured on first
+ * mount.
+ *
+ * We still only re-run the registration effect when the *display* fields
+ * change (id, label, group, keywords, shortcut) so cmdk's fuzzy matcher
+ * doesn't thrash on every parent re-render.
  */
 export function useCommand(info: CommandItemInfo): void {
   const context = useContext(CommandContext);
@@ -140,11 +157,25 @@ export function useCommand(info: CommandItemInfo): void {
   }
   const { register, unregister } = context;
 
+  // Keep the latest handler in a ref so the registered wrapper can invoke
+  // it without the caller having to memoize. Writing on every render (not
+  // inside an effect) avoids a one-render lag between prop change and
+  // handler availability.
+  const runRef = useRef(info.run);
+  runRef.current = info.run;
+
+  const { id, label, group, keywords, shortcut } = info;
   useEffect(() => {
-    register(info);
-    return () => unregister(info.id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [info.id]);
+    register({
+      id,
+      label,
+      group,
+      keywords,
+      shortcut,
+      run: () => runRef.current(),
+    });
+    return () => unregister(id);
+  }, [id, label, group, keywords, shortcut, register, unregister]);
 }
 
 /**

@@ -64,7 +64,17 @@ export function useShortcut(
   handler: () => void,
   options: { allowInput?: boolean } = {}
 ): void {
+  // Context check MUST run before any other hooks. If we let useHotkeys /
+  // useEffect run first and then threw, a component transitioning from
+  // "inside provider" to "outside provider" (or vice versa) would have a
+  // different number of hooks between renders, violating Rules of Hooks.
+  // Throwing at the top means every successful render calls the same
+  // hooks in the same order.
   const context = useContext(ShortcutContext);
+  if (context == null) {
+    throw new Error('useShortcut must be used inside <KeyboardShortcutsProvider>');
+  }
+  const { register, unregister } = context;
 
   useHotkeys(
     keys,
@@ -77,11 +87,6 @@ export function useShortcut(
     },
     [handler, options.allowInput]
   );
-
-  if (context == null) {
-    throw new Error('useShortcut must be used inside <KeyboardShortcutsProvider>');
-  }
-  const { register, unregister } = context;
 
   useEffect(() => {
     register({ id, keys, description });
