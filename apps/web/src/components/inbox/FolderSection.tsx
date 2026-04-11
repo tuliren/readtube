@@ -195,7 +195,7 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
       <RootDropZone>
         {rootChannels.length === 0 ? (
           <p className="px-3 py-1 text-xs text-gray-500">
-            Drop channels here for the root Inbox bucket
+            Drop channels here to move channels out of folders
           </p>
         ) : (
           <ul className="space-y-0.5">
