@@ -4,6 +4,9 @@
 
 This module equips with a set of scripts on top of Prisma's native db migration commands for better migration management.
 
+Check current migration status:
+- `yarn db:status`
+
 Generate dev client
 - Update `prisma.schema`
 - Run `yarn db:generate`
