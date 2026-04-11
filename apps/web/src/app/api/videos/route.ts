@@ -1,13 +1,15 @@
-import { auth } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 
+import { requireUserId } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { decorateVideo, loadTriageContext } from '@/lib/inbox/triage';
 
 export async function GET(request: NextRequest) {
-  const { userId } = await auth();
-  if (userId == null) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const authResult = await requireUserId();
+  if (authResult instanceof NextResponse) {
+    return authResult;
   }
+  const userId = authResult;
 
   const channelIdParam = request.nextUrl.searchParams.get('channelId');
 
@@ -70,17 +72,24 @@ export async function GET(request: NextRequest) {
 
   const sorted = [...videos].sort((a, b) => b.published_at.getTime() - a.published_at.getTime());
 
-  return NextResponse.json(
-    sorted.map((v) => ({
-      id: v.id,
-      sourceId: v.source_id,
-      title: v.title,
-      description: v.description,
-      publishedAt: v.published_at,
-      readAt: readAtFor(v),
-      channelId: v.channel_id,
-      channelName: v.channel.name,
-      channelSourceId: v.channel.source_id,
-    }))
+  const triage = await loadTriageContext(
+    prisma,
+    userId,
+    sorted.map((v) => v.id)
   );
+
+  // Hide archived videos and unexpired snoozes from the inbox feed.
+  const now = new Date();
+  const visible = sorted.filter((v) => {
+    if (triage.archivedIds.has(v.id)) {
+      return false;
+    }
+    const snoozeUntil = triage.snoozeById.get(v.id);
+    if (snoozeUntil != null && snoozeUntil.getTime() > now.getTime()) {
+      return false;
+    }
+    return true;
+  });
+
+  return NextResponse.json(visible.map((v) => decorateVideo(v, triage, readAtFor(v))));
 }

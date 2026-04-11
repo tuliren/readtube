@@ -69,6 +69,9 @@ export async function countUnreadVideos(
 export interface SubscribedChannelWithUnread {
   channel_id: string;
   read_at: Date | null;
+  folder_id: string | null;
+  priority: number;
+  mute_until: Date | null;
   source_id: string;
   name: string;
   rss_url: string;
@@ -95,6 +98,9 @@ export async function getSubscribedChannelsWithUnread(
     Array<{
       channel_id: string;
       read_at: Date | null;
+      folder_id: string | null;
+      priority: number;
+      mute_until: Date | null;
       source_id: string;
       name: string;
       rss_url: string;
@@ -105,6 +111,9 @@ export async function getSubscribedChannelsWithUnread(
     SELECT
       us."channel_id"  AS channel_id,
       us."read_at"     AS read_at,
+      us."folder_id"   AS folder_id,
+      us."priority"    AS priority,
+      us."mute_until"  AS mute_until,
       c."source_id"    AS source_id,
       c."name"         AS name,
       c."rss_url"      AS rss_url,
@@ -120,13 +129,18 @@ export async function getSubscribedChannelsWithUnread(
         WHERE k."video_id" = v."id" AND k."user_id" = us."user_id"
       )
     WHERE us."user_id" = ${userId}
-    GROUP BY us."channel_id", us."read_at", c."source_id", c."name", c."rss_url", c."created_at"
+    GROUP BY
+      us."channel_id", us."read_at", us."folder_id", us."priority", us."mute_until",
+      c."source_id", c."name", c."rss_url", c."created_at"
     ORDER BY LOWER(c."name") ASC
   `;
 
   return rows.map((row) => ({
     channel_id: row.channel_id,
     read_at: row.read_at,
+    folder_id: row.folder_id,
+    priority: row.priority,
+    mute_until: row.mute_until,
     source_id: row.source_id,
     name: row.name,
     rss_url: row.rss_url,
