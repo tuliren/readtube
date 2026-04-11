@@ -82,7 +82,7 @@ export default function SearchInput() {
         }}
         placeholder="Search videos (press Enter)…"
         title={isDirty ? 'Press Enter to search' : undefined}
-        className={`h-7 w-56 rounded-full pl-7 pr-7 text-xs ${
+        className={`h-7 w-72 rounded-full pl-7 pr-7 text-xs ${
           isDirty ? 'border-blue-400 ring-1 ring-blue-200' : ''
         }`}
       />
