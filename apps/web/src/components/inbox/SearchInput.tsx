@@ -1,63 +1,101 @@
 'use client';
 
 import { Search, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { Input } from '@/components/ui/input';
 
 import { useInboxQuery } from './useInboxQuery';
 
 /**
- * Debounced search input that writes `q` into the URL-backed InboxQuery.
- * The /api/videos list endpoint already knows how to honor `q` via
- * plainto_tsquery, so typing into this input progressively narrows the
- * list. For a rank-ordered dedicated results view, /api/search is the
- * richer endpoint (returns ts_headline snippets); we surface it in a
- * future pass.
+ * Enter-to-submit search input. Local state is the source of truth while
+ * the user is typing; the URL only gets updated on form submit (Enter)
+ * or when the clear button fires. This has two benefits over the
+ * previous debounced version:
+ *
+ * 1. No revert race. The old debounce wrote to the URL 200ms after
+ *    each keystroke, which made `query.q` change, which fired a sync
+ *    effect `setLocal(query.q)` — if the user kept typing during those
+ *    200ms, the sync would land AFTER further keystrokes and revert
+ *    them. Making submission explicit means `query.q` only changes
+ *    when the user intended it to.
+ *
+ * 2. Fewer DB queries. plainto_tsquery runs over search_tsv on every
+ *    `q=` change; submitting on Enter means one query per search
+ *    instead of one per keystroke.
+ *
+ * External URL changes (e.g. picking a saved view that sets `q`) still
+ * sync into the input, but ONLY when it isn't focused — so the
+ * "someone else updated the URL while I was mid-typing" path doesn't
+ * clobber in-flight edits.
  */
 export default function SearchInput() {
   const { query, patchQuery } = useInboxQuery();
   const [local, setLocal] = useState(query.q ?? '');
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  // Sync local input when the URL changes from outside (e.g. saved-view pick).
+  // Sync external URL changes into the input — but only when the user
+  // isn't actively typing. This covers cases like: user clicks a saved
+  // view in the dropdown that has its own `q` value, or the user
+  // navigates back/forward in browser history.
   useEffect(() => {
+    if (document.activeElement === inputRef.current) {
+      return;
+    }
     setLocal(query.q ?? '');
   }, [query.q]);
 
-  // Debounce URL writes so every keystroke doesn't trigger a SWR refetch.
-  useEffect(() => {
+  function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
     const next = local.trim();
-    const handle = setTimeout(() => {
-      if (next !== (query.q ?? '')) {
-        patchQuery({ q: next.length > 0 ? next : undefined });
-      }
-    }, 200);
-    return () => clearTimeout(handle);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [local]);
+    if (next === (query.q ?? '')) {
+      // No-op: submitting the same text shouldn't trigger a refetch.
+      return;
+    }
+    patchQuery({ q: next.length > 0 ? next : undefined });
+  }
+
+  function handleClear() {
+    setLocal('');
+    patchQuery({ q: undefined });
+    inputRef.current?.focus();
+  }
+
+  // Tooltip hint that only appears when the local value diverges from
+  // what's currently filtering the list, so the user knows to press
+  // Enter to apply their edit.
+  const isDirty = local.trim() !== (query.q ?? '');
 
   return (
-    <div className="relative flex items-center">
+    <form onSubmit={handleSubmit} className="relative flex items-center">
       <Search className="absolute left-2 h-3.5 w-3.5 text-gray-400" />
       <Input
+        ref={inputRef}
         value={local}
         onChange={(e) => setLocal(e.target.value)}
-        placeholder="Search videos…"
-        className="h-7 w-48 rounded-full pl-7 pr-7 text-xs"
+        onKeyDown={(e) => {
+          // Escape clears the current edit without committing.
+          if (e.key === 'Escape') {
+            setLocal(query.q ?? '');
+            inputRef.current?.blur();
+          }
+        }}
+        placeholder="Search videos (press Enter)…"
+        title={isDirty ? 'Press Enter to search' : undefined}
+        className={`h-7 w-56 rounded-full pl-7 pr-7 text-xs ${
+          isDirty ? 'border-blue-400 ring-1 ring-blue-200' : ''
+        }`}
       />
       {local.length > 0 && (
         <button
           type="button"
-          onClick={() => {
-            setLocal('');
-            patchQuery({ q: undefined });
-          }}
+          onClick={handleClear}
           className="absolute right-2 text-gray-400 hover:text-gray-600"
           aria-label="Clear search"
         >
           <X className="h-3.5 w-3.5" />
         </button>
       )}
-    </div>
+    </form>
   );
 }
