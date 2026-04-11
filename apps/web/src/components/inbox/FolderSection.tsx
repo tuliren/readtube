@@ -11,7 +11,6 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { FolderPlus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 import { displayChannelName } from '@/lib/inbox/channelName';
@@ -155,33 +154,25 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
         Section header — matches the Views header typography in
         ViewsSection.tsx (text-base font-semibold text-gray-900) so the
         two category labels are the largest, darkest text in the sidebar.
-        Outer wrapper uses px-3 so the New-folder action button aligns
-        on the same right rail (12px) as every channel/folder row in the
-        section; the label compensates with its own px-2 to keep the
-        20px left visual indent that matches the Views header.
+        Plain px-3 wrapper + px-2 inner label keeps the 20px left visual
+        indent that matches the Views header. The header no longer
+        carries any action button — folder + channel creation now both
+        live as menu rows directly below it (see the next block).
       */}
-      <div className="mb-1 mt-4 flex items-center justify-between px-3">
+      <div className="mb-1 mt-4 px-3">
         <p className="px-2 text-base font-semibold text-gray-900">Channels</p>
-        <button
-          type="button"
-          onClick={() => setNewFolderOpen(true)}
-          className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-          title="New folder"
-          aria-label="New folder"
-        >
-          <FolderPlus className="h-3.5 w-3.5" />
-        </button>
       </div>
 
       {/*
-        + Add channel — sits right under the Channels header so the
-        entry point is next to the thing it adds to. Same row primitive
-        (sidebarRowClass + SidebarRowContent) as a root channel link so
-        padding, hover, and typography line up exactly. The "+" lives in
-        the label string rather than as a leading icon because channel
-        rows themselves no longer carry an icon — keeping the structure
-        identical means the action reads as "another row" instead of
-        breaking the rail with a different shape.
+        Section actions — "+ Add channel" and "+ New folder" sit right
+        under the Channels header so both entry points are next to the
+        thing they add to. They use the same row primitive
+        (sidebarRowClass + SidebarRowContent) as root channel links so
+        padding, hover, and typography line up exactly. The "+" lives
+        in the label string rather than as a leading icon because
+        channel rows themselves no longer carry an icon — keeping the
+        structure identical means each action reads as "another row"
+        instead of breaking the rail with a different shape.
       */}
       <div className="px-3">
         <button
@@ -190,6 +181,13 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
           className={`${sidebarRowClass(false)} w-full text-left`}
         >
           <SidebarRowContent label="+ Add channel" />
+        </button>
+        <button
+          type="button"
+          onClick={() => setNewFolderOpen(true)}
+          className={`${sidebarRowClass(false)} w-full text-left`}
+        >
+          <SidebarRowContent label="+ New folder" />
         </button>
       </div>
 
