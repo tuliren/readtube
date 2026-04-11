@@ -131,7 +131,7 @@ export default function FolderGroup({
       )}
       {!isCollapsed && channels.length === 0 && (
         <p className="ml-6 mt-1 px-3 py-1 text-xs text-gray-500">
-          No channels yet — drag any channel here to add it.
+          This folder has no channel yet. Drag any channel here to add to this folder.
         </p>
       )}
     </div>
