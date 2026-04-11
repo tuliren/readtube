@@ -15,8 +15,10 @@ import { useMemo, useState } from 'react';
 
 import type { ChannelData } from '@/lib/types';
 
+import DeleteFolderDialog from './DeleteFolderDialog';
 import DraggableChannelLink from './DraggableChannelLink';
 import FolderGroup from './FolderGroup';
+import NewFolderDialog from './NewFolderDialog';
 import { useFolders } from './useFolders';
 
 interface Props {
@@ -34,9 +36,11 @@ interface Props {
  * expand state isn't persisted across reloads yet.
  */
 export default function FolderSection({ channels, selectedChannelId }: Props) {
-  const { folders, create, remove, moveChannel } = useFolders();
+  const { folders, moveChannel } = useFolders();
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
+  const [newFolderOpen, setNewFolderOpen] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -62,22 +66,6 @@ export default function FolderSection({ channels, selectedChannelId }: Props) {
       }
       return copy;
     });
-  }
-
-  async function handleCreate() {
-    const name = window.prompt('New folder name');
-    if (name == null || name.trim() === '') {
-      return;
-    }
-    await create(name);
-  }
-
-  async function handleDelete(folderId: string) {
-    const ok = window.confirm('Delete this folder? Channels inside will move back to Inbox.');
-    if (!ok) {
-      return;
-    }
-    await remove(folderId);
   }
 
   function handleDragStart(event: DragStartEvent) {
@@ -144,13 +132,20 @@ export default function FolderSection({ channels, selectedChannelId }: Props) {
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
-      <div className="flex items-center justify-between px-5 pt-2">
+      {/*
+        Section header — same uppercase tracking style as the Views
+        section header in ViewsSection.tsx (px-5 pt-4 mb-1 text-xs font-
+        semibold uppercase tracking-wider text-gray-400) so the two
+        section labels align in the sidebar.
+      */}
+      <div className="mb-1 mt-4 flex items-center justify-between px-5">
         <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Channels</p>
         <button
           type="button"
-          onClick={() => void handleCreate()}
+          onClick={() => setNewFolderOpen(true)}
           className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
           title="New folder"
+          aria-label="New folder"
         >
           <FolderPlus className="h-3.5 w-3.5" />
         </button>
@@ -192,12 +187,15 @@ export default function FolderSection({ channels, selectedChannelId }: Props) {
             selectedChannelId={selectedChannelId}
             isCollapsed={isCollapsed}
             onToggle={() => toggleCollapsed(folder.id)}
-            onDelete={() => void handleDelete(folder.id)}
+            onDelete={() => setPendingDelete({ id: folder.id, name: folder.name })}
             folders={folders}
             onMoveTo={moveTo}
           />
         );
       })}
+
+      <NewFolderDialog open={newFolderOpen} onOpenChange={setNewFolderOpen} />
+      <DeleteFolderDialog target={pendingDelete} onClose={() => setPendingDelete(null)} />
 
       {/*
         Portal-rendered floating preview that follows the cursor during

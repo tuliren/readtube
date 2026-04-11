@@ -1,42 +1,62 @@
 'use client';
 
-import { Archive, Bookmark, Clock, Star } from 'lucide-react';
+import { Archive, Bookmark, Clock, Inbox as InboxIcon, Star } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 
+import { isDefaultQuery } from '@/lib/inbox/filter';
 import type { InboxQuery } from '@/lib/types';
 
+import { SidebarBadge, SidebarRowContent, sidebarRowClass } from './SidebarRow';
 import { useInboxQuery } from './useInboxQuery';
 
 interface ViewDef {
   label: string;
-  icon: React.ComponentType<{ className?: string }>;
-  /** The query that pins this view. Used both for the href and for
-   *  deciding whether the current URL matches it. */
+  icon: LucideIcon;
+  /** The query that pins this view. Also used to decide whether the
+   *  current URL matches it. The Inbox row uses an empty object — it's
+   *  handled specially in isActive. */
   query: Partial<InboxQuery>;
 }
 
 const VIEWS: ViewDef[] = [
+  { label: 'Inbox', icon: InboxIcon, query: {} },
   { label: 'Starred', icon: Star, query: { starred: true } },
   { label: 'Read Later', icon: Bookmark, query: { saved: true } },
   { label: 'Snoozed', icon: Clock, query: { snoozed: true } },
   { label: 'Archived', icon: Archive, query: { archived: true } },
 ];
 
+interface Props {
+  /** Aggregate unread count across every subscribed channel. Renders as
+   *  the badge on the Inbox row. The other view rows don't get counts
+   *  yet — that lands with the planned /api/inbox/counts endpoint. */
+  inboxUnread: number;
+}
+
 /**
- * Sidebar "Views" section — persistent one-click entries for the triage
- * buckets that don't have a dedicated page. Clicking a view navigates to
- * `/inbox?{key}=1`. FilterBar already handles the toggles inside /inbox,
- * so this is just a durable shortcut for users who expect their
- * Read-Later list to be one click away from anywhere in the sidebar.
+ * Sidebar "Views" section — persistent one-click entries for the main
+ * triage buckets. Inbox is the first entry (the default view that shows
+ * every video from every subscribed channel), followed by the triage-
+ * table-backed views.
+ *
+ * Clicking a view does a full navigation to `/inbox?<key>=1` so the bucket
+ * is a clean slate. FilterBar chips at the top of the list provide the
+ * "narrow within current context" behavior; these sidebar rows are the
+ * "jump to a bucket from anywhere" behavior.
  */
-export default function ViewsSection() {
+export default function ViewsSection({ inboxUnread }: Props) {
   const { query } = useInboxQuery();
 
   function isActive(view: ViewDef): boolean {
-    // Active iff every key in the view's query matches the URL's query.
-    // We intentionally don't require a full-object equality — a user can
-    // layer additional filters on top (e.g. Starred + Unread) and the
-    // Starred view stays highlighted.
+    // The Inbox view is the "default" view — active iff no filter keys
+    // are set. We can't rely on subset-match (every key absent matches
+    // subset-of-anything) because an empty query is also a subset of
+    // "starred=true", which would light up Inbox while Starred is
+    // active.
+    if (Object.keys(view.query).length === 0) {
+      return isDefaultQuery(query);
+    }
     return Object.entries(view.query).every(([k, v]) => query[k as keyof InboxQuery] === v);
   }
 
@@ -47,7 +67,6 @@ export default function ViewsSection() {
       </p>
       <ul className="space-y-0.5">
         {VIEWS.map((view) => {
-          const Icon = view.icon;
           const active = isActive(view);
           const params = new URLSearchParams();
           for (const [k, v] of Object.entries(view.query)) {
@@ -57,20 +76,18 @@ export default function ViewsSection() {
               params.set(k, v);
             }
           }
-          const href = `/inbox?${params.toString()}`;
+          const qs = params.toString();
+          const href = qs.length > 0 ? `/inbox?${qs}` : '/inbox';
+          const count = view.label === 'Inbox' ? inboxUnread : 0;
 
           return (
             <li key={view.label}>
-              <Link
-                href={href}
-                className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm ${
-                  active
-                    ? 'bg-blue-50 font-medium text-blue-700'
-                    : 'text-gray-700 hover:bg-gray-100'
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-                {view.label}
+              <Link href={href} className={sidebarRowClass(active)}>
+                <SidebarRowContent
+                  icon={view.icon}
+                  label={view.label}
+                  trailing={<SidebarBadge count={count} />}
+                />
               </Link>
             </li>
           );
