@@ -13,6 +13,8 @@ export interface TriageRawRow {
   title: string;
   description: string | null;
   published_at: Date;
+  duration_seconds: number | null;
+  transcript_unavailable: boolean;
   channel_id: string;
   channel: { name: string; source_id: string };
 }
@@ -123,6 +125,8 @@ export function decorateVideo(
     description: row.description,
     publishedAt: row.published_at.toISOString(),
     readAt: readAt != null ? readAt.toISOString() : null,
+    durationSeconds: row.duration_seconds,
+    transcriptUnavailable: row.transcript_unavailable,
     channelId: row.channel_id,
     channelName: row.channel.name,
     channelSourceId: row.channel.source_id,

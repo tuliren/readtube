@@ -29,6 +29,14 @@ export interface VideoData {
   description: string | null;
   publishedAt: string;
   readAt: string | null;
+  // Length of the video in seconds, or null when the channel scraper
+  // hasn't captured it yet (Shorts, ad slots, pre-backfill rows).
+  durationSeconds: number | null;
+  // Sticky "we've already tried and there's nothing here" flag set on
+  // the Video row when a transcript fetch came back empty. Used by the
+  // reader to skip retry attempts and to disable Generate buttons in
+  // Summary / Article when there's nothing to feed them.
+  transcriptUnavailable: boolean;
   channelId: string;
   channelName: string;
   channelSourceId: string;
