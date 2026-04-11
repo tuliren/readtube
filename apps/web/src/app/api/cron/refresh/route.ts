@@ -60,6 +60,7 @@ export async function POST(request: NextRequest) {
             title: video.title,
             description: video.description,
             published_at: video.publishedAt,
+            duration_seconds: video.durationSeconds,
           },
           update: {
             title: video.title,
@@ -67,6 +68,11 @@ export async function POST(request: NextRequest) {
             // Shelf-scraped videos hardcode description to '', and we don't want
             // to clobber a real description that was captured earlier.
             ...(isEmptyString(video.description) ? {} : { description: video.description }),
+            // Backfill duration on existing rows the moment we see a real
+            // value, but never clobber a known duration with null — that
+            // way a one-off scraper shape change can't blank out the
+            // duration of every video in the channel.
+            ...(video.durationSeconds != null ? { duration_seconds: video.durationSeconds } : {}),
           },
         });
         totalNew++;
