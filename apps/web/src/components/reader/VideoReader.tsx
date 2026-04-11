@@ -10,6 +10,7 @@ import type { VideoData } from '@/lib/types';
 import ArticleReader from './ArticleReader';
 import SummaryReader from './SummaryReader';
 import TranscriptReader from './TranscriptReader';
+import VideoReaderActions from './VideoReaderActions';
 
 interface Props {
   video: VideoData;
@@ -35,9 +36,9 @@ export default function VideoReader({ video }: Props) {
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
-      {/* Back nav */}
+      {/* Back nav + triage actions */}
       <div className="sticky top-0 z-10 border-b border-gray-100 bg-white px-6 py-3">
-        <div className="mx-auto w-full max-w-3xl">
+        <div className="mx-auto flex w-full max-w-3xl items-center justify-between">
           <Link
             href={backHref}
             className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700"
@@ -45,6 +46,7 @@ export default function VideoReader({ video }: Props) {
             <ArrowLeftIcon className="h-4 w-4" />
             Back
           </Link>
+          <VideoReaderActions video={video} />
         </div>
       </div>
 

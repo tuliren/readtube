@@ -11,6 +11,12 @@ import type { BulkAction } from '@/lib/inbox/triageActions';
  * BOTH /api/videos and /api/channels so unread counts stay in sync with
  * row state (star doesn't need the channel refresh, but the cost is
  * trivial and the consistency is worth it).
+ *
+ * Return contract: each toggle returns `true` on success, `false` on
+ * failure. Callers that track optimistic state (e.g. VideoReaderActions,
+ * which flips icons before the fetch resolves) use the boolean to decide
+ * whether to revert. Errors are toasted inside this hook so every call
+ * site shares the same error surface.
  */
 export function useTriage() {
   const { mutate } = useSWRConfig();
@@ -47,52 +53,62 @@ export function useTriage() {
   }
 
   return {
-    async toggleStar(videoId: string, isStarred: boolean): Promise<void> {
+    async toggleStar(videoId: string, isStarred: boolean): Promise<boolean> {
       try {
         await call(isStarred ? 'DELETE' : 'POST', `/api/videos/${videoId}/star`);
         invalidateLists();
+        return true;
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Failed to star video');
+        return false;
       }
     },
 
-    async toggleSave(videoId: string, isSaved: boolean): Promise<void> {
+    async toggleSave(videoId: string, isSaved: boolean): Promise<boolean> {
       try {
         await call(isSaved ? 'DELETE' : 'POST', `/api/videos/${videoId}/save`);
         invalidateLists();
+        return true;
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Failed to save video');
+        return false;
       }
     },
 
-    async archive(videoId: string): Promise<void> {
+    async archive(videoId: string): Promise<boolean> {
       try {
         await call('POST', `/api/videos/${videoId}/archive`);
         invalidateLists();
         toast.success('Archived');
+        return true;
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Failed to archive');
+        return false;
       }
     },
 
-    async unarchive(videoId: string): Promise<void> {
+    async unarchive(videoId: string): Promise<boolean> {
       try {
         await call('DELETE', `/api/videos/${videoId}/archive`);
         invalidateLists();
+        return true;
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Failed to unarchive');
+        return false;
       }
     },
 
-    async snoozeUntil(videoId: string, until: Date): Promise<void> {
+    async snoozeUntil(videoId: string, until: Date): Promise<boolean> {
       try {
         await call('POST', `/api/videos/${videoId}/snooze`, {
           snoozeUntil: until.toISOString(),
         });
         invalidateLists();
         toast.success(`Snoozed until ${until.toLocaleDateString()}`);
+        return true;
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Failed to snooze');
+        return false;
       }
     },
 
