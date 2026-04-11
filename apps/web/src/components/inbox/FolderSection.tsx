@@ -11,8 +11,15 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
+import { FolderPlus, Plus, Radio } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { displayChannelName } from '@/lib/inbox/channelName';
 import type { ChannelData } from '@/lib/types';
 
@@ -21,7 +28,6 @@ import DraggableChannelLink from './DraggableChannelLink';
 import FolderGroup from './FolderGroup';
 import NewFolderDialog from './NewFolderDialog';
 import RenameFolderDialog from './RenameFolderDialog';
-import { SidebarRowContent, sidebarRowClass } from './SidebarRow';
 import { useFolders } from './useFolders';
 
 interface Props {
@@ -154,41 +160,34 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
         Section header — matches the Views header typography in
         ViewsSection.tsx (text-base font-semibold text-gray-900) so the
         two category labels are the largest, darkest text in the sidebar.
-        Plain px-3 wrapper + px-2 inner label keeps the 20px left visual
-        indent that matches the Views header. The header no longer
-        carries any action button — folder + channel creation now both
-        live as menu rows directly below it (see the next block).
+        Trailing "+" button opens a dropdown with the two creation
+        actions (Add channel / Create folder), aligned to the same
+        right rail as the per-row ⋯ menus on channels and folders.
       */}
-      <div className="mb-1 mt-4 px-3">
+      <div className="mb-1 mt-4 flex items-center justify-between px-3">
         <p className="px-2 text-base font-semibold text-gray-900">Channels</p>
-      </div>
-
-      {/*
-        Section actions — "+ Add channel" and "+ New folder" sit right
-        under the Channels header so both entry points are next to the
-        thing they add to. They use the same row primitive
-        (sidebarRowClass + SidebarRowContent) as root channel links so
-        padding, hover, and typography line up exactly. The "+" lives
-        in the label string rather than as a leading icon because
-        channel rows themselves no longer carry an icon — keeping the
-        structure identical means each action reads as "another row"
-        instead of breaking the rail with a different shape.
-      */}
-      <div className="px-3">
-        <button
-          type="button"
-          onClick={onAddChannel}
-          className={`${sidebarRowClass(false)} w-full text-left`}
-        >
-          <SidebarRowContent label="+ Add channel" />
-        </button>
-        <button
-          type="button"
-          onClick={() => setNewFolderOpen(true)}
-          className={`${sidebarRowClass(false)} w-full text-left`}
-        >
-          <SidebarRowContent label="+ New folder" />
-        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 data-[state=open]:bg-gray-100 data-[state=open]:text-gray-600"
+              aria-label="Add channel or folder"
+              title="Add channel or folder"
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuItem onSelect={onAddChannel}>
+              <Radio className="mr-2 h-4 w-4 text-gray-500" />
+              Add channel
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setNewFolderOpen(true)}>
+              <FolderPlus className="mr-2 h-4 w-4 text-gray-500" />
+              Create folder
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Root (unfoldered) channels */}
