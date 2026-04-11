@@ -1,10 +1,12 @@
 'use client';
 
 import { UserButton } from '@clerk/nextjs';
-import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { useMemo, useState } from 'react';
 import useSWR from 'swr';
 
 import { Toaster } from '@/components/ui/sonner';
+import { encodeInboxQuery, parseInboxQuery } from '@/lib/inbox/filter';
 import type { ChannelData, VideoData } from '@/lib/types';
 
 import AddChannelModal from './AddChannelModal';
@@ -38,11 +40,21 @@ export default function InboxShell({
   children,
 }: Props) {
   const [modalOpen, setModalOpen] = useState(false);
+  const searchParams = useSearchParams();
 
   const channelsUrl = '/api/channels';
-  const videosUrl = selectedChannelId
-    ? `/api/videos?channelId=${selectedChannelId}`
-    : '/api/videos';
+  // Build the videos fetch URL from the full InboxQuery (including filter
+  // chips, search text, saved views). We round-trip through the canonical
+  // codec so the client request matches what the server parses.
+  const videosUrl = useMemo(() => {
+    const query = parseInboxQuery(searchParams);
+    if (query.channelId == null && selectedChannelId != null) {
+      query.channelId = selectedChannelId;
+    }
+    const params = encodeInboxQuery(query);
+    const qs = params.toString();
+    return qs.length > 0 ? `/api/videos?${qs}` : '/api/videos';
+  }, [searchParams, selectedChannelId]);
 
   const { data: channels = initialChannels, mutate: mutateChannels } = useSWR<ChannelData[]>(
     channelsUrl,
@@ -50,9 +62,29 @@ export default function InboxShell({
     { fallbackData: initialChannels }
   );
 
-  const { data: videos = initialVideos } = useSWR<VideoData[]>(videosUrl, fetcher, {
-    fallbackData: initialVideos,
+  // Capture the videosUrl that matched server-side rendering on mount.
+  // We can only safely fall back to `initialVideos` for that exact key —
+  // otherwise SWR will hand the SSR-rendered list back as the "fallback"
+  // for any new key (every filter chip toggle, search edit, saved view
+  // click) and the user briefly sees the old, wrong list flash before
+  // the correct fetch resolves. Pre-PR this only fired on channel
+  // switch; the filter system makes the videosUrl change on nearly
+  // every interaction.
+  const [ssrVideosUrl] = useState(videosUrl);
+  const videosFallback = videosUrl === ssrVideosUrl ? initialVideos : undefined;
+
+  // No destructuring default — we explicitly want `videos` to be
+  // undefined while a non-SSR key is loading so the consumer can
+  // render an empty placeholder instead of stale wrong content. We
+  // deliberately do NOT pass keepPreviousData, because the previous
+  // key's data would be just as wrong as the SSR fallback for the
+  // user's freshly-toggled filter (e.g., toggling Starred would show
+  // the old unfiltered list briefly, which is exactly the regression
+  // this fix is closing).
+  const { data: videos } = useSWR<VideoData[]>(videosUrl, fetcher, {
+    fallbackData: videosFallback,
   });
+  const videoList = videos ?? [];
 
   const totalUnread = channels.reduce((sum, c) => sum + c.unreadCount, 0);
 
@@ -72,7 +104,7 @@ export default function InboxShell({
       <CommandPaletteProvider>
         <InboxShellInner
           channels={channels}
-          videos={videos}
+          videos={videoList}
           selectedChannelId={selectedChannelId}
           selectedVideoId={selectedVideoId}
           totalUnread={totalUnread}
@@ -149,8 +181,8 @@ function InboxShellInner({
           <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
             <div>
               <p className="text-lg font-semibold text-gray-700">No channels yet</p>
-              <p className="mt-1 text-sm text-gray-400">Add a YouTube channel to get started.</p>
-              <p className="mt-1 text-xs text-gray-400">
+              <p className="mt-1 text-sm text-gray-500">Add a YouTube channel to get started.</p>
+              <p className="mt-1 text-xs text-gray-500">
                 Supported:{' '}
                 <code className="rounded bg-gray-100 px-1">youtube.com/channel/UCxxxxx</code> or{' '}
                 <code className="rounded bg-gray-100 px-1">UCxxxxx</code>

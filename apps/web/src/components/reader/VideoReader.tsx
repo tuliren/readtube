@@ -28,8 +28,8 @@ function relativeDate(dateStr: string): string {
 
 export default function VideoReader({ video }: Props) {
   const searchParams = useSearchParams();
-  const channelParam = searchParams.get('channel');
-  const backHref = channelParam ? `/inbox?channel=${channelParam}` : '/inbox';
+  const channelParam = searchParams.get('channelId');
+  const backHref = channelParam ? `/inbox?channelId=${channelParam}` : '/inbox';
   const watchUrl = `https://youtube.com/watch?v=${video.sourceId}`;
 
   const [activeTab, setActiveTab] = useState<Tab>('transcript');

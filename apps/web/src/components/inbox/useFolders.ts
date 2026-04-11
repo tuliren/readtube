@@ -66,7 +66,14 @@ export function useFolders() {
       }
     },
 
-    async remove(id: string): Promise<void> {
+    /**
+     * Returns true on success, false on failure. The boolean lets
+     * DeleteFolderDialog keep the modal open + busy=false on failure
+     * so the user can retry, instead of always closing on completion.
+     * Mirrors the create() pattern (which returns the new folder on
+     * success or null on failure).
+     */
+    async remove(id: string): Promise<boolean> {
       try {
         const res = await fetch(`/api/folders/${id}`, { method: 'DELETE' });
         if (!res.ok) {
@@ -75,8 +82,10 @@ export function useFolders() {
         void mutate();
         invalidateChannels();
         toast.success('Folder deleted');
+        return true;
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Failed to delete folder');
+        return false;
       }
     },
 

@@ -1,9 +1,17 @@
 'use client';
 
-import { Dialog, DialogBackdrop, DialogPanel, DialogTitle } from '@headlessui/react';
-import { XMarkIcon } from '@heroicons/react/24/outline';
 import { FormEvent, useState } from 'react';
 
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import type { ChannelData } from '@/lib/types';
 
 interface Props {
@@ -12,31 +20,42 @@ interface Props {
   onChannelAdded: (channel: ChannelData) => void;
 }
 
+/**
+ * Modal for subscribing to a new YouTube channel. Ported from Headless
+ * UI Dialog to shadcn Dialog so every dialog in /inbox uses the same
+ * primitive (NewFolderDialog, AddChannelModal, plus the AlertDialog
+ * variants for destructive confirms). Visual contract identical to the
+ * folder-create dialog: Title + Description in DialogHeader, body with
+ * Input + helper copy, DialogFooter with Cancel + Action buttons.
+ */
 export default function AddChannelModal({ isOpen, onClose, onChannelAdded }: Props) {
   const [url, setUrl] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  function reset() {
+    setUrl('');
+    setError('');
+    setLoading(false);
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (loading) {
       return;
     }
-
     setError('');
     setLoading(true);
-
     try {
       const res = await fetch('/api/channels', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url }),
       });
-
       if (res.status === 201) {
         const channel = (await res.json()) as ChannelData;
         onChannelAdded(channel);
-        setUrl('');
+        reset();
         onClose();
       } else {
         const data = (await res.json()) as { error?: string };
@@ -49,77 +68,60 @@ export default function AddChannelModal({ isOpen, onClose, onChannelAdded }: Pro
     }
   }
 
-  function handleClose() {
-    if (!loading) {
-      setUrl('');
-      setError('');
-      onClose();
+  // Block close while a request is in flight so the user can't lose the
+  // pending state by clicking the backdrop or hitting Escape mid-request.
+  function handleOpenChange(open: boolean) {
+    if (open) {
+      return;
     }
+    if (loading) {
+      return;
+    }
+    reset();
+    onClose();
   }
 
   return (
-    <Dialog open={isOpen} onClose={handleClose} className="relative z-50">
-      <DialogBackdrop className="fixed inset-0 bg-black/30" />
-      <div className="fixed inset-0 flex items-center justify-center p-4">
-        <DialogPanel className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
-          <div className="flex items-center justify-between">
-            <DialogTitle className="text-lg font-semibold text-gray-900">
-              Add YouTube channel
-            </DialogTitle>
-            <button
-              onClick={handleClose}
-              className="rounded p-1 text-gray-400 hover:text-gray-600"
-              aria-label="Close"
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Add YouTube channel</DialogTitle>
+          <DialogDescription>
+            Paste any YouTube channel URL:{' '}
+            <code className="rounded bg-gray-100 px-1">youtube.com/@handle</code>,{' '}
+            <code className="rounded bg-gray-100 px-1">youtube.com/channel/UCxxxxx</code>, or a bare{' '}
+            <code className="rounded bg-gray-100 px-1">UC…</code> channel ID.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={handleSubmit} className="mt-2 space-y-4">
+          <Input
+            id="channel-url"
+            type="text"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://youtube.com/@ChannelName"
+            disabled={loading}
+            autoFocus
+          />
+
+          {error.length > 0 && <p className="text-sm text-red-600">{error}</p>}
+
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => handleOpenChange(false)}
+              disabled={loading}
             >
-              <XMarkIcon className="h-5 w-5" />
-            </button>
-          </div>
-
-          <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-            <div>
-              <label htmlFor="channel-url" className="block text-sm font-medium text-gray-700">
-                Channel URL or ID
-              </label>
-              <input
-                id="channel-url"
-                type="text"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://youtube.com/@ChannelName"
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                disabled={loading}
-                autoFocus
-              />
-              <p className="mt-1.5 text-xs text-gray-500">
-                Paste any YouTube channel URL:{' '}
-                <code className="rounded bg-gray-100 px-1">youtube.com/@handle</code>,{' '}
-                <code className="rounded bg-gray-100 px-1">youtube.com/channel/UCxxxxx</code>, or a
-                bare <code className="rounded bg-gray-100 px-1">UC...</code> channel ID
-              </p>
-            </div>
-
-            {error && <p className="text-sm text-red-600">{error}</p>}
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={handleClose}
-                disabled={loading}
-                className="rounded-md px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={loading || !url.trim()}
-                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-              >
-                {loading ? 'Adding...' : 'Add channel'}
-              </button>
-            </div>
-          </form>
-        </DialogPanel>
-      </div>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={loading || url.trim().length === 0}>
+              {loading ? 'Adding…' : 'Add channel'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
     </Dialog>
   );
 }

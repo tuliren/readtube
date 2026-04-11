@@ -6,22 +6,31 @@ import {
   DragOverlay,
   type DragStartEvent,
   PointerSensor,
+  pointerWithin,
   useDroppable,
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { FolderInput, FolderPlus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
+import { displayChannelName } from '@/lib/inbox/channelName';
 import type { ChannelData } from '@/lib/types';
 
+import DeleteFolderDialog from './DeleteFolderDialog';
 import DraggableChannelLink from './DraggableChannelLink';
 import FolderGroup from './FolderGroup';
+import NewFolderDialog from './NewFolderDialog';
+import RenameFolderDialog from './RenameFolderDialog';
+import { SidebarRowContent, sidebarRowClass } from './SidebarRow';
 import { useFolders } from './useFolders';
 
 interface Props {
   channels: ChannelData[];
   selectedChannelId: string | null;
+  /** Opens the AddChannelModal owned by InboxShell. Lives here (rather
+   *  than in ChannelSection) so the entry point sits right under the
+   *  Channels category header — next to the thing it adds to. */
+  onAddChannel: () => void;
 }
 
 /**
@@ -33,10 +42,13 @@ interface Props {
  * Collapsible folders + per-folder unread rollups are local-state only —
  * expand state isn't persisted across reloads yet.
  */
-export default function FolderSection({ channels, selectedChannelId }: Props) {
-  const { folders, create, remove, moveChannel } = useFolders();
+export default function FolderSection({ channels, selectedChannelId, onAddChannel }: Props) {
+  const { folders, moveChannel } = useFolders();
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
+  const [newFolderOpen, setNewFolderOpen] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
+  const [pendingRename, setPendingRename] = useState<{ id: string; name: string } | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -62,22 +74,6 @@ export default function FolderSection({ channels, selectedChannelId }: Props) {
       }
       return copy;
     });
-  }
-
-  async function handleCreate() {
-    const name = window.prompt('New folder name');
-    if (name == null || name.trim() === '') {
-      return;
-    }
-    await create(name);
-  }
-
-  async function handleDelete(folderId: string) {
-    const ok = window.confirm('Delete this folder? Channels inside will move back to Inbox.');
-    if (!ok) {
-      return;
-    }
-    await remove(folderId);
   }
 
   function handleDragStart(event: DragStartEvent) {
@@ -140,26 +136,65 @@ export default function FolderSection({ channels, selectedChannelId }: Props) {
   return (
     <DndContext
       sensors={sensors}
+      // pointerWithin (instead of the default rectIntersection) so the
+      // drop target tracks the cursor, not the dragged overlay rect.
+      // With rectIntersection, dragging a channel toward the first
+      // folder would still intersect the RootDropZone above it (only an
+      // `mt-2` margin separates their bounding boxes) and `over` would
+      // resolve to 'root' — silently re-routing the drop to "unassign"
+      // instead of "move into first folder". pointerWithin ignores the
+      // overlay's geometry and just asks "what's under the cursor?",
+      // which matches user intent for a vertical sidebar list.
+      collisionDetection={pointerWithin}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
-      <div className="flex items-center justify-between px-5 pt-2">
-        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Channels</p>
+      {/*
+        Section header — matches the Views header typography in
+        ViewsSection.tsx (text-base font-semibold text-gray-900) so the
+        two category labels are the largest, darkest text in the sidebar.
+        Plain px-3 wrapper + px-2 inner label keeps the 20px left visual
+        indent that matches the Views header. The header no longer
+        carries any action button — folder + channel creation now both
+        live as menu rows directly below it (see the next block).
+      */}
+      <div className="mb-1 mt-4 px-3">
+        <p className="px-2 text-base font-semibold text-gray-900">Channels</p>
+      </div>
+
+      {/*
+        Section actions — "+ Add channel" and "+ New folder" sit right
+        under the Channels header so both entry points are next to the
+        thing they add to. They use the same row primitive
+        (sidebarRowClass + SidebarRowContent) as root channel links so
+        padding, hover, and typography line up exactly. The "+" lives
+        in the label string rather than as a leading icon because
+        channel rows themselves no longer carry an icon — keeping the
+        structure identical means each action reads as "another row"
+        instead of breaking the rail with a different shape.
+      */}
+      <div className="px-3">
         <button
           type="button"
-          onClick={() => void handleCreate()}
-          className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-          title="New folder"
+          onClick={onAddChannel}
+          className={`${sidebarRowClass(false)} w-full text-left`}
         >
-          <FolderPlus className="h-3.5 w-3.5" />
+          <SidebarRowContent label="+ Add channel" />
+        </button>
+        <button
+          type="button"
+          onClick={() => setNewFolderOpen(true)}
+          className={`${sidebarRowClass(false)} w-full text-left`}
+        >
+          <SidebarRowContent label="+ New folder" />
         </button>
       </div>
 
       {/* Root (unfoldered) channels */}
       <RootDropZone>
         {rootChannels.length === 0 ? (
-          <p className="px-5 py-1 text-xs text-gray-300">
+          <p className="px-3 py-1 text-xs text-gray-500">
             Drop channels here for the root Inbox bucket
           </p>
         ) : (
@@ -192,12 +227,17 @@ export default function FolderSection({ channels, selectedChannelId }: Props) {
             selectedChannelId={selectedChannelId}
             isCollapsed={isCollapsed}
             onToggle={() => toggleCollapsed(folder.id)}
-            onDelete={() => void handleDelete(folder.id)}
+            onRename={() => setPendingRename({ id: folder.id, name: folder.name })}
+            onDelete={() => setPendingDelete({ id: folder.id, name: folder.name })}
             folders={folders}
             onMoveTo={moveTo}
           />
         );
       })}
+
+      <NewFolderDialog open={newFolderOpen} onOpenChange={setNewFolderOpen} />
+      <RenameFolderDialog target={pendingRename} onClose={() => setPendingRename(null)} />
+      <DeleteFolderDialog target={pendingDelete} onClose={() => setPendingDelete(null)} />
 
       {/*
         Portal-rendered floating preview that follows the cursor during
@@ -208,8 +248,7 @@ export default function FolderSection({ channels, selectedChannelId }: Props) {
       <DragOverlay dropAnimation={null}>
         {activeChannel != null ? (
           <div className="flex cursor-grabbing items-center justify-between gap-2 rounded-md border border-blue-300 bg-white px-3 py-1.5 text-sm font-medium text-blue-700 shadow-lg ring-2 ring-blue-200">
-            <FolderInput className="h-3.5 w-3.5 shrink-0 text-blue-400" />
-            <span className="truncate">{activeChannel.name}</span>
+            <span className="truncate">{displayChannelName(activeChannel.name)}</span>
             {activeChannel.unreadCount > 0 && (
               <span className="ml-auto shrink-0 rounded-full bg-blue-600 px-1.5 py-0.5 text-xs font-medium text-white">
                 {activeChannel.unreadCount}
@@ -230,8 +269,14 @@ export default function FolderSection({ channels, selectedChannelId }: Props) {
  */
 function RootDropZone({ children }: { children: React.ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id: 'root' });
+  // The `px-3` here is the same outer padding ViewsSection uses
+  // (`<div className="px-3 pt-4">`) and that the FolderGroup header
+  // uses (`<div className="px-3">`) — without it, root channels would
+  // sit at half the indent of views and folder headers because their
+  // only horizontal padding would come from sidebarRowClass's own
+  // px-3, while views/folders get px-3 + px-3.
   return (
-    <div ref={setNodeRef} className={`mt-1 ${isOver ? 'bg-blue-50/60' : ''}`}>
+    <div ref={setNodeRef} className={`mt-1 px-3 ${isOver ? 'bg-blue-50/60' : ''}`}>
       {children}
     </div>
   );

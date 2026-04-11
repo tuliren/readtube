@@ -39,6 +39,11 @@ const CommandInput = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive.Input>,
   React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input>
 >(({ className, ...props }, ref) => (
+  // cmdk-input-wrapper is a custom DOM attribute cmdk's own CSS selectors
+  // target (see https://github.com/pacocoursey/cmdk). It's not a React
+  // prop, so the react/no-unknown-property rule flags it; renaming to a
+  // `data-*` attribute would break cmdk's styling.
+  // eslint-disable-next-line react/no-unknown-property
   <div className="flex items-center border-b px-3" cmdk-input-wrapper="">
     <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
     <CommandPrimitive.Input

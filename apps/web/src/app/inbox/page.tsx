@@ -9,7 +9,12 @@ import { getSubscribedChannelsWithUnread } from '@/lib/subscriptions';
 import type { ChannelData, VideoData } from '@/lib/types';
 
 interface Props {
-  searchParams: Promise<{ channel?: string }>;
+  // `channelId` (not `channel`) so the SSR-side key matches the client
+  // InboxQuery codec in lib/inbox/filter.ts. Before unification the
+  // sidebar wrote `?channel=` but the codec parsed `channelId`, and any
+  // client-side patchQuery() rebuilt the URL from codec keys only —
+  // silently dropping the channel selection on every filter toggle.
+  searchParams: Promise<{ channelId?: string }>;
 }
 
 export default async function InboxPage({ searchParams }: Props) {
@@ -20,7 +25,7 @@ export default async function InboxPage({ searchParams }: Props) {
 
   await ensureUserExists(userId);
 
-  const { channel: channelParam } = await searchParams;
+  const { channelId: channelParam } = await searchParams;
   const selectedChannelId = channelParam ?? null;
 
   // Single SQL query: subscriptions + channel metadata + per-channel unread

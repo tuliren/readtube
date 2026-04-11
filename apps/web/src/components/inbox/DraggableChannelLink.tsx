@@ -1,7 +1,7 @@
 'use client';
 
 import { useDraggable } from '@dnd-kit/core';
-import { Check, FolderIcon, FolderInput, Inbox, MoreHorizontal } from 'lucide-react';
+import { Check, CircleDashed, FolderIcon, FolderInput, MoreHorizontal } from 'lucide-react';
 import Link from 'next/link';
 
 import {
@@ -13,7 +13,10 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { displayChannelName } from '@/lib/inbox/channelName';
 import type { ChannelData, FolderData } from '@/lib/types';
+
+import { SidebarBadge, SidebarRowContent, sidebarRowClass } from './SidebarRow';
 
 interface Props {
   channel: ChannelData;
@@ -24,13 +27,17 @@ interface Props {
 
 /**
  * One channel row in the sidebar. The row is draggable (to move the
- * channel into a folder) AND has a per-row "Move to…" dropdown (for
- * users who'd rather pick a destination from a menu).
+ * channel into a folder) AND has a per-row ⋯ actions dropdown (Move to…
+ * for now, more actions will land as features ship).
  *
  * setNodeRef + listeners go on the Link only (not the wrapping li), so
- * the Move-to dropdown button is a sibling outside the draggable zone —
- * clicking it never accidentally starts a drag, no stopPropagation hack
- * is needed.
+ * the ⋯ menu button is a sibling outside the draggable zone — clicking
+ * it never accidentally starts a drag, no stopPropagation hack is
+ * needed.
+ *
+ * The row body uses sidebarRowClass + SidebarRowContent so channels
+ * share the same padding, icon slot, and active/hover states as every
+ * other sidebar row (Views, folder headers, Add channel button).
  */
 export default function DraggableChannelLink({ channel, isSelected, folders, onMoveTo }: Props) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
@@ -44,18 +51,14 @@ export default function DraggableChannelLink({ channel, isSelected, folders, onM
           ref={setNodeRef}
           {...attributes}
           {...listeners}
-          href={`/inbox?channel=${channel.id}`}
-          className={`flex flex-1 items-center justify-between rounded-md px-3 py-1.5 text-sm cursor-grab active:cursor-grabbing ${
-            isSelected ? 'bg-blue-50 font-medium text-blue-700' : 'text-gray-700 hover:bg-gray-100'
-          }`}
+          href={`/inbox?channelId=${channel.id}`}
+          className={`${sidebarRowClass(isSelected)} flex-1 cursor-grab active:cursor-grabbing`}
           title="Click to open · drag to move to a folder"
         >
-          <span className="truncate">{channel.name}</span>
-          {channel.unreadCount > 0 && (
-            <span className="ml-1 shrink-0 rounded-full bg-blue-600 px-1.5 py-0.5 text-xs font-medium text-white">
-              {channel.unreadCount}
-            </span>
-          )}
+          <SidebarRowContent
+            label={displayChannelName(channel.name)}
+            trailing={<SidebarBadge count={channel.unreadCount} />}
+          />
         </Link>
 
         <DropdownMenu>
@@ -88,9 +91,9 @@ export default function DraggableChannelLink({ channel, isSelected, folders, onM
                   {channel.folderId == null ? (
                     <Check className="mr-2 h-3.5 w-3.5 text-blue-600" />
                   ) : (
-                    <Inbox className="mr-2 h-3.5 w-3.5 text-gray-400" />
+                    <CircleDashed className="mr-2 h-3.5 w-3.5 text-gray-400" />
                   )}
-                  Inbox (no folder)
+                  (No folder)
                 </DropdownMenuItem>
                 {folders.map((folder) => {
                   const isCurrent = channel.folderId === folder.id;

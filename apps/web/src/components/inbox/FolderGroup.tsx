@@ -1,17 +1,26 @@
 'use client';
 
 import { useDroppable } from '@dnd-kit/core';
-import { ChevronDown, ChevronRight, FolderIcon, Trash2 } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronRight,
+  FolderIcon,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+} from 'lucide-react';
 
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { ChannelData, FolderData } from '@/lib/types';
 
 import DraggableChannelLink from './DraggableChannelLink';
+import { SidebarBadge, sidebarRowClass } from './SidebarRow';
 
 interface Props {
   folder: FolderData;
@@ -20,17 +29,24 @@ interface Props {
   selectedChannelId: string | null;
   isCollapsed: boolean;
   onToggle: () => void;
+  onRename: () => void;
   onDelete: () => void;
   folders: FolderData[];
   onMoveTo: (channelId: string, folderId: string | null) => void;
 }
 
 /**
- * One collapsible folder group in the sidebar. Renders a header row
- * (toggle + folder name + rolled-up unread count + ⋯ menu) and, when
+ * One collapsible folder group in the sidebar. Header row (toggle +
+ * folder icon + name + rolled-up unread badge + ⋯ menu) and, when
  * expanded, the list of DraggableChannelLink rows that belong to it.
  * The whole group is a droppable target so users can drag a channel
  * from anywhere in the sidebar onto this folder.
+ *
+ * The header uses sidebarRowClass so folders share the same padding,
+ * hover, and icon slot as every other sidebar row. The chevron sits at
+ * h-3.5 w-3.5 (smaller than the row icon) because it's an affordance,
+ * not a category label. The unread badge uses SidebarBadge — same blue
+ * as channel and Inbox badges, no more gray-200 folder badges.
  */
 export default function FolderGroup({
   folder,
@@ -39,6 +55,7 @@ export default function FolderGroup({
   selectedChannelId,
   isCollapsed,
   onToggle,
+  onRename,
   onDelete,
   folders,
   onMoveTo,
@@ -46,43 +63,51 @@ export default function FolderGroup({
   const { setNodeRef, isOver } = useDroppable({ id: folder.id });
 
   return (
-    <div className={`mt-2 ${isOver ? 'bg-blue-50/60' : ''}`} ref={setNodeRef}>
+    // px-3 lives on the outer wrapper (rather than each inner row) so
+    // every action button in this folder — the header ⋯ menu and each
+    // channel-row ⋯ menu — sits at the same 12px-from-right rail as
+    // the New-folder button up in the Channels header. Without this
+    // the folder-children channel rows would extend to 0px because
+    // their <ul> has no horizontal padding.
+    <div className={`mt-2 px-3 ${isOver ? 'bg-blue-50/60' : ''}`} ref={setNodeRef}>
       {/*
         The `group` class here is what activates `group-hover:opacity-100`
-        on the folder menu button below — without it, the ⋯ button stays
-        invisible at opacity-0 and the Delete action is inaccessible.
+        on the folder menu button below — without it the ⋯ button stays
+        invisible and the Delete action is inaccessible.
       */}
-      <div className="group flex items-center gap-1 px-3">
+      <div className="group flex items-center">
         <button
           type="button"
           onClick={onToggle}
-          className="flex flex-1 items-center gap-1 rounded px-1 py-1 text-left text-sm text-gray-700 hover:bg-gray-100"
+          className={`${sidebarRowClass(false)} flex-1 text-left`}
         >
           {isCollapsed ? (
-            <ChevronRight className="h-3.5 w-3.5" />
+            <ChevronRight className="-ml-1 h-3.5 w-3.5 shrink-0" />
           ) : (
-            <ChevronDown className="h-3.5 w-3.5" />
+            <ChevronDown className="-ml-1 h-3.5 w-3.5 shrink-0" />
           )}
-          <FolderIcon className="h-3.5 w-3.5 text-gray-400" />
-          <span className="flex-1 truncate font-medium">{folder.name}</span>
-          {unread > 0 ? (
-            <span className="rounded-full bg-gray-200 px-1.5 py-0.5 text-xs font-medium text-gray-700">
-              {unread}
-            </span>
-          ) : null}
+          <FolderIcon className="h-4 w-4 shrink-0 text-gray-400" />
+          <span className="flex-1 truncate font-semibold text-gray-900">{folder.name}</span>
+          <SidebarBadge count={unread} />
         </button>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="rounded p-1 text-gray-400 opacity-0 hover:bg-gray-100 hover:text-gray-600 group-hover:opacity-100"
+              className="ml-0.5 rounded p-1 text-gray-400 opacity-0 hover:bg-gray-100 hover:text-gray-600 group-hover:opacity-100 data-[state=open]:opacity-100"
               aria-label="Folder menu"
+              title="Folder actions"
             >
-              <span aria-hidden>⋯</span>
+              <MoreHorizontal className="h-3.5 w-3.5" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={onRename}>
+              <Pencil className="mr-2 h-4 w-4" />
+              Rename folder
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={onDelete} className="text-red-600">
               <Trash2 className="mr-2 h-4 w-4" />
               Delete folder
@@ -105,7 +130,9 @@ export default function FolderGroup({
         </ul>
       )}
       {!isCollapsed && channels.length === 0 && (
-        <p className="ml-6 mt-1 px-2 py-1 text-xs text-gray-300">Drop a channel here</p>
+        <p className="ml-6 mt-1 px-3 py-1 text-xs text-gray-500">
+          No channels yet — drag any channel here to add it.
+        </p>
       )}
     </div>
   );

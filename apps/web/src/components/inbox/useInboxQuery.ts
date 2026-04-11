@@ -1,0 +1,51 @@
+'use client';
+
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useMemo } from 'react';
+
+import { encodeInboxQuery, parseInboxQuery } from '@/lib/inbox/filter';
+import type { InboxQuery } from '@/lib/types';
+
+/**
+ * Read/write the inbox filter state from the URL. A thin wrapper around
+ * Next.js's useSearchParams + router.replace so every component
+ * (SearchInput, FilterBar, SavedViewMenu) can read and mutate the same
+ * canonical shape.
+ *
+ * We deliberately use router.replace (not push) so filter changes don't
+ * pollute browser history. The "channel" search param is preserved via
+ * the codec.
+ */
+export function useInboxQuery() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const query = useMemo<InboxQuery>(() => parseInboxQuery(searchParams), [searchParams]);
+
+  const setQuery = useCallback(
+    (next: InboxQuery) => {
+      const params = encodeInboxQuery(next);
+      const qs = params.toString();
+      router.replace(qs.length > 0 ? `${pathname}?${qs}` : pathname);
+    },
+    [router, pathname]
+  );
+
+  const patchQuery = useCallback(
+    (patch: Partial<InboxQuery>) => {
+      const next: InboxQuery = { ...query, ...patch };
+      // Strip keys whose values are undefined so they don't appear as
+      // explicit empty strings in the URL.
+      for (const key of Object.keys(patch) as (keyof InboxQuery)[]) {
+        if (patch[key] === undefined) {
+          delete next[key];
+        }
+      }
+      setQuery(next);
+    },
+    [query, setQuery]
+  );
+
+  return { query, setQuery, patchQuery };
+}
