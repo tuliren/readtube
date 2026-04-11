@@ -90,11 +90,20 @@ export default function FolderSection({ channels, selectedChannelId }: Props) {
     void moveChannel(channelId, nextFolderId);
   }
 
-  // Partition channels by folder
-  const rootChannels = channels.filter((c) => c.folderId == null);
+  // Partition channels by folder. We treat "unknown folder id" as root so
+  // that channels stay visible in two cases:
+  //   1. Initial render: channels come from SSR fallback data already
+  //      populated, but `folders` is [] until the client-side /api/folders
+  //      fetch completes. Without this fallback, foldered channels would
+  //      flash out of view for the first 100ms.
+  //   2. Stale state: a folder was deleted in another tab; its channels
+  //      still carry the old folder_id until the next /api/channels
+  //      revalidation. We'd rather show them at root than hide them.
+  const folderIds = new Set(folders.map((f) => f.id));
+  const rootChannels = channels.filter((c) => c.folderId == null || !folderIds.has(c.folderId));
   const byFolder = new Map<string, ChannelData[]>();
   for (const channel of channels) {
-    if (channel.folderId == null) {
+    if (channel.folderId == null || !folderIds.has(channel.folderId)) {
       continue;
     }
     const existing = byFolder.get(channel.folderId) ?? [];
@@ -190,7 +199,12 @@ function FolderGroup({
 
   return (
     <div className={`mt-2 ${isOver ? 'bg-blue-50/60' : ''}`} ref={setNodeRef}>
-      <div className="flex items-center gap-1 px-3">
+      {/*
+        The `group` class here is what activates `group-hover:opacity-100`
+        on the folder menu button below — without it, the ⋯ button stays
+        invisible at opacity-0 and the Delete action is inaccessible.
+      */}
+      <div className="group flex items-center gap-1 px-3">
         <button
           type="button"
           onClick={onToggle}
