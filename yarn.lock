@@ -4976,6 +4976,7 @@ __metadata:
     rehype-raw: "npm:^7.0.0"
     rehype-sanitize: "npm:^6.0.0"
     remark-gfm: "npm:^4.0.0"
+    resend: "npm:^6.10.0"
     sonner: "npm:^2.0.7"
     storybook: "npm:^10.1.2"
     svix: "npm:^1.90.0"
@@ -19108,6 +19109,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"postal-mime@npm:2.7.4":
+  version: 2.7.4
+  resolution: "postal-mime@npm:2.7.4"
+  checksum: 10c0/836220ef876b8e3ae7236341a4fbff5b8bf6618952a1208966a4e3040c9f51c14572fa695b1863bd445e8d7894536d2eb4e5001f50795c3f7fbfe39c8946ba09
+  languageName: node
+  linkType: hard
+
 "postcss-loader@npm:^8.1.1":
   version: 8.2.0
   resolution: "postcss-loader@npm:8.2.0"
@@ -20416,6 +20424,21 @@ __metadata:
   version: 1.0.0
   resolution: "requires-port@npm:1.0.0"
   checksum: 10c0/b2bfdd09db16c082c4326e573a82c0771daaf7b53b9ce8ad60ea46aa6e30aaf475fe9b164800b89f93b748d2c234d8abff945d2551ba47bf5698e04cd7713267
+  languageName: node
+  linkType: hard
+
+"resend@npm:^6.10.0":
+  version: 6.10.0
+  resolution: "resend@npm:6.10.0"
+  dependencies:
+    postal-mime: "npm:2.7.4"
+    svix: "npm:1.88.0"
+  peerDependencies:
+    "@react-email/render": "*"
+  peerDependenciesMeta:
+    "@react-email/render":
+      optional: true
+  checksum: 10c0/f472729baa8a1f46d64abe82910cb1a564e7b99aa2baf8b08333245ce379746f0f5afdbd4ccacc66d3643e9a37d59be2b5e199f616fc1641d006b948963782c2
   languageName: node
   linkType: hard
 
@@ -21990,6 +22013,16 @@ __metadata:
   version: 1.0.0
   resolution: "supports-preserve-symlinks-flag@npm:1.0.0"
   checksum: 10c0/6c4032340701a9950865f7ae8ef38578d8d7053f5e10518076e6554a9381fa91bd9c6850193695c141f32b21f979c985db07265a758867bac95de05f7d8aeb39
+  languageName: node
+  linkType: hard
+
+"svix@npm:1.88.0":
+  version: 1.88.0
+  resolution: "svix@npm:1.88.0"
+  dependencies:
+    standardwebhooks: "npm:1.0.0"
+    uuid: "npm:^10.0.0"
+  checksum: 10c0/e30c7488111790f6f358e8c0256bc7e08ec972e1124e4e6afb137fcadc0c0f21033455f5d82ac6a63d18ed4f5dc6c102d544588d2adcd0d3e03e7d7c1166309a
   languageName: node
   linkType: hard
 
