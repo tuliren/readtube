@@ -37,11 +37,13 @@ function ArtifactBadges({ video }: { video: VideoData }) {
       </span>
     );
   }
+  // Order matches the reader's tab order (Summary, Article, Transcript)
+  // so the same artifact maps to the same position in both surfaces.
   return (
     <span className="inline-flex items-center gap-1">
-      <ArtifactDot label="T" present={video.hasTranscript} title="Transcript" />
       <ArtifactDot label="S" present={video.hasSummary} title="Summary" />
       <ArtifactDot label="A" present={video.hasArticle} title="Article" />
+      <ArtifactDot label="T" present={video.hasTranscript} title="Transcript" />
     </span>
   );
 }

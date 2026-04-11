@@ -120,22 +120,43 @@ export default function VideoReader({ video }: Props) {
 
         {/* Tabs — Summary first because it's the cheapest scannable
             view, then Article (the long-form rewrite), then Transcript
-            (the raw firehose). */}
+            (the raw firehose). Each tab carries a small filled dot
+            when its corresponding artifact has already been generated
+            for this video, so the user can tell at a glance which
+            tabs have content waiting versus which would require a
+            generate / fetch round-trip. */}
         <div className="mt-8 border-b border-gray-200">
           <div className="flex gap-6">
-            {TABS.map((tab) => (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className={`-mb-px border-b-2 px-1 py-3 text-sm font-medium transition-colors ${
-                  activeTab === tab.key
-                    ? 'border-gray-900 text-gray-900'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
+            {TABS.map((tab) => {
+              const generated =
+                tab.key === 'summary'
+                  ? video.hasSummary
+                  : tab.key === 'article'
+                    ? video.hasArticle
+                    : video.hasTranscript;
+              return (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`-mb-px inline-flex items-center gap-1.5 border-b-2 px-1 py-3 text-sm font-medium transition-colors ${
+                    activeTab === tab.key
+                      ? 'border-gray-900 text-gray-900'
+                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  {tab.label}
+                  {generated && (
+                    <span
+                      className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                        activeTab === tab.key ? 'bg-gray-900' : 'bg-blue-500'
+                      }`}
+                      title={`${tab.label} already generated`}
+                      aria-label={`${tab.label} already generated`}
+                    />
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
 

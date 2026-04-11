@@ -99,7 +99,7 @@ export default function InboxShell({
 
   const selectedChannel =
     selectedChannelId != null ? (channels.find((c) => c.id === selectedChannelId) ?? null) : null;
-  const headerName = selectedChannel != null ? selectedChannel.name : 'All unread';
+  const headerName = selectedChannel != null ? selectedChannel.name : 'Inbox';
   const headerUnread = selectedChannel != null ? selectedChannel.unreadCount : totalUnread;
 
   return (
