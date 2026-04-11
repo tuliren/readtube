@@ -413,18 +413,22 @@ model DigestRun {
   @@index([user_id, sent_at], name: "digest_run_index_on_user_sent_at")
 }
 
-// pgvector embedding per video. 1536 dims matches common OpenAI-compatible
-// embedding models; update together with prompt_version if you swap models.
-// HNSW index is created by raw SQL in the migration file.
+// pgvector embedding per video. 1536 dims matches OpenAI's
+// text-embedding-3-small (the model configured in apps/web/src/lib/ai/embed.ts).
+// We use OpenAI for embeddings even though generation uses Google Gemini —
+// they're routed independently through the Vercel AI Gateway. If you swap
+// to a model with a different output size, bump EMBEDDING_PROMPT_VERSION
+// and add a follow-up migration that ALTERs the column + rebuilds the
+// HNSW index.
 model VideoEmbedding {
-  id             String                       @id @default(cuid())
-  video_id       String                       @unique
+  id             String                      @id @default(cuid())
+  video_id       String                      @unique
   embedding      Unsupported("vector(1536)")
-  // e.g. "google/text-embedding-004"
+  // e.g. "openai/text-embedding-3-small"
   model          String
   // bump when the embedding input recipe (title + summary etc.) changes
   prompt_version String
-  generated_at   DateTime                     @default(now())
+  generated_at   DateTime                    @default(now())
 
   video Video @relation(fields: [video_id], references: [id], onDelete: Cascade)
 }

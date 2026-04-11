@@ -12,10 +12,16 @@ import { prisma } from '@/lib/db';
 export const EMBEDDING_PROMPT_VERSION = 'v1';
 
 /**
- * Model for semantic embeddings. 1536 dims matches the pgvector column in
- * the schema; if this changes, the schema + migration must change too.
+ * Model for semantic embeddings. 1536 native dims matches the pgvector
+ * column in the schema. We use OpenAI for embeddings even though
+ * generation (summaries, articles, Ask-my-inbox answers) uses Google
+ * Gemini — the Vercel AI Gateway routes them independently by provider
+ * prefix, and no 1536-dim Google embedding model is available through
+ * the gateway as a plain string identifier today. If you swap to a
+ * model with a different output size, bump EMBEDDING_PROMPT_VERSION
+ * AND alter the pgvector column + HNSW index together.
  */
-export const EMBEDDING_MODEL = 'google/text-embedding-004';
+export const EMBEDDING_MODEL = 'openai/text-embedding-3-small';
 
 interface EmbedResult {
   skipped: boolean;
