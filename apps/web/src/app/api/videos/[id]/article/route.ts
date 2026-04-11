@@ -19,8 +19,8 @@ function parseStyle(raw: string | null | undefined): ArticleStyle | null {
   if (raw == null) {
     return DEFAULT_STYLE;
   }
-  if (raw in ArticleStyle) {
-    return ArticleStyle[raw as keyof typeof ArticleStyle];
+  if (Object.values(ArticleStyle).includes(raw as ArticleStyle)) {
+    return raw as ArticleStyle;
   }
   return null;
 }
