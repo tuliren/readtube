@@ -15,7 +15,24 @@ interface Props {
 
 export default function VideoList({ videos, selectedVideoId }: Props) {
   const searchParams = useSearchParams();
-  const channelParam = searchParams.get('channelId');
+
+  // Build the "filter context" we want to forward into the reader as
+  // a single ?from=<encoded-query> param so the reader's Back button
+  // can land back in the exact filtered list.
+  //
+  // Two cases:
+  //   1. We're on `/inbox?starred=1` (or similar) — searchParams IS
+  //      the filter context, so use its toString().
+  //   2. We're already in the reader at `/inbox/<id>?from=<inner>` —
+  //      forward the same `from` value verbatim so navigating between
+  //      sibling videos doesn't lose the back-target.
+  const filterContext = (() => {
+    const fromInUrl = searchParams.get('from');
+    if (fromInUrl != null) {
+      return fromInUrl;
+    }
+    return searchParams.toString();
+  })();
 
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
 
@@ -75,8 +92,8 @@ export default function VideoList({ videos, selectedVideoId }: Props) {
         {videos.map((video) => {
           const isSelected = selectedVideoId === video.id;
           const href =
-            channelParam != null
-              ? `/inbox/${video.id}?channelId=${channelParam}`
+            filterContext.length > 0
+              ? `/inbox/${video.id}?from=${encodeURIComponent(filterContext)}`
               : `/inbox/${video.id}`;
 
           return (

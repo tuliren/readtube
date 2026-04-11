@@ -126,6 +126,29 @@ export function isDefaultQuery(query: InboxQuery): boolean {
  * the sequence) and protects against any future caller building tagIds
  * in a non-deterministic order.
  */
+/**
+ * The reader navigates to `/inbox/<videoId>?from=<encoded-inbox-query>`
+ * so the Back link can restore the exact filtered list the user came
+ * from. Both the SSR pages and the client-side hooks need to look at
+ * the inner query for filtering, not the wrapper `from` param.
+ *
+ * This helper takes the raw URLSearchParams and returns either:
+ *   - the URLSearchParams parsed from the `from` value, if present, or
+ *   - a copy of the original with `from` stripped out, otherwise.
+ *
+ * Always returns a fresh URLSearchParams so callers can mutate it
+ * without aliasing the React searchParams instance.
+ */
+export function extractInboxSearchParams(raw: URLSearchParams): URLSearchParams {
+  const fromValue = raw.get('from');
+  if (fromValue != null && fromValue.length > 0) {
+    return new URLSearchParams(fromValue);
+  }
+  const copy = new URLSearchParams(raw);
+  copy.delete('from');
+  return copy;
+}
+
 export function inboxQueriesEqual(a: InboxQuery, b: InboxQuery): boolean {
   for (const key of STRING_KEYS) {
     if ((a[key] ?? '') !== (b[key] ?? '')) {

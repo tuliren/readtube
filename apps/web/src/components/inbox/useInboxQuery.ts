@@ -3,7 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useMemo } from 'react';
 
-import { encodeInboxQuery, parseInboxQuery } from '@/lib/inbox/filter';
+import { encodeInboxQuery, extractInboxSearchParams, parseInboxQuery } from '@/lib/inbox/filter';
 import type { InboxQuery } from '@/lib/types';
 
 /**
@@ -21,7 +21,14 @@ export function useInboxQuery() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const query = useMemo<InboxQuery>(() => parseInboxQuery(searchParams), [searchParams]);
+  // Unwrap the `from` indirection used by the reader: in `/inbox/<id>`
+  // the canonical filter context lives in `?from=<encoded-inner>`
+  // rather than as direct top-level params, so the FilterBar / saved
+  // views / search box still see the same query they came from.
+  const query = useMemo<InboxQuery>(
+    () => parseInboxQuery(extractInboxSearchParams(searchParams)),
+    [searchParams]
+  );
 
   const setQuery = useCallback(
     (next: InboxQuery) => {

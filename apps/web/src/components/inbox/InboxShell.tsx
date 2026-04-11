@@ -6,7 +6,7 @@ import { useMemo, useState } from 'react';
 import useSWR from 'swr';
 
 import { Toaster } from '@/components/ui/sonner';
-import { encodeInboxQuery, parseInboxQuery } from '@/lib/inbox/filter';
+import { encodeInboxQuery, extractInboxSearchParams, parseInboxQuery } from '@/lib/inbox/filter';
 import type { ChannelData, VideoData } from '@/lib/types';
 
 import AddChannelModal from './AddChannelModal';
@@ -46,8 +46,11 @@ export default function InboxShell({
   // Build the videos fetch URL from the full InboxQuery (including filter
   // chips, search text, saved views). We round-trip through the canonical
   // codec so the client request matches what the server parses.
+  // extractInboxSearchParams unwraps the `from` indirection used by the
+  // reader so the sidebar list reflects the same filter the user came
+  // from when they opened the video.
   const videosUrl = useMemo(() => {
-    const query = parseInboxQuery(searchParams);
+    const query = parseInboxQuery(extractInboxSearchParams(searchParams));
     if (query.channelId == null && selectedChannelId != null) {
       query.channelId = selectedChannelId;
     }
