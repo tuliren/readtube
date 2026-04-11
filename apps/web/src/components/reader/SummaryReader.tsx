@@ -2,6 +2,10 @@
 
 import { ArrowPathIcon } from '@heroicons/react/24/outline';
 import { useEffect, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import rehypeExternalLinks from 'rehype-external-links';
+import rehypeSanitize from 'rehype-sanitize';
+import remarkGfm from 'remark-gfm';
 
 interface Props {
   videoDbId: string;
@@ -235,7 +239,7 @@ export default function SummaryReader({ videoDbId }: Props) {
 
   const isStreaming = status === 'generating';
   const isRegenerating = (field: SummaryField) => regeneratingFields.includes(field);
-  const fullParagraphs = summary.full?.split(/\n\n+/).filter((p) => p.trim().length > 0) ?? [];
+  const fullMarkdown = summary.full?.trim() ?? '';
 
   return (
     <div className="space-y-8">
@@ -293,15 +297,26 @@ export default function SummaryReader({ videoDbId }: Props) {
             <RegenerateButton onClick={() => handleGenerate(['full'])} disabled={isStreaming} />
           )}
         </div>
-        {fullParagraphs.length > 0 ? (
-          <div
-            className="space-y-4 leading-relaxed text-gray-800"
+        {fullMarkdown.length > 0 ? (
+          // Render via react-markdown so the new bullet-friendly prompt
+          // (SUMMARY_PROMPT_VERSION v4) can mix prose paragraphs and
+          // Markdown lists. Sanitized + external-link safety mirrors
+          // ArticleReader so we don't ship two different sanitization
+          // policies for AI-generated content.
+          <article
+            className="prose prose-gray max-w-none"
             style={{ fontFamily: 'Georgia, serif', fontSize: '17px', lineHeight: '1.8' }}
           >
-            {fullParagraphs.map((para, i) => (
-              <p key={i}>{para}</p>
-            ))}
-          </div>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              rehypePlugins={[
+                rehypeSanitize,
+                [rehypeExternalLinks, { target: '_blank', rel: ['noopener', 'noreferrer'] }],
+              ]}
+            >
+              {fullMarkdown}
+            </ReactMarkdown>
+          </article>
         ) : isRegenerating('full') ? (
           <div className="space-y-2">
             {[100, 95, 90, 85, 75].map((w, i) => (

@@ -17,7 +17,12 @@ interface Props {
   video: VideoData;
 }
 
-type Tab = 'summary' | 'transcript' | 'article';
+type Tab = 'summary' | 'article' | 'transcript';
+const TABS: { key: Tab; label: string }[] = [
+  { key: 'summary', label: 'Summary' },
+  { key: 'article', label: 'Article' },
+  { key: 'transcript', label: 'Transcript' },
+];
 
 function relativeDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString(undefined, {
@@ -33,7 +38,10 @@ export default function VideoReader({ video }: Props) {
   const backHref = channelParam ? `/inbox?channelId=${channelParam}` : '/inbox';
   const watchUrl = `https://youtube.com/watch?v=${video.sourceId}`;
 
-  const [activeTab, setActiveTab] = useState<Tab>('transcript');
+  // Default to Summary because that's the cheapest scannable view —
+  // the previous default of Transcript meant every reader open
+  // landed on the densest, longest content first.
+  const [activeTab, setActiveTab] = useState<Tab>('summary');
   const durationLabel = formatDurationSeconds(video.durationSeconds);
 
   return (
@@ -92,39 +100,24 @@ export default function VideoReader({ video }: Props) {
           </blockquote>
         )}
 
-        {/* Tabs */}
+        {/* Tabs — Summary first because it's the cheapest scannable
+            view, then Article (the long-form rewrite), then Transcript
+            (the raw firehose). */}
         <div className="mt-8 border-b border-gray-200">
           <div className="flex gap-6">
-            <button
-              onClick={() => setActiveTab('summary')}
-              className={`-mb-px border-b-2 px-1 py-3 text-sm font-medium transition-colors ${
-                activeTab === 'summary'
-                  ? 'border-gray-900 text-gray-900'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Summary
-            </button>
-            <button
-              onClick={() => setActiveTab('transcript')}
-              className={`-mb-px border-b-2 px-1 py-3 text-sm font-medium transition-colors ${
-                activeTab === 'transcript'
-                  ? 'border-gray-900 text-gray-900'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Transcript
-            </button>
-            <button
-              onClick={() => setActiveTab('article')}
-              className={`-mb-px border-b-2 px-1 py-3 text-sm font-medium transition-colors ${
-                activeTab === 'article'
-                  ? 'border-gray-900 text-gray-900'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Article
-            </button>
+            {TABS.map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`-mb-px border-b-2 px-1 py-3 text-sm font-medium transition-colors ${
+                  activeTab === tab.key
+                    ? 'border-gray-900 text-gray-900'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
         </div>
 

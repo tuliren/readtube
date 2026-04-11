@@ -9,7 +9,7 @@ interface TranscriptSegment {
   text: string;
 }
 
-const SUMMARY_PROMPT_VERSION = 'v3';
+const SUMMARY_PROMPT_VERSION = 'v4';
 const MODEL = 'google/gemini-2.5-flash';
 
 const LANGUAGE_RULE = `Write in the same language as the transcript below. Do not translate — if the transcript is in Chinese, write in Chinese; if Spanish, write in Spanish; and so on.`;
@@ -26,10 +26,15 @@ Output only the title itself, nothing else.`,
 - 1-2 more sentences: the most important supporting context.
 - Plain prose. No headings, no lists, no preamble.
 - ${LANGUAGE_RULE}`,
-  full: `Write a compact summary of this video — at most 2-3 short paragraphs (not more). Rules:
+  full: `Write a compact summary of this video. Rules:
 - Focus only on the main arguments and conclusions. Cut examples, tangents, and non-essential details.
 - Favor density over completeness. A reader should get the gist in under a minute.
-- No headings or lists — just prose.
+- Choose the format that fits the content best:
+  - Use prose (2-3 short paragraphs) when the video is one continuous argument.
+  - Use a Markdown bullet list when the video naturally breaks into discrete items (steps, tips, comparisons, list-of-N).
+  - Mix prose and a short bullet list when an introductory point is followed by enumerated takeaways.
+- Bullets must be terse (one line each) and use Markdown "- " syntax. Do not nest more than one level.
+- Never use headings (no #, ##, etc.). Do not bold or italicize.
 - ${LANGUAGE_RULE}`,
 } as const;
 
