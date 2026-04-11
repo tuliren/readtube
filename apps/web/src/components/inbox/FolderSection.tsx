@@ -21,11 +21,16 @@ import DeleteFolderDialog from './DeleteFolderDialog';
 import DraggableChannelLink from './DraggableChannelLink';
 import FolderGroup from './FolderGroup';
 import NewFolderDialog from './NewFolderDialog';
+import { SidebarRowContent, sidebarRowClass } from './SidebarRow';
 import { useFolders } from './useFolders';
 
 interface Props {
   channels: ChannelData[];
   selectedChannelId: string | null;
+  /** Opens the AddChannelModal owned by InboxShell. Lives here (rather
+   *  than in ChannelSection) so the entry point sits right under the
+   *  Channels category header — next to the thing it adds to. */
+  onAddChannel: () => void;
 }
 
 /**
@@ -37,7 +42,7 @@ interface Props {
  * Collapsible folders + per-folder unread rollups are local-state only —
  * expand state isn't persisted across reloads yet.
  */
-export default function FolderSection({ channels, selectedChannelId }: Props) {
+export default function FolderSection({ channels, selectedChannelId, onAddChannel }: Props) {
   const { folders, moveChannel } = useFolders();
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
@@ -148,9 +153,13 @@ export default function FolderSection({ channels, selectedChannelId }: Props) {
         Section header — matches the Views header typography in
         ViewsSection.tsx (text-base font-semibold text-gray-900) so the
         two category labels are the largest, darkest text in the sidebar.
+        Outer wrapper uses px-3 so the New-folder action button aligns
+        on the same right rail (12px) as every channel/folder row in the
+        section; the label compensates with its own px-2 to keep the
+        20px left visual indent that matches the Views header.
       */}
-      <div className="mb-1 mt-4 flex items-center justify-between px-5">
-        <p className="text-base font-semibold text-gray-900">Channels</p>
+      <div className="mb-1 mt-4 flex items-center justify-between px-3">
+        <p className="px-2 text-base font-semibold text-gray-900">Channels</p>
         <button
           type="button"
           onClick={() => setNewFolderOpen(true)}
@@ -159,6 +168,26 @@ export default function FolderSection({ channels, selectedChannelId }: Props) {
           aria-label="New folder"
         >
           <FolderPlus className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      {/*
+        + Add channel — sits right under the Channels header so the
+        entry point is next to the thing it adds to. Same row primitive
+        (sidebarRowClass + SidebarRowContent) as a root channel link so
+        padding, hover, and typography line up exactly. The "+" lives in
+        the label string rather than as a leading icon because channel
+        rows themselves no longer carry an icon — keeping the structure
+        identical means the action reads as "another row" instead of
+        breaking the rail with a different shape.
+      */}
+      <div className="px-3">
+        <button
+          type="button"
+          onClick={onAddChannel}
+          className={`${sidebarRowClass(false)} w-full text-left`}
+        >
+          <SidebarRowContent label="+ Add channel" />
         </button>
       </div>
 

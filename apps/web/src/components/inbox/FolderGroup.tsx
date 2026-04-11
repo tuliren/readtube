@@ -53,13 +53,19 @@ export default function FolderGroup({
   const { setNodeRef, isOver } = useDroppable({ id: folder.id });
 
   return (
-    <div className={`mt-2 ${isOver ? 'bg-blue-50/60' : ''}`} ref={setNodeRef}>
+    // px-3 lives on the outer wrapper (rather than each inner row) so
+    // every action button in this folder — the header ⋯ menu and each
+    // channel-row ⋯ menu — sits at the same 12px-from-right rail as
+    // the New-folder button up in the Channels header. Without this
+    // the folder-children channel rows would extend to 0px because
+    // their <ul> has no horizontal padding.
+    <div className={`mt-2 px-3 ${isOver ? 'bg-blue-50/60' : ''}`} ref={setNodeRef}>
       {/*
         The `group` class here is what activates `group-hover:opacity-100`
         on the folder menu button below — without it the ⋯ button stays
         invisible and the Delete action is inaccessible.
       */}
-      <div className="group flex items-center px-3">
+      <div className="group flex items-center">
         <button
           type="button"
           onClick={onToggle}
