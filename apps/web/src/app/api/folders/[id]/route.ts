@@ -1,0 +1,81 @@
+import { prisma } from '@readtube/database';
+import { NextRequest, NextResponse } from 'next/server';
+
+import { requireUserId } from '@/lib/auth';
+
+interface Params {
+  params: Promise<{ id: string }>;
+}
+
+export async function PATCH(request: NextRequest, { params }: Params) {
+  const authResult = await requireUserId();
+  if (authResult instanceof NextResponse) {
+    return authResult;
+  }
+  const userId = authResult;
+  const { id } = await params;
+
+  let body: { name?: string; sortOrder?: number };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
+  }
+
+  // Scope the update via the compound where so we can't touch another
+  // user's folder by guessing an id.
+  const existing = await prisma.folder.findFirst({
+    where: { id, user_id: userId },
+    select: { id: true },
+  });
+  if (existing == null) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+
+  const updates: { name?: string; sort_order?: number } = {};
+  if (body.name != null) {
+    const trimmed = body.name.trim();
+    if (trimmed.length === 0 || trimmed.length > 80) {
+      return NextResponse.json({ error: 'Invalid folder name' }, { status: 400 });
+    }
+    updates.name = trimmed;
+  }
+  if (body.sortOrder != null) {
+    if (!Number.isInteger(body.sortOrder)) {
+      return NextResponse.json({ error: 'sortOrder must be an integer' }, { status: 400 });
+    }
+    updates.sort_order = body.sortOrder;
+  }
+  if (Object.keys(updates).length === 0) {
+    return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
+  }
+
+  const row = await prisma.folder.update({
+    where: { id },
+    data: updates,
+    select: { id: true, name: true, sort_order: true },
+  });
+
+  return NextResponse.json({ id: row.id, name: row.name, sortOrder: row.sort_order });
+}
+
+export async function DELETE(_request: NextRequest, { params }: Params) {
+  const authResult = await requireUserId();
+  if (authResult instanceof NextResponse) {
+    return authResult;
+  }
+  const userId = authResult;
+  const { id } = await params;
+
+  // Scope to the owning user. The SetNull FK on UserSubscription.folder_id
+  // means any subscriptions filed under this folder fall back to "Inbox
+  // root" rather than getting deleted.
+  const result = await prisma.folder.deleteMany({
+    where: { id, user_id: userId },
+  });
+  if (result.count === 0) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+
+  return NextResponse.json({ deleted: true });
+}
