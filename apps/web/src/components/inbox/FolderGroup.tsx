@@ -1,12 +1,20 @@
 'use client';
 
 import { useDroppable } from '@dnd-kit/core';
-import { ChevronDown, ChevronRight, FolderIcon, MoreHorizontal, Trash2 } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronRight,
+  FolderIcon,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+} from 'lucide-react';
 
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { ChannelData, FolderData } from '@/lib/types';
@@ -21,6 +29,7 @@ interface Props {
   selectedChannelId: string | null;
   isCollapsed: boolean;
   onToggle: () => void;
+  onRename: () => void;
   onDelete: () => void;
   folders: FolderData[];
   onMoveTo: (channelId: string, folderId: string | null) => void;
@@ -46,6 +55,7 @@ export default function FolderGroup({
   selectedChannelId,
   isCollapsed,
   onToggle,
+  onRename,
   onDelete,
   folders,
   onMoveTo,
@@ -93,6 +103,11 @@ export default function FolderGroup({
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={onRename}>
+              <Pencil className="mr-2 h-4 w-4" />
+              Rename folder
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={onDelete} className="text-red-600">
               <Trash2 className="mr-2 h-4 w-4" />
               Delete folder

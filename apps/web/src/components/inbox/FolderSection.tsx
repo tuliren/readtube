@@ -21,6 +21,7 @@ import DeleteFolderDialog from './DeleteFolderDialog';
 import DraggableChannelLink from './DraggableChannelLink';
 import FolderGroup from './FolderGroup';
 import NewFolderDialog from './NewFolderDialog';
+import RenameFolderDialog from './RenameFolderDialog';
 import { SidebarRowContent, sidebarRowClass } from './SidebarRow';
 import { useFolders } from './useFolders';
 
@@ -48,6 +49,7 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
+  const [pendingRename, setPendingRename] = useState<{ id: string; name: string } | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -227,6 +229,7 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
             selectedChannelId={selectedChannelId}
             isCollapsed={isCollapsed}
             onToggle={() => toggleCollapsed(folder.id)}
+            onRename={() => setPendingRename({ id: folder.id, name: folder.name })}
             onDelete={() => setPendingDelete({ id: folder.id, name: folder.name })}
             folders={folders}
             onMoveTo={moveTo}
@@ -235,6 +238,7 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
       })}
 
       <NewFolderDialog open={newFolderOpen} onOpenChange={setNewFolderOpen} />
+      <RenameFolderDialog target={pendingRename} onClose={() => setPendingRename(null)} />
       <DeleteFolderDialog target={pendingDelete} onClose={() => setPendingDelete(null)} />
 
       {/*
