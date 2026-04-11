@@ -62,9 +62,7 @@ export default function ViewsSection({ inboxUnread }: Props) {
 
   return (
     <div className="px-3 pt-4">
-      <p className="mb-1 px-2 text-xs font-semibold uppercase tracking-wider text-gray-400">
-        Views
-      </p>
+      <p className="mb-1 px-2 text-base font-semibold text-gray-900">Views</p>
       <ul className="space-y-0.5">
         {VIEWS.map((view) => {
           const active = isActive(view);

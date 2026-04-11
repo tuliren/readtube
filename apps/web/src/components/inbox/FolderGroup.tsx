@@ -71,7 +71,7 @@ export default function FolderGroup({
             <ChevronDown className="-ml-1 h-3.5 w-3.5 shrink-0" />
           )}
           <FolderIcon className="h-4 w-4 shrink-0 text-gray-400" />
-          <span className="flex-1 truncate font-medium">{folder.name}</span>
+          <span className="flex-1 truncate font-semibold text-gray-900">{folder.name}</span>
           <SidebarBadge count={unread} />
         </button>
 

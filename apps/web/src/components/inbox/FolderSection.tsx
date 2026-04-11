@@ -6,6 +6,7 @@ import {
   DragOverlay,
   type DragStartEvent,
   PointerSensor,
+  pointerWithin,
   useDroppable,
   useSensor,
   useSensors,
@@ -13,6 +14,7 @@ import {
 import { FolderInput, FolderPlus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
+import { displayChannelName } from '@/lib/inbox/channelName';
 import type { ChannelData } from '@/lib/types';
 
 import DeleteFolderDialog from './DeleteFolderDialog';
@@ -128,18 +130,27 @@ export default function FolderSection({ channels, selectedChannelId }: Props) {
   return (
     <DndContext
       sensors={sensors}
+      // pointerWithin (instead of the default rectIntersection) so the
+      // drop target tracks the cursor, not the dragged overlay rect.
+      // With rectIntersection, dragging a channel toward the first
+      // folder would still intersect the RootDropZone above it (only an
+      // `mt-2` margin separates their bounding boxes) and `over` would
+      // resolve to 'root' — silently re-routing the drop to "unassign"
+      // instead of "move into first folder". pointerWithin ignores the
+      // overlay's geometry and just asks "what's under the cursor?",
+      // which matches user intent for a vertical sidebar list.
+      collisionDetection={pointerWithin}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
       {/*
-        Section header — same uppercase tracking style as the Views
-        section header in ViewsSection.tsx (px-5 pt-4 mb-1 text-xs font-
-        semibold uppercase tracking-wider text-gray-400) so the two
-        section labels align in the sidebar.
+        Section header — matches the Views header typography in
+        ViewsSection.tsx (text-base font-semibold text-gray-900) so the
+        two category labels are the largest, darkest text in the sidebar.
       */}
       <div className="mb-1 mt-4 flex items-center justify-between px-5">
-        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Channels</p>
+        <p className="text-base font-semibold text-gray-900">Channels</p>
         <button
           type="button"
           onClick={() => setNewFolderOpen(true)}
@@ -207,7 +218,7 @@ export default function FolderSection({ channels, selectedChannelId }: Props) {
         {activeChannel != null ? (
           <div className="flex cursor-grabbing items-center justify-between gap-2 rounded-md border border-blue-300 bg-white px-3 py-1.5 text-sm font-medium text-blue-700 shadow-lg ring-2 ring-blue-200">
             <FolderInput className="h-3.5 w-3.5 shrink-0 text-blue-400" />
-            <span className="truncate">{activeChannel.name}</span>
+            <span className="truncate">{displayChannelName(activeChannel.name)}</span>
             {activeChannel.unreadCount > 0 && (
               <span className="ml-auto shrink-0 rounded-full bg-blue-600 px-1.5 py-0.5 text-xs font-medium text-white">
                 {activeChannel.unreadCount}
