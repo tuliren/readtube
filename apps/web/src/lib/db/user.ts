@@ -1,7 +1,7 @@
 import { clerkClient } from '@clerk/nextjs/server';
 import type { User as ClerkUser, UserJSON } from '@clerk/nextjs/server';
+import { prisma } from '@readtube/database';
 
-import { prisma } from '@/lib/db';
 import { isEmptyString } from '@/lib/string';
 
 function extractName(user: UserJSON): string {

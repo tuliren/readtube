@@ -1,7 +1,6 @@
 import { auth } from '@clerk/nextjs/server';
+import { prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
-
-import { prisma } from '@/lib/db';
 
 export async function DELETE(
   _request: NextRequest,

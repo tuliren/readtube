@@ -4,6 +4,7 @@ import { UserButton } from '@clerk/nextjs';
 import { useState } from 'react';
 import useSWR from 'swr';
 
+import { Toaster } from '@/components/ui/sonner';
 import type { ChannelData, VideoData } from '@/lib/types';
 
 import AddChannelModal from './AddChannelModal';
@@ -182,6 +183,7 @@ function InboxShellInner({
         onClose={() => setModalOpen(false)}
         onChannelAdded={handleChannelAdded}
       />
+      <Toaster />
     </div>
   );
 }

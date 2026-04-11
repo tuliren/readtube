@@ -1,7 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
+import { prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 
-import { prisma } from '@/lib/db';
 import { fetchSubtitleViaTranscriptApi } from '@/lib/subtitles';
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {

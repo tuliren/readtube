@@ -1,42 +1,62 @@
 'use client';
 
-import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 import type { VideoData } from '@/lib/types';
+
+import BulkActionBar from './BulkActionBar';
+import VideoRow from './VideoRow';
 
 interface Props {
   videos: VideoData[];
   selectedVideoId: string | null;
 }
 
-function relativeTime(dateStr: string): string {
-  const now = Date.now();
-  const then = new Date(dateStr).getTime();
-  const diffMs = now - then;
-  const diffSeconds = Math.floor(diffMs / 1000);
-  const diffMinutes = Math.floor(diffSeconds / 60);
-  const diffHours = Math.floor(diffMinutes / 60);
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffMinutes < 1) {
-    return 'just now';
-  }
-  if (diffHours < 1) {
-    return `${diffMinutes}m ago`;
-  }
-  if (diffDays < 1) {
-    return `${diffHours}h ago`;
-  }
-  if (diffDays < 30) {
-    return `${diffDays}d ago`;
-  }
-  return new Date(dateStr).toLocaleDateString();
-}
-
 export default function VideoList({ videos, selectedVideoId }: Props) {
   const searchParams = useSearchParams();
   const channelParam = searchParams.get('channel');
+
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+
+  // Prune selection to IDs still visible in the current feed. Fires whenever
+  // the `videos` prop changes — on channel switch, filter toggle, or bulk
+  // action that removes items from the feed. This avoids two bugs:
+  //   1. UX: BulkActionBar showing "N selected" for items the user can't
+  //      see after navigating away.
+  //   2. Safety: a stale id from a previously-viewed channel being sent to
+  //      /api/videos/bulk, where the ownership check would accept it and
+  //      silently mutate invisible videos.
+  // We prune instead of clearing so background SWR revalidations (which
+  // return a new array with the same ids) don't fight the user's in-
+  // progress selection.
+  useEffect(() => {
+    const visibleIds = new Set(videos.map((v) => v.id));
+    setCheckedIds((prev) => {
+      const prevIds = Array.from(prev);
+      const kept = prevIds.filter((id) => visibleIds.has(id));
+      if (kept.length === prevIds.length) {
+        return prev;
+      }
+      return new Set(kept);
+    });
+  }, [videos]);
+
+  function toggleChecked(id: string, next: boolean) {
+    setCheckedIds((prev) => {
+      const copy = new Set(prev);
+      if (next) {
+        copy.add(id);
+      } else {
+        copy.delete(id);
+      }
+      return copy;
+    });
+  }
+
+  function clearSelection() {
+    setCheckedIds(new Set());
+  }
 
   if (videos.length === 0) {
     return (
@@ -46,47 +66,31 @@ export default function VideoList({ videos, selectedVideoId }: Props) {
     );
   }
 
+  const selectedArray = Array.from(checkedIds);
+
   return (
-    <ul className="divide-y divide-gray-100">
-      {videos.map((video) => {
-        const isUnread = video.readAt === null;
-        const isSelected = selectedVideoId === video.id;
-        const href = channelParam
-          ? `/inbox/${video.id}?channel=${channelParam}`
-          : `/inbox/${video.id}`;
+    <div className="flex flex-col">
+      <BulkActionBar selectedIds={selectedArray} onClear={clearSelection} />
+      <ul className="divide-y divide-gray-100">
+        {videos.map((video) => {
+          const isSelected = selectedVideoId === video.id;
+          const href =
+            channelParam != null
+              ? `/inbox/${video.id}?channel=${channelParam}`
+              : `/inbox/${video.id}`;
 
-        return (
-          <li key={video.id}>
-            <Link
+          return (
+            <VideoRow
+              key={video.id}
+              video={video}
+              isSelected={isSelected}
+              isChecked={checkedIds.has(video.id)}
+              onToggleChecked={toggleChecked}
               href={href}
-              className={`block px-4 py-3 transition-colors ${
-                isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
-              }`}
-            >
-              <div className="flex items-start gap-2">
-                {isUnread && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-blue-600" />}
-                {!isUnread && <span className="mt-1.5 h-2 w-2 shrink-0" />}
-
-                <div className="min-w-0 flex-1">
-                  <p
-                    className={`truncate text-sm leading-snug ${
-                      isUnread ? 'font-semibold text-gray-900' : 'font-normal text-gray-600'
-                    }`}
-                  >
-                    {video.title}
-                  </p>
-                  <p className="mt-0.5 text-xs text-gray-400">
-                    {video.channelName} · {relativeTime(video.publishedAt)}
-                  </p>
-                  {video.description && (
-                    <p className="mt-1 line-clamp-1 text-xs text-gray-400">{video.description}</p>
-                  )}
-                </div>
-              </div>
-            </Link>
-          </li>
-        );
-      })}
-    </ul>
+            />
+          );
+        })}
+      </ul>
+    </div>
   );
 }
