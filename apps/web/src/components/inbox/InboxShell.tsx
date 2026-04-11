@@ -7,6 +7,7 @@ import useSWR from 'swr';
 
 import { Toaster } from '@/components/ui/sonner';
 import { encodeInboxQuery, extractInboxSearchParams, parseInboxQuery } from '@/lib/inbox/filter';
+import { resolveInboxView } from '@/lib/inbox/views';
 import type { ChannelData, VideoData } from '@/lib/types';
 
 import AddChannelModal from './AddChannelModal';
@@ -97,10 +98,30 @@ export default function InboxShell({
 
   const showEmptyState = channels.length === 0;
 
+  // Resolve the active view from the URL so the header label and the
+  // empty-state copy can change with the filter the user is in.
+  // Channel selection still wins over the named buckets — if a user
+  // is narrowing to a single channel within Starred, the header
+  // shows the channel name, not "Starred".
+  const inboxQuery = useMemo(
+    () => parseInboxQuery(extractInboxSearchParams(searchParams)),
+    [searchParams]
+  );
+  const activeView = useMemo(() => resolveInboxView(inboxQuery), [inboxQuery]);
+
   const selectedChannel =
     selectedChannelId != null ? (channels.find((c) => c.id === selectedChannelId) ?? null) : null;
-  const headerName = selectedChannel != null ? selectedChannel.name : 'Inbox';
+  const headerName =
+    selectedChannel != null ? selectedChannel.name : (activeView?.label ?? 'Inbox');
   const headerUnread = selectedChannel != null ? selectedChannel.unreadCount : totalUnread;
+  // Empty-state copy follows the same precedence: a channel narrow
+  // gets a channel-specific message; otherwise the active named view
+  // owns the copy; otherwise (free-text search, tags, etc.) we fall
+  // back to a generic "no matches" line.
+  const emptyMessage =
+    selectedChannel != null
+      ? `No videos in ${selectedChannel.name} yet.`
+      : (activeView?.emptyMessage ?? 'No videos match the current filters.');
 
   return (
     <KeyboardShortcutsProvider>
@@ -113,6 +134,7 @@ export default function InboxShell({
           totalUnread={totalUnread}
           headerName={headerName}
           headerUnread={headerUnread}
+          emptyMessage={emptyMessage}
           showEmptyState={showEmptyState}
           modalOpen={modalOpen}
           setModalOpen={setModalOpen}
@@ -133,6 +155,7 @@ interface InnerProps {
   totalUnread: number;
   headerName: string;
   headerUnread: number;
+  emptyMessage: string;
   showEmptyState: boolean;
   modalOpen: boolean;
   setModalOpen: (open: boolean) => void;
@@ -148,6 +171,7 @@ function InboxShellInner({
   totalUnread,
   headerName,
   headerUnread,
+  emptyMessage,
   showEmptyState,
   modalOpen,
   setModalOpen,
@@ -207,7 +231,11 @@ function InboxShellInner({
               unreadCount={headerUnread}
             />
             <div className="flex-1 overflow-y-auto">
-              <VideoList videos={videos} selectedVideoId={selectedVideoId} />
+              <VideoList
+                videos={videos}
+                selectedVideoId={selectedVideoId}
+                emptyMessage={emptyMessage}
+              />
             </div>
           </div>
         )}

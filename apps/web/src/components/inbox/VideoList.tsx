@@ -11,9 +11,14 @@ import VideoRow from './VideoRow';
 interface Props {
   videos: VideoData[];
   selectedVideoId: string | null;
+  /** Copy to render when `videos` is empty. The parent owns this so
+   *  the message can change with the active filter (Starred → "No
+   *  starred videos yet…", channel narrow → "No videos in <name>
+   *  yet.", etc.) instead of always saying "No videos yet". */
+  emptyMessage: string;
 }
 
-export default function VideoList({ videos, selectedVideoId }: Props) {
+export default function VideoList({ videos, selectedVideoId, emptyMessage }: Props) {
   const searchParams = useSearchParams();
 
   // Build the "filter context" we want to forward into the reader as
@@ -78,7 +83,7 @@ export default function VideoList({ videos, selectedVideoId }: Props) {
   if (videos.length === 0) {
     return (
       <div className="flex flex-1 items-center justify-center p-8 text-center text-sm text-gray-500">
-        No videos yet. New videos will appear here after the next refresh.
+        {emptyMessage}
       </div>
     );
   }

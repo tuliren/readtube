@@ -118,73 +118,100 @@ export default function VideoReader({ video }: Props) {
           </blockquote>
         )}
 
-        {/* Tabs — Summary first because it's the cheapest scannable
-            view, then Article (the long-form rewrite), then Transcript
-            (the raw firehose). Each tab carries a small filled dot
-            when its corresponding artifact has already been generated
-            for this video, so the user can tell at a glance which
-            tabs have content waiting versus which would require a
-            generate / fetch round-trip. */}
-        <div className="mt-8 border-b border-gray-200">
-          <div className="flex gap-6">
-            {TABS.map((tab) => {
-              const generated =
-                tab.key === 'summary'
-                  ? video.hasSummary
-                  : tab.key === 'article'
-                    ? video.hasArticle
-                    : video.hasTranscript;
-              return (
-                <button
-                  key={tab.key}
-                  onClick={() => setActiveTab(tab.key)}
-                  className={`-mb-px inline-flex items-center gap-1.5 border-b-2 px-1 py-3 text-sm font-medium transition-colors ${
-                    activeTab === tab.key
-                      ? 'border-gray-900 text-gray-900'
-                      : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  {tab.label}
-                  {generated && (
-                    <span
-                      className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                        activeTab === tab.key ? 'bg-gray-900' : 'bg-blue-500'
+        {transcriptStatus === 'unavailable' ? (
+          // Transcript is sticky-unavailable for this video — there's
+          // nothing the AI tabs can produce. Skip the tab bar entirely
+          // and render a single "no transcript" notice with a YouTube
+          // link, so the user has one obvious next step instead of
+          // three tabs that all show the same message.
+          <div className="mt-8 rounded-md border border-amber-200 bg-amber-50 px-4 py-6 text-center">
+            <p className="text-sm font-medium text-amber-800">
+              No transcript is available for this video
+            </p>
+            <p className="mt-1 text-xs text-amber-700">
+              Without captions there&rsquo;s nothing for the summary, article, or transcript tabs to
+              work with.
+            </p>
+            <a
+              href={watchUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:underline"
+            >
+              Watch on YouTube ↗
+            </a>
+          </div>
+        ) : (
+          <>
+            {/* Tabs — Summary first because it's the cheapest scannable
+                view, then Article (the long-form rewrite), then Transcript
+                (the raw firehose). Each tab carries a small dot:
+                  - blue when the corresponding artifact has been generated
+                  - red when no content exists yet for that tab
+                The dot color is stable across active/inactive states so
+                the signal doesn't depend on which tab the user clicked. */}
+            <div className="mt-8 border-b border-gray-200">
+              <div className="flex gap-6">
+                {TABS.map((tab) => {
+                  const generated =
+                    tab.key === 'summary'
+                      ? video.hasSummary
+                      : tab.key === 'article'
+                        ? video.hasArticle
+                        : video.hasTranscript;
+                  const dotColor = generated ? 'bg-blue-500' : 'bg-red-500';
+                  const dotTitle = generated
+                    ? `${tab.label} already generated`
+                    : `${tab.label} not generated yet`;
+                  return (
+                    <button
+                      key={tab.key}
+                      onClick={() => setActiveTab(tab.key)}
+                      className={`-mb-px inline-flex items-center gap-1.5 border-b-2 px-1 py-3 text-sm font-medium transition-colors ${
+                        activeTab === tab.key
+                          ? 'border-gray-900 text-gray-900'
+                          : 'border-transparent text-gray-500 hover:text-gray-700'
                       }`}
-                      title={`${tab.label} already generated`}
-                      aria-label={`${tab.label} already generated`}
-                    />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+                    >
+                      {tab.label}
+                      <span
+                        className={`h-1.5 w-1.5 shrink-0 rounded-full ${dotColor}`}
+                        title={dotTitle}
+                        aria-label={dotTitle}
+                      />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-        {/* Tab content */}
-        <div className="mt-6">
-          <div className={activeTab === 'summary' ? '' : 'hidden'}>
-            <SummaryReader
-              videoDbId={video.id}
-              transcriptStatus={transcriptStatus}
-              onTranscriptStatusChange={setTranscriptStatus}
-            />
-          </div>
-          <div className={activeTab === 'article' ? '' : 'hidden'}>
-            <ArticleReader
-              videoDbId={video.id}
-              transcriptStatus={transcriptStatus}
-              onTranscriptStatusChange={setTranscriptStatus}
-            />
-          </div>
-          <div className={activeTab === 'transcript' ? '' : 'hidden'}>
-            <TranscriptReader
-              videoDbId={video.id}
-              sourceId={video.sourceId}
-              transcriptStatus={transcriptStatus}
-              onTranscriptStatusChange={setTranscriptStatus}
-            />
-          </div>
-        </div>
+            {/* Tab content */}
+            <div className="mt-6">
+              <div className={activeTab === 'summary' ? '' : 'hidden'}>
+                <SummaryReader
+                  videoDbId={video.id}
+                  transcriptStatus={transcriptStatus}
+                  onTranscriptStatusChange={setTranscriptStatus}
+                />
+              </div>
+              <div className={activeTab === 'article' ? '' : 'hidden'}>
+                <ArticleReader
+                  videoDbId={video.id}
+                  transcriptStatus={transcriptStatus}
+                  onTranscriptStatusChange={setTranscriptStatus}
+                />
+              </div>
+              <div className={activeTab === 'transcript' ? '' : 'hidden'}>
+                <TranscriptReader
+                  videoDbId={video.id}
+                  sourceId={video.sourceId}
+                  transcriptStatus={transcriptStatus}
+                  onTranscriptStatusChange={setTranscriptStatus}
+                />
+              </div>
+            </div>
+          </>
+        )}
       </article>
     </div>
   );
