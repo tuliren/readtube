@@ -1,4 +1,4 @@
-import { PrismaClient } from '@repo/database';
+import { PrismaClient } from '@readtube/database';
 
 /**
  * Import '@tests/integration-tests' in integration test files,

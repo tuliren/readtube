@@ -1,5 +1,6 @@
 'use client';
 
+import { SignInButton, useAuth } from '@clerk/nextjs';
 import { Dialog, DialogPanel } from '@headlessui/react';
 import { Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
@@ -8,14 +9,18 @@ import { useState } from 'react';
 import { Logo } from '@/components/Logo';
 import { TITLE } from '@/constants';
 
-const navigation = [
-  { name: 'Home', href: '/' },
-  // { name: 'Pricing', href: '#pricing' },
-  // { name: 'FAQs', href: '#faqs' },
-];
-
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { isSignedIn } = useAuth();
+
+  const navigation = [
+    { name: 'Home', href: '/' },
+    ...(isSignedIn ? [{ name: 'Inbox', href: '/inbox' }] : []),
+  ];
+
+  const linkClass = 'font-semibold leading-6 text-slate-700';
+  const mobileLinkClass =
+    '-mx-3 block rounded-lg px-3 py-2 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50';
 
   return (
     <header className="bg-transparent">
@@ -31,14 +36,15 @@ export default function Header() {
         </div>
         <div className="hidden text-gray-600 hover:text-gray-900 lg:flex lg:gap-x-12">
           {navigation.map((item) => (
-            <Link
-              key={item.name}
-              href={item.href}
-              className="font-semibold leading-6 text-slate-700"
-            >
+            <Link key={item.name} href={item.href} className={linkClass}>
               {item.name}
             </Link>
           ))}
+          {!isSignedIn && (
+            <SignInButton mode="modal">
+              <button className={linkClass}>Sign in</button>
+            </SignInButton>
+          )}
         </div>
         <div className="flex lg:hidden">
           <button
@@ -73,14 +79,15 @@ export default function Header() {
             <div className="-my-6 divide-y divide-gray-500/10">
               <div className="space-y-2 py-6">
                 {navigation.map((item) => (
-                  <Link
-                    key={item.name}
-                    href={item.href}
-                    className="-mx-3 block rounded-lg px-3 py-2 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50"
-                  >
+                  <Link key={item.name} href={item.href} className={mobileLinkClass}>
                     {item.name}
                   </Link>
                 ))}
+                {!isSignedIn && (
+                  <SignInButton mode="modal">
+                    <button className={`w-full text-left ${mobileLinkClass}`}>Sign in</button>
+                  </SignInButton>
+                )}
               </div>
             </div>
           </div>

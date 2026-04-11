@@ -1,4 +1,4 @@
-const reactInternalConfig = require('@repo/eslint-config/react-internal.js');
+const reactInternalConfig = require('@readtube/eslint-config/react-internal.js');
 const tsparser = require('@typescript-eslint/parser');
 const globals = require('globals');
 const path = require('node:path');

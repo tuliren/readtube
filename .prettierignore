@@ -8,6 +8,7 @@ node_modules
 
 # Generated files
 packages/database/generated
+packages/database/prisma/migrations
 
 # Ignore all HTML files:
 **/*.html
