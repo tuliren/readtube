@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { requireUserId } from '@/lib/auth';
+import { prisma } from '@/lib/db';
 import { assertUserCanTouchVideo, saveVideo, unsaveVideo } from '@/lib/inbox/triageActions';
 
 interface Params {
@@ -15,12 +16,12 @@ export async function POST(_request: Request, { params }: Params) {
   const userId = authResult;
   const { id } = await params;
 
-  const ok = await assertUserCanTouchVideo({ userId, videoId: id });
+  const ok = await assertUserCanTouchVideo(prisma, { userId, videoId: id });
   if (!ok) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  await saveVideo(userId, id);
+  await saveVideo(prisma, userId, id);
   return NextResponse.json({ saved: true });
 }
 
@@ -32,6 +33,6 @@ export async function DELETE(_request: Request, { params }: Params) {
   const userId = authResult;
   const { id } = await params;
 
-  await unsaveVideo(userId, id);
+  await unsaveVideo(prisma, userId, id);
   return NextResponse.json({ saved: false });
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { requireUserId } from '@/lib/auth';
+import { prisma } from '@/lib/db';
 import { archiveVideo, assertUserCanTouchVideo, unarchiveVideo } from '@/lib/inbox/triageActions';
 
 interface Params {
@@ -15,12 +16,12 @@ export async function POST(_request: Request, { params }: Params) {
   const userId = authResult;
   const { id } = await params;
 
-  const ok = await assertUserCanTouchVideo({ userId, videoId: id });
+  const ok = await assertUserCanTouchVideo(prisma, { userId, videoId: id });
   if (!ok) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  await archiveVideo(userId, id);
+  await archiveVideo(prisma, userId, id);
   return NextResponse.json({ archived: true });
 }
 
@@ -32,6 +33,6 @@ export async function DELETE(_request: Request, { params }: Params) {
   const userId = authResult;
   const { id } = await params;
 
-  await unarchiveVideo(userId, id);
+  await unarchiveVideo(prisma, userId, id);
   return NextResponse.json({ archived: false });
 }

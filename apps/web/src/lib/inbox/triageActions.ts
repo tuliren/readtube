@@ -1,10 +1,17 @@
-import { prisma } from '@/lib/db';
+import type { PrismaClient } from '@readtube/database';
 
 /**
  * Shared helpers for the star/save/archive endpoints. Each toggle delete
  * is a thin wrapper around `deleteMany` so repeated DELETE requests are
  * idempotent (not 404ing on second call), and each create uses the
  * user+video unique constraint for idempotency on the POST side.
+ *
+ * Every function takes `prisma` as its first argument instead of pulling
+ * the prod singleton from `@/lib/db`. This mirrors the pattern already
+ * used in `subscriptions.ts` and is the only way integration tests can
+ * hit the testcontainers-backed database — if we imported the prod
+ * singleton here, it would bind to the real `DATABASE_URL` at module
+ * load time, before `beforeAll` can swap in the testcontainers URL.
  */
 
 interface AssertArgs {
@@ -17,7 +24,10 @@ interface AssertArgs {
  * given video. Used by every triage endpoint to prevent IDOR before
  * touching state. A single JOIN, no separate findFirst round-trips.
  */
-export async function assertUserCanTouchVideo({ userId, videoId }: AssertArgs): Promise<boolean> {
+export async function assertUserCanTouchVideo(
+  prisma: PrismaClient,
+  { userId, videoId }: AssertArgs
+): Promise<boolean> {
   const row = await prisma.video.findFirst({
     where: {
       id: videoId,
@@ -28,7 +38,11 @@ export async function assertUserCanTouchVideo({ userId, videoId }: AssertArgs): 
   return row != null;
 }
 
-export async function starVideo(userId: string, videoId: string): Promise<void> {
+export async function starVideo(
+  prisma: PrismaClient,
+  userId: string,
+  videoId: string
+): Promise<void> {
   await prisma.videoStar.upsert({
     where: { video_star_unique_user_video: { user_id: userId, video_id: videoId } },
     create: { user_id: userId, video_id: videoId },
@@ -36,13 +50,21 @@ export async function starVideo(userId: string, videoId: string): Promise<void> 
   });
 }
 
-export async function unstarVideo(userId: string, videoId: string): Promise<void> {
+export async function unstarVideo(
+  prisma: PrismaClient,
+  userId: string,
+  videoId: string
+): Promise<void> {
   await prisma.videoStar.deleteMany({
     where: { user_id: userId, video_id: videoId },
   });
 }
 
-export async function saveVideo(userId: string, videoId: string): Promise<void> {
+export async function saveVideo(
+  prisma: PrismaClient,
+  userId: string,
+  videoId: string
+): Promise<void> {
   await prisma.videoSave.upsert({
     where: { video_save_unique_user_video: { user_id: userId, video_id: videoId } },
     create: { user_id: userId, video_id: videoId },
@@ -50,13 +72,21 @@ export async function saveVideo(userId: string, videoId: string): Promise<void> 
   });
 }
 
-export async function unsaveVideo(userId: string, videoId: string): Promise<void> {
+export async function unsaveVideo(
+  prisma: PrismaClient,
+  userId: string,
+  videoId: string
+): Promise<void> {
   await prisma.videoSave.deleteMany({
     where: { user_id: userId, video_id: videoId },
   });
 }
 
-export async function archiveVideo(userId: string, videoId: string): Promise<void> {
+export async function archiveVideo(
+  prisma: PrismaClient,
+  userId: string,
+  videoId: string
+): Promise<void> {
   await prisma.videoArchive.upsert({
     where: { video_archive_unique_user_video: { user_id: userId, video_id: videoId } },
     create: { user_id: userId, video_id: videoId },
@@ -64,13 +94,18 @@ export async function archiveVideo(userId: string, videoId: string): Promise<voi
   });
 }
 
-export async function unarchiveVideo(userId: string, videoId: string): Promise<void> {
+export async function unarchiveVideo(
+  prisma: PrismaClient,
+  userId: string,
+  videoId: string
+): Promise<void> {
   await prisma.videoArchive.deleteMany({
     where: { user_id: userId, video_id: videoId },
   });
 }
 
 export async function snoozeVideo(
+  prisma: PrismaClient,
   userId: string,
   videoId: string,
   snoozeUntil: Date
@@ -82,7 +117,11 @@ export async function snoozeVideo(
   });
 }
 
-export async function unsnoozeVideo(userId: string, videoId: string): Promise<void> {
+export async function unsnoozeVideo(
+  prisma: PrismaClient,
+  userId: string,
+  videoId: string
+): Promise<void> {
   await prisma.videoSnooze.deleteMany({
     where: { user_id: userId, video_id: videoId },
   });
@@ -105,6 +144,7 @@ export type BulkAction =
   | { type: 'snooze'; snoozeUntil: string };
 
 export async function applyBulk(
+  prisma: PrismaClient,
   userId: string,
   videoIds: string[],
   action: BulkAction
@@ -186,7 +226,7 @@ export async function applyBulk(
       // untouched, so loop upserts here to preserve the "update the date"
       // behavior a user expects from re-snoozing.
       for (const id of ownedIds) {
-        await snoozeVideo(userId, id, until);
+        await snoozeVideo(prisma, userId, id, until);
       }
       return { affected: ownedIds.length };
     }

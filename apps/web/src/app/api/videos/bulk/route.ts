@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { requireUserId } from '@/lib/auth';
+import { prisma } from '@/lib/db';
 import { type BulkAction, applyBulk } from '@/lib/inbox/triageActions';
 
 interface Body {
@@ -61,6 +62,6 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const result = await applyBulk(userId, videoIds, action);
+  const result = await applyBulk(prisma, userId, videoIds, action);
   return NextResponse.json(result);
 }

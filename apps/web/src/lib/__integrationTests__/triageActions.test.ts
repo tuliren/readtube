@@ -13,11 +13,6 @@ import {
   unstarVideo,
 } from '@/lib/inbox/triageActions';
 
-// The prod module pulls the shared `prisma` singleton, which we rebind to
-// testPrisma at setup time via `@tests/integration-tests`. Keep the alias
-// local for readability.
-const db = global.testPrisma;
-
 async function seedUserVideo(opts: {
   userSourceId: string;
   channelSourceId: string;
@@ -25,7 +20,7 @@ async function seedUserVideo(opts: {
 }) {
   const { userSourceId, channelSourceId, videoSourceId } = opts;
 
-  await db.user.create({
+  await global.testPrisma.user.create({
     data: {
       source_id: userSourceId,
       name: 'Test User',
@@ -33,7 +28,7 @@ async function seedUserVideo(opts: {
     },
   });
 
-  const channel = await db.channel.create({
+  const channel = await global.testPrisma.channel.create({
     data: {
       source_id: channelSourceId,
       name: `Channel ${channelSourceId}`,
@@ -41,7 +36,7 @@ async function seedUserVideo(opts: {
     },
   });
 
-  const video = await db.video.create({
+  const video = await global.testPrisma.video.create({
     data: {
       channel_id: channel.id,
       source_id: videoSourceId,
@@ -50,7 +45,7 @@ async function seedUserVideo(opts: {
     },
   });
 
-  await db.userSubscription.create({
+  await global.testPrisma.userSubscription.create({
     data: { user_id: userSourceId, channel_id: channel.id },
   });
 
@@ -58,15 +53,15 @@ async function seedUserVideo(opts: {
 }
 
 beforeEach(async () => {
-  await db.userVideoConsumption.deleteMany();
-  await db.videoStar.deleteMany();
-  await db.videoSave.deleteMany();
-  await db.videoArchive.deleteMany();
-  await db.videoSnooze.deleteMany();
-  await db.userSubscription.deleteMany();
-  await db.video.deleteMany();
-  await db.channel.deleteMany();
-  await db.user.deleteMany();
+  await global.testPrisma.userVideoConsumption.deleteMany();
+  await global.testPrisma.videoStar.deleteMany();
+  await global.testPrisma.videoSave.deleteMany();
+  await global.testPrisma.videoArchive.deleteMany();
+  await global.testPrisma.videoSnooze.deleteMany();
+  await global.testPrisma.userSubscription.deleteMany();
+  await global.testPrisma.video.deleteMany();
+  await global.testPrisma.channel.deleteMany();
+  await global.testPrisma.user.deleteMany();
 });
 
 describe('assertUserCanTouchVideo', () => {
@@ -77,7 +72,10 @@ describe('assertUserCanTouchVideo', () => {
       videoSourceId: 'vid1',
     });
 
-    const ok = await assertUserCanTouchVideo({ userId: 'user_owner', videoId });
+    const ok = await assertUserCanTouchVideo(global.testPrisma, {
+      userId: 'user_owner',
+      videoId,
+    });
     expect(ok).toBe(true);
   });
 
@@ -88,11 +86,14 @@ describe('assertUserCanTouchVideo', () => {
       videoSourceId: 'vid1',
     });
 
-    await db.user.create({
+    await global.testPrisma.user.create({
       data: { source_id: 'user_intruder', name: 'Intruder', email: 'intruder@example.com' },
     });
 
-    const ok = await assertUserCanTouchVideo({ userId: 'user_intruder', videoId });
+    const ok = await assertUserCanTouchVideo(global.testPrisma, {
+      userId: 'user_intruder',
+      videoId,
+    });
     expect(ok).toBe(false);
   });
 });
@@ -104,21 +105,21 @@ describe('toggles are idempotent', () => {
       set: starVideo,
       unset: unstarVideo,
       count: (userId: string, videoId: string) =>
-        db.videoStar.count({ where: { user_id: userId, video_id: videoId } }),
+        global.testPrisma.videoStar.count({ where: { user_id: userId, video_id: videoId } }),
     },
     {
       action: 'save',
       set: saveVideo,
       unset: unsaveVideo,
       count: (userId: string, videoId: string) =>
-        db.videoSave.count({ where: { user_id: userId, video_id: videoId } }),
+        global.testPrisma.videoSave.count({ where: { user_id: userId, video_id: videoId } }),
     },
     {
       action: 'archive',
       set: archiveVideo,
       unset: unarchiveVideo,
       count: (userId: string, videoId: string) =>
-        db.videoArchive.count({ where: { user_id: userId, video_id: videoId } }),
+        global.testPrisma.videoArchive.count({ where: { user_id: userId, video_id: videoId } }),
     },
   ])('$action set twice and unset twice is a no-op', async ({ set, unset, count }) => {
     const { videoId } = await seedUserVideo({
@@ -127,12 +128,12 @@ describe('toggles are idempotent', () => {
       videoSourceId: 'vid1',
     });
 
-    await set('user1', videoId);
-    await set('user1', videoId);
+    await set(global.testPrisma, 'user1', videoId);
+    await set(global.testPrisma, 'user1', videoId);
     expect(await count('user1', videoId)).toBe(1);
 
-    await unset('user1', videoId);
-    await unset('user1', videoId);
+    await unset(global.testPrisma, 'user1', videoId);
+    await unset(global.testPrisma, 'user1', videoId);
     expect(await count('user1', videoId)).toBe(0);
   });
 });
@@ -148,10 +149,12 @@ describe('snoozeVideo', () => {
     const first = new Date('2026-02-01T00:00:00Z');
     const second = new Date('2026-03-01T00:00:00Z');
 
-    await snoozeVideo('user1', videoId, first);
-    await snoozeVideo('user1', videoId, second);
+    await snoozeVideo(global.testPrisma, 'user1', videoId, first);
+    await snoozeVideo(global.testPrisma, 'user1', videoId, second);
 
-    const row = await db.videoSnooze.findFirst({ where: { user_id: 'user1', video_id: videoId } });
+    const row = await global.testPrisma.videoSnooze.findFirst({
+      where: { user_id: 'user1', video_id: videoId },
+    });
     expect(row?.snooze_until.toISOString()).toEqual(second.toISOString());
   });
 
@@ -162,10 +165,12 @@ describe('snoozeVideo', () => {
       videoSourceId: 'vid1',
     });
 
-    await snoozeVideo('user1', videoId, new Date('2026-02-01T00:00:00Z'));
-    await unsnoozeVideo('user1', videoId);
+    await snoozeVideo(global.testPrisma, 'user1', videoId, new Date('2026-02-01T00:00:00Z'));
+    await unsnoozeVideo(global.testPrisma, 'user1', videoId);
 
-    const count = await db.videoSnooze.count({ where: { user_id: 'user1', video_id: videoId } });
+    const count = await global.testPrisma.videoSnooze.count({
+      where: { user_id: 'user1', video_id: videoId },
+    });
     expect(count).toBe(0);
   });
 });
@@ -179,10 +184,10 @@ describe('applyBulk', () => {
     });
 
     // A second channel + video the owner does NOT subscribe to
-    const otherChannel = await db.channel.create({
+    const otherChannel = await global.testPrisma.channel.create({
       data: { source_id: 'chan2', name: 'Other', rss_url: 'https://example.com/2.xml' },
     });
-    const otherVideo = await db.video.create({
+    const otherVideo = await global.testPrisma.video.create({
       data: {
         channel_id: otherChannel.id,
         source_id: 'vid_other',
@@ -191,10 +196,12 @@ describe('applyBulk', () => {
       },
     });
 
-    const result = await applyBulk('owner', [owner.videoId, otherVideo.id], { type: 'star' });
+    const result = await applyBulk(global.testPrisma, 'owner', [owner.videoId, otherVideo.id], {
+      type: 'star',
+    });
     expect(result.affected).toBe(1);
 
-    const stars = await db.videoStar.findMany({ where: { user_id: 'owner' } });
+    const stars = await global.testPrisma.videoStar.findMany({ where: { user_id: 'owner' } });
     expect(stars.map((s) => s.video_id)).toEqual([owner.videoId]);
   });
 
@@ -205,15 +212,15 @@ describe('applyBulk', () => {
       videoSourceId: 'vid1',
     });
 
-    await applyBulk('user1', [videoId], { type: 'mark_read' });
-    const count = await db.userVideoConsumption.count({
+    await applyBulk(global.testPrisma, 'user1', [videoId], { type: 'mark_read' });
+    const count = await global.testPrisma.userVideoConsumption.count({
       where: { user_id: 'user1', video_id: videoId },
     });
     expect(count).toBe(1);
   });
 
   it('is a no-op for empty videoIds', async () => {
-    const result = await applyBulk('user1', [], { type: 'star' });
+    const result = await applyBulk(global.testPrisma, 'user1', [], { type: 'star' });
     expect(result.affected).toBe(0);
   });
 });

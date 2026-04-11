@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { requireUserId } from '@/lib/auth';
+import { prisma } from '@/lib/db';
 import { assertUserCanTouchVideo, starVideo, unstarVideo } from '@/lib/inbox/triageActions';
 
 interface Params {
@@ -15,12 +16,12 @@ export async function POST(_request: Request, { params }: Params) {
   const userId = authResult;
   const { id } = await params;
 
-  const ok = await assertUserCanTouchVideo({ userId, videoId: id });
+  const ok = await assertUserCanTouchVideo(prisma, { userId, videoId: id });
   if (!ok) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  await starVideo(userId, id);
+  await starVideo(prisma, userId, id);
   return NextResponse.json({ starred: true });
 }
 
@@ -34,6 +35,6 @@ export async function DELETE(_request: Request, { params }: Params) {
 
   // Idempotent: we don't bother checking ownership before a no-op delete.
   // deleteMany is scoped to user_id, so there's no IDOR risk.
-  await unstarVideo(userId, id);
+  await unstarVideo(prisma, userId, id);
   return NextResponse.json({ starred: false });
 }

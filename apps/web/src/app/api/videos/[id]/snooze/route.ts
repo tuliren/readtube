@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { requireUserId } from '@/lib/auth';
+import { prisma } from '@/lib/db';
 import { assertUserCanTouchVideo, snoozeVideo, unsnoozeVideo } from '@/lib/inbox/triageActions';
 
 interface Params {
@@ -33,12 +34,12 @@ export async function POST(request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'snoozeUntil must be in the future' }, { status: 400 });
   }
 
-  const ok = await assertUserCanTouchVideo({ userId, videoId: id });
+  const ok = await assertUserCanTouchVideo(prisma, { userId, videoId: id });
   if (!ok) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  await snoozeVideo(userId, id, until);
+  await snoozeVideo(prisma, userId, id, until);
   return NextResponse.json({ snoozedUntil: until.toISOString() });
 }
 
@@ -50,6 +51,6 @@ export async function DELETE(_request: NextRequest, { params }: Params) {
   const userId = authResult;
   const { id } = await params;
 
-  await unsnoozeVideo(userId, id);
+  await unsnoozeVideo(prisma, userId, id);
   return NextResponse.json({ snoozedUntil: null });
 }
