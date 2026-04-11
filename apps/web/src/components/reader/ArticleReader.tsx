@@ -98,6 +98,14 @@ export default function ArticleReader({
         return;
       }
 
+      // Reaching this point means the server's ensureTranscript call
+      // already succeeded (otherwise it would have returned 410
+      // before any stream body) — the transcript is now cached.
+      // Broadcast 'present' so the Transcript tab loads it
+      // automatically the moment the user switches over, instead of
+      // still showing the Fetch button.
+      onTranscriptStatusChange('present');
+
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';

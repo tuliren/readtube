@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import type { TranscriptSegment } from '@/lib/subtitles/types';
 import { formatTimestamp, groupTranscriptSegments } from '@/lib/youtube/transcript';
@@ -59,6 +59,18 @@ export default function TranscriptReader({
   const [segments, setSegments] = useState<TranscriptSegment[] | null>(null);
   const [localStatus, setLocalStatus] = useState<LocalStatus>('checking');
 
+  // Track which videoDbId we already have segments for. The effect
+  // depends on transcriptStatus so an external flip from the Summary
+  // or Article tab (e.g., they ran ensureTranscript on the user's
+  // first Generate click and broadcast 'present') re-runs the effect
+  // automatically. Without this ref, it would also re-run after our
+  // OWN successful initial fetch — broadcasting + a re-fetch +
+  // localStatus flickering loaded → checking → loaded. The ref lets
+  // the effect bail out on subsequent runs once we've loaded data
+  // for this video, while still allowing a fresh fetch when the
+  // status flips from notCached to present.
+  const loadedForVideoDbIdRef = useRef<string | null>(null);
+
   useEffect(() => {
     // If the parent already knows the transcript is unavailable
     // (server flag from SSR or set by another tab earlier this
@@ -68,14 +80,29 @@ export default function TranscriptReader({
     if (transcriptStatus === 'unavailable') {
       setLocalStatus('notCached');
       setSegments(null);
+      loadedForVideoDbIdRef.current = null;
       return;
     }
 
+    // Already have segments for this video — nothing to do. This is
+    // the path that handles the external 'present' broadcast from
+    // Summary/Article AFTER our initial GET already loaded the data
+    // (the cached-transcript happy path). Without this guard the
+    // user would see the transcript pane briefly flicker through
+    // the skeleton on every successful Summary/Article generate.
+    if (loadedForVideoDbIdRef.current === videoDbId) {
+      return;
+    }
+
+    let cancelled = false;
     setLocalStatus('checking');
     setSegments(null);
 
     fetch(`/api/videos/${videoDbId}/transcript`)
       .then(async (res) => {
+        if (cancelled) {
+          return;
+        }
         // 410 Gone is the canonical "we already tried and there's
         // nothing here" signal — flip the shared status so Summary
         // and Article also surface the unavailable state without
@@ -86,6 +113,10 @@ export default function TranscriptReader({
           return;
         }
         if (res.status === 404) {
+          // Genuine cache miss — leave the status alone so the user
+          // can click Fetch (or kick off a Summary/Article generate
+          // that will auto-fetch via ensureTranscript). Don't
+          // broadcast 'present' here — we don't have the data yet.
           setLocalStatus('notCached');
           return;
         }
@@ -96,9 +127,24 @@ export default function TranscriptReader({
         const data = (await res.json()) as { segments: TranscriptSegment[] };
         setSegments(data.segments);
         setLocalStatus('loaded');
-        onTranscriptStatusChange('present');
+        // Set the ref BEFORE any setState that could trigger a
+        // re-render so the next pass through the effect sees it.
+        loadedForVideoDbIdRef.current = videoDbId;
+        // Deliberately do NOT broadcast 'present' here. The other
+        // tabs only care about the unavailable case; broadcasting
+        // 'present' would re-trigger this effect and waste a fetch.
+        // Summary/Article will broadcast 'present' themselves when
+        // they need to (after a successful generate).
       })
-      .catch(() => setLocalStatus('error'));
+      .catch(() => {
+        if (!cancelled) {
+          setLocalStatus('error');
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [videoDbId, transcriptStatus, onTranscriptStatusChange]);
 
   async function handleFetch() {
@@ -117,6 +163,10 @@ export default function TranscriptReader({
       const data = (await res.json()) as { segments: TranscriptSegment[] };
       setSegments(data.segments);
       setLocalStatus('loaded');
+      // Set the ref BEFORE the broadcast so when the effect re-runs
+      // (because transcriptStatus prop changes from unknown→present)
+      // it sees the loaded ref and bails out.
+      loadedForVideoDbIdRef.current = videoDbId;
       onTranscriptStatusChange('present');
     } catch {
       setLocalStatus('error');
