@@ -7,8 +7,10 @@ import type { InboxQuery } from '@/lib/types';
 
 import { useInboxQuery } from './useInboxQuery';
 
+type ViewKey = 'unread' | 'starred' | 'saved' | 'snoozed' | 'archived';
+
 interface Chip {
-  key: keyof Pick<InboxQuery, 'unread' | 'starred' | 'saved' | 'snoozed' | 'archived'>;
+  key: ViewKey;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
 }
@@ -21,10 +23,31 @@ const CHIPS: Chip[] = [
   { key: 'archived', label: 'Archived', icon: Archive },
 ];
 
+// Every key the chips manage as a view. Clicking a chip clears all of
+// these and sets just the clicked one (or clears everything if the
+// clicked chip was already active). includeSnoozed is in here because it
+// conflicts semantically with `snoozed` — you shouldn't be in both
+// "show-only-snoozed" and "mix-snoozed-into-feed" modes at once.
+const VIEW_KEYS: (keyof InboxQuery)[] = [
+  'unread',
+  'starred',
+  'saved',
+  'snoozed',
+  'archived',
+  'includeSnoozed',
+];
+
 /**
- * Filter chip row. Each chip is a toggle on the URL-backed InboxQuery.
- * Defaults (all off) match the default inbox view; toggling a chip
- * writes its key=true to the query string, toggling off strips the key.
+ * Filter chip row. Each chip represents a preset view. Chips are
+ * RADIO-EXCLUSIVE among the view keys: clicking one clears every other
+ * view chip and activates the clicked one, so you can't end up in an
+ * incoherent Starred+Archived intersection. Clicking an already-active
+ * chip clears everything (back to the default view).
+ *
+ * Orthogonal filters (`q`, `channelId`, `folderId`, `tagIds`, `from/to`,
+ * `sort`) are intentionally preserved — you legitimately want
+ * "Unread within my 'rust' search" or "Starred within the Tech folder",
+ * and those compose cleanly with view selection.
  *
  * The chip set is intentionally small — advanced filters (tag, date
  * range, folder) live in the command palette (Stream D) rather than
@@ -32,6 +55,22 @@ const CHIPS: Chip[] = [
  */
 export default function FilterBar() {
   const { query, patchQuery } = useInboxQuery();
+
+  function handleChipClick(key: ViewKey) {
+    const wasActive = query[key] === true;
+    // Build a patch that clears every view key and then sets just the
+    // clicked one (unless it was already active, in which case leave
+    // everything cleared — clicking an active chip is how you exit a
+    // view without having to navigate elsewhere).
+    const patch: Partial<InboxQuery> = {};
+    for (const viewKey of VIEW_KEYS) {
+      patch[viewKey] = undefined;
+    }
+    if (!wasActive) {
+      patch[key] = true;
+    }
+    patchQuery(patch);
+  }
 
   return (
     <div className="flex items-center gap-1">
@@ -42,7 +81,7 @@ export default function FilterBar() {
           <button
             key={chip.key}
             type="button"
-            onClick={() => patchQuery({ [chip.key]: active ? undefined : true })}
+            onClick={() => handleChipClick(chip.key)}
             className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs transition-colors ${
               active
                 ? 'bg-blue-600 text-white hover:bg-blue-700'
