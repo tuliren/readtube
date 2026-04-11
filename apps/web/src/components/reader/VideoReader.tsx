@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 
+import { formatDurationSeconds } from '@/lib/format/duration';
 import type { VideoData } from '@/lib/types';
 
 import ArticleReader from './ArticleReader';
@@ -33,6 +34,7 @@ export default function VideoReader({ video }: Props) {
   const watchUrl = `https://youtube.com/watch?v=${video.sourceId}`;
 
   const [activeTab, setActiveTab] = useState<Tab>('transcript');
+  const durationLabel = formatDurationSeconds(video.durationSeconds);
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
@@ -60,6 +62,12 @@ export default function VideoReader({ video }: Props) {
           <span>{video.channelName}</span>
           <span>·</span>
           <span>{relativeDate(video.publishedAt)}</span>
+          {durationLabel != null && (
+            <>
+              <span>·</span>
+              <span>{durationLabel}</span>
+            </>
+          )}
           <span>·</span>
           <a
             href={watchUrl}

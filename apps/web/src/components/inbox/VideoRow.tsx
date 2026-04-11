@@ -4,6 +4,7 @@ import { Archive, Bookmark, BookmarkCheck, Clock, Star } from 'lucide-react';
 import Link from 'next/link';
 
 import { Checkbox } from '@/components/ui/checkbox';
+import { formatDurationSeconds } from '@/lib/format/duration';
 import type { VideoData } from '@/lib/types';
 
 import { useTriage } from './useTriage';
@@ -98,6 +99,10 @@ export default function VideoRow({ video, isSelected, isChecked, onToggleChecked
             </p>
             <p className="mt-0.5 text-xs text-gray-400">
               {video.channelName} · {relativeTime(video.publishedAt)}
+              {(() => {
+                const duration = formatDurationSeconds(video.durationSeconds);
+                return duration != null ? ` · ${duration}` : null;
+              })()}
               {video.noteCount > 0
                 ? ` · ${video.noteCount} note${video.noteCount === 1 ? '' : 's'}`
                 : null}
