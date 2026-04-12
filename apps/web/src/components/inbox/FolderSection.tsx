@@ -141,6 +141,16 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
 
   return (
     <DndContext
+      // Stable id prevents a hydration mismatch on the
+      // aria-describedby="DndDescribedBy-N" attributes that dnd-kit
+      // attaches to every draggable. Without this, dnd-kit falls
+      // back to a module-level auto-increment counter — and React
+      // strict mode's dev-only double-render bumps the client
+      // counter ahead of the SSR counter, so the server emits
+      // "DndDescribedBy-0" while the client emits
+      // "DndDescribedBy-2", tripping React's hydration check on
+      // pages that share this layout (e.g. /inbox/ask).
+      id="inbox-channels-dnd"
       sensors={sensors}
       // pointerWithin (instead of the default rectIntersection) so the
       // drop target tracks the cursor, not the dragged overlay rect.
