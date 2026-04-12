@@ -3,7 +3,7 @@
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { formatDurationSeconds } from '@/lib/format/duration';
 import type { VideoData } from '@/lib/types';
@@ -64,6 +64,18 @@ export default function VideoReader({ video }: Props) {
   const [transcriptStatus, setTranscriptStatus] = useState<TranscriptStatus>(
     video.transcriptUnavailable ? 'unavailable' : 'unknown'
   );
+
+  // useState only seeds from the initial render. When the user clicks
+  // a different video in the sidebar Next.js performs a soft
+  // navigation — VideoReader receives new props but is NOT
+  // remounted, so transcriptStatus would otherwise stay at the
+  // previous video's value. If that previous video was unavailable,
+  // the new (perfectly fine) video would render as "no transcript"
+  // across all three tabs with no client-side recovery path. Resync
+  // on every video identity / unavailability change.
+  useEffect(() => {
+    setTranscriptStatus(video.transcriptUnavailable ? 'unavailable' : 'unknown');
+  }, [video.id, video.transcriptUnavailable]);
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
