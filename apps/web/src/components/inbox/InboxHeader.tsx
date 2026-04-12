@@ -1,8 +1,12 @@
 'use client';
 
 import { CheckIcon } from '@heroicons/react/24/outline';
+import { RefreshCw } from 'lucide-react';
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { useSWRConfig } from 'swr';
+
+import { isProduction } from '@/lib/vercelEnv';
 
 import FilterBar from './FilterBar';
 import Pagination from './Pagination';
@@ -20,6 +24,33 @@ interface Props {
 export default function InboxHeader({ channelId, channelName, unreadCount, totalVideos }: Props) {
   const { mutate } = useSWRConfig();
   const [marking, setMarking] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const showRefresh = !isProduction() && channelId != null;
+
+  async function handleRefreshChannel() {
+    if (channelId == null || refreshing) {
+      return;
+    }
+    setRefreshing(true);
+    try {
+      const res = await fetch(`/api/channels/${channelId}/refresh`, { method: 'POST' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ error: 'Refresh failed' }));
+        toast.error(body.error ?? 'Refresh failed');
+        return;
+      }
+      const body = (await res.json()) as { videosProcessed: number };
+      toast.success(`Refreshed: ${body.videosProcessed} videos processed`);
+      // Invalidate both the channel list (for updated metadata/logo)
+      // and the video list (for new videos + thumbnails).
+      await Promise.all([
+        mutate('/api/channels'),
+        mutate((key) => typeof key === 'string' && key.startsWith('/api/videos')),
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   async function handleMarkAllRead() {
     setMarking(true);
@@ -56,6 +87,17 @@ export default function InboxHeader({ channelId, channelName, unreadCount, total
         </div>
         <div className="flex items-center gap-2">
           <SearchInput />
+          {showRefresh && (
+            <button
+              onClick={handleRefreshChannel}
+              disabled={refreshing}
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50 disabled:hover:bg-transparent"
+              title="Pull latest videos + metadata for this channel"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+              {refreshing ? 'Refreshing…' : 'Refresh'}
+            </button>
+          )}
           {unreadCount > 0 && (
             <button
               onClick={handleMarkAllRead}
