@@ -1,6 +1,14 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 interface SidebarState {
   /** Sidebar width in pixels (only used when expanded). */
@@ -74,6 +82,17 @@ export function useSidebar(): SidebarState {
     throw new Error('useSidebar must be used within SidebarProvider');
   }
   return ctx;
+}
+
+/**
+ * Override wrapper that forces `collapsed: false` for all descendants.
+ * Used by the mobile drawer so it always renders the full sidebar
+ * content regardless of the desktop collapse state.
+ */
+export function SidebarExpandedOverride({ children }: { children: React.ReactNode }) {
+  const parent = useSidebar();
+  const value = useMemo(() => ({ ...parent, collapsed: false }), [parent]);
+  return <SidebarCtx.Provider value={value}>{children}</SidebarCtx.Provider>;
 }
 
 /**

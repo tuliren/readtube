@@ -24,7 +24,12 @@ import ChannelSection from './ChannelSection';
 import { CommandPaletteProvider } from './CommandPalette';
 import InboxHeader from './InboxHeader';
 import { KeyboardShortcutsProvider } from './KeyboardShortcutsProvider';
-import { SidebarProvider, SidebarResizeHandle, useSidebar } from './SidebarContext';
+import {
+  SidebarExpandedOverride,
+  SidebarProvider,
+  SidebarResizeHandle,
+  useSidebar,
+} from './SidebarContext';
 import VideoList from './VideoList';
 
 const fetcher = (url: string) =>
@@ -261,15 +266,18 @@ function InboxShellInner({
 
   return (
     <div className="flex h-full min-h-0">
-      {/* Mobile sidebar drawer */}
+      {/* Mobile sidebar drawer — always renders full (expanded) content
+          regardless of the desktop collapse state. */}
       {isMobile && (
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
           <SheetContent side="left" className="w-72 p-0">
-            <div className="flex h-14 shrink-0 items-center justify-between border-b border-gray-200 px-5">
-              <span className="text-base font-bold text-gray-900">ReadTube</span>
-              <UserButton />
-            </div>
-            {sidebarContent}
+            <SidebarExpandedOverride>
+              <div className="flex h-14 shrink-0 items-center justify-between border-b border-gray-200 px-5">
+                <span className="text-base font-bold text-gray-900">ReadTube</span>
+                <UserButton />
+              </div>
+              {sidebarContent}
+            </SidebarExpandedOverride>
           </SheetContent>
         </Sheet>
       )}
