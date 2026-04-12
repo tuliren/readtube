@@ -21,6 +21,7 @@ export default async function AskInboxPage() {
     sourceId: row.source_id,
     name: row.name,
     rssUrl: row.rss_url,
+    logoUrl: row.logo_url ?? null,
     createdAt: row.created_at.toISOString(),
     unreadCount: row.unread_count,
     folderId: row.folder_id,

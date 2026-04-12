@@ -16,6 +16,7 @@ import {
 import { displayChannelName } from '@/lib/inbox/channelName';
 import type { ChannelData, FolderData } from '@/lib/types';
 
+import ChannelAvatar from './ChannelAvatar';
 import { SidebarBadge, SidebarRowContent, sidebarRowClass } from './SidebarRow';
 
 interface Props {
@@ -55,6 +56,9 @@ export default function DraggableChannelLink({ channel, isSelected, folders, onM
           className={`${sidebarRowClass(isSelected)} flex-1 cursor-grab active:cursor-grabbing`}
           title="Click to open · drag to move to a folder"
         >
+          {channel.logoUrl != null && (
+            <ChannelAvatar url={channel.logoUrl} size={40} cssSize="h-5 w-5" />
+          )}
           <SidebarRowContent
             label={displayChannelName(channel.name)}
             trailing={<SidebarBadge count={channel.unreadCount} />}

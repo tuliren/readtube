@@ -167,11 +167,27 @@ export default function VideoReader({ video }: Props) {
           </a>
         </div>
 
-        {/* RSS description as quick summary */}
-        {video.description && (
-          <blockquote className="mt-5 border-l-2 border-gray-200 pl-4 text-sm leading-relaxed text-gray-500 italic">
-            {video.description}
-          </blockquote>
+        {/* Thumbnail + description row — thumbnail sits to the left
+            of the description at the same height so it reads as one
+            unit. When there's no description the thumbnail still
+            renders standalone; when there's no thumbnail the
+            description spans the full width. */}
+        {(video.thumbnailUrl != null || video.description != null) && (
+          <div className="mt-5 flex items-start gap-4">
+            {video.thumbnailUrl != null && (
+              <img
+                src={video.thumbnailUrl}
+                alt={video.title}
+                className="w-40 shrink-0 rounded-lg object-cover"
+                loading="eager"
+              />
+            )}
+            {video.description != null && (
+              <blockquote className="min-w-0 flex-1 border-l-2 border-gray-200 pl-4 text-sm leading-relaxed text-gray-500 italic">
+                {video.description}
+              </blockquote>
+            )}
+          </div>
         )}
 
         {transcriptStatus === 'unavailable' ? (

@@ -38,6 +38,10 @@ CREATE TABLE "Channel" (
   "rss_url" TEXT NOT NULL,
   "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updated_at" TIMESTAMP(3) NOT NULL,
+  "handle" TEXT,
+  "description" TEXT,
+  "verified" BOOLEAN NOT NULL DEFAULT false,
+  "logo_url" TEXT,
   CONSTRAINT "Channel_pkey" PRIMARY KEY ("id")
 );
 
@@ -77,6 +81,7 @@ CREATE TABLE "Video" (
   ),
   "duration_seconds" INTEGER,
   "transcript_unavailable" BOOLEAN NOT NULL DEFAULT false,
+  "thumbnail_url" TEXT,
   CONSTRAINT "Video_pkey" PRIMARY KEY ("id")
 );
 

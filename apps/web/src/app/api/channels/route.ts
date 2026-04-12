@@ -9,6 +9,7 @@ import {
   countUnreadVideos,
   getSubscribedChannelsWithUnread,
 } from '@/lib/subscriptions';
+import { buildThumbnailUrl, fetchChannelLatest } from '@/lib/youtube/channelMetadata';
 import { buildRssUrl, extractChannelId, extractHandle } from '@/lib/youtube/channelUrl';
 import { scrapeChannel } from '@/lib/youtube/scrapeChannel';
 
@@ -28,6 +29,7 @@ export async function GET() {
       sourceId: row.source_id,
       name: row.name,
       rssUrl: row.rss_url,
+      logoUrl: row.logo_url ?? null,
       createdAt: row.created_at,
       unreadCount: row.unread_count,
       folderId: row.folder_id,
@@ -113,6 +115,7 @@ export async function POST(request: NextRequest) {
       source_id: sourceId,
       name: scraped.name,
       rss_url: rssUrl,
+      logo_url: scraped.logoUrl,
       videos: {
         create: scraped.videos.map((v) => ({
           source_id: v.videoId,
@@ -123,8 +126,40 @@ export async function POST(request: NextRequest) {
         })),
       },
     },
-    update: {},
+    // On re-create (channel already exists), refresh the logo if
+    // the scraper has one and the channel doesn't yet.
+    update: {
+      ...(scraped.logoUrl != null ? { logo_url: scraped.logoUrl } : {}),
+    },
   });
+
+  // Best-effort metadata enrichment via TranscriptAPI's RSS endpoint.
+  // This gives us per-video thumbnails + view counts. If it fails
+  // (network, rate limit, etc.) we fall back to constructing thumbnail
+  // URLs from the videoId directly.
+  try {
+    const meta = await fetchChannelLatest(sourceId);
+    for (const videoMeta of meta.videos) {
+      await prisma.video.updateMany({
+        where: { channel_id: channel.id, source_id: videoMeta.videoId },
+        data: {
+          thumbnail_url: videoMeta.thumbnailUrl,
+        },
+      });
+    }
+  } catch (err) {
+    console.warn(
+      '[channels/POST] TranscriptAPI enrichment failed, using fallback thumbnails:',
+      err
+    );
+    // Fallback: construct thumbnail URLs directly from videoId.
+    for (const video of scraped.videos) {
+      await prisma.video.updateMany({
+        where: { channel_id: channel.id, source_id: video.videoId },
+        data: { thumbnail_url: buildThumbnailUrl(video.videoId) },
+      });
+    }
+  }
 
   // Compute the initial read watermark per the configured subscription mode
   // (all_new / none_new / recent_n_new). Done after the channel + its videos
@@ -152,6 +187,7 @@ export async function POST(request: NextRequest) {
       source_id: true,
       name: true,
       rss_url: true,
+      logo_url: true,
       created_at: true,
     },
   });
@@ -163,6 +199,7 @@ export async function POST(request: NextRequest) {
       sourceId: channelRow.source_id,
       name: channelRow.name,
       rssUrl: channelRow.rss_url,
+      logoUrl: channelRow.logo_url,
       createdAt: channelRow.created_at,
       unreadCount,
       folderId: null,

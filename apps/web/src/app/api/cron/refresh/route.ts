@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { verifyCronRequest } from '@/lib/cron';
 import { isEmptyString } from '@/lib/string';
+import { buildThumbnailUrl, fetchChannelLatest } from '@/lib/youtube/channelMetadata';
 import { scrapeChannel } from '@/lib/youtube/scrapeChannel';
 
 export async function POST(request: NextRequest) {
@@ -21,6 +22,14 @@ export async function POST(request: NextRequest) {
     try {
       const channelPageUrl = `https://www.youtube.com/channel/${channel.source_id}`;
       const scraped = await scrapeChannel(channelPageUrl);
+
+      // Update channel logo from the scrape if available.
+      if (scraped.logoUrl != null) {
+        await prisma.channel.update({
+          where: { id: channel.id },
+          data: { logo_url: scraped.logoUrl },
+        });
+      }
 
       for (const video of scraped.videos) {
         await prisma.video.upsert({
@@ -52,6 +61,33 @@ export async function POST(request: NextRequest) {
           },
         });
         totalNew++;
+      }
+
+      // Best-effort metadata enrichment via TranscriptAPI's RSS
+      // endpoint. Backfills thumbnail + viewCount on videos that were
+      // just upserted from the scraper's output. Falls back to
+      // constructing thumbnail URLs from videoId directly.
+      try {
+        const meta = await fetchChannelLatest(channel.source_id);
+        for (const videoMeta of meta.videos) {
+          await prisma.video.updateMany({
+            where: { channel_id: channel.id, source_id: videoMeta.videoId },
+            data: {
+              thumbnail_url: videoMeta.thumbnailUrl,
+            },
+          });
+        }
+      } catch (metaErr) {
+        console.warn(
+          `[cron/refresh] TranscriptAPI enrichment failed for ${channel.id}, using fallback thumbnails:`,
+          metaErr
+        );
+        for (const video of scraped.videos) {
+          await prisma.video.updateMany({
+            where: { channel_id: channel.id, source_id: video.videoId },
+            data: { thumbnail_url: buildThumbnailUrl(video.videoId) },
+          });
+        }
       }
     } catch (err) {
       errors++;

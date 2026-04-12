@@ -75,6 +75,7 @@ export interface SubscribedChannelWithUnread {
   source_id: string;
   name: string;
   rss_url: string;
+  logo_url: string | null;
   created_at: Date;
   unread_count: number;
 }
@@ -104,6 +105,7 @@ export async function getSubscribedChannelsWithUnread(
       source_id: string;
       name: string;
       rss_url: string;
+      logo_url: string | null;
       created_at: Date;
       unread_count: bigint;
     }>
@@ -117,6 +119,7 @@ export async function getSubscribedChannelsWithUnread(
       c."source_id"    AS source_id,
       c."name"         AS name,
       c."rss_url"      AS rss_url,
+      c."logo_url"     AS logo_url,
       c."created_at"   AS created_at,
       COUNT(v."id")    AS unread_count
     FROM "UserSubscription" us
@@ -131,7 +134,7 @@ export async function getSubscribedChannelsWithUnread(
     WHERE us."user_id" = ${userId}
     GROUP BY
       us."channel_id", us."read_at", us."folder_id", us."priority", us."mute_until",
-      c."source_id", c."name", c."rss_url", c."created_at"
+      c."source_id", c."name", c."rss_url", c."logo_url", c."created_at"
     ORDER BY LOWER(c."name") ASC
   `;
 
@@ -144,6 +147,7 @@ export async function getSubscribedChannelsWithUnread(
     source_id: row.source_id,
     name: row.name,
     rss_url: row.rss_url,
+    logo_url: row.logo_url,
     created_at: row.created_at,
     unread_count: Number(row.unread_count),
   }));
