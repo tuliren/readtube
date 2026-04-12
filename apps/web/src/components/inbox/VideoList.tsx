@@ -11,11 +11,33 @@ import VideoRow from './VideoRow';
 interface Props {
   videos: VideoData[];
   selectedVideoId: string | null;
+  /** Copy to render when `videos` is empty. The parent owns this so
+   *  the message can change with the active filter (Starred → "No
+   *  starred videos yet…", channel narrow → "No videos in <name>
+   *  yet.", etc.) instead of always saying "No videos yet". */
+  emptyMessage: string;
 }
 
-export default function VideoList({ videos, selectedVideoId }: Props) {
+export default function VideoList({ videos, selectedVideoId, emptyMessage }: Props) {
   const searchParams = useSearchParams();
-  const channelParam = searchParams.get('channelId');
+
+  // Build the "filter context" we want to forward into the reader as
+  // a single ?returnTo=<encoded-query> param so the reader's Back
+  // button can land back in the exact filtered list.
+  //
+  // Two cases:
+  //   1. We're on `/inbox?starred=1` (or similar) — searchParams IS
+  //      the filter context, so use its toString().
+  //   2. We're already in the reader at `/inbox/<id>?returnTo=<inner>`
+  //      — forward the same `returnTo` value verbatim so navigating
+  //      between sibling videos doesn't lose the back-target.
+  const filterContext = (() => {
+    const returnToInUrl = searchParams.get('returnTo');
+    if (returnToInUrl != null) {
+      return returnToInUrl;
+    }
+    return searchParams.toString();
+  })();
 
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
 
@@ -59,9 +81,13 @@ export default function VideoList({ videos, selectedVideoId }: Props) {
   }
 
   if (videos.length === 0) {
+    // No "Add channel" CTA here — VideoList only renders when the
+    // user already has at least one channel. The first-time
+    // no-channels-at-all path is handled in InboxShell's
+    // showEmptyState branch with its own prominent button.
     return (
       <div className="flex flex-1 items-center justify-center p-8 text-center text-sm text-gray-500">
-        No videos yet. New videos will appear here after the next refresh.
+        {emptyMessage}
       </div>
     );
   }
@@ -75,8 +101,8 @@ export default function VideoList({ videos, selectedVideoId }: Props) {
         {videos.map((video) => {
           const isSelected = selectedVideoId === video.id;
           const href =
-            channelParam != null
-              ? `/inbox/${video.id}?channelId=${channelParam}`
+            filterContext.length > 0
+              ? `/inbox/${video.id}?returnTo=${encodeURIComponent(filterContext)}`
               : `/inbox/${video.id}`;
 
           return (

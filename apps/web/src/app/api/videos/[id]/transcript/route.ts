@@ -2,7 +2,7 @@ import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 
-import { fetchSubtitleViaTranscriptApi } from '@/lib/subtitles';
+import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { userId } = await auth();
@@ -12,11 +12,13 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
   const { id } = await params;
 
-  // IDOR check + fetch most recent cached transcript
+  // IDOR check + fetch most recent cached transcript + the sticky
+  // unavailable flag in one round-trip.
   const video = await prisma.video.findFirst({
     where: { id, channel: { subscriptions: { some: { user_id: userId } } } },
     select: {
       id: true,
+      transcript_unavailable: true,
       transcripts: {
         orderBy: { created_at: 'desc' },
         take: 1,
@@ -29,11 +31,22 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   }
 
   const cached = video.transcripts[0];
-  if (!cached) {
-    return NextResponse.json({ error: 'Not cached' }, { status: 404 });
+  if (cached != null) {
+    return NextResponse.json({ segments: JSON.parse(cached.text), language: cached.language });
   }
 
-  return NextResponse.json({ segments: JSON.parse(cached.text), language: cached.language });
+  // 410 Gone signals "we already tried and there is nothing here" so
+  // the client can render a permanent unavailable state without
+  // offering a retry button. 404 stays reserved for "we haven't tried
+  // yet" — the client renders a Fetch button for that path.
+  if (video.transcript_unavailable) {
+    return NextResponse.json(
+      { error: 'Transcript unavailable', code: 'unavailable' },
+      { status: 410 }
+    );
+  }
+
+  return NextResponse.json({ error: 'Not cached' }, { status: 404 });
 }
 
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -44,31 +57,25 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
 
   const { id } = await params;
 
-  // IDOR check
-  const video = await prisma.video.findFirst({
-    where: { id, channel: { subscriptions: { some: { user_id: userId } } } },
-    select: { id: true, source_id: true },
-  });
-  if (!video) {
-    return NextResponse.json({ error: 'Video not found' }, { status: 404 });
+  // ensureTranscript handles the whole pipeline: IDOR check, cache
+  // hit, sticky-unavailable short circuit, upstream fetch, and the
+  // sticky flag write on failure. The route just maps the result.
+  const result = await ensureTranscript(prisma, userId, id);
+  if (!result.ok) {
+    if (result.reason === 'not-found') {
+      return NextResponse.json({ error: 'Video not found' }, { status: 404 });
+    }
+    if (result.reason === 'transient-error') {
+      return NextResponse.json(
+        { error: 'Transcript fetch failed temporarily — please try again.', code: 'transient' },
+        { status: 503 }
+      );
+    }
+    return NextResponse.json(
+      { error: 'Transcript unavailable', code: 'unavailable' },
+      { status: 410 }
+    );
   }
 
-  let result;
-  try {
-    result = await fetchSubtitleViaTranscriptApi(video.source_id);
-  } catch (err) {
-    console.error('[transcript/POST] fetch failed:', err);
-    return NextResponse.json({ error: 'Transcript unavailable' }, { status: 404 });
-  }
-
-  await prisma.transcript.create({
-    data: {
-      video_id: video.id,
-      text: JSON.stringify(result.segments),
-      language: result.language,
-      fetched_at: new Date(),
-    },
-  });
-
-  return NextResponse.json({ segments: result.segments, language: result.language });
+  return NextResponse.json({ segments: result.transcript.segments });
 }

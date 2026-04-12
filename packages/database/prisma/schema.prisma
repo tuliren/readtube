@@ -117,6 +117,16 @@ model Video {
   description  String?
   published_at DateTime
   created_at   DateTime @default(now())
+  // Length of the video in seconds. Nullable because the channel scraper
+  // may not always capture the duration string (Shorts, ad slots, etc.)
+  // and we backfill incrementally as the cron refresh runs.
+  duration_seconds Int?
+  // Sticky flag set the first time we attempt to fetch a transcript and
+  // come back empty. Once true, the transcript route refuses to retry —
+  // some videos genuinely have no captions and re-hammering the upstream
+  // API on every reader open is wasteful for the user and the provider.
+  // Reset by hand if a captionless video later gains captions.
+  transcript_unavailable Boolean @default(false)
   // Full-text search vector over title + description. Backed by a STORED
   // GENERATED column — the migration SQL creates it with to_tsvector +
   // setweight. Prisma sees it as Unsupported, which is fine for writes

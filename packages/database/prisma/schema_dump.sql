@@ -75,6 +75,8 @@ CREATE TABLE "Video" (
       'B'::"char"
     )
   ),
+  "duration_seconds" INTEGER,
+  "transcript_unavailable" BOOLEAN NOT NULL DEFAULT false,
   CONSTRAINT "Video_pkey" PRIMARY KEY ("id")
 );
 

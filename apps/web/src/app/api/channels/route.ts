@@ -119,6 +119,7 @@ export async function POST(request: NextRequest) {
           title: v.title,
           description: v.description,
           published_at: v.publishedAt,
+          duration_seconds: v.durationSeconds,
         })),
       },
     },

@@ -72,35 +72,41 @@ export default function VideoReaderActions({ video }: Props) {
     }
   }
 
+  // Each button overrides the Button cva's `gap-2` with `gap-1` so the
+  // icon sits closer to the label — gap-2 (8px) reads as a yawning
+  // void at this size. The labels also drop their `ml-1` because the
+  // gap utility already provides spacing.
+  const tightGap = 'gap-1';
+
   return (
     <div className="flex items-center gap-1">
       <Button
         variant="ghost"
         size="sm"
         onClick={() => void toggleStar()}
-        className={isStarred ? 'text-yellow-600 hover:text-yellow-700' : ''}
+        className={`${tightGap} ${isStarred ? 'text-yellow-600 hover:text-yellow-700' : ''}`}
         title={isStarred ? 'Unstar' : 'Star'}
       >
         <Star className={`h-4 w-4 ${isStarred ? 'fill-yellow-400' : ''}`} />
-        <span className="ml-1 hidden sm:inline">{isStarred ? 'Starred' : 'Star'}</span>
+        <span className="hidden sm:inline">{isStarred ? 'Starred' : 'Star'}</span>
       </Button>
 
       <Button
         variant="ghost"
         size="sm"
         onClick={() => void toggleSave()}
-        className={isSaved ? 'text-blue-600 hover:text-blue-700' : ''}
+        className={`${tightGap} ${isSaved ? 'text-blue-600 hover:text-blue-700' : ''}`}
         title={isSaved ? 'Remove from Read Later' : 'Read Later'}
       >
         {isSaved ? <BookmarkCheck className="h-4 w-4" /> : <Bookmark className="h-4 w-4" />}
-        <span className="ml-1 hidden sm:inline">{isSaved ? 'Saved' : 'Save'}</span>
+        <span className="hidden sm:inline">{isSaved ? 'Saved' : 'Save'}</span>
       </Button>
 
       <Button
         variant="ghost"
         size="sm"
         onClick={() => void snoozeTomorrow()}
-        className={snoozedUntil != null ? 'text-purple-600 hover:text-purple-700' : ''}
+        className={`${tightGap} ${snoozedUntil != null ? 'text-purple-600 hover:text-purple-700' : ''}`}
         title={
           snoozedUntil != null
             ? `Snoozed until ${new Date(snoozedUntil).toLocaleDateString()}`
@@ -108,18 +114,18 @@ export default function VideoReaderActions({ video }: Props) {
         }
       >
         <Clock className="h-4 w-4" />
-        <span className="ml-1 hidden sm:inline">Snooze</span>
+        <span className="hidden sm:inline">Snooze</span>
       </Button>
 
       <Button
         variant="ghost"
         size="sm"
         onClick={() => void toggleArchive()}
-        className={isArchived ? 'text-red-600 hover:text-red-700' : ''}
+        className={`${tightGap} ${isArchived ? 'text-red-600 hover:text-red-700' : ''}`}
         title={isArchived ? 'Unarchive' : 'Archive'}
       >
         <Archive className="h-4 w-4" />
-        <span className="ml-1 hidden sm:inline">{isArchived ? 'Archived' : 'Archive'}</span>
+        <span className="hidden sm:inline">{isArchived ? 'Archived' : 'Archive'}</span>
       </Button>
     </div>
   );

@@ -3,6 +3,13 @@ module.exports = {
   transpilePackages: ['@readtube/lib'],
   reactStrictMode: true,
   pageExtensions: ['js', 'jsx', 'md', 'mdx', 'ts', 'tsx'],
+  // Expose Vercel's auto-set VERCEL_ENV to client code via the
+  // NEXT_PUBLIC_ prefix so isProduction() works in 'use client'
+  // components. Used to gate dev-only affordances like the
+  // SummaryReader Regenerate buttons.
+  env: {
+    NEXT_PUBLIC_VERCEL_ENV: process.env.VERCEL_ENV,
+  },
   async rewrites() {
     return [
       {

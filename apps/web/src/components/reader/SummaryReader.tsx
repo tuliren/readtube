@@ -2,9 +2,29 @@
 
 import { ArrowPathIcon } from '@heroicons/react/24/outline';
 import { useEffect, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import rehypeExternalLinks from 'rehype-external-links';
+import rehypeSanitize from 'rehype-sanitize';
+import remarkGfm from 'remark-gfm';
+
+import { countWords } from '@/lib/format/wordCount';
+import { isProduction } from '@/lib/vercelEnv';
+
+import type { TranscriptStatus } from './VideoReader';
 
 interface Props {
   videoDbId: string;
+  /** Shared transcript availability lifted from VideoReader. The
+   *  three reader tabs share one source of truth so that auto-
+   *  fetch results in the Summary tab also disable Generate in
+   *  Article and switch the Transcript tab to its unavailable
+   *  state without an extra round-trip. */
+  transcriptStatus: TranscriptStatus;
+  onTranscriptStatusChange: (next: TranscriptStatus) => void;
+  /** Tells VideoReader that a Summary now exists for this video so
+   *  the Summary tab dot can flip from red → blue. Fired on the
+   *  initial GET cache hit AND after a successful generation. */
+  onSummaryAvailable: () => void;
 }
 
 type SummaryField = 'headline' | 'short' | 'full';
@@ -29,6 +49,17 @@ function SummarySkeleton() {
   );
 }
 
+function WordCountLabel({ count }: { count: number }) {
+  if (count <= 0) {
+    return null;
+  }
+  return (
+    <span className="text-xs font-normal text-gray-400">
+      ({count} {count === 1 ? 'word' : 'words'})
+    </span>
+  );
+}
+
 function RegenerateButton({ onClick, disabled }: { onClick: () => void; disabled?: boolean }) {
   return (
     <button
@@ -43,7 +74,12 @@ function RegenerateButton({ onClick, disabled }: { onClick: () => void; disabled
   );
 }
 
-export default function SummaryReader({ videoDbId }: Props) {
+export default function SummaryReader({
+  videoDbId,
+  transcriptStatus,
+  onTranscriptStatusChange,
+  onSummaryAvailable,
+}: Props) {
   const [status, setStatus] = useState<Status>('checking');
   const [summary, setSummary] = useState<SummaryData | null>(null);
   const [regeneratingFields, setRegeneratingFields] = useState<SummaryField[]>([]);
@@ -68,6 +104,10 @@ export default function SummaryReader({ videoDbId }: Props) {
         const data = (await res.json()) as SummaryData;
         setSummary(data);
         setStatus('done');
+        // Cache hit — flip the parent's Summary tab dot to blue
+        // immediately, regardless of whether the user is currently
+        // looking at this tab.
+        onSummaryAvailable();
       })
       .catch(() => {
         if (!cancelled) {
@@ -78,7 +118,7 @@ export default function SummaryReader({ videoDbId }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [videoDbId]);
+  }, [videoDbId, onSummaryAvailable]);
 
   async function handleGenerate(targetFields?: SummaryField[]) {
     const fields = targetFields ?? [...ALL_FIELDS];
@@ -104,6 +144,32 @@ export default function SummaryReader({ videoDbId }: Props) {
       });
 
       if (!res.ok) {
+        // 410 from the server means ensureTranscript flagged this
+        // video as transcript-unavailable. Flip the shared status so
+        // Article and Transcript tabs immediately render their
+        // unavailable state too — no extra fetches needed.
+        if (res.status === 410) {
+          onTranscriptStatusChange('unavailable');
+          setErrorMessage('Transcript unavailable for this video.');
+          setStatus('error');
+          setRegeneratingFields([]);
+          return;
+        }
+        // 503 means the upstream transcript provider blipped
+        // (network error / 429 / 5xx). Surface a retry-friendly
+        // error in THIS tab only — do NOT broadcast unavailable,
+        // because doing so would lock Article and Transcript out
+        // for the rest of the session even though the next click
+        // would probably succeed.
+        if (res.status === 503) {
+          const body = await res
+            .json()
+            .catch(() => ({ error: 'Transcript fetch failed temporarily — please try again.' }));
+          setErrorMessage(body.error ?? 'Transcript fetch failed temporarily — please try again.');
+          setStatus('error');
+          setRegeneratingFields([]);
+          return;
+        }
         const body = await res.json().catch(() => ({ error: 'Failed to generate summary.' }));
         setErrorMessage(body.error ?? 'Failed to generate summary.');
         setStatus('error');
@@ -117,6 +183,14 @@ export default function SummaryReader({ videoDbId }: Props) {
         setRegeneratingFields([]);
         return;
       }
+
+      // Reaching this point means the server's ensureTranscript call
+      // already succeeded (otherwise it would have returned 410
+      // before any stream body) — the transcript is now cached.
+      // Broadcast 'present' so the Transcript tab loads it
+      // automatically the moment the user switches over, instead of
+      // still showing the Fetch button.
+      onTranscriptStatusChange('present');
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -187,6 +261,9 @@ export default function SummaryReader({ videoDbId }: Props) {
 
       setStatus('done');
       setRegeneratingFields([]);
+      // Tell the parent the Summary tab now has content so its tab
+      // dot can flip from red → blue without waiting for a refresh.
+      onSummaryAvailable();
     } catch (err) {
       console.error('[SummaryReader] generate error:', err);
       setErrorMessage(err instanceof Error ? err.message : 'Failed to generate summary.');
@@ -200,6 +277,17 @@ export default function SummaryReader({ videoDbId }: Props) {
   }
 
   if (status === 'idle') {
+    // Sticky-unavailable: hide the Generate affordance entirely so the
+    // user isn't tempted to click into a guaranteed-failure state. The
+    // server already returns 410 for this case but eliminating the
+    // button is the kinder UX.
+    if (transcriptStatus === 'unavailable') {
+      return (
+        <div className="py-8 text-center text-sm text-gray-500">
+          No transcript is available for this video, so a summary can&rsquo;t be generated.
+        </div>
+      );
+    }
     return (
       <div className="py-8 text-center">
         <p className="mb-4 text-sm text-gray-500">
@@ -235,7 +323,20 @@ export default function SummaryReader({ videoDbId }: Props) {
 
   const isStreaming = status === 'generating';
   const isRegenerating = (field: SummaryField) => regeneratingFields.includes(field);
-  const fullParagraphs = summary.full?.split(/\n\n+/).filter((p) => p.trim().length > 0) ?? [];
+  const fullMarkdown = summary.full?.trim() ?? '';
+  // Regenerate is a dev-only escape hatch — costs tokens, can produce
+  // worse output than a cached run, and shouldn't be exposed to end
+  // users in production.
+  const showRegenerate = !isProduction();
+
+  // Word counts surfaced next to the multi-sentence section headers
+  // so the reader can size up the density before reading. Computed
+  // on the rendered text, so a streaming generation increments
+  // visibly as new tokens come in. Headline is intentionally
+  // excluded — it's a one-sentence newspaper-style title and a
+  // word count there is just visual noise.
+  const shortWords = countWords(summary.short);
+  const fullWords = countWords(summary.full);
 
   return (
     <div className="space-y-8">
@@ -250,7 +351,7 @@ export default function SummaryReader({ videoDbId }: Props) {
         ) : (
           <div className="flex-1 text-sm text-gray-400 italic">No headline yet.</div>
         )}
-        {!isRegenerating('headline') && (
+        {showRegenerate && !isRegenerating('headline') && (
           <RegenerateButton onClick={() => handleGenerate(['headline'])} disabled={isStreaming} />
         )}
       </div>
@@ -258,20 +359,15 @@ export default function SummaryReader({ videoDbId }: Props) {
       {/* Short */}
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-xs font-medium tracking-wide text-gray-400 uppercase">
-            Quick summary
+          <h3 className="text-base font-semibold text-gray-900">
+            Quick summary <WordCountLabel count={shortWords} />
           </h3>
-          {!isRegenerating('short') && (
+          {showRegenerate && !isRegenerating('short') && (
             <RegenerateButton onClick={() => handleGenerate(['short'])} disabled={isStreaming} />
           )}
         </div>
         {summary.short ? (
-          <p
-            className="leading-relaxed text-gray-700"
-            style={{ fontFamily: 'Georgia, serif', fontSize: '17px', lineHeight: '1.8' }}
-          >
-            {summary.short}
-          </p>
+          <p className="font-sans text-[17px] leading-[1.8] text-gray-700">{summary.short}</p>
         ) : isRegenerating('short') ? (
           <div className="space-y-2">
             <div className="h-4 w-full animate-pulse rounded bg-gray-200" />
@@ -286,22 +382,30 @@ export default function SummaryReader({ videoDbId }: Props) {
       {/* Full */}
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-xs font-medium tracking-wide text-gray-400 uppercase">
-            Full summary
+          <h3 className="text-base font-semibold text-gray-900">
+            Full summary <WordCountLabel count={fullWords} />
           </h3>
-          {!isRegenerating('full') && (
+          {showRegenerate && !isRegenerating('full') && (
             <RegenerateButton onClick={() => handleGenerate(['full'])} disabled={isStreaming} />
           )}
         </div>
-        {fullParagraphs.length > 0 ? (
-          <div
-            className="space-y-4 leading-relaxed text-gray-800"
-            style={{ fontFamily: 'Georgia, serif', fontSize: '17px', lineHeight: '1.8' }}
-          >
-            {fullParagraphs.map((para, i) => (
-              <p key={i}>{para}</p>
-            ))}
-          </div>
+        {fullMarkdown.length > 0 ? (
+          // Render via react-markdown so the new bullet-friendly prompt
+          // (SUMMARY_PROMPT_VERSION v4) can mix prose paragraphs and
+          // Markdown lists. Sanitized + external-link safety mirrors
+          // ArticleReader so we don't ship two different sanitization
+          // policies for AI-generated content.
+          <article className="prose prose-gray max-w-none font-sans text-[17px] leading-[1.8]">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              rehypePlugins={[
+                rehypeSanitize,
+                [rehypeExternalLinks, { target: '_blank', rel: ['noopener', 'noreferrer'] }],
+              ]}
+            >
+              {fullMarkdown}
+            </ReactMarkdown>
+          </article>
         ) : isRegenerating('full') ? (
           <div className="space-y-2">
             {[100, 95, 90, 85, 75].map((w, i) => (

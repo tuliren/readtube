@@ -3,13 +3,9 @@ import { prisma } from '@readtube/database';
 import { streamText } from 'ai';
 import { NextRequest, NextResponse } from 'next/server';
 
-interface TranscriptSegment {
-  startMs: number;
-  endMs: number;
-  text: string;
-}
+import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
 
-const SUMMARY_PROMPT_VERSION = 'v3';
+const SUMMARY_PROMPT_VERSION = 'v4';
 const MODEL = 'google/gemini-2.5-flash';
 
 const LANGUAGE_RULE = `Write in the same language as the transcript below. Do not translate — if the transcript is in Chinese, write in Chinese; if Spanish, write in Spanish; and so on.`;
@@ -26,10 +22,15 @@ Output only the title itself, nothing else.`,
 - 1-2 more sentences: the most important supporting context.
 - Plain prose. No headings, no lists, no preamble.
 - ${LANGUAGE_RULE}`,
-  full: `Write a compact summary of this video — at most 2-3 short paragraphs (not more). Rules:
+  full: `Write a compact summary of this video. Rules:
 - Focus only on the main arguments and conclusions. Cut examples, tangents, and non-essential details.
 - Favor density over completeness. A reader should get the gist in under a minute.
-- No headings or lists — just prose.
+- Choose the format that fits the content best:
+  - Use prose (2-3 short paragraphs) when the video is one continuous argument.
+  - Use a Markdown bullet list when the video naturally breaks into discrete items (steps, tips, comparisons, list-of-N).
+  - Mix prose and a short bullet list when an introductory point is followed by enumerated takeaways.
+- Bullets must be terse (one line each) and use Markdown "- " syntax. Do not nest more than one level.
+- Never use headings (no #, ##, etc.). Do not bold or italicize.
 - ${LANGUAGE_RULE}`,
 } as const;
 
@@ -125,33 +126,48 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
   const fieldsToGenerate: SummaryField[] = requestedFields ?? [...SUMMARY_FIELDS];
 
+  // Look up title + channel name first; ensureTranscript will do
+  // its own IDOR check + transcript resolution.
   const video = await prisma.video.findFirst({
     where: { id, channel: { subscriptions: { some: { user_id: userId } } } },
     select: {
       id: true,
       title: true,
       channel: { select: { name: true } },
-      transcripts: {
-        orderBy: { created_at: 'desc' },
-        take: 1,
-        select: { id: true, text: true },
-      },
     },
   });
   if (!video) {
     return NextResponse.json({ error: 'Video not found' }, { status: 404 });
   }
 
-  const transcript = video.transcripts[0];
-  if (!transcript) {
+  // Auto-fetch the transcript if it isn't already cached. The single
+  // ensureTranscript call replaces "expect transcript or 400" — the
+  // user clicks Generate once and the route transparently ensures
+  // there's something to feed the model. If the upstream provider
+  // can't deliver captions, ensureTranscript flips the sticky
+  // transcript_unavailable flag on the Video so we don't waste a
+  // round-trip on the next click.
+  const ensured = await ensureTranscript(prisma, userId, id);
+  if (!ensured.ok) {
+    if (ensured.reason === 'not-found') {
+      return NextResponse.json({ error: 'Video not found' }, { status: 404 });
+    }
+    if (ensured.reason === 'transient-error') {
+      return NextResponse.json(
+        {
+          error: 'Could not fetch the transcript right now — please try again.',
+          code: 'transient',
+        },
+        { status: 503 }
+      );
+    }
     return NextResponse.json(
-      { error: 'Transcript not available. Fetch the transcript first.' },
-      { status: 400 }
+      { error: 'Transcript unavailable for this video.', code: 'unavailable' },
+      { status: 410 }
     );
   }
-
-  const segments = JSON.parse(transcript.text) as TranscriptSegment[];
-  const transcriptText = segments.map((s) => s.text).join(' ');
+  const transcript = ensured.transcript;
+  const transcriptText = transcript.segments.map((s) => s.text).join(' ');
 
   // Kick off streams for the requested fields in parallel.
   const generations = fieldsToGenerate.map((field) => {

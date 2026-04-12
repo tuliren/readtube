@@ -126,6 +126,41 @@ export function isDefaultQuery(query: InboxQuery): boolean {
  * the sequence) and protects against any future caller building tagIds
  * in a non-deterministic order.
  */
+/**
+ * Name of the URL param the reader uses to remember which filtered
+ * inbox list the user came from, so its Back link can restore the
+ * exact view they navigated away from.
+ *
+ * IMPORTANT: this MUST NOT collide with any InboxQuery key. The
+ * earlier name `from` clashed with InboxQuery.from (the date-range
+ * lower bound), which silently broke date-filtered URLs — see
+ * tuliren/readtube#13 review comment 3068752681.
+ */
+export const RETURN_TO_PARAM = 'returnTo';
+
+/**
+ * The reader navigates to `/inbox/<videoId>?returnTo=<encoded-inbox-query>`
+ * so the Back link can restore the exact filtered list the user came
+ * from. Both the SSR pages and the client-side hooks need to look at
+ * the inner query for filtering, not the wrapper `returnTo` param.
+ *
+ * This helper takes the raw URLSearchParams and returns either:
+ *   - the URLSearchParams parsed from the `returnTo` value, if present, or
+ *   - a copy of the original with `returnTo` stripped out, otherwise.
+ *
+ * Always returns a fresh URLSearchParams so callers can mutate it
+ * without aliasing the React searchParams instance.
+ */
+export function extractInboxSearchParams(raw: URLSearchParams): URLSearchParams {
+  const returnToValue = raw.get(RETURN_TO_PARAM);
+  if (returnToValue != null && returnToValue.length > 0) {
+    return new URLSearchParams(returnToValue);
+  }
+  const copy = new URLSearchParams(raw);
+  copy.delete(RETURN_TO_PARAM);
+  return copy;
+}
+
 export function inboxQueriesEqual(a: InboxQuery, b: InboxQuery): boolean {
   for (const key of STRING_KEYS) {
     if ((a[key] ?? '') !== (b[key] ?? '')) {

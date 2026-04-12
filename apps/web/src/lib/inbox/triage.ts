@@ -13,8 +13,24 @@ export interface TriageRawRow {
   title: string;
   description: string | null;
   published_at: Date;
+  duration_seconds: number | null;
+  transcript_unavailable: boolean;
   channel_id: string;
   channel: { name: string; source_id: string };
+  /**
+   * Latest Transcript row (or none) plus whether it has a Summary
+   * row attached and whether it has at least one Article row. The
+   * caller should `take: 1` on this relation; we only need to know
+   * presence, not the full payload.
+   *
+   * Shape kept structural so callers can pick the cheapest possible
+   * select clause: a single Transcript row with id, summary id, and
+   * one Article id is all we need.
+   */
+  transcripts: Array<{
+    summary: { transcript_id: string } | null;
+    articles: Array<{ id: string }>;
+  }>;
 }
 
 interface TriageContext {
@@ -116,6 +132,14 @@ export function decorateVideo(
   context: TriageContext,
   readAt: Date | null
 ): VideoData {
+  // Derive the artifact-presence flags from the latest Transcript
+  // row. The caller's Prisma select uses `take: 1` ordered by
+  // created_at desc, so transcripts[0] is the latest snapshot.
+  const latestTranscript = row.transcripts[0];
+  const hasTranscript = latestTranscript != null;
+  const hasSummary = latestTranscript?.summary != null;
+  const hasArticle = (latestTranscript?.articles.length ?? 0) > 0;
+
   return {
     id: row.id,
     sourceId: row.source_id,
@@ -123,6 +147,11 @@ export function decorateVideo(
     description: row.description,
     publishedAt: row.published_at.toISOString(),
     readAt: readAt != null ? readAt.toISOString() : null,
+    durationSeconds: row.duration_seconds,
+    transcriptUnavailable: row.transcript_unavailable,
+    hasTranscript,
+    hasSummary,
+    hasArticle,
     channelId: row.channel_id,
     channelName: row.channel.name,
     channelSourceId: row.channel.source_id,

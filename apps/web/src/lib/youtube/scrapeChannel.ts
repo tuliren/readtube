@@ -6,6 +6,9 @@ export interface ScrapedVideo {
   title: string;
   description: string;
   publishedAt: Date;
+  /** Length of the video in seconds, or null if the scraped data
+   *  didn't include a parseable lengthText (Shorts, ad slots, etc.). */
+  durationSeconds: number | null;
 }
 
 export interface ScrapedChannel {
@@ -65,6 +68,34 @@ function parseRelativeTime(text: string | undefined): Date {
   }
 
   return now;
+}
+
+/**
+ * Parse YouTube's lengthText.simpleText (e.g. "12:34", "1:02:03", "0:42")
+ * into total seconds. Returns null if the input is null/undefined/empty
+ * or doesn't match the expected colon-separated digits shape — better
+ * to skip than to write a bogus duration.
+ */
+export function parseDurationText(text: string | null | undefined): number | null {
+  if (text == null) {
+    return null;
+  }
+  const trimmed = text.trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+  const parts = trimmed.split(':');
+  if (parts.length < 2 || parts.length > 3) {
+    return null;
+  }
+  let total = 0;
+  for (const part of parts) {
+    if (!/^\d+$/.test(part)) {
+      return null;
+    }
+    total = total * 60 + parseInt(part, 10);
+  }
+  return total;
 }
 
 /**
@@ -186,11 +217,17 @@ function extractVideosFromInitialData(data: YtData): ScrapedVideo[] {
 
     const publishedText = (v.publishedTimeText as YtData)?.simpleText as string | undefined;
 
+    // YouTube exposes the duration as `videoRenderer.lengthText.simpleText`
+    // ("12:34"). The shorts shelf path uses a different shape and may
+    // omit it entirely — fall through to null in that case.
+    const lengthText = (v.lengthText as YtData)?.simpleText as string | undefined;
+
     videos.push({
       videoId,
       title,
       description,
       publishedAt: parseRelativeTime(publishedText),
+      durationSeconds: parseDurationText(lengthText),
     });
   }
 

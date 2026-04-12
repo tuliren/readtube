@@ -29,6 +29,22 @@ export interface VideoData {
   description: string | null;
   publishedAt: string;
   readAt: string | null;
+  // Length of the video in seconds, or null when the channel scraper
+  // hasn't captured it yet (Shorts, ad slots, pre-backfill rows).
+  durationSeconds: number | null;
+  // Sticky "we've already tried and there's nothing here" flag set on
+  // the Video row when a transcript fetch came back empty. Used by the
+  // reader to skip retry attempts and to disable Generate buttons in
+  // Summary / Article when there's nothing to feed them.
+  transcriptUnavailable: boolean;
+  // Whether the latest transcript fetch produced cached segments (i.e.
+  // there's at least one Transcript row for the video). Used by
+  // VideoRow to render the artifact-presence badges.
+  hasTranscript: boolean;
+  // Whether a Summary row exists for the latest transcript.
+  hasSummary: boolean;
+  // Whether at least one Article row exists for the latest transcript.
+  hasArticle: boolean;
   channelId: string;
   channelName: string;
   channelSourceId: string;

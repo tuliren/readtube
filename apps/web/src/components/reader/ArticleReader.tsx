@@ -6,15 +6,30 @@ import rehypeExternalLinks from 'rehype-external-links';
 import rehypeSanitize from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
 
+import type { TranscriptStatus } from './VideoReader';
+
 interface Props {
   videoDbId: string;
+  /** Shared transcript availability lifted from VideoReader. See the
+   *  matching prop on SummaryReader for the longer explanation. */
+  transcriptStatus: TranscriptStatus;
+  onTranscriptStatusChange: (next: TranscriptStatus) => void;
+  /** Tells VideoReader that an Article now exists for this video so
+   *  the Article tab dot can flip from red → blue. Fired on the
+   *  initial GET cache hit AND after a successful generation. */
+  onArticleAvailable: () => void;
 }
 
 type Status = 'checking' | 'idle' | 'streaming' | 'done' | 'error';
 
 const STYLE = 'NARRATIVE';
 
-export default function ArticleReader({ videoDbId }: Props) {
+export default function ArticleReader({
+  videoDbId,
+  transcriptStatus,
+  onTranscriptStatusChange,
+  onArticleAvailable,
+}: Props) {
   const [status, setStatus] = useState<Status>('checking');
   const [markdown, setMarkdown] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -41,6 +56,9 @@ export default function ArticleReader({ videoDbId }: Props) {
         const data = (await res.json()) as { content: string };
         setMarkdown(data.content);
         setStatus('done');
+        // Cache hit — flip the parent's Article tab dot to blue
+        // immediately, regardless of which tab the user is on.
+        onArticleAvailable();
       })
       .catch(() => {
         if (!cancelled) {
@@ -51,7 +69,7 @@ export default function ArticleReader({ videoDbId }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [videoDbId]);
+  }, [videoDbId, onArticleAvailable]);
 
   async function handleGenerate() {
     setStatus('streaming');
@@ -66,6 +84,27 @@ export default function ArticleReader({ videoDbId }: Props) {
       });
 
       if (!res.ok) {
+        // 410 from the server means ensureTranscript flagged this
+        // video as transcript-unavailable. Flip the shared status so
+        // Summary and Transcript tabs immediately render their
+        // unavailable state too.
+        if (res.status === 410) {
+          onTranscriptStatusChange('unavailable');
+          setErrorMessage('Transcript unavailable for this video.');
+          setStatus('error');
+          return;
+        }
+        // 503 means the upstream transcript provider blipped
+        // (network error / 429 / 5xx). Surface a retry-friendly
+        // error in THIS tab only — do NOT broadcast unavailable.
+        if (res.status === 503) {
+          const body = await res
+            .json()
+            .catch(() => ({ error: 'Transcript fetch failed temporarily — please try again.' }));
+          setErrorMessage(body.error ?? 'Transcript fetch failed temporarily — please try again.');
+          setStatus('error');
+          return;
+        }
         const body = await res.json().catch(() => ({ error: 'Failed to generate article.' }));
         setErrorMessage(body.error ?? 'Failed to generate article.');
         setStatus('error');
@@ -77,6 +116,14 @@ export default function ArticleReader({ videoDbId }: Props) {
         setStatus('error');
         return;
       }
+
+      // Reaching this point means the server's ensureTranscript call
+      // already succeeded (otherwise it would have returned 410
+      // before any stream body) — the transcript is now cached.
+      // Broadcast 'present' so the Transcript tab loads it
+      // automatically the moment the user switches over, instead of
+      // still showing the Fetch button.
+      onTranscriptStatusChange('present');
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -98,6 +145,9 @@ export default function ArticleReader({ videoDbId }: Props) {
       }
 
       setStatus('done');
+      // Tell the parent the Article tab now has content so its tab
+      // dot can flip from red → blue without waiting for a refresh.
+      onArticleAvailable();
     } catch (err) {
       console.error('[ArticleReader] stream error:', err);
       setErrorMessage(err instanceof Error ? err.message : 'Failed to generate article.');
@@ -116,6 +166,13 @@ export default function ArticleReader({ videoDbId }: Props) {
   }
 
   if (status === 'idle') {
+    if (transcriptStatus === 'unavailable') {
+      return (
+        <div className="py-8 text-center text-sm text-gray-500">
+          No transcript is available for this video, so an article can&rsquo;t be generated.
+        </div>
+      );
+    }
     return (
       <div className="py-8 text-center">
         <p className="mb-4 text-sm text-gray-500">
@@ -147,10 +204,7 @@ export default function ArticleReader({ videoDbId }: Props) {
 
   return (
     <div>
-      <article
-        className="prose prose-gray max-w-none"
-        style={{ fontFamily: 'Georgia, serif', fontSize: '17px', lineHeight: '1.8' }}
-      >
+      <article className="prose prose-gray max-w-none font-sans text-[17px] leading-[1.8]">
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           rehypePlugins={[
