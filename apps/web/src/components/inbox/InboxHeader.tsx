@@ -7,8 +7,8 @@ import { toast } from 'sonner';
 import { useSWRConfig } from 'swr';
 
 import { isProduction } from '@/lib/vercelEnv';
-import { resizeGoogleAvatar } from '@/lib/youtube/avatarUrl';
 
+import ChannelAvatar from './ChannelAvatar';
 import FilterBar from './FilterBar';
 import Pagination from './Pagination';
 import SearchInput from './SearchInput';
@@ -92,14 +92,7 @@ export default function InboxHeader({
       <div className="flex h-12 items-center justify-between px-4">
         <div className="flex min-w-0 items-center gap-2">
           {channelLogoUrl != null && (
-            <img
-              src={resizeGoogleAvatar(channelLogoUrl, 24)}
-              alt=""
-              className="h-6 w-6 shrink-0 rounded-full"
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = 'none';
-              }}
-            />
+            <ChannelAvatar url={channelLogoUrl} size={24} cssSize="h-6 w-6" />
           )}
           <h1 className="truncate text-sm font-semibold text-gray-900">{channelName}</h1>
           {unreadCount > 0 && (
