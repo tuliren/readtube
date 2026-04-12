@@ -25,16 +25,17 @@ const fetcher = (url: string) =>
 
 interface Props {
   videoId: string;
-  videoTitle: string;
+  /** Optional subtitle shown below the header (e.g. video title in list view). */
+  subtitle?: string;
   onClose: () => void;
 }
 
 /**
- * Notes panel that appears inline to the right of the video list.
- * Lets the user view and manage notes without navigating into the
- * video reader.
+ * Reusable inline notes side panel. Renders as a fixed-width column
+ * (w-80) with a header, compose area, and scrollable notes list.
+ * Used in both the video list view and the video reader.
  */
-export default function ListNotesPanel({ videoId, videoTitle, onClose }: Props) {
+export default function NotesPanel({ videoId, subtitle, onClose }: Props) {
   const [draft, setDraft] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -89,9 +90,11 @@ export default function ListNotesPanel({ videoId, videoTitle, onClose }: Props) 
         </button>
       </div>
 
-      <div className="border-b border-gray-100 px-4 py-2">
-        <p className="truncate text-xs text-gray-500">{videoTitle}</p>
-      </div>
+      {subtitle != null && (
+        <div className="border-b border-gray-100 px-4 py-2">
+          <p className="truncate text-xs text-gray-500">{subtitle}</p>
+        </div>
+      )}
 
       <div className="flex flex-col gap-2 px-4 py-3">
         <textarea

@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import useSWR from 'swr';
 
+import NotesPanel from '@/components/NotesPanel';
 import { Toaster } from '@/components/ui/sonner';
 import {
   PAGE_SIZE,
@@ -21,7 +22,6 @@ import ChannelSection from './ChannelSection';
 import { CommandPaletteProvider } from './CommandPalette';
 import InboxHeader from './InboxHeader';
 import { KeyboardShortcutsProvider } from './KeyboardShortcutsProvider';
-import ListNotesPanel from './ListNotesPanel';
 import VideoList from './VideoList';
 
 const fetcher = (url: string) =>
@@ -293,9 +293,9 @@ function InboxShellInner({
               </div>
             </div>
             {notesVideo != null && (
-              <ListNotesPanel
+              <NotesPanel
                 videoId={notesVideo.id}
-                videoTitle={notesVideo.title}
+                subtitle={notesVideo.title}
                 onClose={() => setNotesVideo(null)}
               />
             )}
