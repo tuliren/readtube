@@ -1,23 +1,27 @@
 /**
- * Client for the TranscriptAPI channel endpoints. Both are free (no
- * API key needed). We use /youtube/channel/latest to get the
- * channel's metadata (handle, description, subscriber count,
- * verified, logo) AND the 15 most recent videos with thumbnails +
- * view counts in a single round-trip.
+ * Client for the TranscriptAPI channel/latest endpoint. Requires an
+ * API key (the endpoint is marked "Free" in the docs but still needs
+ * auth). Returns the 15 most recent videos with thumbnails + view
+ * counts, plus basic channel metadata (channelId, title, author).
  *
- * Docs:
- *   - Resolve: https://transcriptapi.com/docs/api/#resolve-channel
- *   - Latest:  https://transcriptapi.com/docs/api/#channel-latest-rss
+ * The endpoint does NOT return richer channel metadata (handle,
+ * description, subscriber count, verified, logo) — those fields are
+ * not available from this RSS-based endpoint. Channel logos would
+ * need to come from scraping the YouTube channel page HTML, which is
+ * a future enhancement.
+ *
+ * Docs: https://transcriptapi.com/docs/api/#channel-latest-rss
  */
+import { isEmptyString } from '@/lib/string';
 
 const BASE_URL = 'https://transcriptapi.com/api/v2';
 
-// ── Response shapes (from API docs) ────────────────────────────────
+// ── Response shapes (from real API call, not docs) ─────────────────
 
-interface ChannelThumbnail {
+interface ChannelLatestThumbnail {
   url: string;
-  width: number;
-  height: number;
+  width: string;
+  height: string;
 }
 
 interface ChannelLatestVideo {
@@ -28,41 +32,29 @@ interface ChannelLatestVideo {
   published: string;
   updated: string;
   link: string;
-  description: string;
-  thumbnail: string;
-  viewCount: number;
+  description: string | null;
+  thumbnail: ChannelLatestThumbnail;
+  viewCount: string;
   starRating: {
-    count: number;
-    average: number;
-    min: number;
-    max: number;
+    count: string;
+    average: string;
+    min: string;
+    max: string;
   };
 }
 
 interface ChannelLatestResponse {
-  channelId: string;
-  title: string;
-  handle: string;
-  url: string;
-  description: string;
-  subscriberCount: number;
-  verified: boolean;
-  rssUrl: string;
-  thumbnails: ChannelThumbnail[];
-  videos: ChannelLatestVideo[];
+  channel: {
+    channelId: string;
+    title: string;
+    author: string;
+    url: string;
+    published: string;
+  };
+  results: ChannelLatestVideo[];
 }
 
 // ── Exported shapes ────────────────────────────────────────────────
-
-export interface ChannelMetadata {
-  channelId: string;
-  name: string;
-  handle: string | null;
-  description: string | null;
-  subscriberCount: number | null;
-  verified: boolean;
-  logoUrl: string | null;
-}
 
 export interface ChannelVideoMeta {
   videoId: string;
@@ -76,19 +68,29 @@ export interface ChannelVideoMeta {
 // ── Functions ──────────────────────────────────────────────────────
 
 /**
- * Fetch channel metadata and the 15 most recent videos from
- * TranscriptAPI's free RSS-backed endpoint. Returns both the
- * channel-level metadata (handle, description, logo, subscriber
- * count, verified) and per-video thumbnails + view counts.
+ * Fetch the 15 most recent videos from TranscriptAPI's RSS-backed
+ * endpoint. Returns per-video thumbnails + view counts.
  *
- * Throws on HTTP errors or network failures — the caller should
- * catch and decide whether to proceed without metadata.
+ * The `channel` parameter accepts @handles, channel URLs, or
+ * UC-prefixed channel IDs — but in practice the API is more
+ * reliable with @handles.
+ *
+ * Requires TRANSCRIPT_API_KEY. Throws on HTTP errors or network
+ * failures — the caller should catch and decide whether to proceed
+ * without metadata.
  */
 export async function fetchChannelLatest(
-  channelId: string
-): Promise<{ channel: ChannelMetadata; videos: ChannelVideoMeta[] }> {
-  const url = `${BASE_URL}/youtube/channel/latest?channel=${encodeURIComponent(channelId)}`;
-  const res = await fetch(url);
+  channelInput: string
+): Promise<{ videos: ChannelVideoMeta[] }> {
+  const apiKey = process.env.TRANSCRIPT_API_KEY;
+  if (isEmptyString(apiKey)) {
+    throw new Error('TRANSCRIPT_API_KEY is not set');
+  }
+
+  const url = `${BASE_URL}/youtube/channel/latest?channel=${encodeURIComponent(channelInput)}`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${apiKey}` },
+  });
   if (!res.ok) {
     const body = await res.text().catch(() => '');
     throw new Error(`TranscriptAPI /channel/latest ${res.status}: ${body}`);
@@ -96,30 +98,25 @@ export async function fetchChannelLatest(
 
   const data: ChannelLatestResponse = await res.json();
 
-  // Pick the largest thumbnail as the logo URL. The array typically
-  // has 48px, 88px, and 176px entries — we want the biggest for
-  // flexibility. Falls back to null if the array is empty.
-  const logo =
-    data.thumbnails?.slice().sort((a, b) => (b.width ?? 0) - (a.width ?? 0))[0]?.url ?? null;
-
-  const channel: ChannelMetadata = {
-    channelId: data.channelId,
-    name: data.title,
-    handle: data.handle || null,
-    description: data.description || null,
-    subscriberCount: data.subscriberCount ?? null,
-    verified: data.verified ?? false,
-    logoUrl: logo,
-  };
-
-  const videos: ChannelVideoMeta[] = (data.videos ?? []).map((v) => ({
+  const videos: ChannelVideoMeta[] = (data.results ?? []).map((v) => ({
     videoId: v.videoId,
     title: v.title,
     description: v.description ?? '',
     publishedAt: new Date(v.published),
-    thumbnailUrl: v.thumbnail || null,
-    viewCount: v.viewCount ?? null,
+    thumbnailUrl: v.thumbnail?.url || null,
+    viewCount: v.viewCount != null ? parseInt(String(v.viewCount), 10) || null : null,
   }));
 
-  return { channel, videos };
+  return { videos };
+}
+
+/**
+ * Construct a YouTube video thumbnail URL from the videoId.
+ * Always available — doesn't require any API call.
+ *
+ * Uses `hqdefault.jpg` (480x360) which is guaranteed to exist for
+ * all public videos.
+ */
+export function buildThumbnailUrl(videoId: string): string {
+  return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
 }

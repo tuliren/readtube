@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { verifyCronRequest } from '@/lib/cron';
 import { isEmptyString } from '@/lib/string';
-import { fetchChannelLatest } from '@/lib/youtube/channelMetadata';
+import { buildThumbnailUrl, fetchChannelLatest } from '@/lib/youtube/channelMetadata';
 import { scrapeChannel } from '@/lib/youtube/scrapeChannel';
 
 export async function POST(request: NextRequest) {
@@ -55,22 +55,12 @@ export async function POST(request: NextRequest) {
         totalNew++;
       }
 
-      // Best-effort metadata enrichment via TranscriptAPI's free RSS
-      // endpoint. Updates channel metadata (logo, handle, description,
-      // subscriber count, verified) and backfills thumbnail + viewCount
-      // on videos that were just upserted from the scraper's output.
+      // Best-effort metadata enrichment via TranscriptAPI's RSS
+      // endpoint. Backfills thumbnail + viewCount on videos that were
+      // just upserted from the scraper's output. Falls back to
+      // constructing thumbnail URLs from videoId directly.
       try {
         const meta = await fetchChannelLatest(channel.source_id);
-        await prisma.channel.update({
-          where: { id: channel.id },
-          data: {
-            handle: meta.channel.handle,
-            description: meta.channel.description,
-            subscriber_count: meta.channel.subscriberCount,
-            verified: meta.channel.verified,
-            logo_url: meta.channel.logoUrl,
-          },
-        });
         for (const videoMeta of meta.videos) {
           await prisma.video.updateMany({
             where: { channel_id: channel.id, source_id: videoMeta.videoId },
@@ -81,7 +71,16 @@ export async function POST(request: NextRequest) {
           });
         }
       } catch (metaErr) {
-        console.warn(`[cron/refresh] metadata enrichment failed for ${channel.id}:`, metaErr);
+        console.warn(
+          `[cron/refresh] TranscriptAPI enrichment failed for ${channel.id}, using fallback thumbnails:`,
+          metaErr
+        );
+        for (const video of scraped.videos) {
+          await prisma.video.updateMany({
+            where: { channel_id: channel.id, source_id: video.videoId },
+            data: { thumbnail_url: buildThumbnailUrl(video.videoId) },
+          });
+        }
       }
     } catch (err) {
       errors++;

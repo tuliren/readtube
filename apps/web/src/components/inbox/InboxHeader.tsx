@@ -75,7 +75,9 @@ export default function InboxHeader({ channelId, channelName, unreadCount, total
 
   return (
     <div className="flex h-auto shrink-0 flex-col border-b border-gray-100 bg-white">
-      {/* Title row */}
+      {/* Title row — action buttons sit next to the title/badge,
+          search stays on the right edge. This keeps the actions
+          contextually close to the thing they act on. */}
       <div className="flex h-12 items-center justify-between px-4">
         <div className="flex min-w-0 items-center gap-2">
           <h1 className="truncate text-sm font-semibold text-gray-900">{channelName}</h1>
@@ -84,9 +86,6 @@ export default function InboxHeader({ channelId, channelName, unreadCount, total
               {unreadCount}
             </span>
           )}
-        </div>
-        <div className="flex items-center gap-2">
-          <SearchInput />
           {showRefresh && (
             <button
               onClick={handleRefreshChannel}
@@ -110,6 +109,7 @@ export default function InboxHeader({ channelId, channelName, unreadCount, total
             </button>
           )}
         </div>
+        <SearchInput />
       </div>
       {/* Filter chips row + pagination on the right. The header
           itself sits above the scrolling video list and never

@@ -3,7 +3,7 @@ import { prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { isEmptyString } from '@/lib/string';
-import { fetchChannelLatest } from '@/lib/youtube/channelMetadata';
+import { buildThumbnailUrl, fetchChannelLatest } from '@/lib/youtube/channelMetadata';
 import { scrapeChannel } from '@/lib/youtube/scrapeChannel';
 
 /**
@@ -79,18 +79,10 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
   }
 
   // Step 2: enrich with TranscriptAPI metadata (best-effort).
+  // Step 2: enrich with TranscriptAPI metadata (best-effort).
+  // Falls back to constructing thumbnail URLs from videoId.
   try {
     const meta = await fetchChannelLatest(channel.source_id);
-    await prisma.channel.update({
-      where: { id: channel.id },
-      data: {
-        handle: meta.channel.handle,
-        description: meta.channel.description,
-        subscriber_count: meta.channel.subscriberCount,
-        verified: meta.channel.verified,
-        logo_url: meta.channel.logoUrl,
-      },
-    });
     for (const videoMeta of meta.videos) {
       await prisma.video.updateMany({
         where: { channel_id: channel.id, source_id: videoMeta.videoId },
@@ -101,8 +93,21 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
       });
     }
   } catch (metaErr) {
-    console.warn(`[channels/refresh] metadata enrichment failed for ${channelId}:`, metaErr);
-    // Proceed — the scrape data is already saved.
+    console.warn(
+      `[channels/refresh] TranscriptAPI failed for ${channelId}, using fallback thumbnails:`,
+      metaErr
+    );
+    // Fallback: construct thumbnails from videoId for all videos in this channel.
+    const allVideos = await prisma.video.findMany({
+      where: { channel_id: channel.id, thumbnail_url: null },
+      select: { id: true, source_id: true },
+    });
+    for (const v of allVideos) {
+      await prisma.video.update({
+        where: { id: v.id },
+        data: { thumbnail_url: buildThumbnailUrl(v.source_id) },
+      });
+    }
   }
 
   return NextResponse.json({ channelId, videosProcessed });
