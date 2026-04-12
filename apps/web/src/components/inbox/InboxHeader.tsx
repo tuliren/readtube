@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { useSWRConfig } from 'swr';
 
 import { isProduction } from '@/lib/vercelEnv';
+import { resizeGoogleAvatar } from '@/lib/youtube/avatarUrl';
 
 import FilterBar from './FilterBar';
 import Pagination from './Pagination';
@@ -15,13 +16,23 @@ import SearchInput from './SearchInput';
 interface Props {
   channelId: string | null;
   channelName: string;
+  /** Channel logo URL. Only available when viewing a single channel
+   *  that has a logo persisted from the scraper. Null for the
+   *  Inbox/Starred/etc. aggregate views. */
+  channelLogoUrl: string | null;
   unreadCount: number;
   /** Total videos that match the current filter (across all pages).
    *  Drives the Page X of Y control on the right side of the header. */
   totalVideos: number;
 }
 
-export default function InboxHeader({ channelId, channelName, unreadCount, totalVideos }: Props) {
+export default function InboxHeader({
+  channelId,
+  channelName,
+  channelLogoUrl,
+  unreadCount,
+  totalVideos,
+}: Props) {
   const { mutate } = useSWRConfig();
   const [marking, setMarking] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -80,6 +91,16 @@ export default function InboxHeader({ channelId, channelName, unreadCount, total
           contextually close to the thing they act on. */}
       <div className="flex h-12 items-center justify-between px-4">
         <div className="flex min-w-0 items-center gap-2">
+          {channelLogoUrl != null && (
+            <img
+              src={resizeGoogleAvatar(channelLogoUrl, 24)}
+              alt=""
+              className="h-6 w-6 shrink-0 rounded-full"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = 'none';
+              }}
+            />
+          )}
           <h1 className="truncate text-sm font-semibold text-gray-900">{channelName}</h1>
           {unreadCount > 0 && (
             <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-700">

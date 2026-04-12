@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { displayChannelName } from '@/lib/inbox/channelName';
 import type { ChannelData, FolderData } from '@/lib/types';
+import { resizeGoogleAvatar } from '@/lib/youtube/avatarUrl';
 
 import { SidebarBadge, SidebarRowContent, sidebarRowClass } from './SidebarRow';
 
@@ -57,10 +58,13 @@ export default function DraggableChannelLink({ channel, isSelected, folders, onM
         >
           {channel.logoUrl != null && (
             <img
-              src={channel.logoUrl}
+              src={resizeGoogleAvatar(channel.logoUrl, 40)}
               alt=""
               className="h-5 w-5 shrink-0 rounded-full"
               loading="lazy"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = 'none';
+              }}
             />
           )}
           <SidebarRowContent

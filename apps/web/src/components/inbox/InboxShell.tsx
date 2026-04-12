@@ -140,6 +140,7 @@ export default function InboxShell({
     selectedChannelId != null ? (channels.find((c) => c.id === selectedChannelId) ?? null) : null;
   const headerName =
     selectedChannel != null ? selectedChannel.name : (activeView?.label ?? 'Inbox');
+  const headerLogoUrl = selectedChannel?.logoUrl ?? null;
   const headerUnread = selectedChannel != null ? selectedChannel.unreadCount : totalUnread;
   // Empty-state copy follows the same precedence: a channel narrow
   // gets a channel-specific message; otherwise the active named view
@@ -162,6 +163,7 @@ export default function InboxShell({
           selectedVideoId={selectedVideoId}
           totalUnread={totalUnread}
           headerName={headerName}
+          headerLogoUrl={headerLogoUrl}
           headerUnread={headerUnread}
           emptyMessage={emptyMessage}
           showEmptyState={showEmptyState}
@@ -185,6 +187,7 @@ interface InnerProps {
   selectedVideoId: string | null;
   totalUnread: number;
   headerName: string;
+  headerLogoUrl: string | null;
   headerUnread: number;
   emptyMessage: string;
   showEmptyState: boolean;
@@ -203,6 +206,7 @@ function InboxShellInner({
   selectedVideoId,
   totalUnread,
   headerName,
+  headerLogoUrl,
   headerUnread,
   emptyMessage,
   showEmptyState,
@@ -261,6 +265,7 @@ function InboxShellInner({
             <InboxHeader
               channelId={selectedChannelId}
               channelName={headerName}
+              channelLogoUrl={headerLogoUrl}
               unreadCount={headerUnread}
               totalVideos={totalVideos}
             />
