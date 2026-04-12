@@ -29,7 +29,7 @@ export default function NotesPanelResponsive({ videoId, subtitle, isMobile, onCl
       >
         <SheetContent
           side="bottom"
-          className="flex h-[70vh] flex-col p-0"
+          className="flex h-[60vh] flex-col p-0"
           aria-describedby={undefined}
         >
           <SheetTitle className="sr-only">Notes</SheetTitle>
