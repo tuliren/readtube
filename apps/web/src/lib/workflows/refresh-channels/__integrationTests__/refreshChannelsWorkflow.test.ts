@@ -369,7 +369,7 @@ describe('refreshChannel', () => {
     expect(updated!.logo_url).toBeNull();
   });
 
-  it('skips scraping when channel has logo and all videos have duration', async () => {
+  it('does not overwrite logo_url when scrape returns null', async () => {
     const ch = await createChannel({ sourceId: 'UC_full', name: 'Full Ch' });
     // Pre-set logo_url on channel
     await global.testPrisma.channel.update({
@@ -397,11 +397,22 @@ describe('refreshChannel', () => {
         },
       ])
     );
+    // Scrape returns null logo — should not overwrite existing
+    mockScrapeChannel.mockResolvedValueOnce({
+      channelId: 'UC_full',
+      name: 'Full Ch',
+      logoUrl: null,
+      videos: [],
+    });
 
     await refreshChannel({ id: ch.id, source_id: ch.source_id, name: ch.name });
 
-    // scrapeChannel should not have been called
-    expect(mockScrapeChannel).not.toHaveBeenCalled();
+    // Scrape is always called now (for logo freshness)
+    expect(mockScrapeChannel).toHaveBeenCalled();
+
+    // Existing logo_url preserved when scrape returns null
+    const updated = await global.testPrisma.channel.findUnique({ where: { id: ch.id } });
+    expect(updated!.logo_url).toBe('https://existing-logo.jpg');
 
     // duration_seconds should be preserved, not overwritten
     const video = await global.testPrisma.video.findFirst({
