@@ -64,31 +64,32 @@ model User {
 }
 
 model Channel {
-  id               String            @id @default(cuid())
-  source_type      VideoPlatformType @default(YOUTUBE)
+  id          String            @id @default(cuid())
+  source_type VideoPlatformType @default(YOUTUBE)
   // source platform channel id
-  source_id        String            @unique
-  name             String
-  rss_url          String
+  source_id   String            @unique
+  name        String
+  rss_url     String
   // Extended metadata populated from TranscriptAPI /youtube/channel/latest.
   // All nullable because they're backfilled incrementally — older channels
   // may not have them until the next cron refresh picks them up.
-  handle           String?
-  description      String?
-  verified         Boolean           @default(false)
+  handle      String?
+  description String?
+  // TODO: remove this column, which is not used at all.
+  verified    Boolean           @default(false)
   // URL to the channel's avatar/logo image. Sourced from the `thumbnails`
   // array in the TranscriptAPI response. Typically a 48px or 88px square
   // hosted on yt3.ggpht.com.
-  logo_url         String?
-  created_at       DateTime          @default(now())
-  updated_at       DateTime          @updatedAt
+  logo_url    String?
+  created_at  DateTime          @default(now())
+  updated_at  DateTime          @updatedAt
 
   videos        Video[]
   subscriptions UserSubscription[]
 }
 
 model UserSubscription {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   user_id    String
   channel_id String
   // Per-subscription "read watermark". Videos in this channel whose
@@ -117,33 +118,33 @@ model UserSubscription {
 }
 
 model Video {
-  id           String   @id @default(cuid())
-  channel_id   String
+  id                     String                   @id @default(cuid())
+  channel_id             String
   // source platform video id
-  source_id    String
-  title        String
-  description  String?
-  published_at DateTime
-  created_at   DateTime @default(now())
+  source_id              String
+  title                  String
+  description            String?
+  published_at           DateTime
+  created_at             DateTime                 @default(now())
   // Length of the video in seconds. Nullable because the channel scraper
   // may not always capture the duration string (Shorts, ad slots, etc.)
   // and we backfill incrementally as the cron refresh runs.
-  duration_seconds Int?
+  duration_seconds       Int?
   // URL to the video's thumbnail image. Sourced from the TranscriptAPI
   // /youtube/channel/latest RSS response. Typically a 480×360 or
   // maxresdefault hosted on i.ytimg.com.
-  thumbnail_url String?
+  thumbnail_url          String?
   // Sticky flag set the first time we attempt to fetch a transcript and
   // come back empty. Once true, the transcript route refuses to retry —
   // some videos genuinely have no captions and re-hammering the upstream
   // API on every reader open is wasteful for the user and the provider.
   // Reset by hand if a captionless video later gains captions.
-  transcript_unavailable Boolean @default(false)
+  transcript_unavailable Boolean                  @default(false)
   // Full-text search vector over title + description. Backed by a STORED
   // GENERATED column — the migration SQL creates it with to_tsvector +
   // setweight. Prisma sees it as Unsupported, which is fine for writes
   // (generated) and for raw-SQL reads.
-  search_tsv   Unsupported("tsvector")?
+  search_tsv             Unsupported("tsvector")?
 
   channel      Channel                @relation(fields: [channel_id], references: [id], onDelete: Cascade)
   transcripts  Transcript[]
