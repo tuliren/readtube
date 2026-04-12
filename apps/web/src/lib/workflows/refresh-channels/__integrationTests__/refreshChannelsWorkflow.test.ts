@@ -10,6 +10,7 @@ import {
   refreshChannel,
 } from '@/lib/workflows/refresh-channels/steps';
 import type { ChannelMeta, ChannelVideoMeta } from '@/lib/youtube/channelMetadata';
+import type { ScrapedChannel } from '@/lib/youtube/scrapeChannel';
 
 // ─── Module mocks (hoisted by Jest) ──────────────────────────────
 
@@ -36,6 +37,13 @@ const mockFetchChannelLatest = jest.fn<
 jest.mock('@/lib/youtube/channelMetadata', () => ({
   ...jest.requireActual('@/lib/youtube/channelMetadata'),
   fetchChannelLatest: (input: string) => mockFetchChannelLatest(input),
+}));
+
+const mockScrapeChannel = jest.fn<Promise<ScrapedChannel>, [string]>();
+
+jest.mock('@/lib/youtube/scrapeChannel', () => ({
+  ...jest.requireActual('@/lib/youtube/scrapeChannel'),
+  scrapeChannel: (url: string) => mockScrapeChannel(url),
 }));
 
 // ─── Helpers ─────────────────────────────────────────────────────
@@ -75,6 +83,14 @@ function makeApiResponse(
 
 beforeEach(async () => {
   mockFetchChannelLatest.mockReset();
+  mockScrapeChannel.mockReset();
+  // Default: scrape returns no extra data (logo/duration tests override this)
+  mockScrapeChannel.mockResolvedValue({
+    channelId: 'UC_default',
+    name: 'Default',
+    logoUrl: null,
+    videos: [],
+  });
   await global.testPrisma.video.deleteMany();
   await global.testPrisma.channel.deleteMany();
 });
@@ -284,6 +300,73 @@ describe('refreshChannel', () => {
     expect(videos[1]!.source_id).toBe('vid_old');
     expect(videos[1]!.title).toBe('New Title');
     expect(videos[1]!.description).toBe('New desc');
+  });
+
+  it('persists logo_url from scrape and duration_seconds per video', async () => {
+    const ch = await createChannel({ sourceId: 'UC_logo', name: 'Logo Ch' });
+    mockFetchChannelLatest.mockResolvedValueOnce(
+      makeApiResponse('Logo Ch', [
+        {
+          videoId: 'vid_dur',
+          title: 'With Duration',
+          published: '2026-02-01T00:00:00Z',
+          description: 'Test',
+        },
+      ])
+    );
+    mockScrapeChannel.mockResolvedValueOnce({
+      channelId: 'UC_logo',
+      name: 'Logo Ch',
+      logoUrl: 'https://yt3.googleusercontent.com/logo.jpg',
+      videos: [
+        {
+          videoId: 'vid_dur',
+          title: 'With Duration',
+          description: '',
+          publishedAt: new Date('2026-02-01T00:00:00Z'),
+          durationSeconds: 754,
+        },
+      ],
+    });
+
+    await refreshChannel({ id: ch.id, source_id: ch.source_id, name: ch.name });
+
+    const updated = await global.testPrisma.channel.findUnique({ where: { id: ch.id } });
+    expect(updated!.logo_url).toBe('https://yt3.googleusercontent.com/logo.jpg');
+
+    const video = await global.testPrisma.video.findFirst({
+      where: { channel_id: ch.id, source_id: 'vid_dur' },
+    });
+    expect(video!.duration_seconds).toBe(754);
+  });
+
+  it('still succeeds when scraping fails (best-effort)', async () => {
+    const ch = await createChannel({ sourceId: 'UC_scrape_fail', name: 'Scrape Fail' });
+    mockFetchChannelLatest.mockResolvedValueOnce(
+      makeApiResponse('Scrape Fail', [
+        {
+          videoId: 'vid_ok',
+          title: 'Still Works',
+          published: '2026-02-01T00:00:00Z',
+          description: 'Yes',
+        },
+      ])
+    );
+    mockScrapeChannel.mockRejectedValueOnce(new Error('YouTube blocked'));
+
+    const result = await refreshChannel({ id: ch.id, source_id: ch.source_id, name: ch.name });
+
+    expect(result.videosProcessed).toBe(1);
+
+    const video = await global.testPrisma.video.findFirst({
+      where: { channel_id: ch.id, source_id: 'vid_ok' },
+    });
+    expect(video!.title).toBe('Still Works');
+    expect(video!.duration_seconds).toBeNull();
+
+    const updated = await global.testPrisma.channel.findUnique({ where: { id: ch.id } });
+    expect(updated!.checked_at).not.toBeNull();
+    expect(updated!.logo_url).toBeNull();
   });
 });
 

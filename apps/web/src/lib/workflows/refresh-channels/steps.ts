@@ -2,6 +2,7 @@ import { prisma } from '@readtube/database';
 
 import { isEmptyString } from '@/lib/string';
 import { fetchChannelLatest } from '@/lib/youtube/channelMetadata';
+import { scrapeChannel } from '@/lib/youtube/scrapeChannel';
 
 /** Number of days before a channel is considered stale and eligible for refresh. */
 export const STALE_DAYS = 5;
@@ -46,9 +47,31 @@ export async function refreshChannel(channel: StaleChannel): Promise<RefreshResu
 
   const data = await fetchChannelLatest(channel.source_id);
 
+  // Best-effort scrape for logo_url and duration_seconds — fields the
+  // TranscriptAPI RSS endpoint doesn't provide.
+  let logoUrl: string | null = null;
+  const durationMap = new Map<string, number>();
+  try {
+    const channelPageUrl = `https://www.youtube.com/channel/${channel.source_id}`;
+    const scraped = await scrapeChannel(channelPageUrl);
+    logoUrl = scraped.logoUrl;
+    for (const v of scraped.videos) {
+      if (v.durationSeconds != null) {
+        durationMap.set(v.videoId, v.durationSeconds);
+      }
+    }
+  } catch (err) {
+    console.warn(
+      `[refresh-channels] scrape failed for ${channel.id}, skipping logo/duration:`,
+      err
+    );
+  }
+
   const nameUpdated = data.channel.title !== channel.name;
 
   for (const video of data.videos) {
+    const durationSeconds = durationMap.get(video.videoId) ?? null;
+
     await prisma.video.upsert({
       where: {
         video_unique_channel_source: {
@@ -63,11 +86,13 @@ export async function refreshChannel(channel: StaleChannel): Promise<RefreshResu
         description: video.description,
         published_at: video.publishedAt,
         thumbnail_url: video.thumbnailUrl,
+        duration_seconds: durationSeconds,
       },
       update: {
         title: video.title,
         ...(isEmptyString(video.description) ? {} : { description: video.description }),
         ...(video.thumbnailUrl != null ? { thumbnail_url: video.thumbnailUrl } : {}),
+        ...(durationSeconds != null ? { duration_seconds: durationSeconds } : {}),
       },
     });
   }
@@ -76,6 +101,7 @@ export async function refreshChannel(channel: StaleChannel): Promise<RefreshResu
     where: { id: channel.id },
     data: {
       ...(nameUpdated ? { name: data.channel.title } : {}),
+      ...(logoUrl != null ? { logo_url: logoUrl } : {}),
       checked_at: new Date(),
     },
   });
