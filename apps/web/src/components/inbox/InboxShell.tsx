@@ -6,7 +6,13 @@ import { useMemo, useState } from 'react';
 import useSWR from 'swr';
 
 import { Toaster } from '@/components/ui/sonner';
-import { encodeInboxQuery, extractInboxSearchParams, parseInboxQuery } from '@/lib/inbox/filter';
+import {
+  PAGE_SIZE,
+  encodeInboxQuery,
+  extractInboxSearchParams,
+  parseInboxQuery,
+} from '@/lib/inbox/filter';
+import type { InboxVideosResult } from '@/lib/inbox/loadVideos';
 import { resolveInboxView } from '@/lib/inbox/views';
 import type { ChannelData, VideoData } from '@/lib/types';
 
@@ -28,6 +34,11 @@ const fetcher = (url: string) =>
 interface Props {
   initialChannels: ChannelData[];
   initialVideos: VideoData[];
+  /** Total matching videos across all pages, computed by the SSR
+   *  loadInboxVideos call. Used as the SWR fallback so the header
+   *  can render Page X of N immediately without waiting for the
+   *  client fetch. */
+  initialTotal: number;
   selectedChannelId: string | null;
   selectedVideoId: string | null;
   children?: React.ReactNode;
@@ -36,6 +47,7 @@ interface Props {
 export default function InboxShell({
   initialChannels,
   initialVideos,
+  initialTotal,
   selectedChannelId,
   selectedVideoId,
   children,
@@ -67,17 +79,25 @@ export default function InboxShell({
   );
 
   // Capture the videosUrl that matched server-side rendering on mount.
-  // We can only safely fall back to `initialVideos` for that exact key —
-  // otherwise SWR will hand the SSR-rendered list back as the "fallback"
-  // for any new key (every filter chip toggle, search edit, saved view
-  // click) and the user briefly sees the old, wrong list flash before
-  // the correct fetch resolves. Pre-PR this only fired on channel
-  // switch; the filter system makes the videosUrl change on nearly
-  // every interaction.
+  // We can only safely fall back to the SSR payload for that exact
+  // key — otherwise SWR would hand the SSR-rendered list (and total)
+  // back as the "fallback" for any new key (every filter chip toggle,
+  // search edit, saved view click, page change) and the user would
+  // briefly see the old, wrong list flash before the correct fetch
+  // resolves. Pre-PR this only fired on channel switch; the filter
+  // system makes the videosUrl change on nearly every interaction.
   const [ssrVideosUrl] = useState(videosUrl);
-  const videosFallback = videosUrl === ssrVideosUrl ? initialVideos : undefined;
+  const videosFallback: InboxVideosResult | undefined =
+    videosUrl === ssrVideosUrl
+      ? {
+          videos: initialVideos,
+          total: initialTotal,
+          page: Math.max(1, parseInboxQuery(extractInboxSearchParams(searchParams)).page ?? 1),
+          pageSize: PAGE_SIZE,
+        }
+      : undefined;
 
-  // No destructuring default — we explicitly want `videos` to be
+  // No destructuring default — we explicitly want `data` to be
   // undefined while a non-SSR key is loading so the consumer can
   // render a loading skeleton instead of an empty-state message
   // (which would otherwise flash for ~100ms on every filter change).
@@ -85,16 +105,17 @@ export default function InboxShell({
   // previous key's data would be just as wrong as the SSR fallback
   // for the user's freshly-toggled filter (e.g., toggling Starred
   // would show the old unfiltered list briefly).
-  const { data: videos } = useSWR<VideoData[]>(videosUrl, fetcher, {
+  const { data: videosData } = useSWR<InboxVideosResult>(videosUrl, fetcher, {
     fallbackData: videosFallback,
   });
   // `isLoading` reflects "we have no data to show yet" — i.e. the
   // SWR cache has nothing for this key AND no SSR fallback applied.
-  // `videos === undefined` is the right signal because the SSR
-  // fallback path resolves synchronously to an array, so any
-  // undefined value means we're actively waiting on a fetch.
-  const isLoadingVideos = videos === undefined;
-  const videoList = videos ?? [];
+  // `videosData === undefined` is the right signal because the SSR
+  // fallback path resolves synchronously, so any undefined value
+  // means we're actively waiting on a fetch.
+  const isLoadingVideos = videosData === undefined;
+  const videoList = videosData?.videos ?? [];
+  const totalVideos = videosData?.total ?? 0;
 
   const totalUnread = channels.reduce((sum, c) => sum + c.unreadCount, 0);
 
@@ -135,6 +156,7 @@ export default function InboxShell({
         <InboxShellInner
           channels={channels}
           videos={videoList}
+          totalVideos={totalVideos}
           isLoadingVideos={isLoadingVideos}
           selectedChannelId={selectedChannelId}
           selectedVideoId={selectedVideoId}
@@ -157,6 +179,7 @@ export default function InboxShell({
 interface InnerProps {
   channels: ChannelData[];
   videos: VideoData[];
+  totalVideos: number;
   isLoadingVideos: boolean;
   selectedChannelId: string | null;
   selectedVideoId: string | null;
@@ -174,6 +197,7 @@ interface InnerProps {
 function InboxShellInner({
   channels,
   videos,
+  totalVideos,
   isLoadingVideos,
   selectedChannelId,
   selectedVideoId,
@@ -238,6 +262,7 @@ function InboxShellInner({
               channelId={selectedChannelId}
               channelName={headerName}
               unreadCount={headerUnread}
+              totalVideos={totalVideos}
             />
             <div className="flex-1 overflow-y-auto">
               <VideoList

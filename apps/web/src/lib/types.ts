@@ -88,4 +88,11 @@ export interface InboxQuery {
   from?: string;
   to?: string;
   sort?: 'newest' | 'oldest';
+  /**
+   * 1-indexed page number for the paginated video list. Default is
+   * page 1 when omitted. Encoded into the URL via the InboxQuery
+   * codec; the codec drops it on encode when it equals 1, so the
+   * default state is still a clean URL.
+   */
+  page?: number;
 }

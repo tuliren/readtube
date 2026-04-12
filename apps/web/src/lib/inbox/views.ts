@@ -139,5 +139,8 @@ function isPlainInbox(query: InboxQuery): boolean {
   if (query.sort != null && query.sort !== 'newest') {
     return false;
   }
+  // Page is intentionally NOT checked — "Inbox page 2" should still
+  // resolve to the Inbox view so the header label and empty-state
+  // copy stay correct as the user paginates within a view.
   return true;
 }

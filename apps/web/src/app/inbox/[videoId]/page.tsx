@@ -101,12 +101,13 @@ export default async function VideoPage({ params, searchParams }: Props) {
   // byte-for-byte identical to what SWR would have fetched for this
   // URL. Replaces the bespoke channel-only where + JS archive/snooze
   // post-filter that ignored every other InboxQuery key.
-  const sidebarVideos = await loadInboxVideos(prisma, userId, query);
+  const initial = await loadInboxVideos(prisma, userId, query);
 
   return (
     <InboxShell
       initialChannels={channels}
-      initialVideos={sidebarVideos}
+      initialVideos={initial.videos}
+      initialTotal={initial.total}
       selectedChannelId={selectedChannelId}
       selectedVideoId={videoDbId}
     >

@@ -50,6 +50,17 @@ export function useInboxQuery() {
           delete next[key];
         }
       }
+      // Any non-page change (filter chip toggle, search edit, saved
+      // view jump, etc.) resets the page back to 1. The user expects
+      // to land on the first page of the new view, not at "page 5"
+      // of an entirely different filter. The page setter still
+      // works because a `{ page: N }` patch is page-only and so
+      // skipped by this branch.
+      const patchKeys = Object.keys(patch) as (keyof InboxQuery)[];
+      const onlyPagePatch = patchKeys.length > 0 && patchKeys.every((k) => k === 'page');
+      if (!onlyPagePatch) {
+        delete next.page;
+      }
       setQuery(next);
     },
     [query, setQuery]
