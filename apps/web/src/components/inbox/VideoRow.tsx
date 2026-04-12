@@ -151,6 +151,15 @@ export default function VideoRow({ video, isSelected, isChecked, onToggleChecked
             <span className="mt-1.5 h-2 w-2 shrink-0" />
           )}
 
+          {video.thumbnailUrl != null && (
+            <img
+              src={video.thumbnailUrl}
+              alt=""
+              className="mt-0.5 h-12 w-[80px] shrink-0 rounded object-cover"
+              loading="lazy"
+            />
+          )}
+
           <div className="min-w-0 flex-1">
             <p
               className={`truncate text-sm leading-snug ${

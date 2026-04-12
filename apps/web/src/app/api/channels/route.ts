@@ -9,6 +9,7 @@ import {
   countUnreadVideos,
   getSubscribedChannelsWithUnread,
 } from '@/lib/subscriptions';
+import { fetchChannelLatest } from '@/lib/youtube/channelMetadata';
 import { buildRssUrl, extractChannelId, extractHandle } from '@/lib/youtube/channelUrl';
 import { scrapeChannel } from '@/lib/youtube/scrapeChannel';
 
@@ -28,6 +29,7 @@ export async function GET() {
       sourceId: row.source_id,
       name: row.name,
       rssUrl: row.rss_url,
+      logoUrl: row.logo_url ?? null,
       createdAt: row.created_at,
       unreadCount: row.unread_count,
       folderId: row.folder_id,
@@ -126,6 +128,41 @@ export async function POST(request: NextRequest) {
     update: {},
   });
 
+  // Best-effort metadata enrichment via TranscriptAPI's free RSS endpoint.
+  // This gives us the channel logo, description, subscriber count, handle,
+  // verified status, and per-video thumbnails + view counts. If it fails
+  // (network, rate limit, etc.) we proceed without — the channel was
+  // already saved with the scraper's data, and the cron can backfill
+  // later.
+  try {
+    const meta = await fetchChannelLatest(sourceId);
+    // Update the channel row with the richer metadata.
+    await prisma.channel.update({
+      where: { id: channel.id },
+      data: {
+        handle: meta.channel.handle,
+        description: meta.channel.description,
+        subscriber_count: meta.channel.subscriberCount,
+        verified: meta.channel.verified,
+        logo_url: meta.channel.logoUrl,
+      },
+    });
+    // Backfill thumbnail + viewCount on videos that were just created
+    // from the scraper's output. The scraper doesn't provide these
+    // fields, but the RSS feed does — match by source_id (videoId).
+    for (const videoMeta of meta.videos) {
+      await prisma.video.updateMany({
+        where: { channel_id: channel.id, source_id: videoMeta.videoId },
+        data: {
+          thumbnail_url: videoMeta.thumbnailUrl,
+          view_count: videoMeta.viewCount,
+        },
+      });
+    }
+  } catch (err) {
+    console.warn('[channels/POST] metadata enrichment failed (proceeding without):', err);
+  }
+
   // Compute the initial read watermark per the configured subscription mode
   // (all_new / none_new / recent_n_new). Done after the channel + its videos
   // have been created above so the videos are queryable.
@@ -152,6 +189,7 @@ export async function POST(request: NextRequest) {
       source_id: true,
       name: true,
       rss_url: true,
+      logo_url: true,
       created_at: true,
     },
   });
@@ -163,6 +201,7 @@ export async function POST(request: NextRequest) {
       sourceId: channelRow.source_id,
       name: channelRow.name,
       rssUrl: channelRow.rss_url,
+      logoUrl: channelRow.logo_url,
       createdAt: channelRow.created_at,
       unreadCount,
       folderId: null,

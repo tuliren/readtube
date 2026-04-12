@@ -55,6 +55,14 @@ export default function DraggableChannelLink({ channel, isSelected, folders, onM
           className={`${sidebarRowClass(isSelected)} flex-1 cursor-grab active:cursor-grabbing`}
           title="Click to open · drag to move to a folder"
         >
+          {channel.logoUrl != null && (
+            <img
+              src={channel.logoUrl}
+              alt=""
+              className="h-5 w-5 shrink-0 rounded-full"
+              loading="lazy"
+            />
+          )}
           <SidebarRowContent
             label={displayChannelName(channel.name)}
             trailing={<SidebarBadge count={channel.unreadCount} />}

@@ -142,6 +142,16 @@ export default function VideoReader({ video }: Props) {
 
       {/* Article */}
       <article className="mx-auto w-full max-w-3xl px-6 py-8">
+        {/* Video thumbnail hero */}
+        {video.thumbnailUrl != null && (
+          <img
+            src={video.thumbnailUrl}
+            alt={video.title}
+            className="mb-5 w-full rounded-lg object-cover"
+            loading="eager"
+          />
+        )}
+
         {/* Meta: video title */}
         <h1 className="text-2xl font-bold leading-tight text-gray-900">{video.title}</h1>
 

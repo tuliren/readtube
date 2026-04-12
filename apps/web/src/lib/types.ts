@@ -3,6 +3,11 @@ export interface ChannelData {
   sourceId: string;
   name: string;
   rssUrl: string;
+  /** URL to the channel's logo/avatar. Populated from the
+   *  TranscriptAPI /youtube/channel/latest endpoint. Null for
+   *  channels that were added before this feature or whose
+   *  metadata enrichment failed. */
+  logoUrl: string | null;
   createdAt: string;
   unreadCount: number;
   folderId: string | null;
@@ -32,6 +37,10 @@ export interface VideoData {
   // Length of the video in seconds, or null when the channel scraper
   // hasn't captured it yet (Shorts, ad slots, pre-backfill rows).
   durationSeconds: number | null;
+  // URL to the video's thumbnail image (typically i.ytimg.com).
+  thumbnailUrl: string | null;
+  // Total view count at the time of the last scrape.
+  viewCount: number | null;
   // Sticky "we've already tried and there's nothing here" flag set on
   // the Video row when a transcript fetch came back empty. Used by the
   // reader to skip retry attempts and to disable Generate buttons in

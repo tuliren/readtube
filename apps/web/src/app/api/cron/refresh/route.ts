@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { verifyCronRequest } from '@/lib/cron';
 import { isEmptyString } from '@/lib/string';
+import { fetchChannelLatest } from '@/lib/youtube/channelMetadata';
 import { scrapeChannel } from '@/lib/youtube/scrapeChannel';
 
 export async function POST(request: NextRequest) {
@@ -52,6 +53,35 @@ export async function POST(request: NextRequest) {
           },
         });
         totalNew++;
+      }
+
+      // Best-effort metadata enrichment via TranscriptAPI's free RSS
+      // endpoint. Updates channel metadata (logo, handle, description,
+      // subscriber count, verified) and backfills thumbnail + viewCount
+      // on videos that were just upserted from the scraper's output.
+      try {
+        const meta = await fetchChannelLatest(channel.source_id);
+        await prisma.channel.update({
+          where: { id: channel.id },
+          data: {
+            handle: meta.channel.handle,
+            description: meta.channel.description,
+            subscriber_count: meta.channel.subscriberCount,
+            verified: meta.channel.verified,
+            logo_url: meta.channel.logoUrl,
+          },
+        });
+        for (const videoMeta of meta.videos) {
+          await prisma.video.updateMany({
+            where: { channel_id: channel.id, source_id: videoMeta.videoId },
+            data: {
+              thumbnail_url: videoMeta.thumbnailUrl,
+              ...(videoMeta.viewCount != null ? { view_count: videoMeta.viewCount } : {}),
+            },
+          });
+        }
+      } catch (metaErr) {
+        console.warn(`[cron/refresh] metadata enrichment failed for ${channel.id}:`, metaErr);
       }
     } catch (err) {
       errors++;
