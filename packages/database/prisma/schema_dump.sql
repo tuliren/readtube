@@ -42,6 +42,7 @@ CREATE TABLE "Channel" (
   "description" TEXT,
   "verified" BOOLEAN NOT NULL DEFAULT false,
   "logo_url" TEXT,
+  "checked_at" TIMESTAMP(3),
   CONSTRAINT "Channel_pkey" PRIMARY KEY ("id")
 );
 
