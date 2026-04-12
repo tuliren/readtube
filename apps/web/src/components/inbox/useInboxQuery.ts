@@ -21,10 +21,11 @@ export function useInboxQuery() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  // Unwrap the `from` indirection used by the reader: in `/inbox/<id>`
-  // the canonical filter context lives in `?from=<encoded-inner>`
-  // rather than as direct top-level params, so the FilterBar / saved
-  // views / search box still see the same query they came from.
+  // Unwrap the `returnTo` indirection used by the reader: in
+  // `/inbox/<id>` the canonical filter context lives in
+  // `?returnTo=<encoded-inner>` rather than as direct top-level
+  // params, so the FilterBar / saved views / search box still see
+  // the same query they came from.
   const query = useMemo<InboxQuery>(
     () => parseInboxQuery(extractInboxSearchParams(searchParams)),
     [searchParams]

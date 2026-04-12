@@ -141,9 +141,10 @@ export async function loadInboxVideos(
  * have a `request.nextUrl.searchParams` to hand off, so this small
  * adapter keeps both call sites going through the canonical codec.
  *
- * Also unwraps the `from` indirection used by the reader Back-button
- * flow: when the URL is `/inbox/<id>?from=channelId%3Dabc%26starred%3D1`
- * the inner query is what we actually want to filter against.
+ * Also unwraps the `returnTo` indirection used by the reader Back-
+ * button flow: when the URL is
+ * `/inbox/<id>?returnTo=channelId%3Dabc%26starred%3D1` the inner
+ * query is what we actually want to filter against.
  */
 export function searchParamsToInboxQuery(
   raw: Record<string, string | string[] | undefined>

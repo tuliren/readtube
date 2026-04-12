@@ -154,21 +154,22 @@ describe('inboxQueriesEqual', () => {
 });
 
 describe('extractInboxSearchParams', () => {
-  it('passes through plain inbox params unchanged when no `from` is present', () => {
+  it('passes through plain inbox params unchanged when no `returnTo` is present', () => {
     const result = extractInboxSearchParams(new URLSearchParams('channelId=abc&starred=1'));
     expect(result.toString()).toBe('channelId=abc&starred=1');
   });
 
-  it('returns the parsed `from` value when present, ignoring siblings', () => {
-    const raw = new URLSearchParams('from=channelId%3Dabc%26starred%3D1&unread=1');
+  it('returns the parsed `returnTo` value when present, ignoring siblings', () => {
+    const raw = new URLSearchParams('returnTo=channelId%3Dabc%26starred%3D1&unread=1');
     const result = extractInboxSearchParams(raw);
-    // The inner `from` content wins; the outer `unread=1` is dropped
-    // because the reader URL does not carry direct filter params.
+    // The inner `returnTo` content wins; the outer `unread=1` is
+    // dropped because the reader URL does not carry direct filter
+    // params.
     expect(result.toString()).toBe('channelId=abc&starred=1');
   });
 
-  it('strips an empty `from` and keeps the rest', () => {
-    const result = extractInboxSearchParams(new URLSearchParams('from=&channelId=abc'));
+  it('strips an empty `returnTo` and keeps the rest', () => {
+    const result = extractInboxSearchParams(new URLSearchParams('returnTo=&channelId=abc'));
     expect(result.toString()).toBe('channelId=abc');
   });
 
@@ -182,5 +183,25 @@ describe('extractInboxSearchParams', () => {
     const result = extractInboxSearchParams(raw);
     result.set('starred', '1');
     expect(raw.toString()).toBe('channelId=abc');
+  });
+
+  it('preserves the InboxQuery `from` date-range filter (regression test)', () => {
+    // The reader navigation context is named `returnTo` precisely to
+    // avoid colliding with InboxQuery.from. Confirm a date-filtered
+    // inbox URL passes through this helper without losing its `from`
+    // (or `to`) keys.
+    const result = extractInboxSearchParams(new URLSearchParams('from=2026-01-01&to=2026-02-01'));
+    expect(result.get('from')).toBe('2026-01-01');
+    expect(result.get('to')).toBe('2026-02-01');
+  });
+
+  it('still unwraps returnTo when a date `from` is also present in the inner query', () => {
+    // The inner query has its own `from` date filter; the outer
+    // wrapper is `returnTo`. The inner key must survive the unwrap.
+    const inner = 'starred=1&from=2026-01-01';
+    const raw = new URLSearchParams(`returnTo=${encodeURIComponent(inner)}`);
+    const result = extractInboxSearchParams(raw);
+    expect(result.get('starred')).toBe('1');
+    expect(result.get('from')).toBe('2026-01-01');
   });
 });
