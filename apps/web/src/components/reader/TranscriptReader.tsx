@@ -127,14 +127,15 @@ export default function TranscriptReader({
         const data = (await res.json()) as { segments: TranscriptSegment[] };
         setSegments(data.segments);
         setLocalStatus('loaded');
-        // Set the ref BEFORE any setState that could trigger a
-        // re-render so the next pass through the effect sees it.
+        // Set the ref BEFORE the broadcast so when the effect re-runs
+        // (because transcriptStatus prop changes from unknown→present)
+        // it sees the loaded ref and bails out without re-fetching.
+        // The combination of (loadedForVideoDbIdRef guard) +
+        // (broadcast 'present' here) is what lets the parent's tab
+        // dot for Transcript flip to blue on a cache hit without
+        // double-fetching.
         loadedForVideoDbIdRef.current = videoDbId;
-        // Deliberately do NOT broadcast 'present' here. The other
-        // tabs only care about the unavailable case; broadcasting
-        // 'present' would re-trigger this effect and waste a fetch.
-        // Summary/Article will broadcast 'present' themselves when
-        // they need to (after a successful generate).
+        onTranscriptStatusChange('present');
       })
       .catch(() => {
         if (!cancelled) {

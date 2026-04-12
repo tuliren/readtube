@@ -3,7 +3,7 @@
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { formatDurationSeconds } from '@/lib/format/duration';
 import type { VideoData } from '@/lib/types';
@@ -54,28 +54,65 @@ export default function VideoReader({ video }: Props) {
   const durationLabel = formatDurationSeconds(video.durationSeconds);
 
   // Shared transcript availability state across all three tabs.
-  // Seeded from the SSR-rendered VideoData so a video that was already
-  // marked transcript_unavailable in a previous session opens straight
-  // into the unavailable state without retrying. The three children
-  // call setTranscriptStatus when their own requests reveal the
-  // status: TranscriptReader's GET, and either auto-fetch (Summary /
-  // Article generate buttons) running through ensureTranscript on
-  // the server.
-  const [transcriptStatus, setTranscriptStatus] = useState<TranscriptStatus>(
-    video.transcriptUnavailable ? 'unavailable' : 'unknown'
-  );
+  // Seeded from the SSR-rendered VideoData: an already-flagged
+  // captionless video opens straight into the unavailable state, an
+  // already-cached transcript starts as 'present' (so its tab dot
+  // is blue from the first render), everything else is 'unknown'.
+  const initialTranscriptStatus: TranscriptStatus = video.transcriptUnavailable
+    ? 'unavailable'
+    : video.hasTranscript
+      ? 'present'
+      : 'unknown';
+  const [transcriptStatus, setTranscriptStatus] =
+    useState<TranscriptStatus>(initialTranscriptStatus);
+
+  // hasSummary / hasArticle are lifted into local state too so the
+  // tab dots can flip from red to blue the moment a generate
+  // succeeds in the same session. The SSR props on `video` are a
+  // snapshot from page load — they never update unless the user
+  // refreshes — so if the dots were derived from them directly the
+  // user would generate a summary, see the content stream in, and
+  // the tab dot would still be red until the next reload.
+  const [hasSummary, setHasSummary] = useState<boolean>(video.hasSummary);
+  const [hasArticle, setHasArticle] = useState<boolean>(video.hasArticle);
 
   // useState only seeds from the initial render. When the user clicks
   // a different video in the sidebar Next.js performs a soft
   // navigation — VideoReader receives new props but is NOT
-  // remounted, so transcriptStatus would otherwise stay at the
-  // previous video's value. If that previous video was unavailable,
-  // the new (perfectly fine) video would render as "no transcript"
-  // across all three tabs with no client-side recovery path. Resync
-  // on every video identity / unavailability change.
+  // remounted, so transcriptStatus / hasSummary / hasArticle would
+  // otherwise stay at the previous video's values. If the previous
+  // video was unavailable the new (perfectly fine) video would
+  // render as "no transcript" across all three tabs; if the previous
+  // video had a generated summary the new video's Summary tab dot
+  // would falsely be blue. Resync everything on every video identity
+  // change.
   useEffect(() => {
-    setTranscriptStatus(video.transcriptUnavailable ? 'unavailable' : 'unknown');
-  }, [video.id, video.transcriptUnavailable]);
+    setTranscriptStatus(
+      video.transcriptUnavailable ? 'unavailable' : video.hasTranscript ? 'present' : 'unknown'
+    );
+    setHasSummary(video.hasSummary);
+    setHasArticle(video.hasArticle);
+  }, [
+    video.id,
+    video.transcriptUnavailable,
+    video.hasTranscript,
+    video.hasSummary,
+    video.hasArticle,
+  ]);
+
+  // Derived flag for the Transcript tab dot — once transcriptStatus
+  // is 'present', a transcript exists in the cache. Keeps the dot's
+  // source of truth in one place rather than maintaining a parallel
+  // hasTranscript local state that could drift.
+  const hasTranscript = transcriptStatus === 'present';
+
+  // Stable callbacks the children pass into their effect dep arrays.
+  // useState's setters are already stable, but wrapping the
+  // single-update closures in useCallback gives a clean reference
+  // that satisfies react-hooks/exhaustive-deps without triggering
+  // an effect re-run on every parent render.
+  const handleSummaryAvailable = useCallback(() => setHasSummary(true), []);
+  const handleArticleAvailable = useCallback(() => setHasArticle(true), []);
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
@@ -171,10 +208,10 @@ export default function VideoReader({ video }: Props) {
                 {TABS.map((tab) => {
                   const generated =
                     tab.key === 'summary'
-                      ? video.hasSummary
+                      ? hasSummary
                       : tab.key === 'article'
-                        ? video.hasArticle
-                        : video.hasTranscript;
+                        ? hasArticle
+                        : hasTranscript;
                   const dotColor = generated ? 'bg-blue-500' : 'bg-red-500';
                   const dotTitle = generated
                     ? `${tab.label} already generated`
@@ -208,6 +245,7 @@ export default function VideoReader({ video }: Props) {
                   videoDbId={video.id}
                   transcriptStatus={transcriptStatus}
                   onTranscriptStatusChange={setTranscriptStatus}
+                  onSummaryAvailable={handleSummaryAvailable}
                 />
               </div>
               <div className={activeTab === 'article' ? '' : 'hidden'}>
@@ -215,6 +253,7 @@ export default function VideoReader({ video }: Props) {
                   videoDbId={video.id}
                   transcriptStatus={transcriptStatus}
                   onTranscriptStatusChange={setTranscriptStatus}
+                  onArticleAvailable={handleArticleAvailable}
                 />
               </div>
               <div className={activeTab === 'transcript' ? '' : 'hidden'}>

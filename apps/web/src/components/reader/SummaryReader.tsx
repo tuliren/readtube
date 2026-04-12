@@ -21,6 +21,10 @@ interface Props {
    *  state without an extra round-trip. */
   transcriptStatus: TranscriptStatus;
   onTranscriptStatusChange: (next: TranscriptStatus) => void;
+  /** Tells VideoReader that a Summary now exists for this video so
+   *  the Summary tab dot can flip from red → blue. Fired on the
+   *  initial GET cache hit AND after a successful generation. */
+  onSummaryAvailable: () => void;
 }
 
 type SummaryField = 'headline' | 'short' | 'full';
@@ -74,6 +78,7 @@ export default function SummaryReader({
   videoDbId,
   transcriptStatus,
   onTranscriptStatusChange,
+  onSummaryAvailable,
 }: Props) {
   const [status, setStatus] = useState<Status>('checking');
   const [summary, setSummary] = useState<SummaryData | null>(null);
@@ -99,6 +104,10 @@ export default function SummaryReader({
         const data = (await res.json()) as SummaryData;
         setSummary(data);
         setStatus('done');
+        // Cache hit — flip the parent's Summary tab dot to blue
+        // immediately, regardless of whether the user is currently
+        // looking at this tab.
+        onSummaryAvailable();
       })
       .catch(() => {
         if (!cancelled) {
@@ -109,7 +118,7 @@ export default function SummaryReader({
     return () => {
       cancelled = true;
     };
-  }, [videoDbId]);
+  }, [videoDbId, onSummaryAvailable]);
 
   async function handleGenerate(targetFields?: SummaryField[]) {
     const fields = targetFields ?? [...ALL_FIELDS];
@@ -252,6 +261,9 @@ export default function SummaryReader({
 
       setStatus('done');
       setRegeneratingFields([]);
+      // Tell the parent the Summary tab now has content so its tab
+      // dot can flip from red → blue without waiting for a refresh.
+      onSummaryAvailable();
     } catch (err) {
       console.error('[SummaryReader] generate error:', err);
       setErrorMessage(err instanceof Error ? err.message : 'Failed to generate summary.');

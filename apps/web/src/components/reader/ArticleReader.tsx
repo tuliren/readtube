@@ -14,6 +14,10 @@ interface Props {
    *  matching prop on SummaryReader for the longer explanation. */
   transcriptStatus: TranscriptStatus;
   onTranscriptStatusChange: (next: TranscriptStatus) => void;
+  /** Tells VideoReader that an Article now exists for this video so
+   *  the Article tab dot can flip from red → blue. Fired on the
+   *  initial GET cache hit AND after a successful generation. */
+  onArticleAvailable: () => void;
 }
 
 type Status = 'checking' | 'idle' | 'streaming' | 'done' | 'error';
@@ -24,6 +28,7 @@ export default function ArticleReader({
   videoDbId,
   transcriptStatus,
   onTranscriptStatusChange,
+  onArticleAvailable,
 }: Props) {
   const [status, setStatus] = useState<Status>('checking');
   const [markdown, setMarkdown] = useState('');
@@ -51,6 +56,9 @@ export default function ArticleReader({
         const data = (await res.json()) as { content: string };
         setMarkdown(data.content);
         setStatus('done');
+        // Cache hit — flip the parent's Article tab dot to blue
+        // immediately, regardless of which tab the user is on.
+        onArticleAvailable();
       })
       .catch(() => {
         if (!cancelled) {
@@ -61,7 +69,7 @@ export default function ArticleReader({
     return () => {
       cancelled = true;
     };
-  }, [videoDbId]);
+  }, [videoDbId, onArticleAvailable]);
 
   async function handleGenerate() {
     setStatus('streaming');
@@ -137,6 +145,9 @@ export default function ArticleReader({
       }
 
       setStatus('done');
+      // Tell the parent the Article tab now has content so its tab
+      // dot can flip from red → blue without waiting for a refresh.
+      onArticleAvailable();
     } catch (err) {
       console.error('[ArticleReader] stream error:', err);
       setErrorMessage(err instanceof Error ? err.message : 'Failed to generate article.');
