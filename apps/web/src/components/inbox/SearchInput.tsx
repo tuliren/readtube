@@ -82,7 +82,10 @@ export default function SearchInput() {
         }}
         placeholder="Search videos…"
         title={isDirty ? 'Press Enter to search' : undefined}
-        className={`h-7 w-72 rounded-full pl-7 pr-14 text-xs ${
+        // shadow-none clobbers the shared Input primitive's `shadow-sm`,
+        // which read as too heavy at this size on the inbox header rail.
+        // Other Inputs (folder dialog, add-channel modal) keep theirs.
+        className={`h-7 w-72 rounded-full pl-7 pr-14 text-xs shadow-none ${
           isDirty ? 'border-blue-400 ring-1 ring-blue-200' : ''
         }`}
       />
