@@ -32,60 +32,79 @@ interface Turn {
 export default function AskInboxChat() {
   const [input, setInput] = useState('');
   const [turns, setTurns] = useState<Turn[]>([]);
+  // Guard against concurrent submissions while a stream is in
+  // flight. Without this the user could fire a second question
+  // before the first finishes streaming, and both stream loops
+  // would race to update `turns[prev.length - 1]` — corrupting
+  // each other's answer cell.
+  const [streaming, setStreaming] = useState(false);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    if (streaming) {
+      return;
+    }
     const question = input.trim();
     if (question.length === 0) {
       return;
     }
     setInput('');
+    setStreaming(true);
 
     const turn: Turn = { question, answer: '', citations: [], loading: true };
     setTurns((prev) => [...prev, turn]);
 
-    const res = await fetch('/api/inbox/ask', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question }),
-    });
+    try {
+      const res = await fetch('/api/inbox/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question }),
+      });
 
-    const citationsHeader = res.headers.get('X-Citations');
-    const citations: Citation[] = citationsHeader != null ? JSON.parse(citationsHeader) : [];
+      const citationsHeader = res.headers.get('X-Citations');
+      const citations: Citation[] = citationsHeader != null ? JSON.parse(citationsHeader) : [];
 
-    if (!res.ok || res.body == null) {
-      let error = 'Failed to get an answer';
-      try {
-        const body = await res.json();
-        if (body?.error != null) {
-          error = String(body.error);
+      if (!res.ok || res.body == null) {
+        let error = 'Failed to get an answer';
+        try {
+          const body = await res.json();
+          if (body?.error != null) {
+            error = String(body.error);
+          }
+        } catch {
+          // ignore
         }
-      } catch {
-        // ignore
+        setTurns((prev) =>
+          prev.map((t, i) =>
+            i === prev.length - 1 ? { ...t, answer: error, citations: [], loading: false } : t
+          )
+        );
+        return;
       }
-      setTurns((prev) =>
-        prev.map((t, i) =>
-          i === prev.length - 1 ? { ...t, answer: error, citations: [], loading: false } : t
-        )
-      );
-      return;
-    }
 
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) {
-        break;
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+        buffer += decoder.decode(value, { stream: true });
+        const snapshot = buffer;
+        setTurns((prev) =>
+          prev.map((t, i) => (i === prev.length - 1 ? { ...t, answer: snapshot, citations } : t))
+        );
       }
-      buffer += decoder.decode(value, { stream: true });
-      const snapshot = buffer;
       setTurns((prev) =>
-        prev.map((t, i) => (i === prev.length - 1 ? { ...t, answer: snapshot, citations } : t))
+        prev.map((t, i) => (i === prev.length - 1 ? { ...t, loading: false } : t))
       );
+    } finally {
+      // Always release the streaming guard, even if the fetch threw
+      // mid-stream — otherwise an error during the read loop would
+      // permanently lock the input.
+      setStreaming(false);
     }
-    setTurns((prev) => prev.map((t, i) => (i === prev.length - 1 ? { ...t, loading: false } : t)));
   }
 
   return (
@@ -151,10 +170,13 @@ export default function AskInboxChat() {
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask anything about your inbox…"
-            className="flex-1 rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+            placeholder={
+              streaming ? 'Waiting for the previous answer…' : 'Ask anything about your inbox…'
+            }
+            disabled={streaming}
+            className="flex-1 rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400"
           />
-          <Button type="submit" size="sm" disabled={input.trim().length === 0}>
+          <Button type="submit" size="sm" disabled={streaming || input.trim().length === 0}>
             <Send className="h-4 w-4" />
           </Button>
         </div>

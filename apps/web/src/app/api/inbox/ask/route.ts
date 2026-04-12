@@ -62,18 +62,29 @@ export async function POST(request: NextRequest) {
     distance: number;
   }
 
+  // LATERAL subquery picks the LATEST Transcript per video (and its
+  // Summary). The previous version LEFT-JOINed Transcript directly,
+  // which produced one row per (video × transcript) combination —
+  // a video with three transcripts would consume three of the
+  // LIMIT 6 slots and show up duplicated in the citation list.
   const rows: RetrievalRow[] = await prisma.$queryRaw<RetrievalRow[]>`
     SELECT
       v."id"         AS video_id,
       v."title"      AS title,
       c."name"       AS channel_name,
-      s."short"      AS summary,
+      ts."short"     AS summary,
       (ve."embedding" <=> ${vectorLiteral}::vector) AS distance
     FROM "VideoEmbedding" ve
     JOIN "Video" v ON v."id" = ve."video_id"
     JOIN "Channel" c ON c."id" = v."channel_id"
-    LEFT JOIN "Transcript" t ON t."video_id" = v."id"
-    LEFT JOIN "Summary" s ON s."transcript_id" = t."id"
+    LEFT JOIN LATERAL (
+      SELECT s."short"
+      FROM "Transcript" t
+      LEFT JOIN "Summary" s ON s."transcript_id" = t."id"
+      WHERE t."video_id" = v."id"
+      ORDER BY t."created_at" DESC
+      LIMIT 1
+    ) ts ON true
     WHERE v."channel_id" IN (
       SELECT "channel_id" FROM "UserSubscription" WHERE "user_id" = ${userId}
     )
@@ -82,9 +93,24 @@ export async function POST(request: NextRequest) {
   `;
 
   if (rows.length === 0) {
-    return NextResponse.json({
-      answer: "No embedded videos yet. Ingest a few videos first so there's something to search.",
-      citations: [],
+    // Stream the friendly message back as plain text so the client's
+    // streaming reader path renders it directly, instead of dumping
+    // a JSON blob into the chat bubble. Mirrors the success path's
+    // Content-Type and X-Citations header so the client doesn't
+    // need a special branch.
+    const message =
+      "No embedded videos yet. Ingest a few videos first so there's something to search.";
+    const noResultsStream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(message));
+        controller.close();
+      },
+    });
+    return new Response(noResultsStream, {
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'X-Citations': '[]',
+      },
     });
   }
 
