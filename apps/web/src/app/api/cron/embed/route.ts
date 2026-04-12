@@ -1,9 +1,8 @@
 import { prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
-import { timingSafeEqual } from 'node:crypto';
 
 import { EMBEDDING_PROMPT_VERSION, embedVideo } from '@/lib/ai/embed';
-import { isEmptyString } from '@/lib/string';
+import { verifyCronRequest } from '@/lib/cron';
 
 /**
  * Backfill / refresh pgvector embeddings. Picks up to BATCH_SIZE videos
@@ -15,30 +14,8 @@ import { isEmptyString } from '@/lib/string';
 
 const BATCH_SIZE = 25;
 
-function verifyToken(request: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (isEmptyString(secret)) {
-    return false;
-  }
-  const authHeader = request.headers.get('authorization');
-  if (authHeader == null || !authHeader.startsWith('Bearer ')) {
-    return false;
-  }
-  const token = authHeader.slice(7);
-  try {
-    const secretBuf = new TextEncoder().encode(secret);
-    const tokenBuf = new TextEncoder().encode(token);
-    if (secretBuf.length !== tokenBuf.length) {
-      return false;
-    }
-    return timingSafeEqual(secretBuf, tokenBuf);
-  } catch {
-    return false;
-  }
-}
-
 export async function POST(request: NextRequest) {
-  if (!verifyToken(request)) {
+  if (!verifyCronRequest(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
