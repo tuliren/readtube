@@ -6,6 +6,7 @@
     "build": "next build",
     "build-storybook": "storybook build --webpack-stats-json",
     "dev": "next dev",
+    "dev:workflow": "npx workflow web",
     "integrationTest": "jest --config jest.integration.config.cjs --coverage",
     "lint": "eslint . --max-warnings 0",
     "script": "scripts/runScriptWithEnv.sh development",
@@ -61,6 +62,7 @@
     "tailwind-merge": "^3.0.2",
     "tailwindcss": "^4.0.12",
     "tailwindcss-animate": "^1.0.7",
+    "workflow": "^4.2.1",
     "zod": "^4.3.6"
   },
   "devDependencies": {

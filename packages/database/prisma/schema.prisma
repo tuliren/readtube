@@ -83,6 +83,7 @@ model Channel {
   logo_url    String?
   created_at  DateTime          @default(now())
   updated_at  DateTime          @updatedAt
+  checked_at  DateTime?
 
   videos        Video[]
   subscriptions UserSubscription[]

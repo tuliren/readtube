@@ -1,5 +1,7 @@
+const { withWorkflow } = require('workflow/next');
+
 /** @type {import('next').NextConfig} */
-module.exports = {
+module.exports = withWorkflow({
   transpilePackages: ['@readtube/lib'],
   reactStrictMode: true,
   pageExtensions: ['js', 'jsx', 'md', 'mdx', 'ts', 'tsx'],
@@ -43,4 +45,4 @@ module.exports = {
       },
     ],
   },
-};
+});

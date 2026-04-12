@@ -14,7 +14,7 @@ import { VercelEnv, getVercelEnv } from '@/lib/vercelEnv';
  * the cron endpoint.
  *
  * In local development we skip the check entirely so a developer can
- * `curl http://localhost:3000/api/cron/refresh -X POST` without
+ * `curl http://localhost:3000/api/cron/refresh-channels` without
  * having to copy the secret out of .env. Production behavior is
  * unchanged because Vercel sets `VERCEL_ENV=production` for prod
  * deploys (and `preview` for branches), and only `development`
