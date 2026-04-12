@@ -188,7 +188,7 @@ function InboxShellInner({
           <UserButton />
         </div>
 
-        <div className="flex flex-1 flex-col overflow-y-auto">
+        <div className="flex flex-1 flex-col overflow-y-auto pb-6">
           <ChannelSection
             channels={channels}
             selectedChannelId={selectedChannelId}

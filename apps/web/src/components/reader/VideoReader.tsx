@@ -9,6 +9,7 @@ import { formatDurationSeconds } from '@/lib/format/duration';
 import type { VideoData } from '@/lib/types';
 
 import ArticleReader from './ArticleReader';
+import NotesPanel from './NotesPanel';
 import SummaryReader from './SummaryReader';
 import TranscriptReader from './TranscriptReader';
 import VideoReaderActions from './VideoReaderActions';
@@ -117,13 +118,13 @@ export default function VideoReader({ video }: Props) {
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
       {/*
-        Back nav + triage actions. The header bar deliberately bypasses
-        the article's `mx-auto max-w-3xl` indent and uses px-3 directly,
-        matching the Channels-section header on the sidebar — both
-        category headers should hug the pane edge with the same
-        12px-from-the-edge action rail. Without this the Back link and
-        the action buttons sat indented to match the article body and
-        floated in a sea of whitespace.
+        Back nav + triage actions + notes drawer. The header bar
+        deliberately bypasses the article's `mx-auto max-w-3xl` indent
+        and uses px-3 directly, matching the Channels-section header on
+        the sidebar — both category headers should hug the pane edge
+        with the same 12px-from-the-edge action rail. NotesPanel sits
+        between the Back link and VideoReaderActions so it shares the
+        same right-aligned cluster as the triage buttons.
       */}
       <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-100 bg-white px-3 py-3">
         <Link
@@ -133,7 +134,10 @@ export default function VideoReader({ video }: Props) {
           <ArrowLeftIcon className="h-4 w-4" />
           Back
         </Link>
-        <VideoReaderActions video={video} />
+        <div className="flex items-center gap-2">
+          <NotesPanel videoId={video.id} />
+          <VideoReaderActions video={video} />
+        </div>
       </div>
 
       {/* Article */}
