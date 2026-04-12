@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { EMBEDDING_MODEL } from '@/lib/ai/embed';
 import { requireUserId } from '@/lib/auth';
+import { headerSafeJson } from '@/lib/http/headerSafeJson';
 
 interface RetrievedChunk {
   video_id: string;
@@ -156,7 +157,7 @@ Answer with citations in the form [1], [2], etc. pointing to the numbered videos
   return new Response(stream, {
     headers: {
       'Content-Type': 'text/plain; charset=utf-8',
-      'X-Citations': JSON.stringify(
+      'X-Citations': headerSafeJson(
         chunks.map((c) => ({
           videoId: c.video_id,
           title: c.title,
