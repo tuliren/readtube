@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeftIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/outline';
 import { NotebookPen } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -118,6 +118,14 @@ export default function VideoReader({ video }: Props) {
   const handleSummaryAvailable = useCallback(() => setHasSummary(true), []);
   const handleArticleAvailable = useCallback(() => setHasArticle(true), []);
 
+  // Description collapse state — collapsed by default to keep the header compact.
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
+
+  // Reset description collapse when navigating to a different video.
+  useEffect(() => {
+    setDescriptionExpanded(false);
+  }, [video.id]);
+
   // Notes panel state — auto-open when arriving with ?openNotes=1
   const [notesOpen, setNotesOpen] = useState(() => searchParams.get('openNotes') === '1');
   const handleNotesOpenChange = useCallback((open: boolean) => setNotesOpen(open), []);
@@ -216,9 +224,29 @@ export default function VideoReader({ video }: Props) {
                 />
               )}
               {video.description != null && (
-                <blockquote className="min-w-0 flex-1 border-l-2 border-gray-200 pl-4 text-sm leading-relaxed text-gray-500 italic">
-                  {video.description}
-                </blockquote>
+                <div className="min-w-0 flex-1">
+                  <blockquote
+                    className={`border-l-2 border-gray-200 pl-4 text-sm leading-relaxed text-gray-500 italic ${
+                      descriptionExpanded ? '' : 'line-clamp-4'
+                    }`}
+                  >
+                    {video.description}
+                  </blockquote>
+                  <button
+                    onClick={() => setDescriptionExpanded((prev) => !prev)}
+                    className="mt-1 flex items-center gap-0.5 text-xs text-gray-400 hover:text-gray-600"
+                  >
+                    {descriptionExpanded ? (
+                      <>
+                        Show less <ChevronUpIcon className="h-3 w-3" />
+                      </>
+                    ) : (
+                      <>
+                        Show more <ChevronDownIcon className="h-3 w-3" />
+                      </>
+                    )}
+                  </button>
+                </div>
               )}
             </div>
           )}
