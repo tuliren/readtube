@@ -71,43 +71,6 @@ describe('buildVideoWhere — archive mode', () => {
   });
 });
 
-describe('buildVideoWhere — snooze modes', () => {
-  it('hides active snoozes by default', () => {
-    const where = buildVideoWhere({}, USER_ID, CHANNEL_IDS);
-    expect(where.snoozes).toEqual({
-      none: {
-        user_id: USER_ID,
-        snooze_until: { gt: expect.any(Date) },
-      },
-    });
-  });
-
-  it('snoozed=true flips to "only active snoozes"', () => {
-    const where = buildVideoWhere({ snoozed: true }, USER_ID, CHANNEL_IDS);
-    expect(where.snoozes).toEqual({
-      some: {
-        user_id: USER_ID,
-        snooze_until: { gt: expect.any(Date) },
-      },
-    });
-  });
-
-  it('includeSnoozed=true removes the snooze filter entirely', () => {
-    const where = buildVideoWhere({ includeSnoozed: true }, USER_ID, CHANNEL_IDS);
-    expect(where.snoozes).toBeUndefined();
-  });
-
-  it('snoozed wins over includeSnoozed when both are set', () => {
-    const where = buildVideoWhere({ snoozed: true, includeSnoozed: true }, USER_ID, CHANNEL_IDS);
-    expect(where.snoozes).toEqual({
-      some: {
-        user_id: USER_ID,
-        snooze_until: { gt: expect.any(Date) },
-      },
-    });
-  });
-});
-
 describe('buildVideoWhere — star + save filters', () => {
   it.each([
     {

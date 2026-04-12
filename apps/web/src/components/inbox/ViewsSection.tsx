@@ -1,6 +1,6 @@
 'use client';
 
-import { Archive, Bookmark, Clock, Inbox as InboxIcon, Star } from 'lucide-react';
+import { Archive, Bookmark, Inbox as InboxIcon, Star } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 
@@ -23,7 +23,6 @@ const VIEWS: ViewDef[] = [
   { label: 'Inbox', icon: InboxIcon, query: {} },
   { label: 'Starred', icon: Star, query: { starred: true } },
   { label: 'Read Later', icon: Bookmark, query: { saved: true } },
-  { label: 'Snoozed', icon: Clock, query: { snoozed: true } },
   { label: 'Archived', icon: Archive, query: { archived: true } },
 ];
 

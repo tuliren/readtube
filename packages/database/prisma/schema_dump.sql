@@ -178,16 +178,6 @@ CREATE TABLE "VideoSave" (
 );
 
 -- CreateTable
-CREATE TABLE "VideoSnooze" (
-  "id" TEXT NOT NULL,
-  "user_id" TEXT NOT NULL,
-  "video_id" TEXT NOT NULL,
-  "snooze_until" TIMESTAMP(3) NOT NULL,
-  "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT "VideoSnooze_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
 CREATE TABLE "VideoArchive" (
   "id" TEXT NOT NULL,
   "user_id" TEXT NOT NULL,
@@ -232,16 +222,6 @@ CREATE TABLE "Rule" (
   "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updated_at" TIMESTAMP(3) NOT NULL,
   CONSTRAINT "Rule_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "SavedView" (
-  "id" TEXT NOT NULL,
-  "user_id" TEXT NOT NULL,
-  "name" TEXT NOT NULL,
-  "query" JSONB NOT NULL,
-  "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT "SavedView_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -355,12 +335,6 @@ CREATE INDEX "video_save_index_on_video_id" ON "VideoSave" ("video_id");
 CREATE UNIQUE INDEX "VideoSave_user_id_video_id_key" ON "VideoSave" ("user_id", "video_id");
 
 -- CreateIndex
-CREATE INDEX "video_snooze_index_on_snooze_until" ON "VideoSnooze" ("snooze_until");
-
--- CreateIndex
-CREATE UNIQUE INDEX "VideoSnooze_user_id_video_id_key" ON "VideoSnooze" ("user_id", "video_id");
-
--- CreateIndex
 CREATE INDEX "video_archive_index_on_video_id" ON "VideoArchive" ("video_id");
 
 -- CreateIndex
@@ -374,9 +348,6 @@ CREATE INDEX "highlight_index_on_user_video" ON "Highlight" ("user_id", "video_i
 
 -- CreateIndex
 CREATE INDEX "rule_index_on_user_id" ON "Rule" ("user_id");
-
--- CreateIndex
-CREATE INDEX "saved_view_index_on_user_id" ON "SavedView" ("user_id");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "UserPreference_user_id_key" ON "UserPreference" ("user_id");
@@ -463,14 +434,6 @@ ALTER TABLE "VideoSave"
 ADD CONSTRAINT "VideoSave_video_id_fkey" FOREIGN KEY ("video_id") REFERENCES "Video" ("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "VideoSnooze"
-ADD CONSTRAINT "VideoSnooze_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "User" ("source_id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "VideoSnooze"
-ADD CONSTRAINT "VideoSnooze_video_id_fkey" FOREIGN KEY ("video_id") REFERENCES "Video" ("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE "VideoArchive"
 ADD CONSTRAINT "VideoArchive_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "User" ("source_id") ON DELETE CASCADE ON UPDATE CASCADE;
 
@@ -497,10 +460,6 @@ ADD CONSTRAINT "Highlight_video_id_fkey" FOREIGN KEY ("video_id") REFERENCES "Vi
 -- AddForeignKey
 ALTER TABLE "Rule"
 ADD CONSTRAINT "Rule_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "User" ("source_id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "SavedView"
-ADD CONSTRAINT "SavedView_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "User" ("source_id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "UserPreference"

@@ -9,13 +9,6 @@ import { buildVideoWhere } from '@/lib/inbox/buildWhere';
  * in distinct triage states, then assert that each filter combination
  * returns the expected subset when the built where clause is handed
  * directly to prisma.video.findMany.
- *
- * This differs from the buildWhere unit test in two ways:
- *   1. The unit test verifies the SHAPE of the where object; this test
- *      verifies that Prisma + Postgres actually interpret the shape as
- *      intended end-to-end.
- *   2. It covers snooze TIME semantics — active vs expired snoozes —
- *      which the unit test can't fully exercise without stubbing Date.
  */
 
 const USER_ID = 'filter_user';
@@ -26,8 +19,6 @@ interface SeededVideos {
   starred: string;
   saved: string;
   archived: string;
-  snoozedActive: string;
-  snoozedExpired: string;
 }
 
 async function seed(): Promise<SeededVideos> {
@@ -41,7 +32,7 @@ async function seed(): Promise<SeededVideos> {
     data: { user_id: USER_ID, channel_id: channel.id },
   });
 
-  // Six videos with deterministic publish times so ordering is stable.
+  // Four videos with deterministic publish times so ordering is stable.
   const baseMs = new Date('2026-01-01T00:00:00Z').getTime();
   const hour = 60 * 60 * 1000;
   const videos = await global.testPrisma.video.createManyAndReturn({
@@ -70,18 +61,6 @@ async function seed(): Promise<SeededVideos> {
         title: 'Archived',
         published_at: new Date(baseMs - 3 * hour),
       },
-      {
-        channel_id: channel.id,
-        source_id: 'vid_snoozed_active',
-        title: 'Snoozed (active)',
-        published_at: new Date(baseMs - 4 * hour),
-      },
-      {
-        channel_id: channel.id,
-        source_id: 'vid_snoozed_expired',
-        title: 'Snoozed (expired)',
-        published_at: new Date(baseMs - 5 * hour),
-      },
     ],
     select: { id: true, source_id: true },
   });
@@ -100,21 +79,6 @@ async function seed(): Promise<SeededVideos> {
   await global.testPrisma.videoArchive.create({
     data: { user_id: USER_ID, video_id: byKey.vid_archived },
   });
-  // Active snooze: 24h in the future. Expired: 24h in the past.
-  await global.testPrisma.videoSnooze.createMany({
-    data: [
-      {
-        user_id: USER_ID,
-        video_id: byKey.vid_snoozed_active,
-        snooze_until: new Date(Date.now() + 24 * hour),
-      },
-      {
-        user_id: USER_ID,
-        video_id: byKey.vid_snoozed_expired,
-        snooze_until: new Date(Date.now() - 24 * hour),
-      },
-    ],
-  });
 
   return {
     channelId: channel.id,
@@ -122,8 +86,6 @@ async function seed(): Promise<SeededVideos> {
     starred: byKey.vid_starred,
     saved: byKey.vid_saved,
     archived: byKey.vid_archived,
-    snoozedActive: byKey.vid_snoozed_active,
-    snoozedExpired: byKey.vid_snoozed_expired,
   };
 }
 
@@ -141,7 +103,6 @@ beforeEach(async () => {
   await global.testPrisma.videoStar.deleteMany();
   await global.testPrisma.videoSave.deleteMany();
   await global.testPrisma.videoArchive.deleteMany();
-  await global.testPrisma.videoSnooze.deleteMany();
   await global.testPrisma.userSubscription.deleteMany();
   await global.testPrisma.video.deleteMany();
   await global.testPrisma.channel.deleteMany();
@@ -149,19 +110,17 @@ beforeEach(async () => {
 });
 
 describe('buildVideoWhere end-to-end with Prisma', () => {
-  it('default view hides archived + active snoozes but shows expired snoozes', async () => {
+  it('default view hides archived videos', async () => {
     const seeded = await seed();
     const rows = await runFilter([seeded.channelId], {});
     const ids = rows.map((r) => r.id);
 
-    // Visible: plain, starred, saved, snoozed_expired (4)
-    // Hidden: archived, snoozed_active (2)
+    // Visible: plain, starred, saved (3)
+    // Hidden: archived (1)
     expect(ids).toContain(seeded.plain);
     expect(ids).toContain(seeded.starred);
     expect(ids).toContain(seeded.saved);
-    expect(ids).toContain(seeded.snoozedExpired);
     expect(ids).not.toContain(seeded.archived);
-    expect(ids).not.toContain(seeded.snoozedActive);
   });
 
   it('starred=true returns only the starred video', async () => {
@@ -182,30 +141,10 @@ describe('buildVideoWhere end-to-end with Prisma', () => {
     expect(rows.map((r) => r.id)).toEqual([seeded.archived]);
   });
 
-  it('snoozed=true returns ONLY currently-active snoozes (not expired ones)', async () => {
-    const seeded = await seed();
-    const rows = await runFilter([seeded.channelId], { snoozed: true });
-    expect(rows.map((r) => r.id)).toEqual([seeded.snoozedActive]);
-  });
-
-  it('includeSnoozed=true adds active snoozes back into the main feed', async () => {
-    const seeded = await seed();
-    const rows = await runFilter([seeded.channelId], { includeSnoozed: true });
-    const ids = rows.map((r) => r.id);
-
-    // Everything except archived (archived still excluded by default)
-    expect(ids).toContain(seeded.plain);
-    expect(ids).toContain(seeded.starred);
-    expect(ids).toContain(seeded.saved);
-    expect(ids).toContain(seeded.snoozedActive);
-    expect(ids).toContain(seeded.snoozedExpired);
-    expect(ids).not.toContain(seeded.archived);
-  });
-
   it('channelId narrows to a single channel when in scope', async () => {
     const seeded = await seed();
     const rows = await runFilter([seeded.channelId], { channelId: seeded.channelId });
-    // Default view rules still apply (archived / active snooze excluded)
-    expect(rows.length).toBe(4);
+    // Default view rules still apply (archived excluded)
+    expect(rows.length).toBe(3);
   });
 });

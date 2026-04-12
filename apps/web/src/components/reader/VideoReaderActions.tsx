@@ -1,6 +1,6 @@
 'use client';
 
-import { Archive, Bookmark, BookmarkCheck, Clock, Star } from 'lucide-react';
+import { Archive, Bookmark, BookmarkCheck, Star } from 'lucide-react';
 import { useState } from 'react';
 
 import { useTriage } from '@/components/inbox/useTriage';
@@ -18,9 +18,6 @@ interface Props {
  * the UI flips immediately without waiting for a re-fetch — the reader is
  * server-rendered so there's no SWR cache to invalidate for this specific
  * video view.
- *
- * For snooze we use the same "until tomorrow 9am" quick action as VideoRow;
- * a richer date picker comes in Stream D via the command palette.
  */
 export default function VideoReaderActions({ video }: Props) {
   const triage = useTriage();
@@ -31,7 +28,6 @@ export default function VideoReaderActions({ video }: Props) {
   const [isStarred, setIsStarred] = useState(video.isStarred);
   const [isSaved, setIsSaved] = useState(video.isSaved);
   const [isArchived, setIsArchived] = useState(video.isArchived);
-  const [snoozedUntil, setSnoozedUntil] = useState<string | null>(video.snoozedUntil);
 
   async function toggleStar() {
     const wasStarred = isStarred;
@@ -48,18 +44,6 @@ export default function VideoReaderActions({ video }: Props) {
     const ok = await triage.toggleSave(video.id, wasSaved);
     if (!ok) {
       setIsSaved(wasSaved);
-    }
-  }
-
-  async function snoozeTomorrow() {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(9, 0, 0, 0);
-    const previous = snoozedUntil;
-    setSnoozedUntil(tomorrow.toISOString());
-    const ok = await triage.snoozeUntil(video.id, tomorrow);
-    if (!ok) {
-      setSnoozedUntil(previous);
     }
   }
 
@@ -100,21 +84,6 @@ export default function VideoReaderActions({ video }: Props) {
       >
         {isSaved ? <BookmarkCheck className="h-4 w-4" /> : <Bookmark className="h-4 w-4" />}
         <span className="hidden sm:inline">{isSaved ? 'Saved' : 'Save'}</span>
-      </Button>
-
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => void snoozeTomorrow()}
-        className={`${tightGap} ${snoozedUntil != null ? 'text-purple-600 hover:text-purple-700' : ''}`}
-        title={
-          snoozedUntil != null
-            ? `Snoozed until ${new Date(snoozedUntil).toLocaleDateString()}`
-            : 'Snooze until tomorrow 9am'
-        }
-      >
-        <Clock className="h-4 w-4" />
-        <span className="hidden sm:inline">Snooze</span>
       </Button>
 
       <Button

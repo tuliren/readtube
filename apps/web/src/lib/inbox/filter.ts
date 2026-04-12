@@ -5,12 +5,12 @@ import type { InboxQuery } from '@/lib/types';
  * sidebar, header, saved views, and /api/videos.
  *
  * Rules:
- * - Unknown keys are dropped (forward-compat via SavedView JSON).
+ * - Unknown keys are dropped (forward-compat).
  * - Empty strings are treated as absent.
  * - Booleans: `?unread=1` or `?unread=true` is true; anything else is false.
  * - tagIds is comma-separated in the URL (`?tag=a,b,c`).
  * - from/to are ISO date strings (YYYY-MM-DD ok; server normalizes).
- * - Defaults (sort='newest', includeSnoozed=false, page=1) are NOT
+ * - Defaults (sort='newest', page=1) are NOT
  *   emitted when encoding, so a "default" view has an empty query string.
  */
 
@@ -21,7 +21,7 @@ import type { InboxQuery } from '@/lib/types';
  */
 export const PAGE_SIZE = 25;
 
-const BOOL_KEYS = ['unread', 'starred', 'saved', 'archived', 'snoozed', 'includeSnoozed'] as const;
+const BOOL_KEYS = ['unread', 'starred', 'saved', 'archived'] as const;
 const STRING_KEYS = ['q', 'channelId', 'folderId', 'from', 'to'] as const;
 type BoolKey = (typeof BOOL_KEYS)[number];
 type StringKey = (typeof STRING_KEYS)[number];
@@ -125,38 +125,14 @@ export function encodeInboxQuery(query: InboxQuery): URLSearchParams {
  * Used to decide whether to show a "clear filters" button in the header.
  *
  * Page is intentionally ignored — paginating to page 2 of the Inbox
- * view is still semantically "the Inbox view", and saved views
- * shouldn't be considered modified just because the user advanced a
- * page. We strip `page` before checking by feeding a copy to the
- * encoder.
+ * view is still semantically "the Inbox view". We strip `page`
+ * before checking by feeding a copy to the encoder.
  */
 export function isDefaultQuery(query: InboxQuery): boolean {
   const { page: _page, ...rest } = query;
   return encodeInboxQuery(rest).toString().length === 0;
 }
 
-/**
- * Order-independent equality for two InboxQuery values. Used by
- * SavedViewMenu to mark the active saved view with a checkmark.
- *
- * The previous implementation compared `JSON.stringify(a) === JSON.stringify(b)`
- * which is sensitive to property insertion order — and the two sources
- * being compared insert keys differently:
- *   • A SavedView's `query` is round-tripped through a JSONB column,
- *     and PostgreSQL JSONB normalizes keys by length-then-lex order.
- *   • The current `query` comes from `parseInboxQuery`, which inserts
- *     keys in `STRING_KEYS` / `BOOL_KEYS` iteration order.
- * Mixed key sets like `{starred, saved}` round-trip to `{saved, starred}`,
- * so the active-view checkmark silently failed to render.
- *
- * This helper compares each canonical key explicitly. Booleans are
- * normalized so `false` and `undefined` are treated as the same (matching
- * how the encoder drops absent/false bools). `tagIds` is compared as a
- * sorted set so the same set of tags in different order still counts as
- * equal — that matches user intent (the filter applies to the set, not
- * the sequence) and protects against any future caller building tagIds
- * in a non-deterministic order.
- */
 /**
  * Name of the URL param the reader uses to remember which filtered
  * inbox list the user came from, so its Back link can restore the
@@ -190,38 +166,4 @@ export function extractInboxSearchParams(raw: URLSearchParams): URLSearchParams 
   const copy = new URLSearchParams(raw);
   copy.delete(RETURN_TO_PARAM);
   return copy;
-}
-
-export function inboxQueriesEqual(a: InboxQuery, b: InboxQuery): boolean {
-  // Note: `page` is intentionally NOT compared. Saved views are
-  // page-agnostic — "starred + read later" matches whether the user
-  // is on page 1 or page 5. The active-view checkmark in
-  // SavedViewMenu uses this helper, and it should keep matching
-  // the Starred view as the user paginates within it.
-  for (const key of STRING_KEYS) {
-    if ((a[key] ?? '') !== (b[key] ?? '')) {
-      return false;
-    }
-  }
-  for (const key of BOOL_KEYS) {
-    if ((a[key] === true) !== (b[key] === true)) {
-      return false;
-    }
-  }
-  const aSort = a.sort ?? 'newest';
-  const bSort = b.sort ?? 'newest';
-  if (aSort !== bSort) {
-    return false;
-  }
-  const aTags = [...(a.tagIds ?? [])].sort();
-  const bTags = [...(b.tagIds ?? [])].sort();
-  if (aTags.length !== bTags.length) {
-    return false;
-  }
-  for (let i = 0; i < aTags.length; i += 1) {
-    if (aTags[i] !== bTags[i]) {
-      return false;
-    }
-  }
-  return true;
 }
