@@ -1,7 +1,8 @@
 'use client';
 
 import { NotebookPen, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import useSWR from 'swr';
 
@@ -42,7 +43,28 @@ interface Props {
  * a future pass; this component focuses on freeform notes.
  */
 export default function NotesPanel({ videoId }: Props) {
-  const [open, setOpen] = useState(false);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // VideoRow's notes button navigates here with `?openNotes=1` so the
+  // panel pops open as soon as the reader mounts. Strip the param via
+  // router.replace immediately after honoring it so a page refresh
+  // doesn't reopen the drawer the user has since closed.
+  const [open, setOpen] = useState(() => searchParams.get('openNotes') === '1');
+  useEffect(() => {
+    if (searchParams.get('openNotes') !== '1') {
+      return;
+    }
+    const params = new URLSearchParams(searchParams);
+    params.delete('openNotes');
+    const qs = params.toString();
+    router.replace(qs.length > 0 ? `${pathname}?${qs}` : pathname);
+    // We only want this to run on mount when the param is present —
+    // not every time searchParams changes. Empty deps is intentional.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const [draft, setDraft] = useState('');
   const [saving, setSaving] = useState(false);
 
