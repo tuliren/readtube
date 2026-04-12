@@ -1,3 +1,4 @@
+export { fetchSubtitleViaDownsub } from './fetchViaDownsub';
 export { fetchSubtitleViaHtmlScraping } from './fetchViaHtmlScraping';
 export { fetchSubtitleViaTranscriptApi } from './fetchViaTranscriptApi';
 export { fetchSubtitleViaYoutubei } from './fetchViaYoutubei';
