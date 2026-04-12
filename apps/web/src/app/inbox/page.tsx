@@ -50,12 +50,15 @@ export default async function InboxPage({ searchParams }: Props) {
   // payload is byte-for-byte identical to what SWR would have fetched
   // for this URL — the InboxShell fallback is now correct for any key
   // a user can land on directly (bookmark, shared link, sidebar nav).
-  const videos = await loadInboxVideos(prisma, userId, query);
+  // Returns one page of videos plus the unpaginated total so the
+  // header can render Page X of N controls.
+  const initial = await loadInboxVideos(prisma, userId, query);
 
   return (
     <InboxShell
       initialChannels={channels}
-      initialVideos={videos}
+      initialVideos={initial.videos}
+      initialTotal={initial.total}
       selectedChannelId={selectedChannelId}
       selectedVideoId={null}
     />

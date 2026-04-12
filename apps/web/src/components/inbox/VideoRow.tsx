@@ -1,6 +1,6 @@
 'use client';
 
-import { Archive, Bookmark, BookmarkCheck, Clock, Star } from 'lucide-react';
+import { Archive, Bookmark, BookmarkCheck, Clock, NotebookPen, Star } from 'lucide-react';
 import Link from 'next/link';
 
 import { Checkbox } from '@/components/ui/checkbox';
@@ -166,9 +166,6 @@ export default function VideoRow({ video, isSelected, isChecked, onToggleChecked
                   const duration = formatDurationSeconds(video.durationSeconds);
                   return duration != null ? ` · ${duration}` : null;
                 })()}
-                {video.noteCount > 0
-                  ? ` · ${video.noteCount} note${video.noteCount === 1 ? '' : 's'}`
-                  : null}
               </span>
               <ArtifactBadges video={video} />
             </div>
@@ -180,8 +177,42 @@ export default function VideoRow({ video, isSelected, isChecked, onToggleChecked
 
         <div
           className="flex shrink-0 items-center gap-1 opacity-0 group-hover:opacity-100 data-[active=true]:opacity-100"
-          data-active={video.isStarred || video.isSaved}
+          data-active={video.isStarred || video.isSaved || video.noteCount > 0}
         >
+          {/*
+            Notes shortcut: navigates into the reader with `?openNotes=1`
+            so NotesPanel auto-opens on mount. The icon is filled-amber
+            with a count when notes already exist (so the row visibly
+            advertises that there's something to read), and an empty
+            outline that only appears on hover otherwise (so an empty
+            notes affordance doesn't clutter the row).
+
+            The href appends to the existing one VideoList built —
+            preserving the returnTo filter context — without
+            re-deriving it from search params.
+          */}
+          <Link
+            href={`${href}${href.includes('?') ? '&' : '?'}openNotes=1`}
+            onClick={(e) => e.stopPropagation()}
+            title={
+              video.noteCount > 0
+                ? `${video.noteCount} note${video.noteCount === 1 ? '' : 's'} — open`
+                : 'Add note'
+            }
+            className={`flex items-center gap-0.5 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-amber-500 ${
+              video.noteCount > 0 ? 'text-amber-500' : ''
+            }`}
+            aria-label={
+              video.noteCount > 0
+                ? `Open notes (${video.noteCount})`
+                : `Add note for ${video.title}`
+            }
+          >
+            <NotebookPen className={`h-4 w-4 ${video.noteCount > 0 ? 'fill-amber-100' : ''}`} />
+            {video.noteCount > 0 && (
+              <span className="text-[10px] font-semibold leading-none">{video.noteCount}</span>
+            )}
+          </Link>
           <button
             type="button"
             onClick={(e) => {

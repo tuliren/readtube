@@ -3,8 +3,20 @@ import type { PrismaClient } from '@readtube/database';
 import type { InboxQuery, VideoData } from '@/lib/types';
 
 import { buildUnreadClause, buildVideoWhere } from './buildWhere';
-import { extractInboxSearchParams, parseInboxQuery } from './filter';
+import { PAGE_SIZE, extractInboxSearchParams, parseInboxQuery } from './filter';
 import { decorateVideo, loadTriageContext } from './triage';
+
+/**
+ * Shape returned by `loadInboxVideos`. The total is the count of
+ * videos that match the where clause BEFORE pagination, so the
+ * client can render Page X of N controls in the inbox header.
+ */
+export interface InboxVideosResult {
+  videos: VideoData[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
 
 /**
  * Single source of truth for "given a user and an InboxQuery, what
@@ -12,29 +24,33 @@ import { decorateVideo, loadTriageContext } from './triage';
  * pages call into this so the server-rendered initial paint is
  * always the same set the client-side SWR fetch will return.
  *
- * Before this helper, the SSR pages only honored `channelId` and did
- * archive/snooze filtering in JS after a wide findMany. That meant
- * landing directly on `/inbox?starred=1` SSR-rendered every video,
- * and InboxShell used that as `fallbackData` for the filtered key —
- * the user briefly saw the unfiltered list flash before SWR
- * resolved. Centralizing the logic eliminates the divergence.
+ * Returns `{ videos, total, page, pageSize }`. `videos` is one
+ * page of results (capped at PAGE_SIZE) and `total` is the count
+ * of rows that match the where clause BEFORE pagination, so the
+ * client can render Page X of N controls in the inbox header.
  *
- * Capped at `take: 500` to match the API endpoint exactly. The same
- * Prisma `select` shape is used so the resulting VideoData[] from
- * SSR is structurally identical to the SWR-fetched payload.
+ * Before this helper, the SSR pages only honored `channelId` and
+ * did archive/snooze filtering in JS after a wide findMany. That
+ * meant landing directly on `/inbox?starred=1` SSR-rendered every
+ * video, and InboxShell used that as `fallbackData` for the
+ * filtered key — the user briefly saw the unfiltered list flash
+ * before SWR resolved. Centralizing the logic eliminates the
+ * divergence.
  */
 export async function loadInboxVideos(
   prisma: PrismaClient,
   userId: string,
   query: InboxQuery
-): Promise<VideoData[]> {
+): Promise<InboxVideosResult> {
+  const requestedPage = Math.max(1, query.page ?? 1);
+
   const userSubs = await prisma.userSubscription.findMany({
     where: { user_id: userId },
     select: { channel_id: true, read_at: true },
   });
   const channelIds = userSubs.map((s) => s.channel_id);
   if (channelIds.length === 0) {
-    return [];
+    return { videos: [], total: 0, page: 1, pageSize: PAGE_SIZE };
   }
   const watermarkByChannelId = new Map<string, Date | null>(
     userSubs.map((s) => [s.channel_id, s.read_at])
@@ -57,7 +73,7 @@ export async function loadInboxVideos(
     `;
     restrictIds = rows.map((r) => r.id);
     if (restrictIds.length === 0) {
-      return [];
+      return { videos: [], total: 0, page: 1, pageSize: PAGE_SIZE };
     }
   }
 
@@ -65,9 +81,9 @@ export async function loadInboxVideos(
   let where: typeof baseWhere =
     restrictIds != null ? { ...baseWhere, id: { in: restrictIds } } : baseWhere;
 
-  // Push unread into the DB query so the take: 500 cap applies to the
+  // Push unread into the DB query so pagination applies to the
   // already-filtered set rather than dropping genuinely unread videos
-  // beyond position 500.
+  // beyond the page boundary.
   if (query.unread === true) {
     where = {
       AND: [where, buildUnreadClause(userId, channelIds, watermarkByChannelId)],
@@ -75,6 +91,22 @@ export async function loadInboxVideos(
   }
 
   const sortDirection = query.sort === 'oldest' ? 'asc' : 'desc';
+
+  // Run count first so we can clamp the requested page against the
+  // actual result set BEFORE running findMany. Without this, a
+  // bookmark like /inbox?starred=1&page=5 against a Starred bucket
+  // that has since shrunk to 30 videos would return zero rows for
+  // skip=100 — leaving the user looking at "Page 5 of 2" with an
+  // empty list. Clamping serializes the two queries (one extra
+  // round-trip) but the cost is small (~5ms) for a properly indexed
+  // COUNT(*).
+  //
+  // When total is 0 we still want to surface page 1 (the pagination
+  // control hides itself when total <= PAGE_SIZE anyway).
+  const total = await prisma.video.count({ where });
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const page = Math.min(requestedPage, totalPages);
+  const skip = (page - 1) * PAGE_SIZE;
 
   const videos = await prisma.video.findMany({
     where,
@@ -109,7 +141,8 @@ export async function loadInboxVideos(
         },
       },
     },
-    take: 500,
+    skip,
+    take: PAGE_SIZE,
   });
 
   type VideoRow = (typeof videos)[number];
@@ -131,7 +164,12 @@ export async function loadInboxVideos(
     videos.map((v) => v.id)
   );
 
-  return videos.map((v) => decorateVideo(v, triage, readAtFor(v)));
+  return {
+    videos: videos.map((v) => decorateVideo(v, triage, readAtFor(v))),
+    total,
+    page,
+    pageSize: PAGE_SIZE,
+  };
 }
 
 /**

@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useSWRConfig } from 'swr';
 
 import FilterBar from './FilterBar';
+import Pagination from './Pagination';
 import SavedViewMenu from './SavedViewMenu';
 import SearchInput from './SearchInput';
 
@@ -12,9 +13,12 @@ interface Props {
   channelId: string | null;
   channelName: string;
   unreadCount: number;
+  /** Total videos that match the current filter (across all pages).
+   *  Drives the Page X of Y control on the right side of the header. */
+  totalVideos: number;
 }
 
-export default function InboxHeader({ channelId, channelName, unreadCount }: Props) {
+export default function InboxHeader({ channelId, channelName, unreadCount, totalVideos }: Props) {
   const { mutate } = useSWRConfig();
   const [marking, setMarking] = useState(false);
 
@@ -67,9 +71,13 @@ export default function InboxHeader({ channelId, channelName, unreadCount }: Pro
           )}
         </div>
       </div>
-      {/* Filter chips row */}
-      <div className="flex items-center px-4 pb-2 pt-0">
+      {/* Filter chips row + pagination on the right. The header
+          itself sits above the scrolling video list and never
+          scrolls away, so the pagination control is always
+          reachable while the user is reading rows. */}
+      <div className="flex items-center justify-between px-4 pb-2 pt-0">
         <FilterBar />
+        <Pagination total={totalVideos} />
       </div>
     </div>
   );

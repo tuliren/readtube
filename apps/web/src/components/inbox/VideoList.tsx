@@ -16,9 +16,39 @@ interface Props {
    *  starred videos yet…", channel narrow → "No videos in <name>
    *  yet.", etc.) instead of always saying "No videos yet". */
   emptyMessage: string;
+  /** True while the SWR fetch for the current videosUrl is in flight
+   *  AND there's no data (cached or SSR-fallback) to show yet.
+   *  Distinguishes "still loading" from "loaded but empty" so we
+   *  show a skeleton instead of flashing the empty-state copy for
+   *  ~100ms on every filter change. */
+  isLoading: boolean;
 }
 
-export default function VideoList({ videos, selectedVideoId, emptyMessage }: Props) {
+/**
+ * Skeleton placeholder rendered while the videos fetch is in flight
+ * and we have no cached data to show. Six rows roughly the height
+ * of a real VideoRow so the layout doesn't jump when the data
+ * resolves. Pulses gently via Tailwind's animate-pulse.
+ */
+function VideoListSkeleton() {
+  return (
+    <ul className="divide-y divide-gray-100" aria-busy="true" aria-live="polite">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <li key={i} className="px-4 py-3">
+          <div className="flex items-start gap-3">
+            <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-gray-200" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <div className="h-4 w-4/5 animate-pulse rounded bg-gray-200" />
+              <div className="h-3 w-1/3 animate-pulse rounded bg-gray-200" />
+            </div>
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export default function VideoList({ videos, selectedVideoId, emptyMessage, isLoading }: Props) {
   const searchParams = useSearchParams();
 
   // Build the "filter context" we want to forward into the reader as
@@ -78,6 +108,15 @@ export default function VideoList({ videos, selectedVideoId, emptyMessage }: Pro
 
   function clearSelection() {
     setCheckedIds(new Set());
+  }
+
+  // Loading takes precedence over the empty state. Without this
+  // guard the empty-state copy ("No starred videos yet…") would
+  // flash for ~100ms on every filter change while SWR is fetching
+  // the new key — incorrect, since we don't actually know whether
+  // the bucket is empty until the response lands.
+  if (isLoading) {
+    return <VideoListSkeleton />;
   }
 
   if (videos.length === 0) {

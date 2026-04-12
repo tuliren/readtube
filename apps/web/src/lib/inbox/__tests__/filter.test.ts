@@ -31,6 +31,14 @@ describe('parseInboxQuery', () => {
     { url: 'sort=bogus', expected: {} },
     { url: 'from=2026-01-01&to=2026-02-01', expected: { from: '2026-01-01', to: '2026-02-01' } },
     { url: 'unknown=value', expected: {} },
+    // Pagination
+    { url: 'page=1', expected: {} }, // default page is dropped on parse
+    { url: 'page=2', expected: { page: 2 } },
+    { url: 'page=42', expected: { page: 42 } },
+    { url: 'page=0', expected: {} }, // not a valid page
+    { url: 'page=-3', expected: {} },
+    { url: 'page=abc', expected: {} },
+    { url: 'starred=1&page=3', expected: { starred: true, page: 3 } },
   ])('parses %s correctly', ({ url, expected }) => {
     const params = new URLSearchParams(url);
     expect(parseInboxQuery(params)).toEqual(expected);
@@ -50,6 +58,10 @@ describe('encodeInboxQuery', () => {
     { query: { tagIds: [] }, expected: '' },
     { query: { sort: 'newest' }, expected: '' },
     { query: { sort: 'oldest' }, expected: 'sort=oldest' },
+    // Pagination
+    { query: { page: 1 }, expected: '' }, // default dropped
+    { query: { page: 2 }, expected: 'page=2' },
+    { query: { starred: true, page: 5 }, expected: 'starred=1&page=5' },
   ])('encodes $query correctly', ({ query, expected }) => {
     expect(encodeInboxQuery(query).toString()).toEqual(expected);
   });
@@ -78,6 +90,11 @@ describe('isDefaultQuery', () => {
     { query: { q: 'x' }, expected: false },
     { query: { starred: true }, expected: false },
     { query: { sort: 'oldest' }, expected: false },
+    // Page is not a filter — paginating within Inbox is still
+    // semantically the default view.
+    { query: { page: 1 }, expected: true },
+    { query: { page: 5 }, expected: true },
+    { query: { starred: true, page: 3 }, expected: false },
   ])('returns $expected for $query', ({ query, expected }) => {
     expect(isDefaultQuery(query)).toBe(expected);
   });
@@ -145,6 +162,18 @@ describe('inboxQueriesEqual', () => {
       a: { tagIds: ['a', 'b'] },
       b: { tagIds: ['a', 'c'] },
       expected: false,
+    },
+    {
+      desc: 'page is ignored when comparing — saved views are page-agnostic',
+      a: { starred: true, page: 1 },
+      b: { starred: true, page: 5 },
+      expected: true,
+    },
+    {
+      desc: 'page is ignored even when only page differs from empty',
+      a: {},
+      b: { page: 7 },
+      expected: true,
     },
   ])('$desc', ({ a, b, expected }) => {
     expect(inboxQueriesEqual(a, b)).toBe(expected);

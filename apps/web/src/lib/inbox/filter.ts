@@ -10,9 +10,16 @@ import type { InboxQuery } from '@/lib/types';
  * - Booleans: `?unread=1` or `?unread=true` is true; anything else is false.
  * - tagIds is comma-separated in the URL (`?tag=a,b,c`).
  * - from/to are ISO date strings (YYYY-MM-DD ok; server normalizes).
- * - Defaults (sort='newest', includeSnoozed=false) are NOT emitted when
- *   encoding, so a "default" view has an empty query string.
+ * - Defaults (sort='newest', includeSnoozed=false, page=1) are NOT
+ *   emitted when encoding, so a "default" view has an empty query string.
  */
+
+/**
+ * Page size for the paginated inbox list. The API caps results at
+ * this value and the client renders Prev / Page X of Y / Next in
+ * the InboxHeader once the total exceeds it.
+ */
+export const PAGE_SIZE = 25;
 
 const BOOL_KEYS = ['unread', 'starred', 'saved', 'archived', 'snoozed', 'includeSnoozed'] as const;
 const STRING_KEYS = ['q', 'channelId', 'folderId', 'from', 'to'] as const;
@@ -66,6 +73,17 @@ export function parseInboxQuery(params: URLSearchParams): InboxQuery {
     query.sort = sort;
   }
 
+  // Page is a positive integer; anything else (including '1', the
+  // default) is dropped from the parsed query so callers see
+  // `query.page === undefined` as the canonical "page 1" state.
+  const pageRaw = pickString(params, 'page');
+  if (pageRaw != null) {
+    const parsed = Number.parseInt(pageRaw, 10);
+    if (Number.isFinite(parsed) && parsed > 1) {
+      query.page = parsed;
+    }
+  }
+
   return query;
 }
 
@@ -93,15 +111,28 @@ export function encodeInboxQuery(query: InboxQuery): URLSearchParams {
     params.set('sort', query.sort);
   }
 
+  // Drop the default page so the URL stays clean — `?page=1` is
+  // semantically identical to no page param at all.
+  if (query.page != null && query.page > 1) {
+    params.set('page', String(query.page));
+  }
+
   return params;
 }
 
 /**
  * True iff the query has at least one filter applied beyond the defaults.
  * Used to decide whether to show a "clear filters" button in the header.
+ *
+ * Page is intentionally ignored — paginating to page 2 of the Inbox
+ * view is still semantically "the Inbox view", and saved views
+ * shouldn't be considered modified just because the user advanced a
+ * page. We strip `page` before checking by feeding a copy to the
+ * encoder.
  */
 export function isDefaultQuery(query: InboxQuery): boolean {
-  return encodeInboxQuery(query).toString().length === 0;
+  const { page: _page, ...rest } = query;
+  return encodeInboxQuery(rest).toString().length === 0;
 }
 
 /**
@@ -162,6 +193,11 @@ export function extractInboxSearchParams(raw: URLSearchParams): URLSearchParams 
 }
 
 export function inboxQueriesEqual(a: InboxQuery, b: InboxQuery): boolean {
+  // Note: `page` is intentionally NOT compared. Saved views are
+  // page-agnostic — "starred + read later" matches whether the user
+  // is on page 1 or page 5. The active-view checkmark in
+  // SavedViewMenu uses this helper, and it should keep matching
+  // the Starred view as the user paginates within it.
   for (const key of STRING_KEYS) {
     if ((a[key] ?? '') !== (b[key] ?? '')) {
       return false;
