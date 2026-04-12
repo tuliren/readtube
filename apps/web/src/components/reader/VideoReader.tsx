@@ -123,13 +123,18 @@ export default function VideoReader({ video }: Props) {
   const handleNotesOpenChange = useCallback((open: boolean) => setNotesOpen(open), []);
 
   // Live note count — shares the SWR cache key with NotesPanel so the
-  // badge updates immediately when notes are added or deleted.
-  const { data: notesData } = useSWR<{ length: number }>(
-    `/api/videos/${video.id}/notes`,
-    (url: string) => fetch(url).then((r) => (r.ok ? r.json() : []))
+  // badge updates immediately when notes are added or deleted. The
+  // fetcher must match NotesPanel's (throw on error) so SWR doesn't
+  // cache [] as valid data on a transient API failure.
+  const { data: notesData } = useSWR<unknown[]>(`/api/videos/${video.id}/notes`, (url: string) =>
+    fetch(url).then((r) => {
+      if (!r.ok) {
+        throw new Error(`Request failed (${r.status})`);
+      }
+      return r.json();
+    })
   );
-  const noteCount =
-    notesData != null ? (Array.isArray(notesData) ? notesData.length : 0) : video.noteCount;
+  const noteCount = Array.isArray(notesData) ? notesData.length : video.noteCount;
 
   return (
     <div className="flex flex-1 overflow-hidden">
