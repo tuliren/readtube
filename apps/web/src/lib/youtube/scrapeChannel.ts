@@ -14,6 +14,10 @@ export interface ScrapedVideo {
 export interface ScrapedChannel {
   channelId: string;
   name: string;
+  /** Channel avatar/logo URL extracted from the page's og:image meta
+   *  tag. Typically a 900x900 hosted on yt3.googleusercontent.com.
+   *  Null if the meta tag is missing. */
+  logoUrl: string | null;
   videos: ScrapedVideo[];
 }
 
@@ -138,22 +142,27 @@ export async function scrapeChannel(channelUrl: string): Promise<ScrapedChannel>
   const nameMatch = html.match(/<meta property="og:title" content="([^"]+)"/);
   const name = nameMatch ? nameMatch[1] : 'Unknown Channel';
 
+  // Extract channel avatar from og:image — YouTube sets this to the
+  // channel's profile picture on the /videos tab page.
+  const logoMatch = html.match(/<meta property="og:image" content="([^"]+)"/);
+  const logoUrl = logoMatch ? logoMatch[1] : null;
+
   // Extract ytInitialData JSON
   const dataMatch = html.match(/var ytInitialData = ({[\s\S]*?});<\/script>/);
   if (!dataMatch) {
     // Return channel info without videos if ytInitialData is missing
-    return { channelId, name, videos: [] };
+    return { channelId, name, logoUrl, videos: [] };
   }
 
   let data: Record<string, unknown>;
   try {
     data = JSON.parse(dataMatch[1]) as Record<string, unknown>;
   } catch {
-    return { channelId, name, videos: [] };
+    return { channelId, name, logoUrl, videos: [] };
   }
 
   const videos = extractVideosFromInitialData(data);
-  return { channelId, name, videos };
+  return { channelId, name, logoUrl, videos };
 }
 
 type YtData = Record<string, unknown>;

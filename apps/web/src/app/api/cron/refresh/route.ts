@@ -23,6 +23,14 @@ export async function POST(request: NextRequest) {
       const channelPageUrl = `https://www.youtube.com/channel/${channel.source_id}`;
       const scraped = await scrapeChannel(channelPageUrl);
 
+      // Update channel logo from the scrape if available.
+      if (scraped.logoUrl != null) {
+        await prisma.channel.update({
+          where: { id: channel.id },
+          data: { logo_url: scraped.logoUrl },
+        });
+      }
+
       for (const video of scraped.videos) {
         await prisma.video.upsert({
           where: {
