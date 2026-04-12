@@ -56,6 +56,11 @@ interface ChannelLatestResponse {
 
 // ── Exported shapes ────────────────────────────────────────────────
 
+export interface ChannelMeta {
+  channelId: string;
+  title: string;
+}
+
 export interface ChannelVideoMeta {
   videoId: string;
   title: string;
@@ -80,7 +85,7 @@ export interface ChannelVideoMeta {
  */
 export async function fetchChannelLatest(
   channelInput: string
-): Promise<{ videos: ChannelVideoMeta[] }> {
+): Promise<{ channel: ChannelMeta; videos: ChannelVideoMeta[] }> {
   const apiKey = process.env.TRANSCRIPT_API_KEY;
   if (isEmptyString(apiKey)) {
     throw new Error('TRANSCRIPT_API_KEY is not set');
@@ -105,7 +110,13 @@ export async function fetchChannelLatest(
     thumbnailUrl: v.thumbnail?.url || null,
   }));
 
-  return { videos };
+  return {
+    channel: {
+      channelId: data.channel.channelId,
+      title: data.channel.title,
+    },
+    videos,
+  };
 }
 
 /**
