@@ -2,7 +2,7 @@
 
 import { UserButton } from '@clerk/nextjs';
 import { useSearchParams } from 'next/navigation';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 
 import NotesPanel from '@/components/NotesPanel';
@@ -218,6 +218,18 @@ function InboxShellInner({
 }: InnerProps) {
   const [notesVideo, setNotesVideo] = useState<{ id: string; title: string } | null>(null);
 
+  // Close the notes panel when the video list changes (channel switch,
+  // filter toggle) and the video whose notes are open is no longer visible.
+  useEffect(() => {
+    if (notesVideo == null) {
+      return;
+    }
+    const stillVisible = videos.some((v) => v.id === notesVideo.id);
+    if (!stillVisible) {
+      setNotesVideo(null);
+    }
+  }, [videos, notesVideo]);
+
   function handleOpenNotes(videoId: string, videoTitle: string) {
     // Toggle: clicking the same video's notes button closes the panel
     if (notesVideo?.id === videoId) {
@@ -294,6 +306,7 @@ function InboxShellInner({
             </div>
             {notesVideo != null && (
               <NotesPanel
+                key={notesVideo.id}
                 videoId={notesVideo.id}
                 subtitle={notesVideo.title}
                 onClose={() => setNotesVideo(null)}
