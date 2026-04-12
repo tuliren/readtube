@@ -79,15 +79,21 @@ export default function InboxShell({
 
   // No destructuring default — we explicitly want `videos` to be
   // undefined while a non-SSR key is loading so the consumer can
-  // render an empty placeholder instead of stale wrong content. We
-  // deliberately do NOT pass keepPreviousData, because the previous
-  // key's data would be just as wrong as the SSR fallback for the
-  // user's freshly-toggled filter (e.g., toggling Starred would show
-  // the old unfiltered list briefly, which is exactly the regression
-  // this fix is closing).
+  // render a loading skeleton instead of an empty-state message
+  // (which would otherwise flash for ~100ms on every filter change).
+  // We deliberately do NOT pass keepPreviousData, because the
+  // previous key's data would be just as wrong as the SSR fallback
+  // for the user's freshly-toggled filter (e.g., toggling Starred
+  // would show the old unfiltered list briefly).
   const { data: videos } = useSWR<VideoData[]>(videosUrl, fetcher, {
     fallbackData: videosFallback,
   });
+  // `isLoading` reflects "we have no data to show yet" — i.e. the
+  // SWR cache has nothing for this key AND no SSR fallback applied.
+  // `videos === undefined` is the right signal because the SSR
+  // fallback path resolves synchronously to an array, so any
+  // undefined value means we're actively waiting on a fetch.
+  const isLoadingVideos = videos === undefined;
   const videoList = videos ?? [];
 
   const totalUnread = channels.reduce((sum, c) => sum + c.unreadCount, 0);
@@ -129,6 +135,7 @@ export default function InboxShell({
         <InboxShellInner
           channels={channels}
           videos={videoList}
+          isLoadingVideos={isLoadingVideos}
           selectedChannelId={selectedChannelId}
           selectedVideoId={selectedVideoId}
           totalUnread={totalUnread}
@@ -150,6 +157,7 @@ export default function InboxShell({
 interface InnerProps {
   channels: ChannelData[];
   videos: VideoData[];
+  isLoadingVideos: boolean;
   selectedChannelId: string | null;
   selectedVideoId: string | null;
   totalUnread: number;
@@ -166,6 +174,7 @@ interface InnerProps {
 function InboxShellInner({
   channels,
   videos,
+  isLoadingVideos,
   selectedChannelId,
   selectedVideoId,
   totalUnread,
@@ -235,6 +244,7 @@ function InboxShellInner({
                 videos={videos}
                 selectedVideoId={selectedVideoId}
                 emptyMessage={emptyMessage}
+                isLoading={isLoadingVideos}
               />
             </div>
           </div>
