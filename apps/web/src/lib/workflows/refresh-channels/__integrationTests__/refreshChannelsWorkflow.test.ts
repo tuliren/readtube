@@ -457,8 +457,14 @@ describe('refreshChannelsWorkflow', () => {
   });
 
   it('continues processing remaining channels after one fails', async () => {
-    const ch1 = await createChannel({ sourceId: 'UC_fail', name: 'Fail' });
-    const ch2 = await createChannel({ sourceId: 'UC_ok', name: 'OK' });
+    // Use explicit checked_at values to guarantee deterministic ordering
+    // (nulls first, then oldest) instead of relying on insertion order.
+    const ch1 = await createChannel({ sourceId: 'UC_fail', name: 'Fail', checkedAt: null });
+    const ch2 = await createChannel({
+      sourceId: 'UC_ok',
+      name: 'OK',
+      checkedAt: daysAgo(STALE_DAYS + 1),
+    });
 
     mockFetchChannelLatest.mockRejectedValueOnce(new Error('API down')).mockResolvedValueOnce(
       makeApiResponse('OK', [
