@@ -68,6 +68,20 @@ export default function NotesPanel({ videoId }: Props) {
   const [draft, setDraft] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // Reset local state whenever the user soft-navigates to a different
+  // video. NotesPanel is mounted under VideoReader, which itself is
+  // not remounted on sibling-video clicks (Next.js soft nav reuses
+  // the component tree — see the matching note in
+  // VideoReader.tsx:80-89). Without this resync, a draft typed for
+  // video A would silently POST to video B's notes endpoint when
+  // saved after navigating, and the open/saving flags would carry
+  // across navigations too.
+  useEffect(() => {
+    setDraft('');
+    setOpen(false);
+    setSaving(false);
+  }, [videoId]);
+
   const { data: notes = [], mutate } = useSWR<NoteData[]>(
     open ? `/api/videos/${videoId}/notes` : null,
     fetcher
