@@ -1,13 +1,13 @@
 'use client';
 
-import { Archive, Bookmark, Clock, Mail, Star } from 'lucide-react';
+import { Archive, Bookmark, Mail, Star } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import type { InboxQuery } from '@/lib/types';
 
 import { useInboxQuery } from './useInboxQuery';
 
-type ViewKey = 'unread' | 'starred' | 'saved' | 'snoozed' | 'archived';
+type ViewKey = 'unread' | 'starred' | 'saved' | 'archived';
 
 interface Chip {
   key: ViewKey;
@@ -19,23 +19,13 @@ const CHIPS: Chip[] = [
   { key: 'unread', label: 'Unread', icon: Mail },
   { key: 'starred', label: 'Starred', icon: Star },
   { key: 'saved', label: 'Read Later', icon: Bookmark },
-  { key: 'snoozed', label: 'Snoozed', icon: Clock },
   { key: 'archived', label: 'Archived', icon: Archive },
 ];
 
 // Every key the chips manage as a view. Clicking a chip clears all of
 // these and sets just the clicked one (or clears everything if the
-// clicked chip was already active). includeSnoozed is in here because it
-// conflicts semantically with `snoozed` — you shouldn't be in both
-// "show-only-snoozed" and "mix-snoozed-into-feed" modes at once.
-const VIEW_KEYS: (keyof InboxQuery)[] = [
-  'unread',
-  'starred',
-  'saved',
-  'snoozed',
-  'archived',
-  'includeSnoozed',
-];
+// clicked chip was already active).
+const VIEW_KEYS: (keyof InboxQuery)[] = ['unread', 'starred', 'saved', 'archived'];
 
 /**
  * Filter chip row. Each chip represents a preset view. Chips are

@@ -3,7 +3,6 @@ import type { InboxQuery } from '@/lib/types';
 import {
   encodeInboxQuery,
   extractInboxSearchParams,
-  inboxQueriesEqual,
   isDefaultQuery,
   parseInboxQuery,
 } from '../filter';
@@ -20,9 +19,6 @@ describe('parseInboxQuery', () => {
     { url: 'unread=0', expected: { unread: false } },
     { url: 'starred=1&saved=1', expected: { starred: true, saved: true } },
     { url: 'archived=1', expected: { archived: true } },
-    { url: 'snoozed=1', expected: { snoozed: true } },
-    { url: 'includeSnoozed=1', expected: { includeSnoozed: true } },
-    { url: 'snoozed=1&includeSnoozed=1', expected: { snoozed: true, includeSnoozed: true } },
     { url: 'tagIds=a,b,c', expected: { tagIds: ['a', 'b', 'c'] } },
     { url: 'tagIds=', expected: {} },
     { url: 'tagIds=x,,y', expected: { tagIds: ['x', 'y'] } },
@@ -53,7 +49,6 @@ describe('encodeInboxQuery', () => {
     { query: { unread: true }, expected: 'unread=1' },
     { query: { unread: false }, expected: '' },
     { query: { starred: true, saved: true }, expected: 'starred=1&saved=1' },
-    { query: { snoozed: true }, expected: 'snoozed=1' },
     { query: { tagIds: ['a', 'b'] }, expected: 'tagIds=a%2Cb' },
     { query: { tagIds: [] }, expected: '' },
     { query: { sort: 'newest' }, expected: '' },
@@ -72,8 +67,7 @@ describe('encodeInboxQuery', () => {
     { channelId: 'ch1', unread: true },
     { tagIds: ['tag-a', 'tag-b'], starred: true },
     { from: '2026-01-01', to: '2026-02-01', sort: 'oldest' },
-    { folderId: 'f1', archived: true, includeSnoozed: true },
-    { snoozed: true },
+    { folderId: 'f1', archived: true },
   ])('round-trips %s through encode -> parse', (query) => {
     const encoded = encodeInboxQuery(query);
     const parsed = parseInboxQuery(encoded);
@@ -97,88 +91,6 @@ describe('isDefaultQuery', () => {
     { query: { starred: true, page: 3 }, expected: false },
   ])('returns $expected for $query', ({ query, expected }) => {
     expect(isDefaultQuery(query)).toBe(expected);
-  });
-});
-
-describe('inboxQueriesEqual', () => {
-  it.each<{ desc: string; a: InboxQuery; b: InboxQuery; expected: boolean }>([
-    { desc: 'two empty queries', a: {}, b: {}, expected: true },
-    {
-      desc: 'same booleans regardless of insertion order',
-      a: { starred: true, saved: true },
-      b: { saved: true, starred: true },
-      expected: true,
-    },
-    {
-      desc: 'mixed string + bool regardless of order',
-      a: { channelId: 'abc', unread: true },
-      b: { unread: true, channelId: 'abc' },
-      expected: true,
-    },
-    {
-      desc: 'absent boolean === false boolean',
-      a: { starred: true },
-      b: { starred: true, unread: false },
-      expected: true,
-    },
-    {
-      desc: 'absent string === empty string',
-      a: { channelId: 'abc' },
-      b: { channelId: 'abc', q: '' },
-      expected: true,
-    },
-    {
-      desc: 'tagIds compared as a set, order-independent',
-      a: { tagIds: ['a', 'b', 'c'] },
-      b: { tagIds: ['c', 'a', 'b'] },
-      expected: true,
-    },
-    {
-      desc: 'default sort === explicit "newest"',
-      a: { starred: true },
-      b: { starred: true, sort: 'newest' },
-      expected: true,
-    },
-    {
-      desc: 'differing booleans are not equal',
-      a: { starred: true },
-      b: { starred: true, saved: true },
-      expected: false,
-    },
-    {
-      desc: 'differing strings are not equal',
-      a: { channelId: 'abc' },
-      b: { channelId: 'def' },
-      expected: false,
-    },
-    {
-      desc: 'different sort orders are not equal',
-      a: { sort: 'newest' },
-      b: { sort: 'oldest' },
-      expected: false,
-    },
-    {
-      desc: 'different tag sets are not equal',
-      a: { tagIds: ['a', 'b'] },
-      b: { tagIds: ['a', 'c'] },
-      expected: false,
-    },
-    {
-      desc: 'page is ignored when comparing — saved views are page-agnostic',
-      a: { starred: true, page: 1 },
-      b: { starred: true, page: 5 },
-      expected: true,
-    },
-    {
-      desc: 'page is ignored even when only page differs from empty',
-      a: {},
-      b: { page: 7 },
-      expected: true,
-    },
-  ])('$desc', ({ a, b, expected }) => {
-    expect(inboxQueriesEqual(a, b)).toBe(expected);
-    // Symmetry
-    expect(inboxQueriesEqual(b, a)).toBe(expected);
   });
 });
 

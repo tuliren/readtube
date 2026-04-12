@@ -6,7 +6,6 @@ import { useSWRConfig } from 'swr';
 
 import FilterBar from './FilterBar';
 import Pagination from './Pagination';
-import SavedViewMenu from './SavedViewMenu';
 import SearchInput from './SearchInput';
 
 interface Props {
@@ -57,7 +56,6 @@ export default function InboxHeader({ channelId, channelName, unreadCount, total
         </div>
         <div className="flex items-center gap-2">
           <SearchInput />
-          <SavedViewMenu />
           {unreadCount > 0 && (
             <button
               onClick={handleMarkAllRead}

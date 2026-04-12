@@ -5,11 +5,9 @@ import {
   archiveVideo,
   assertUserCanTouchVideo,
   saveVideo,
-  snoozeVideo,
   starVideo,
   unarchiveVideo,
   unsaveVideo,
-  unsnoozeVideo,
   unstarVideo,
 } from '@/lib/inbox/triageActions';
 
@@ -57,7 +55,6 @@ beforeEach(async () => {
   await global.testPrisma.videoStar.deleteMany();
   await global.testPrisma.videoSave.deleteMany();
   await global.testPrisma.videoArchive.deleteMany();
-  await global.testPrisma.videoSnooze.deleteMany();
   await global.testPrisma.userSubscription.deleteMany();
   await global.testPrisma.video.deleteMany();
   await global.testPrisma.channel.deleteMany();
@@ -135,43 +132,6 @@ describe('toggles are idempotent', () => {
     await unset(global.testPrisma, 'user1', videoId);
     await unset(global.testPrisma, 'user1', videoId);
     expect(await count('user1', videoId)).toBe(0);
-  });
-});
-
-describe('snoozeVideo', () => {
-  it('updates snooze_until on a second call', async () => {
-    const { videoId } = await seedUserVideo({
-      userSourceId: 'user1',
-      channelSourceId: 'chan1',
-      videoSourceId: 'vid1',
-    });
-
-    const first = new Date('2026-02-01T00:00:00Z');
-    const second = new Date('2026-03-01T00:00:00Z');
-
-    await snoozeVideo(global.testPrisma, 'user1', videoId, first);
-    await snoozeVideo(global.testPrisma, 'user1', videoId, second);
-
-    const row = await global.testPrisma.videoSnooze.findFirst({
-      where: { user_id: 'user1', video_id: videoId },
-    });
-    expect(row?.snooze_until.toISOString()).toEqual(second.toISOString());
-  });
-
-  it('unsnooze removes the row', async () => {
-    const { videoId } = await seedUserVideo({
-      userSourceId: 'user1',
-      channelSourceId: 'chan1',
-      videoSourceId: 'vid1',
-    });
-
-    await snoozeVideo(global.testPrisma, 'user1', videoId, new Date('2026-02-01T00:00:00Z'));
-    await unsnoozeVideo(global.testPrisma, 'user1', videoId);
-
-    const count = await global.testPrisma.videoSnooze.count({
-      where: { user_id: 'user1', video_id: videoId },
-    });
-    expect(count).toBe(0);
   });
 });
 

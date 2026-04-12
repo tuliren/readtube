@@ -98,20 +98,6 @@ export function useTriage() {
       }
     },
 
-    async snoozeUntil(videoId: string, until: Date): Promise<boolean> {
-      try {
-        await call('POST', `/api/videos/${videoId}/snooze`, {
-          snoozeUntil: until.toISOString(),
-        });
-        invalidateLists();
-        toast.success(`Snoozed until ${until.toLocaleDateString()}`);
-        return true;
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Failed to snooze');
-        return false;
-      }
-    },
-
     async bulk(videoIds: string[], action: BulkAction): Promise<number> {
       try {
         const res = await call('POST', '/api/videos/bulk', { videoIds, action });

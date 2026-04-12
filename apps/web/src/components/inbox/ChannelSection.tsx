@@ -16,7 +16,7 @@ interface Props {
  * Left sidebar content below the app topbar. Two sections:
  *
  *   1. Views — Inbox + the triage buckets (Starred / Read Later /
- *      Snoozed / Archived). Inbox is the default view and shows the
+ *      Archived). Inbox is the default view and shows the
  *      aggregate unread badge, so the separate "All unread" entry that
  *      used to live at the top is gone.
  *   2. Channels — folder-aware list of subscribed channels. The

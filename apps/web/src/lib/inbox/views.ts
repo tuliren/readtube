@@ -2,7 +2,7 @@ import type { InboxQuery } from '@/lib/types';
 
 /**
  * Metadata about an "inbox view" — the named buckets users can land
- * in via the sidebar (Inbox / Starred / Read Later / Snoozed /
+ * in via the sidebar (Inbox / Starred / Read Later /
  * Archived). Centralized so the sidebar entries, the header label,
  * and the contextual empty-state message all read from one source.
  *
@@ -18,7 +18,7 @@ import type { InboxQuery } from '@/lib/types';
  *     something).
  */
 export interface InboxViewDef {
-  key: 'inbox' | 'starred' | 'saved' | 'snoozed' | 'archived';
+  key: 'inbox' | 'starred' | 'saved' | 'archived';
   label: string;
   query: Partial<InboxQuery>;
   emptyMessage: string;
@@ -44,12 +44,6 @@ export const INBOX_VIEWS: InboxViewDef[] = [
     emptyMessage: 'Nothing saved for later yet. Save a video to read it here.',
   },
   {
-    key: 'snoozed',
-    label: 'Snoozed',
-    query: { snoozed: true },
-    emptyMessage: 'No snoozed videos right now. Snoozed videos appear here until they wake up.',
-  },
-  {
     key: 'archived',
     label: 'Archived',
     query: { archived: true },
@@ -60,7 +54,7 @@ export const INBOX_VIEWS: InboxViewDef[] = [
 /**
  * Resolve the active view from an InboxQuery, in declaration order.
  *
- * The named filter buckets (Starred / Read Later / Snoozed /
+ * The named filter buckets (Starred / Read Later /
  * Archived) win over the default Inbox view when their flag is set.
  * Returns null when nothing matches — that's the case for free-text
  * search, custom saved-view jumps, or any combination of filter
@@ -106,16 +100,10 @@ function isPlainInbox(query: InboxQuery): boolean {
   if (query.saved === true) {
     return false;
   }
-  if (query.snoozed === true) {
-    return false;
-  }
   if (query.archived === true) {
     return false;
   }
   if (query.unread === true) {
-    return false;
-  }
-  if (query.includeSnoozed === true) {
     return false;
   }
   if (query.q != null && query.q.length > 0) {
