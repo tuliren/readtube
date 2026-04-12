@@ -34,8 +34,8 @@ export default function Hero() {
       <p className="mx-auto mt-10 max-w-2xl text-xl tracking-tight text-slate-500">{DESCRIPTION}</p>
 
       <div className="mt-14 flex justify-center gap-x-6">
-        <Button href="#" variant="solid" color="slate">
-          Coming soon
+        <Button href="/sign-up" variant="solid" color="slate">
+          Get Started
         </Button>
       </div>
 
