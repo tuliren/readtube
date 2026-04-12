@@ -1,7 +1,7 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { VideoData } from '@/lib/types';
 
@@ -22,6 +22,7 @@ interface Props {
    *  show a skeleton instead of flashing the empty-state copy for
    *  ~100ms on every filter change. */
   isLoading: boolean;
+  onOpenNotes: (videoId: string, videoTitle: string) => void;
 }
 
 /**
@@ -48,7 +49,13 @@ function VideoListSkeleton() {
   );
 }
 
-export default function VideoList({ videos, selectedVideoId, emptyMessage, isLoading }: Props) {
+export default function VideoList({
+  videos,
+  selectedVideoId,
+  emptyMessage,
+  isLoading,
+  onOpenNotes,
+}: Props) {
   const searchParams = useSearchParams();
 
   // Build the "filter context" we want to forward into the reader as
@@ -70,6 +77,10 @@ export default function VideoList({ videos, selectedVideoId, emptyMessage, isLoa
   })();
 
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  // Track the last toggled-on index for Shift+click range selection.
+  const lastCheckedIndexRef = useRef<number | null>(null);
+
+  const inSelectionMode = checkedIds.size > 0;
 
   // Prune selection to IDs still visible in the current feed. Fires whenever
   // the `videos` prop changes — on channel switch, filter toggle, or bulk
@@ -94,20 +105,43 @@ export default function VideoList({ videos, selectedVideoId, emptyMessage, isLoa
     });
   }, [videos]);
 
-  function toggleChecked(id: string, next: boolean) {
-    setCheckedIds((prev) => {
-      const copy = new Set(prev);
-      if (next) {
-        copy.add(id);
+  const toggleChecked = useCallback(
+    (id: string, next: boolean, shiftKey?: boolean) => {
+      const currentIndex = videos.findIndex((v) => v.id === id);
+
+      if (shiftKey && next && lastCheckedIndexRef.current != null) {
+        // Shift+click: select the range from lastCheckedIndex to currentIndex
+        const from = Math.min(lastCheckedIndexRef.current, currentIndex);
+        const to = Math.max(lastCheckedIndexRef.current, currentIndex);
+        setCheckedIds((prev) => {
+          const copy = new Set(prev);
+          for (let i = from; i <= to; i++) {
+            copy.add(videos[i].id);
+          }
+          return copy;
+        });
       } else {
-        copy.delete(id);
+        setCheckedIds((prev) => {
+          const copy = new Set(prev);
+          if (next) {
+            copy.add(id);
+          } else {
+            copy.delete(id);
+          }
+          return copy;
+        });
       }
-      return copy;
-    });
-  }
+
+      if (next) {
+        lastCheckedIndexRef.current = currentIndex;
+      }
+    },
+    [videos]
+  );
 
   function clearSelection() {
     setCheckedIds(new Set());
+    lastCheckedIndexRef.current = null;
   }
 
   // Loading takes precedence over the empty state. Without this
@@ -152,6 +186,8 @@ export default function VideoList({ videos, selectedVideoId, emptyMessage, isLoa
               isChecked={checkedIds.has(video.id)}
               onToggleChecked={toggleChecked}
               href={href}
+              inSelectionMode={inSelectionMode}
+              onOpenNotes={onOpenNotes}
             />
           );
         })}

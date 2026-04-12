@@ -21,6 +21,7 @@ import ChannelSection from './ChannelSection';
 import { CommandPaletteProvider } from './CommandPalette';
 import InboxHeader from './InboxHeader';
 import { KeyboardShortcutsProvider } from './KeyboardShortcutsProvider';
+import ListNotesPanel from './ListNotesPanel';
 import VideoList from './VideoList';
 
 const fetcher = (url: string) =>
@@ -215,6 +216,17 @@ function InboxShellInner({
   handleChannelAdded,
   children,
 }: InnerProps) {
+  const [notesVideo, setNotesVideo] = useState<{ id: string; title: string } | null>(null);
+
+  function handleOpenNotes(videoId: string, videoTitle: string) {
+    // Toggle: clicking the same video's notes button closes the panel
+    if (notesVideo?.id === videoId) {
+      setNotesVideo(null);
+    } else {
+      setNotesVideo({ id: videoId, title: videoTitle });
+    }
+  }
+
   return (
     <div className="flex h-full min-h-0">
       {/* Sidebar */}
@@ -261,22 +273,32 @@ function InboxShellInner({
           </div>
         ) : (
           // List mode: show video list with a header toolbar
-          <div className="flex flex-1 flex-col overflow-hidden">
-            <InboxHeader
-              channelId={selectedChannelId}
-              channelName={headerName}
-              channelLogoUrl={headerLogoUrl}
-              unreadCount={headerUnread}
-              totalVideos={totalVideos}
-            />
-            <div className="flex-1 overflow-y-auto">
-              <VideoList
-                videos={videos}
-                selectedVideoId={selectedVideoId}
-                emptyMessage={emptyMessage}
-                isLoading={isLoadingVideos}
+          <div className="flex flex-1 overflow-hidden">
+            <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+              <InboxHeader
+                channelId={selectedChannelId}
+                channelName={headerName}
+                channelLogoUrl={headerLogoUrl}
+                unreadCount={headerUnread}
+                totalVideos={totalVideos}
               />
+              <div className="flex-1 overflow-y-auto">
+                <VideoList
+                  videos={videos}
+                  selectedVideoId={selectedVideoId}
+                  emptyMessage={emptyMessage}
+                  isLoading={isLoadingVideos}
+                  onOpenNotes={handleOpenNotes}
+                />
+              </div>
             </div>
+            {notesVideo != null && (
+              <ListNotesPanel
+                videoId={notesVideo.id}
+                videoTitle={notesVideo.title}
+                onClose={() => setNotesVideo(null)}
+              />
+            )}
           </div>
         )}
       </div>
