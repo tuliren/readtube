@@ -73,7 +73,9 @@ export default function RemoveChannelDialog({ target, onClose }: Props) {
             {target != null ? (
               <>
                 <strong className="font-medium text-gray-900">{target.name}</strong>
-                {' will be removed from your inbox. You can re-add it at any time.'}
+                {
+                  ' will be removed from your inbox. All your data associated with this channel and its videos will be permanently deleted, including read history, stars, saved items, archives, notes, highlights, and tags. You can re-add the channel at any time, but your data cannot be recovered.'
+                }
               </>
             ) : null}
           </AlertDialogDescription>
