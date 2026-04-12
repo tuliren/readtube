@@ -148,6 +148,11 @@ export default function VideoReader({ video }: Props) {
             >
               <NotebookPen className="h-4 w-4" />
               Notes
+              {video.noteCount > 0 && (
+                <span className="rounded-full bg-amber-100 px-1.5 text-[10px] font-semibold text-amber-700">
+                  {video.noteCount}
+                </span>
+              )}
             </Button>
             <VideoReaderActions video={video} />
           </div>

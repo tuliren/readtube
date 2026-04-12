@@ -222,36 +222,32 @@ export default function VideoRow({
             className="flex shrink-0 items-center gap-1 opacity-0 group-hover:opacity-100 data-[active=true]:opacity-100"
             data-active={video.isStarred || video.isSaved || video.noteCount > 0}
           >
-            {/*
-              Notes button: when the video has notes, opens the inline
-              notes panel in the list view. When it has no notes,
-              navigates into the reader with ?openNotes=1.
-            */}
-            {video.noteCount > 0 ? (
-              <button
-                type="button"
-                onClick={(e) => {
-                  stop(e);
-                  onOpenNotes(video.id, video.title);
-                }}
-                title={`${video.noteCount} note${video.noteCount === 1 ? '' : 's'} — open`}
-                className="flex items-center gap-0.5 rounded p-1 text-amber-500 hover:bg-gray-100 hover:text-amber-500"
-                aria-label={`Open notes (${video.noteCount})`}
-              >
-                <NotebookPen className="h-4 w-4 fill-amber-100" />
+            {/* Notes button: always opens the inline notes panel in the list view. */}
+            <button
+              type="button"
+              onClick={(e) => {
+                stop(e);
+                onOpenNotes(video.id, video.title);
+              }}
+              title={
+                video.noteCount > 0
+                  ? `${video.noteCount} note${video.noteCount === 1 ? '' : 's'} — open`
+                  : 'Add note'
+              }
+              className={`flex items-center gap-0.5 rounded p-1 hover:bg-gray-100 hover:text-amber-500 ${
+                video.noteCount > 0 ? 'text-amber-500' : 'text-gray-400'
+              }`}
+              aria-label={
+                video.noteCount > 0
+                  ? `Open notes (${video.noteCount})`
+                  : `Add note for ${video.title}`
+              }
+            >
+              <NotebookPen className={`h-4 w-4 ${video.noteCount > 0 ? 'fill-amber-100' : ''}`} />
+              {video.noteCount > 0 && (
                 <span className="text-[10px] font-semibold leading-none">{video.noteCount}</span>
-              </button>
-            ) : (
-              <Link
-                href={`${href}${href.includes('?') ? '&' : '?'}openNotes=1`}
-                onClick={(e) => e.stopPropagation()}
-                title="Add note"
-                className="flex items-center gap-0.5 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-amber-500"
-                aria-label={`Add note for ${video.title}`}
-              >
-                <NotebookPen className="h-4 w-4" />
-              </Link>
-            )}
+              )}
+            </button>
             <button
               type="button"
               onClick={(e) => {
