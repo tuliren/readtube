@@ -77,8 +77,10 @@ export default function VideoList({
   })();
 
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
-  // Track the last toggled-on index for Shift+click range selection.
-  const lastCheckedIndexRef = useRef<number | null>(null);
+  // Track the last toggled-on video ID for Shift+click range selection.
+  // We store the ID (not the index) so the anchor stays correct even
+  // when the videos array changes (SWR revalidation, filter toggle).
+  const lastCheckedIdRef = useRef<string | null>(null);
 
   const inSelectionMode = checkedIds.size > 0;
 
@@ -109,17 +111,27 @@ export default function VideoList({
     (id: string, next: boolean, shiftKey?: boolean) => {
       const currentIndex = videos.findIndex((v) => v.id === id);
 
-      if (shiftKey && next && lastCheckedIndexRef.current != null) {
-        // Shift+click: select the range from lastCheckedIndex to currentIndex
-        const from = Math.min(lastCheckedIndexRef.current, currentIndex);
-        const to = Math.max(lastCheckedIndexRef.current, currentIndex);
-        setCheckedIds((prev) => {
-          const copy = new Set(prev);
-          for (let i = from; i <= to; i++) {
-            copy.add(videos[i].id);
-          }
-          return copy;
-        });
+      if (shiftKey && next && lastCheckedIdRef.current != null) {
+        // Resolve the anchor ID to its current index in the (possibly changed) list.
+        const anchorIndex = videos.findIndex((v) => v.id === lastCheckedIdRef.current);
+        if (anchorIndex !== -1) {
+          const from = Math.min(anchorIndex, currentIndex);
+          const to = Math.max(anchorIndex, currentIndex);
+          setCheckedIds((prev) => {
+            const copy = new Set(prev);
+            for (let i = from; i <= to; i++) {
+              copy.add(videos[i].id);
+            }
+            return copy;
+          });
+        } else {
+          // Anchor video is no longer in the list — fall back to single toggle.
+          setCheckedIds((prev) => {
+            const copy = new Set(prev);
+            copy.add(id);
+            return copy;
+          });
+        }
       } else {
         setCheckedIds((prev) => {
           const copy = new Set(prev);
@@ -133,7 +145,7 @@ export default function VideoList({
       }
 
       if (next) {
-        lastCheckedIndexRef.current = currentIndex;
+        lastCheckedIdRef.current = id;
       }
     },
     [videos]
@@ -141,7 +153,7 @@ export default function VideoList({
 
   function clearSelection() {
     setCheckedIds(new Set());
-    lastCheckedIndexRef.current = null;
+    lastCheckedIdRef.current = null;
   }
 
   // Loading takes precedence over the empty state. Without this

@@ -5,6 +5,7 @@ import { NotebookPen } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
+import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
 import { formatDurationSeconds } from '@/lib/format/duration';
@@ -121,6 +122,15 @@ export default function VideoReader({ video }: Props) {
   const [notesOpen, setNotesOpen] = useState(() => searchParams.get('openNotes') === '1');
   const handleNotesOpenChange = useCallback((open: boolean) => setNotesOpen(open), []);
 
+  // Live note count — shares the SWR cache key with NotesPanel so the
+  // badge updates immediately when notes are added or deleted.
+  const { data: notesData } = useSWR<{ length: number }>(
+    `/api/videos/${video.id}/notes`,
+    (url: string) => fetch(url).then((r) => (r.ok ? r.json() : []))
+  );
+  const noteCount =
+    notesData != null ? (Array.isArray(notesData) ? notesData.length : 0) : video.noteCount;
+
   return (
     <div className="flex flex-1 overflow-hidden">
       <div className="flex flex-1 flex-col overflow-y-auto">
@@ -148,9 +158,9 @@ export default function VideoReader({ video }: Props) {
             >
               <NotebookPen className="h-4 w-4" />
               Notes
-              {video.noteCount > 0 && (
+              {noteCount > 0 && (
                 <span className="rounded-full bg-amber-100 px-1.5 text-[10px] font-semibold text-amber-700">
-                  {video.noteCount}
+                  {noteCount}
                 </span>
               )}
             </Button>
