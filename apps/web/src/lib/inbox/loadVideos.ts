@@ -119,7 +119,6 @@ export async function loadInboxVideos(
       published_at: true,
       duration_seconds: true,
       thumbnail_url: true,
-      view_count: true,
       transcript_unavailable: true,
       channel_id: true,
       channel: { select: { id: true, name: true, source_id: true } },

@@ -144,7 +144,6 @@ export async function POST(request: NextRequest) {
         where: { channel_id: channel.id, source_id: videoMeta.videoId },
         data: {
           thumbnail_url: videoMeta.thumbnailUrl,
-          ...(videoMeta.viewCount != null ? { view_count: videoMeta.viewCount } : {}),
         },
       });
     }

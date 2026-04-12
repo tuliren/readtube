@@ -39,8 +39,6 @@ export interface VideoData {
   durationSeconds: number | null;
   // URL to the video's thumbnail image (typically i.ytimg.com).
   thumbnailUrl: string | null;
-  // Total view count at the time of the last scrape.
-  viewCount: number | null;
   // Sticky "we've already tried and there's nothing here" flag set on
   // the Video row when a transcript fetch came back empty. Used by the
   // reader to skip retry attempts and to disable Generate buttons in

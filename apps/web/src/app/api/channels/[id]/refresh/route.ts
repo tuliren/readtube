@@ -3,6 +3,7 @@ import { prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { isEmptyString } from '@/lib/string';
+import { VercelEnv, getVercelEnv } from '@/lib/vercelEnv';
 import { buildThumbnailUrl, fetchChannelLatest } from '@/lib/youtube/channelMetadata';
 import { scrapeChannel } from '@/lib/youtube/scrapeChannel';
 
@@ -11,13 +12,20 @@ import { scrapeChannel } from '@/lib/youtube/scrapeChannel';
  *
  * Dev-only single-channel refresh. Scrapes the latest videos from the
  * channel's YouTube page, then enriches with TranscriptAPI metadata
- * (logo, thumbnails, view counts). Returns the updated channel +
- * counts so the caller can invalidate its SWR caches.
+ * (logo, thumbnails). Returns the updated channel + counts so the
+ * caller can invalidate its SWR caches.
  *
- * Gated to authenticated users who own the subscription — but the
- * UI button is only shown in dev environments via `isProduction()`.
+ * Gated on both server-side env check (rejects in production) and
+ * client-side UI hiding (the Refresh button uses `isProduction()`).
  */
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  // Server-side production guard — the UI button is already hidden
+  // via isProduction() but this ensures the endpoint can't be called
+  // directly in production by anyone who knows the URL.
+  if (getVercelEnv(process.env.VERCEL_ENV) === VercelEnv.PRODUCTION) {
+    return NextResponse.json({ error: 'Not available in production' }, { status: 403 });
+  }
+
   const { userId } = await auth();
   if (userId == null) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -96,7 +104,6 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
         where: { channel_id: channel.id, source_id: videoMeta.videoId },
         data: {
           thumbnail_url: videoMeta.thumbnailUrl,
-          ...(videoMeta.viewCount != null ? { view_count: videoMeta.viewCount } : {}),
         },
       });
     }

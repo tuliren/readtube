@@ -62,14 +62,13 @@ export interface ChannelVideoMeta {
   description: string;
   publishedAt: Date;
   thumbnailUrl: string | null;
-  viewCount: number | null;
 }
 
 // ── Functions ──────────────────────────────────────────────────────
 
 /**
  * Fetch the 15 most recent videos from TranscriptAPI's RSS-backed
- * endpoint. Returns per-video thumbnails + view counts.
+ * endpoint. Returns per-video thumbnails.
  *
  * The `channel` parameter accepts @handles, channel URLs, or
  * UC-prefixed channel IDs — but in practice the API is more
@@ -104,27 +103,9 @@ export async function fetchChannelLatest(
     description: v.description ?? '',
     publishedAt: new Date(v.published),
     thumbnailUrl: v.thumbnail?.url || null,
-    viewCount: parseViewCount(v.viewCount),
   }));
 
   return { videos };
-}
-
-/**
- * Parse a viewCount string from the API response into a number.
- * Uses explicit NaN check instead of `|| null` so that a genuine
- * view count of 0 (brand-new upload) is preserved rather than
- * being coerced to null by JavaScript's falsy-zero trap.
- */
-function parseViewCount(raw: string | null | undefined): number | null {
-  if (raw == null) {
-    return null;
-  }
-  const n = parseInt(String(raw), 10);
-  if (Number.isNaN(n)) {
-    return null;
-  }
-  return n;
 }
 
 /**

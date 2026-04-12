@@ -75,7 +75,6 @@ model Channel {
   // may not have them until the next cron refresh picks them up.
   handle           String?
   description      String?
-  subscriber_count Int?
   verified         Boolean           @default(false)
   // URL to the channel's avatar/logo image. Sourced from the `thumbnails`
   // array in the TranscriptAPI response. Typically a 48px or 88px square
@@ -134,10 +133,6 @@ model Video {
   // /youtube/channel/latest RSS response. Typically a 480×360 or
   // maxresdefault hosted on i.ytimg.com.
   thumbnail_url String?
-  // Total view count at the time of the last scrape. Sourced from the
-  // TranscriptAPI RSS response's `viewCount` field. Nullable for pre-
-  // backfill rows and Shorts.
-  view_count    Int?
   // Sticky flag set the first time we attempt to fetch a transcript and
   // come back empty. Once true, the transcript route refuses to retry —
   // some videos genuinely have no captions and re-hammering the upstream
