@@ -2,7 +2,7 @@
 
 import { NotebookPen, Trash2 } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import useSWR from 'swr';
 
@@ -76,7 +76,20 @@ export default function NotesPanel({ videoId }: Props) {
   // video A would silently POST to video B's notes endpoint when
   // saved after navigating, and the open/saving flags would carry
   // across navigations too.
+  //
+  // Gated on a previousVideoIdRef so the effect only runs when the
+  // videoId actually CHANGES — never on initial mount. Without this
+  // guard the effect would also fire on the first render and
+  // immediately call setOpen(false), overriding the openNotes=1
+  // initial state set by the useState initializer above (the
+  // VideoRow notes shortcut would navigate here but the drawer
+  // would never open).
+  const previousVideoIdRef = useRef(videoId);
   useEffect(() => {
+    if (previousVideoIdRef.current === videoId) {
+      return;
+    }
+    previousVideoIdRef.current = videoId;
     setDraft('');
     setOpen(false);
     setSaving(false);

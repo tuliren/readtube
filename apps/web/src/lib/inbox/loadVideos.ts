@@ -42,8 +42,7 @@ export async function loadInboxVideos(
   userId: string,
   query: InboxQuery
 ): Promise<InboxVideosResult> {
-  const page = Math.max(1, query.page ?? 1);
-  const skip = (page - 1) * PAGE_SIZE;
+  const requestedPage = Math.max(1, query.page ?? 1);
 
   const userSubs = await prisma.userSubscription.findMany({
     where: { user_id: userId },
@@ -51,7 +50,7 @@ export async function loadInboxVideos(
   });
   const channelIds = userSubs.map((s) => s.channel_id);
   if (channelIds.length === 0) {
-    return { videos: [], total: 0, page, pageSize: PAGE_SIZE };
+    return { videos: [], total: 0, page: 1, pageSize: PAGE_SIZE };
   }
   const watermarkByChannelId = new Map<string, Date | null>(
     userSubs.map((s) => [s.channel_id, s.read_at])
@@ -74,7 +73,7 @@ export async function loadInboxVideos(
     `;
     restrictIds = rows.map((r) => r.id);
     if (restrictIds.length === 0) {
-      return { videos: [], total: 0, page, pageSize: PAGE_SIZE };
+      return { videos: [], total: 0, page: 1, pageSize: PAGE_SIZE };
     }
   }
 
@@ -93,47 +92,58 @@ export async function loadInboxVideos(
 
   const sortDirection = query.sort === 'oldest' ? 'asc' : 'desc';
 
-  // Run count + page fetch in parallel — both go against the same
-  // where clause, so we save one round-trip.
-  const [total, videos] = await Promise.all([
-    prisma.video.count({ where }),
-    prisma.video.findMany({
-      where,
-      orderBy: { published_at: sortDirection },
-      select: {
-        id: true,
-        source_id: true,
-        title: true,
-        description: true,
-        published_at: true,
-        duration_seconds: true,
-        transcript_unavailable: true,
-        channel_id: true,
-        channel: { select: { id: true, name: true, source_id: true } },
-        consumptions: {
-          where: { user_id: userId },
-          select: { read_at: true },
-          take: 1,
-        },
-        // Latest Transcript row (if any) plus minimal presence-check
-        // payloads for its Summary and Articles. We only need the
-        // existence answers to render the artifact badges in VideoRow,
-        // so each child select picks the cheapest possible columns:
-        // a single Summary field via the unique transcript_id, and
-        // a single Article id with take: 1.
-        transcripts: {
-          orderBy: { created_at: 'desc' },
-          take: 1,
-          select: {
-            summary: { select: { transcript_id: true } },
-            articles: { take: 1, select: { id: true } },
-          },
+  // Run count first so we can clamp the requested page against the
+  // actual result set BEFORE running findMany. Without this, a
+  // bookmark like /inbox?starred=1&page=5 against a Starred bucket
+  // that has since shrunk to 30 videos would return zero rows for
+  // skip=100 — leaving the user looking at "Page 5 of 2" with an
+  // empty list. Clamping serializes the two queries (one extra
+  // round-trip) but the cost is small (~5ms) for a properly indexed
+  // COUNT(*).
+  //
+  // When total is 0 we still want to surface page 1 (the pagination
+  // control hides itself when total <= PAGE_SIZE anyway).
+  const total = await prisma.video.count({ where });
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const page = Math.min(requestedPage, totalPages);
+  const skip = (page - 1) * PAGE_SIZE;
+
+  const videos = await prisma.video.findMany({
+    where,
+    orderBy: { published_at: sortDirection },
+    select: {
+      id: true,
+      source_id: true,
+      title: true,
+      description: true,
+      published_at: true,
+      duration_seconds: true,
+      transcript_unavailable: true,
+      channel_id: true,
+      channel: { select: { id: true, name: true, source_id: true } },
+      consumptions: {
+        where: { user_id: userId },
+        select: { read_at: true },
+        take: 1,
+      },
+      // Latest Transcript row (if any) plus minimal presence-check
+      // payloads for its Summary and Articles. We only need the
+      // existence answers to render the artifact badges in VideoRow,
+      // so each child select picks the cheapest possible columns:
+      // a single Summary field via the unique transcript_id, and
+      // a single Article id with take: 1.
+      transcripts: {
+        orderBy: { created_at: 'desc' },
+        take: 1,
+        select: {
+          summary: { select: { transcript_id: true } },
+          articles: { take: 1, select: { id: true } },
         },
       },
-      skip,
-      take: PAGE_SIZE,
-    }),
-  ]);
+    },
+    skip,
+    take: PAGE_SIZE,
+  });
 
   type VideoRow = (typeof videos)[number];
   const readAtFor = (v: VideoRow): Date | null => {
