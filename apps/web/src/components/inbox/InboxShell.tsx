@@ -272,9 +272,8 @@ function InboxShellInner({
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
           <SheetContent side="left" className="w-72 p-0">
             <SidebarExpandedOverride>
-              <div className="flex h-14 shrink-0 items-center justify-between border-b border-gray-200 px-5">
+              <div className="flex h-14 shrink-0 items-center border-b border-gray-200 px-5">
                 <span className="text-base font-bold text-gray-900">ReadTube</span>
-                <UserButton />
               </div>
               {sidebarContent}
             </SidebarExpandedOverride>
