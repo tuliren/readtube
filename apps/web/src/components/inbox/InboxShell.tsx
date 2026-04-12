@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 
-import NotesPanel from '@/components/NotesPanel';
+import NotesPanelResponsive from '@/components/NotesPanelResponsive';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Toaster } from '@/components/ui/sonner';
 import {
@@ -386,10 +386,11 @@ function InboxShellInner({
               </div>
             </div>
             {notesVideo != null && (
-              <NotesPanel
+              <NotesPanelResponsive
                 key={notesVideo.id}
                 videoId={notesVideo.id}
                 subtitle={notesVideo.title}
+                isMobile={isMobile}
                 onClose={() => setNotesVideo(null)}
               />
             )}

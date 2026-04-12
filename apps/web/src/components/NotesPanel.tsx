@@ -74,7 +74,7 @@ export default function NotesPanel({ videoId, subtitle, onClose }: Props) {
   }
 
   return (
-    <div className="flex w-80 shrink-0 flex-col border-l border-gray-200 bg-white">
+    <div className="flex min-h-0 flex-1 flex-col bg-white">
       <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
         <div className="flex items-center gap-2">
           <NotebookPen className="h-4 w-4 text-amber-500" />

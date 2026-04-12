@@ -2,7 +2,8 @@
 
 import { useEffect, useRef } from 'react';
 
-import SharedNotesPanel from '@/components/NotesPanel';
+import NotesPanelResponsive from '@/components/NotesPanelResponsive';
+import { useSidebar } from '@/components/inbox/SidebarContext';
 
 interface Props {
   videoId: string;
@@ -14,8 +15,10 @@ interface Props {
  * Reader-specific notes panel wrapper. Handles closing the panel and
  * resetting state when the user soft-navigates to a different video
  * (Next.js reuses the component tree on sibling-video clicks).
+ * On mobile, renders as a bottom drawer instead of a side panel.
  */
 export default function ReaderNotesPanel({ videoId, open, onOpenChange }: Props) {
+  const { isMobile } = useSidebar();
   const previousVideoIdRef = useRef(videoId);
   useEffect(() => {
     if (previousVideoIdRef.current === videoId) {
@@ -29,5 +32,11 @@ export default function ReaderNotesPanel({ videoId, open, onOpenChange }: Props)
     return null;
   }
 
-  return <SharedNotesPanel videoId={videoId} onClose={() => onOpenChange(false)} />;
+  return (
+    <NotesPanelResponsive
+      videoId={videoId}
+      isMobile={isMobile}
+      onClose={() => onOpenChange(false)}
+    />
+  );
 }
