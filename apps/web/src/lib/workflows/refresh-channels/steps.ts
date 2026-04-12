@@ -47,24 +47,54 @@ export async function refreshChannel(channel: StaleChannel): Promise<RefreshResu
 
   const data = await fetchChannelLatest(channel.source_id);
 
+  // Check what metadata we're already missing so we can skip the
+  // expensive YouTube HTML scrape when everything is already filled in.
+  const channelRow = await prisma.channel.findUnique({
+    where: { id: channel.id },
+    select: { logo_url: true },
+  });
+  const videoSourceIds = data.videos.map((v) => v.videoId);
+  const existingVideos = await prisma.video.findMany({
+    where: { channel_id: channel.id, source_id: { in: videoSourceIds } },
+    select: { source_id: true, duration_seconds: true },
+  });
+  const videosMissingDuration = new Set(
+    existingVideos.filter((v) => v.duration_seconds == null).map((v) => v.source_id)
+  );
+  // Videos not yet in the DB also need duration
+  const existingSourceIds = new Set(existingVideos.map((v) => v.source_id));
+  for (const v of data.videos) {
+    if (!existingSourceIds.has(v.videoId)) {
+      videosMissingDuration.add(v.videoId);
+    }
+  }
+
+  const needsLogo = channelRow?.logo_url == null;
+  const needsDuration = videosMissingDuration.size > 0;
+
   // Best-effort scrape for logo_url and duration_seconds — fields the
-  // TranscriptAPI RSS endpoint doesn't provide.
+  // TranscriptAPI RSS endpoint doesn't provide. Skip if we already
+  // have both.
   let logoUrl: string | null = null;
   const durationMap = new Map<string, number>();
-  try {
-    const channelPageUrl = `https://www.youtube.com/channel/${channel.source_id}`;
-    const scraped = await scrapeChannel(channelPageUrl);
-    logoUrl = scraped.logoUrl;
-    for (const v of scraped.videos) {
-      if (v.durationSeconds != null) {
-        durationMap.set(v.videoId, v.durationSeconds);
+  if (needsLogo || needsDuration) {
+    try {
+      const channelPageUrl = `https://www.youtube.com/channel/${channel.source_id}`;
+      const scraped = await scrapeChannel(channelPageUrl);
+      if (needsLogo) {
+        logoUrl = scraped.logoUrl;
       }
+      for (const v of scraped.videos) {
+        if (v.durationSeconds != null && videosMissingDuration.has(v.videoId)) {
+          durationMap.set(v.videoId, v.durationSeconds);
+        }
+      }
+    } catch (err) {
+      console.warn(
+        `[refresh-channels] scrape failed for ${channel.id}, skipping logo/duration:`,
+        err
+      );
     }
-  } catch (err) {
-    console.warn(
-      `[refresh-channels] scrape failed for ${channel.id}, skipping logo/duration:`,
-      err
-    );
   }
 
   const nameUpdated = data.channel.title !== channel.name;

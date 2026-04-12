@@ -368,6 +368,48 @@ describe('refreshChannel', () => {
     expect(updated!.checked_at).not.toBeNull();
     expect(updated!.logo_url).toBeNull();
   });
+
+  it('skips scraping when channel has logo and all videos have duration', async () => {
+    const ch = await createChannel({ sourceId: 'UC_full', name: 'Full Ch' });
+    // Pre-set logo_url on channel
+    await global.testPrisma.channel.update({
+      where: { id: ch.id },
+      data: { logo_url: 'https://existing-logo.jpg' },
+    });
+    // Pre-create video with duration_seconds
+    await global.testPrisma.video.create({
+      data: {
+        channel_id: ch.id,
+        source_id: 'vid_has_dur',
+        title: 'Old',
+        published_at: new Date('2026-01-01T00:00:00Z'),
+        duration_seconds: 120,
+      },
+    });
+
+    mockFetchChannelLatest.mockResolvedValueOnce(
+      makeApiResponse('Full Ch', [
+        {
+          videoId: 'vid_has_dur',
+          title: 'Updated',
+          published: '2026-01-01T00:00:00Z',
+          description: 'Desc',
+        },
+      ])
+    );
+
+    await refreshChannel({ id: ch.id, source_id: ch.source_id, name: ch.name });
+
+    // scrapeChannel should not have been called
+    expect(mockScrapeChannel).not.toHaveBeenCalled();
+
+    // duration_seconds should be preserved, not overwritten
+    const video = await global.testPrisma.video.findFirst({
+      where: { channel_id: ch.id, source_id: 'vid_has_dur' },
+    });
+    expect(video!.duration_seconds).toBe(120);
+    expect(video!.title).toBe('Updated');
+  });
 });
 
 // ─── refreshChannelsWorkflow (end-to-end) ────────────────────────
