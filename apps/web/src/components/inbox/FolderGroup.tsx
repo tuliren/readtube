@@ -33,6 +33,7 @@ interface Props {
   onDelete: () => void;
   folders: FolderData[];
   onMoveTo: (channelId: string, folderId: string | null) => void;
+  onRemoveChannel: (channel: { id: string; name: string }) => void;
 }
 
 /**
@@ -59,6 +60,7 @@ export default function FolderGroup({
   onDelete,
   folders,
   onMoveTo,
+  onRemoveChannel,
 }: Props) {
   const { setNodeRef, isOver } = useDroppable({ id: folder.id });
 
@@ -125,6 +127,7 @@ export default function FolderGroup({
               isSelected={selectedChannelId === channel.id}
               folders={folders}
               onMoveTo={onMoveTo}
+              onRemove={onRemoveChannel}
             />
           ))}
         </ul>

@@ -27,6 +27,7 @@ import DeleteFolderDialog from './DeleteFolderDialog';
 import DraggableChannelLink from './DraggableChannelLink';
 import FolderGroup from './FolderGroup';
 import NewFolderDialog from './NewFolderDialog';
+import RemoveChannelDialog from './RemoveChannelDialog';
 import RenameFolderDialog from './RenameFolderDialog';
 import { useFolders } from './useFolders';
 
@@ -55,6 +56,10 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
   const [pendingRename, setPendingRename] = useState<{ id: string; name: string } | null>(null);
+  const [pendingRemoveChannel, setPendingRemoveChannel] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -215,6 +220,7 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
                 isSelected={selectedChannelId === channel.id}
                 folders={folders}
                 onMoveTo={moveTo}
+                onRemove={setPendingRemoveChannel}
               />
             ))}
           </ul>
@@ -240,6 +246,7 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
             onDelete={() => setPendingDelete({ id: folder.id, name: folder.name })}
             folders={folders}
             onMoveTo={moveTo}
+            onRemoveChannel={setPendingRemoveChannel}
           />
         );
       })}
@@ -247,6 +254,10 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
       <NewFolderDialog open={newFolderOpen} onOpenChange={setNewFolderOpen} />
       <RenameFolderDialog target={pendingRename} onClose={() => setPendingRename(null)} />
       <DeleteFolderDialog target={pendingDelete} onClose={() => setPendingDelete(null)} />
+      <RemoveChannelDialog
+        target={pendingRemoveChannel}
+        onClose={() => setPendingRemoveChannel(null)}
+      />
 
       {/*
         Portal-rendered floating preview that follows the cursor during

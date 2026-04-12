@@ -1,13 +1,14 @@
 'use client';
 
 import { useDraggable } from '@dnd-kit/core';
-import { Check, CircleDashed, FolderIcon, FolderInput, MoreHorizontal } from 'lucide-react';
+import { Check, CircleDashed, FolderIcon, FolderInput, MoreHorizontal, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
@@ -24,6 +25,7 @@ interface Props {
   isSelected: boolean;
   folders: FolderData[];
   onMoveTo: (channelId: string, folderId: string | null) => void;
+  onRemove: (channel: { id: string; name: string }) => void;
 }
 
 /**
@@ -40,7 +42,13 @@ interface Props {
  * share the same padding, icon slot, and active/hover states as every
  * other sidebar row (Views, folder headers, Add channel button).
  */
-export default function DraggableChannelLink({ channel, isSelected, folders, onMoveTo }: Props) {
+export default function DraggableChannelLink({
+  channel,
+  isSelected,
+  folders,
+  onMoveTo,
+  onRemove,
+}: Props) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: channel.id,
   });
@@ -118,6 +126,14 @@ export default function DraggableChannelLink({ channel, isSelected, folders, onM
                 })}
               </DropdownMenuSubContent>
             </DropdownMenuSub>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onSelect={() => onRemove({ id: channel.id, name: channel.name })}
+              className="text-red-600 focus:text-red-600"
+            >
+              <Trash2 className="mr-2 h-3.5 w-3.5" />
+              Remove channel
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
