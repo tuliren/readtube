@@ -1,10 +1,13 @@
 'use client';
 
 import { UserButton } from '@clerk/nextjs';
+import { Menu, PanelLeft } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 
+import NotesPanelResponsive from '@/components/NotesPanelResponsive';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Toaster } from '@/components/ui/sonner';
 import {
   PAGE_SIZE,
@@ -21,6 +24,12 @@ import ChannelSection from './ChannelSection';
 import { CommandPaletteProvider } from './CommandPalette';
 import InboxHeader from './InboxHeader';
 import { KeyboardShortcutsProvider } from './KeyboardShortcutsProvider';
+import {
+  SidebarExpandedOverride,
+  SidebarProvider,
+  SidebarResizeHandle,
+  useSidebar,
+} from './SidebarContext';
 import VideoList from './VideoList';
 
 const fetcher = (url: string) =>
@@ -152,29 +161,31 @@ export default function InboxShell({
       : (activeView?.emptyMessage ?? 'No videos match the current filters.');
 
   return (
-    <KeyboardShortcutsProvider>
-      <CommandPaletteProvider>
-        <InboxShellInner
-          channels={channels}
-          videos={videoList}
-          totalVideos={totalVideos}
-          isLoadingVideos={isLoadingVideos}
-          selectedChannelId={selectedChannelId}
-          selectedVideoId={selectedVideoId}
-          totalUnread={totalUnread}
-          headerName={headerName}
-          headerLogoUrl={headerLogoUrl}
-          headerUnread={headerUnread}
-          emptyMessage={emptyMessage}
-          showEmptyState={showEmptyState}
-          modalOpen={modalOpen}
-          setModalOpen={setModalOpen}
-          handleChannelAdded={handleChannelAdded}
-        >
-          {children}
-        </InboxShellInner>
-      </CommandPaletteProvider>
-    </KeyboardShortcutsProvider>
+    <SidebarProvider>
+      <KeyboardShortcutsProvider>
+        <CommandPaletteProvider>
+          <InboxShellInner
+            channels={channels}
+            videos={videoList}
+            totalVideos={totalVideos}
+            isLoadingVideos={isLoadingVideos}
+            selectedChannelId={selectedChannelId}
+            selectedVideoId={selectedVideoId}
+            totalUnread={totalUnread}
+            headerName={headerName}
+            headerLogoUrl={headerLogoUrl}
+            headerUnread={headerUnread}
+            emptyMessage={emptyMessage}
+            showEmptyState={showEmptyState}
+            modalOpen={modalOpen}
+            setModalOpen={setModalOpen}
+            handleChannelAdded={handleChannelAdded}
+          >
+            {children}
+          </InboxShellInner>
+        </CommandPaletteProvider>
+      </KeyboardShortcutsProvider>
+    </SidebarProvider>
   );
 }
 
@@ -215,28 +226,122 @@ function InboxShellInner({
   handleChannelAdded,
   children,
 }: InnerProps) {
+  const [notesVideo, setNotesVideo] = useState<{ id: string; title: string } | null>(null);
+
+  // Close the notes panel when the video list changes (channel switch,
+  // filter toggle) and the video whose notes are open is no longer visible.
+  useEffect(() => {
+    if (notesVideo == null) {
+      return;
+    }
+    const stillVisible = videos.some((v) => v.id === notesVideo.id);
+    if (!stillVisible) {
+      setNotesVideo(null);
+    }
+  }, [videos, notesVideo]);
+
+  function handleOpenNotes(videoId: string, videoTitle: string) {
+    // Toggle: clicking the same video's notes button closes the panel
+    if (notesVideo?.id === videoId) {
+      setNotesVideo(null);
+    } else {
+      setNotesVideo({ id: videoId, title: videoTitle });
+    }
+  }
+
+  const { width, collapsed, mobileOpen, isMobile, toggleCollapsed, setMobileOpen } = useSidebar();
+
+  const sidebarContent = (
+    <>
+      <div className="flex flex-1 flex-col overflow-y-auto pb-6">
+        <ChannelSection
+          channels={channels}
+          selectedChannelId={selectedChannelId}
+          totalUnread={totalUnread}
+          onAddChannel={() => setModalOpen(true)}
+        />
+      </div>
+    </>
+  );
+
   return (
     <div className="flex h-full min-h-0">
-      {/* Sidebar */}
-      <aside className="flex w-72 shrink-0 flex-col border-r border-gray-200 bg-gray-50">
-        {/* Logo / topbar */}
-        <div className="flex h-14 shrink-0 items-center justify-between border-b border-gray-200 px-5">
-          <span className="text-base font-bold text-gray-900">ReadTube</span>
-          <UserButton />
-        </div>
+      {/* Mobile sidebar drawer — always renders full (expanded) content
+          regardless of the desktop collapse state. */}
+      {isMobile && (
+        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+          <SheetContent side="left" className="w-72 p-0" aria-describedby={undefined}>
+            <SidebarExpandedOverride>
+              <div className="flex h-14 shrink-0 items-center border-b border-gray-200 px-5">
+                <SheetTitle className="text-base font-bold text-gray-900">ReadTube</SheetTitle>
+              </div>
+              {sidebarContent}
+            </SidebarExpandedOverride>
+          </SheetContent>
+        </Sheet>
+      )}
 
-        <div className="flex flex-1 flex-col overflow-y-auto pb-6">
-          <ChannelSection
-            channels={channels}
-            selectedChannelId={selectedChannelId}
-            totalUnread={totalUnread}
-            onAddChannel={() => setModalOpen(true)}
-          />
-        </div>
-      </aside>
+      {/* Desktop sidebar */}
+      {!isMobile && (
+        <aside
+          className="relative flex shrink-0 flex-col border-r border-gray-200 bg-gray-50"
+          style={{ width: collapsed ? 56 : width }}
+        >
+          {/* Logo / topbar */}
+          <div className="flex h-14 shrink-0 items-center border-b border-gray-200 px-3">
+            {collapsed ? (
+              <button
+                type="button"
+                onClick={toggleCollapsed}
+                className="mx-auto rounded p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                aria-label="Expand sidebar"
+                title="Expand sidebar"
+              >
+                <PanelLeft className="h-4 w-4" />
+              </button>
+            ) : (
+              <div className="flex flex-1 items-center justify-between px-2">
+                <span className="text-base font-bold text-gray-900">ReadTube</span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={toggleCollapsed}
+                    className="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                    aria-label="Collapse sidebar"
+                    title="Collapse sidebar"
+                  >
+                    <PanelLeft className="h-4 w-4" />
+                  </button>
+                  <UserButton />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {sidebarContent}
+          {!collapsed && <SidebarResizeHandle />}
+        </aside>
+      )}
 
       {/* Main content */}
       <div className="flex min-w-0 flex-1 flex-col">
+        {/* Mobile header with menu button */}
+        {isMobile && (
+          <div className="flex h-14 shrink-0 items-center gap-3 border-b border-gray-200 px-4">
+            <button
+              type="button"
+              onClick={() => setMobileOpen(true)}
+              className="rounded p-1.5 text-gray-500 hover:bg-gray-100"
+              aria-label="Open sidebar"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            <span className="text-base font-bold text-gray-900">ReadTube</span>
+            <div className="ml-auto">
+              <UserButton />
+            </div>
+          </div>
+        )}
         {children ? (
           // Reader mode: show the selected video
           <div className="flex flex-1 overflow-hidden">{children}</div>
@@ -261,22 +366,34 @@ function InboxShellInner({
           </div>
         ) : (
           // List mode: show video list with a header toolbar
-          <div className="flex flex-1 flex-col overflow-hidden">
-            <InboxHeader
-              channelId={selectedChannelId}
-              channelName={headerName}
-              channelLogoUrl={headerLogoUrl}
-              unreadCount={headerUnread}
-              totalVideos={totalVideos}
-            />
-            <div className="flex-1 overflow-y-auto">
-              <VideoList
-                videos={videos}
-                selectedVideoId={selectedVideoId}
-                emptyMessage={emptyMessage}
-                isLoading={isLoadingVideos}
+          <div className="flex flex-1 overflow-hidden">
+            <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+              <InboxHeader
+                channelId={selectedChannelId}
+                channelName={headerName}
+                channelLogoUrl={headerLogoUrl}
+                unreadCount={headerUnread}
+                totalVideos={totalVideos}
               />
+              <div className="flex-1 overflow-y-auto">
+                <VideoList
+                  videos={videos}
+                  selectedVideoId={selectedVideoId}
+                  emptyMessage={emptyMessage}
+                  isLoading={isLoadingVideos}
+                  onOpenNotes={handleOpenNotes}
+                />
+              </div>
             </div>
+            {notesVideo != null && (
+              <NotesPanelResponsive
+                key={notesVideo.id}
+                videoId={notesVideo.id}
+                subtitle={notesVideo.title}
+                isMobile={isMobile}
+                onClose={() => setNotesVideo(null)}
+              />
+            )}
           </div>
         )}
       </div>

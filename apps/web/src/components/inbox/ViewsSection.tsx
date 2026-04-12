@@ -4,9 +4,11 @@ import { Archive, Bookmark, Inbox as InboxIcon, Star } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { isDefaultQuery } from '@/lib/inbox/filter';
 import type { InboxQuery } from '@/lib/types';
 
+import { useSidebar } from './SidebarContext';
 import { SidebarBadge, SidebarRowContent, sidebarRowClass } from './SidebarRow';
 import { useInboxQuery } from './useInboxQuery';
 
@@ -46,6 +48,7 @@ interface Props {
  */
 export default function ViewsSection({ inboxUnread }: Props) {
   const { query } = useInboxQuery();
+  const { collapsed } = useSidebar();
 
   function isActive(view: ViewDef): boolean {
     // The Inbox view is the "default" view — active iff no filter keys
@@ -60,8 +63,8 @@ export default function ViewsSection({ inboxUnread }: Props) {
   }
 
   return (
-    <div className="px-3 pt-4">
-      <p className="mb-1 px-2 text-base font-semibold text-gray-900">Views</p>
+    <div className={collapsed ? 'px-1 pt-4' : 'px-3 pt-4'}>
+      {!collapsed && <p className="mb-1 px-2 text-base font-semibold text-gray-900">Views</p>}
       <ul className="space-y-0.5">
         {VIEWS.map((view) => {
           const active = isActive(view);
@@ -76,6 +79,30 @@ export default function ViewsSection({ inboxUnread }: Props) {
           const qs = params.toString();
           const href = qs.length > 0 ? `/inbox?${qs}` : '/inbox';
           const count = view.label === 'Inbox' ? inboxUnread : 0;
+          const Icon = view.icon;
+
+          if (collapsed) {
+            return (
+              <li key={view.label}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Link
+                      href={href}
+                      className={`flex items-center justify-center rounded-md p-2 ${
+                        active ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      <Icon className="h-4 w-4" />
+                    </Link>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    {view.label}
+                    {count > 0 ? ` (${count})` : ''}
+                  </TooltipContent>
+                </Tooltip>
+              </li>
+            );
+          }
 
           return (
             <li key={view.label}>

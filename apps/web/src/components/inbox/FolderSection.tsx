@@ -12,6 +12,7 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import { FolderPlus, Plus, Radio } from 'lucide-react';
+import Link from 'next/link';
 import { useMemo, useState } from 'react';
 
 import {
@@ -20,14 +21,18 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { displayChannelName } from '@/lib/inbox/channelName';
 import type { ChannelData } from '@/lib/types';
 
+import ChannelAvatar from './ChannelAvatar';
 import DeleteFolderDialog from './DeleteFolderDialog';
 import DraggableChannelLink from './DraggableChannelLink';
 import FolderGroup from './FolderGroup';
 import NewFolderDialog from './NewFolderDialog';
+import RemoveChannelDialog from './RemoveChannelDialog';
 import RenameFolderDialog from './RenameFolderDialog';
+import { useSidebar } from './SidebarContext';
 import { useFolders } from './useFolders';
 
 interface Props {
@@ -49,12 +54,17 @@ interface Props {
  * expand state isn't persisted across reloads yet.
  */
 export default function FolderSection({ channels, selectedChannelId, onAddChannel }: Props) {
+  const { collapsed: sidebarCollapsed } = useSidebar();
   const { folders, moveChannel } = useFolders();
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
   const [pendingRename, setPendingRename] = useState<{ id: string; name: string } | null>(null);
+  const [pendingRemoveChannel, setPendingRemoveChannel] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -71,7 +81,7 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
   );
 
   function toggleCollapsed(folderId: string) {
-    setCollapsed((prev) => {
+    setCollapsedFolders((prev) => {
       const copy = new Set(prev);
       if (copy.has(folderId)) {
         copy.delete(folderId);
@@ -137,6 +147,60 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
     const existing = byFolder.get(channel.folderId) ?? [];
     existing.push(channel);
     byFolder.set(channel.folderId, existing);
+  }
+
+  // Collapsed mode: show channel avatars (or initials) with tooltips, no
+  // drag-drop or folder structure. A simple "+ Add" button at the top.
+  if (sidebarCollapsed) {
+    return (
+      <div className="mt-4 flex flex-col items-center gap-1 px-1">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={onAddChannel}
+              className="flex items-center justify-center rounded-md p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+              aria-label="Add channel"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right">Add channel</TooltipContent>
+        </Tooltip>
+        <div className="my-1 h-px w-6 bg-gray-200" />
+        {channels.map((channel) => {
+          const active = selectedChannelId === channel.id;
+          return (
+            <Tooltip key={channel.id}>
+              <TooltipTrigger asChild>
+                <Link
+                  href={`/inbox?channelId=${channel.id}`}
+                  className={`flex items-center justify-center rounded-md p-1.5 ${
+                    active ? 'bg-blue-50 ring-2 ring-blue-200' : 'hover:bg-gray-100'
+                  }`}
+                >
+                  {channel.logoUrl != null ? (
+                    <ChannelAvatar url={channel.logoUrl} size={40} cssSize="h-6 w-6" />
+                  ) : (
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 text-[10px] font-semibold text-gray-600">
+                      {channel.name.charAt(0).toUpperCase()}
+                    </span>
+                  )}
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                {channel.name}
+                {channel.unreadCount > 0 ? ` (${channel.unreadCount})` : ''}
+              </TooltipContent>
+            </Tooltip>
+          );
+        })}
+        <RemoveChannelDialog
+          target={pendingRemoveChannel}
+          onClose={() => setPendingRemoveChannel(null)}
+        />
+      </div>
+    );
   }
 
   return (
@@ -215,6 +279,7 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
                 isSelected={selectedChannelId === channel.id}
                 folders={folders}
                 onMoveTo={moveTo}
+                onRemove={setPendingRemoveChannel}
               />
             ))}
           </ul>
@@ -225,7 +290,7 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
       {folders.map((folder) => {
         const folderChannels = byFolder.get(folder.id) ?? [];
         const folderUnread = folderChannels.reduce((sum, c) => sum + c.unreadCount, 0);
-        const isCollapsed = collapsed.has(folder.id);
+        const isCollapsed = collapsedFolders.has(folder.id);
 
         return (
           <FolderGroup
@@ -240,6 +305,7 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
             onDelete={() => setPendingDelete({ id: folder.id, name: folder.name })}
             folders={folders}
             onMoveTo={moveTo}
+            onRemoveChannel={setPendingRemoveChannel}
           />
         );
       })}
@@ -247,6 +313,10 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
       <NewFolderDialog open={newFolderOpen} onOpenChange={setNewFolderOpen} />
       <RenameFolderDialog target={pendingRename} onClose={() => setPendingRename(null)} />
       <DeleteFolderDialog target={pendingDelete} onClose={() => setPendingDelete(null)} />
+      <RemoveChannelDialog
+        target={pendingRemoveChannel}
+        onClose={() => setPendingRemoveChannel(null)}
+      />
 
       {/*
         Portal-rendered floating preview that follows the cursor during

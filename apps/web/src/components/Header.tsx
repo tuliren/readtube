@@ -1,6 +1,6 @@
 'use client';
 
-import { SignInButton, useAuth } from '@clerk/nextjs';
+import { useAuth } from '@clerk/nextjs';
 import { Dialog, DialogPanel } from '@headlessui/react';
 import { Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
@@ -41,9 +41,9 @@ export default function Header() {
             </Link>
           ))}
           {!isSignedIn && (
-            <SignInButton mode="modal">
-              <button className={linkClass}>Sign in</button>
-            </SignInButton>
+            <Link href="/sign-in" className={linkClass}>
+              Sign in
+            </Link>
           )}
         </div>
         <div className="flex lg:hidden">
@@ -84,9 +84,9 @@ export default function Header() {
                   </Link>
                 ))}
                 {!isSignedIn && (
-                  <SignInButton mode="modal">
-                    <button className={`w-full text-left ${mobileLinkClass}`}>Sign in</button>
-                  </SignInButton>
+                  <Link href="/sign-in" className={`w-full text-left ${mobileLinkClass}`}>
+                    Sign in
+                  </Link>
                 )}
               </div>
             </div>
