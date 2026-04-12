@@ -146,6 +146,21 @@ export default function SummaryReader({
           setRegeneratingFields([]);
           return;
         }
+        // 503 means the upstream transcript provider blipped
+        // (network error / 429 / 5xx). Surface a retry-friendly
+        // error in THIS tab only — do NOT broadcast unavailable,
+        // because doing so would lock Article and Transcript out
+        // for the rest of the session even though the next click
+        // would probably succeed.
+        if (res.status === 503) {
+          const body = await res
+            .json()
+            .catch(() => ({ error: 'Transcript fetch failed temporarily — please try again.' }));
+          setErrorMessage(body.error ?? 'Transcript fetch failed temporarily — please try again.');
+          setStatus('error');
+          setRegeneratingFields([]);
+          return;
+        }
         const body = await res.json().catch(() => ({ error: 'Failed to generate summary.' }));
         setErrorMessage(body.error ?? 'Failed to generate summary.');
         setStatus('error');

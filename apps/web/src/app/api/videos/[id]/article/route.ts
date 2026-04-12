@@ -144,6 +144,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (ensured.reason === 'not-found') {
       return NextResponse.json({ error: 'Video not found' }, { status: 404 });
     }
+    if (ensured.reason === 'transient-error') {
+      return NextResponse.json(
+        {
+          error: 'Could not fetch the transcript right now — please try again.',
+          code: 'transient',
+        },
+        { status: 503 }
+      );
+    }
     return NextResponse.json(
       { error: 'Transcript unavailable for this video.', code: 'unavailable' },
       { status: 410 }

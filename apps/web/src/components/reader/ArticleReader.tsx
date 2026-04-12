@@ -86,6 +86,17 @@ export default function ArticleReader({
           setStatus('error');
           return;
         }
+        // 503 means the upstream transcript provider blipped
+        // (network error / 429 / 5xx). Surface a retry-friendly
+        // error in THIS tab only — do NOT broadcast unavailable.
+        if (res.status === 503) {
+          const body = await res
+            .json()
+            .catch(() => ({ error: 'Transcript fetch failed temporarily — please try again.' }));
+          setErrorMessage(body.error ?? 'Transcript fetch failed temporarily — please try again.');
+          setStatus('error');
+          return;
+        }
         const body = await res.json().catch(() => ({ error: 'Failed to generate article.' }));
         setErrorMessage(body.error ?? 'Failed to generate article.');
         setStatus('error');

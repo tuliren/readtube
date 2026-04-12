@@ -10,7 +10,15 @@ interface CachedTranscript {
 
 export type EnsureTranscriptResult =
   | { ok: true; transcript: CachedTranscript }
-  | { ok: false; reason: 'unavailable' | 'not-found' };
+  // Caller maps each reason to a different HTTP response so the
+  // client can react correctly:
+  //   - 'not-found'      → 404 (the user doesn't own this video)
+  //   - 'unavailable'    → 410 Gone (sticky: video has no captions)
+  //   - 'transient-error' → 503 (network / 429 / 5xx; safe to retry)
+  // The transient case must NOT be conflated with unavailable on the
+  // client — broadcasting transcriptStatus='unavailable' for a
+  // transient blip would lock the entire reader for the session.
+  | { ok: false; reason: 'unavailable' | 'transient-error' | 'not-found' };
 
 /**
  * Make sure a transcript exists for the given video, fetching it from
@@ -82,20 +90,29 @@ export async function ensureTranscript(
     fetched = await fetchSubtitleViaTranscriptApi(video.source_id);
   } catch (err) {
     console.error('[ensureTranscript] upstream fetch failed:', err);
-    // Only flip the sticky transcript_unavailable flag for failures
-    // that mean "this video has no captions". Transient failures
-    // (network blip, 429, 5xx, missing API key) leave the flag
-    // alone so the next attempt — possibly seconds later, possibly
-    // tomorrow — gets a fresh shot. Without this guard a brief
-    // YouTube outage during a cron refresh would permanently
-    // disable transcripts for every video fetched in the window.
+    // Categorize the failure so the caller can map it to the right
+    // HTTP response and the client can react accordingly.
+    //
+    // Permanent (this video has no captions): flip the sticky
+    // transcript_unavailable flag so subsequent calls short-circuit,
+    // and return reason='unavailable'. The caller maps this to 410.
+    //
+    // Transient (network blip, 429, 5xx, missing API key): leave
+    // the sticky flag alone so the next attempt — possibly seconds
+    // later — gets a fresh shot, and return reason='transient-error'.
+    // The caller maps this to 503. Without this distinction the
+    // client previously saw the same 410 on a transient blip and
+    // broadcast transcriptStatus='unavailable', locking the entire
+    // reader (Summary / Article / Transcript tabs all hidden) for
+    // the rest of the session.
     const transient = err instanceof SubtitleFetchError ? err.transient : true;
-    if (!transient) {
-      await prisma.video.update({
-        where: { id: video.id },
-        data: { transcript_unavailable: true },
-      });
+    if (transient) {
+      return { ok: false, reason: 'transient-error' };
     }
+    await prisma.video.update({
+      where: { id: video.id },
+      data: { transcript_unavailable: true },
+    });
     return { ok: false, reason: 'unavailable' };
   }
 

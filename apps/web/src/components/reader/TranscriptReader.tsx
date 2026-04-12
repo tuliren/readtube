@@ -200,14 +200,25 @@ export default function TranscriptReader({
   }
 
   if (localStatus === 'error') {
+    // Reaches here for transient failures (503 from the server,
+    // network errors caught locally, etc.). Distinct from the
+    // sticky `transcriptStatus === 'unavailable'` branch above:
+    // permanent unavailability is handled there, with no retry.
+    // Here the next click is likely to succeed, so offer one.
     return (
-      <div className="py-8 text-center text-sm text-gray-500">
-        Transcript unavailable.{' '}
+      <div className="flex flex-col items-center gap-3 py-8 text-center text-sm text-gray-500">
+        <p>Could not fetch the transcript right now.</p>
+        <button
+          onClick={handleFetch}
+          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+        >
+          Try again
+        </button>
         <a
           href={`https://youtube.com/watch?v=${sourceId}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-blue-600 hover:underline"
+          className="text-xs text-blue-600 hover:underline"
         >
           Watch on YouTube ↗
         </a>
