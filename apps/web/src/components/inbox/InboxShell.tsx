@@ -235,6 +235,7 @@ function InboxShellInner({
                 videos={videos}
                 selectedVideoId={selectedVideoId}
                 emptyMessage={emptyMessage}
+                onAddChannel={() => setModalOpen(true)}
               />
             </div>
           </div>

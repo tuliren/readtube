@@ -16,9 +16,14 @@ interface Props {
    *  starred videos yet…", channel narrow → "No videos in <name>
    *  yet.", etc.) instead of always saying "No videos yet". */
   emptyMessage: string;
+  /** Opens the AddChannelModal owned by InboxShell. The empty-state
+   *  shows a big "Add channel" CTA in the center of the right pane
+   *  so a fresh user (or a user inside an empty filter view) has an
+   *  obvious next action without hunting for the sidebar dropdown. */
+  onAddChannel: () => void;
 }
 
-export default function VideoList({ videos, selectedVideoId, emptyMessage }: Props) {
+export default function VideoList({ videos, selectedVideoId, emptyMessage, onAddChannel }: Props) {
   const searchParams = useSearchParams();
 
   // Build the "filter context" we want to forward into the reader as
@@ -82,8 +87,15 @@ export default function VideoList({ videos, selectedVideoId, emptyMessage }: Pro
 
   if (videos.length === 0) {
     return (
-      <div className="flex flex-1 items-center justify-center p-8 text-center text-sm text-gray-500">
-        {emptyMessage}
+      <div className="flex flex-1 flex-col items-center justify-center gap-5 p-8 text-center">
+        <p className="max-w-sm text-sm text-gray-500">{emptyMessage}</p>
+        <button
+          type="button"
+          onClick={onAddChannel}
+          className="rounded-md bg-blue-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
+        >
+          Add channel
+        </button>
       </div>
     );
   }
