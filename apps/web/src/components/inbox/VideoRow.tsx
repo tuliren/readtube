@@ -1,12 +1,19 @@
 'use client';
 
-import { Archive, Bookmark, BookmarkCheck, NotebookPen, Star } from 'lucide-react';
+import { Archive, Bookmark, BookmarkCheck, MoreHorizontal, NotebookPen, Star } from 'lucide-react';
 import Link from 'next/link';
 
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { formatDurationSeconds } from '@/lib/format/duration';
 import type { VideoData } from '@/lib/types';
 
+import { useSidebar } from './SidebarContext';
 import { useTriage } from './useTriage';
 
 /**
@@ -129,6 +136,7 @@ export default function VideoRow({
   onOpenNotes,
 }: Props) {
   const triage = useTriage();
+  const { isMobile } = useSidebar();
   const isUnread = video.readAt == null;
 
   function stop(e: React.MouseEvent | React.KeyboardEvent) {
@@ -226,78 +234,125 @@ export default function VideoRow({
           </Link>
         )}
 
-        {!inSelectionMode && (
-          <div
-            className="flex shrink-0 items-center gap-1 opacity-0 group-hover:opacity-100 data-[active=true]:opacity-100"
-            data-active={video.isStarred || video.isSaved || video.noteCount > 0}
-          >
-            {/* Notes button: always opens the inline notes panel in the list view. */}
-            <button
-              type="button"
-              onClick={(e) => {
-                stop(e);
-                onOpenNotes(video.id, video.title);
-              }}
-              title={
-                video.noteCount > 0
-                  ? `${video.noteCount} note${video.noteCount === 1 ? '' : 's'} — open`
-                  : 'Add note'
-              }
-              className={`flex items-center gap-0.5 rounded p-1 hover:bg-gray-100 hover:text-amber-500 ${
-                video.noteCount > 0 ? 'text-amber-500' : 'text-gray-400'
-              }`}
-              aria-label={
-                video.noteCount > 0
-                  ? `Open notes (${video.noteCount})`
-                  : `Add note for ${video.title}`
-              }
+        {!inSelectionMode &&
+          (isMobile ? (
+            <div
+              className="flex shrink-0 items-center"
+              data-active={video.isStarred || video.isSaved || video.noteCount > 0}
             >
-              <NotebookPen className={`h-4 w-4 ${video.noteCount > 0 ? 'fill-amber-100' : ''}`} />
-              {video.noteCount > 0 && (
-                <span className="text-[10px] font-semibold leading-none">{video.noteCount}</span>
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                stop(e);
-                void triage.toggleStar(video.id, video.isStarred);
-              }}
-              title={video.isStarred ? 'Unstar' : 'Star'}
-              className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-yellow-500"
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={(e) => e.stopPropagation()}
+                    className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                    aria-label="Actions"
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-40">
+                  <DropdownMenuItem onSelect={() => onOpenNotes(video.id, video.title)}>
+                    <NotebookPen className="mr-2 h-4 w-4 text-amber-500" />
+                    {video.noteCount > 0 ? `Notes (${video.noteCount})` : 'Add note'}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={() => void triage.toggleStar(video.id, video.isStarred)}
+                  >
+                    <Star
+                      className={`mr-2 h-4 w-4 ${video.isStarred ? 'fill-yellow-400 text-yellow-500' : 'text-gray-400'}`}
+                    />
+                    {video.isStarred ? 'Unstar' : 'Star'}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={() => void triage.toggleSave(video.id, video.isSaved)}
+                  >
+                    {video.isSaved ? (
+                      <BookmarkCheck className="mr-2 h-4 w-4 text-blue-500" />
+                    ) : (
+                      <Bookmark className="mr-2 h-4 w-4 text-gray-400" />
+                    )}
+                    {video.isSaved ? 'Unsave' : 'Read Later'}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => void triage.archive(video.id)}>
+                    <Archive className="mr-2 h-4 w-4 text-gray-400" />
+                    Archive
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          ) : (
+            <div
+              className="flex shrink-0 items-center gap-1 opacity-0 group-hover:opacity-100 data-[active=true]:opacity-100"
+              data-active={video.isStarred || video.isSaved || video.noteCount > 0}
             >
-              <Star
-                className={`h-4 w-4 ${video.isStarred ? 'fill-yellow-400 text-yellow-500' : ''}`}
-              />
-            </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                stop(e);
-                void triage.toggleSave(video.id, video.isSaved);
-              }}
-              title={video.isSaved ? 'Remove from Read Later' : 'Read Later'}
-              className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-blue-500"
-            >
-              {video.isSaved ? (
-                <BookmarkCheck className="h-4 w-4 text-blue-500" />
-              ) : (
-                <Bookmark className="h-4 w-4" />
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                stop(e);
-                void triage.archive(video.id);
-              }}
-              title="Archive"
-              className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-red-500"
-            >
-              <Archive className="h-4 w-4" />
-            </button>
-          </div>
-        )}
+              {/* Notes button: always opens the inline notes panel in the list view. */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  stop(e);
+                  onOpenNotes(video.id, video.title);
+                }}
+                title={
+                  video.noteCount > 0
+                    ? `${video.noteCount} note${video.noteCount === 1 ? '' : 's'} — open`
+                    : 'Add note'
+                }
+                className={`flex items-center gap-0.5 rounded p-1 hover:bg-gray-100 hover:text-amber-500 ${
+                  video.noteCount > 0 ? 'text-amber-500' : 'text-gray-400'
+                }`}
+                aria-label={
+                  video.noteCount > 0
+                    ? `Open notes (${video.noteCount})`
+                    : `Add note for ${video.title}`
+                }
+              >
+                <NotebookPen className={`h-4 w-4 ${video.noteCount > 0 ? 'fill-amber-100' : ''}`} />
+                {video.noteCount > 0 && (
+                  <span className="text-[10px] font-semibold leading-none">{video.noteCount}</span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  stop(e);
+                  void triage.toggleStar(video.id, video.isStarred);
+                }}
+                title={video.isStarred ? 'Unstar' : 'Star'}
+                className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-yellow-500"
+              >
+                <Star
+                  className={`h-4 w-4 ${video.isStarred ? 'fill-yellow-400 text-yellow-500' : ''}`}
+                />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  stop(e);
+                  void triage.toggleSave(video.id, video.isSaved);
+                }}
+                title={video.isSaved ? 'Remove from Read Later' : 'Read Later'}
+                className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-blue-500"
+              >
+                {video.isSaved ? (
+                  <BookmarkCheck className="h-4 w-4 text-blue-500" />
+                ) : (
+                  <Bookmark className="h-4 w-4" />
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  stop(e);
+                  void triage.archive(video.id);
+                }}
+                title="Archive"
+                className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-red-500"
+              >
+                <Archive className="h-4 w-4" />
+              </button>
+            </div>
+          ))}
       </div>
     </li>
   );
