@@ -138,13 +138,13 @@ export async function POST(request: NextRequest) {
   // (network, rate limit, etc.) we fall back to constructing thumbnail
   // URLs from the videoId directly.
   try {
-    const meta = await fetchChannelLatest(`@${scraped.name}`);
+    const meta = await fetchChannelLatest(sourceId);
     for (const videoMeta of meta.videos) {
       await prisma.video.updateMany({
         where: { channel_id: channel.id, source_id: videoMeta.videoId },
         data: {
           thumbnail_url: videoMeta.thumbnailUrl,
-          view_count: videoMeta.viewCount,
+          ...(videoMeta.viewCount != null ? { view_count: videoMeta.viewCount } : {}),
         },
       });
     }
