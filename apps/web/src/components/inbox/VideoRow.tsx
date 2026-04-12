@@ -1,6 +1,6 @@
 'use client';
 
-import { Archive, Bookmark, BookmarkCheck, Clock, NotebookPen, Star } from 'lucide-react';
+import { Archive, Bookmark, BookmarkCheck, NotebookPen, Star } from 'lucide-react';
 import Link from 'next/link';
 
 import { Checkbox } from '@/components/ui/checkbox';
@@ -107,7 +107,7 @@ function relativeTime(dateStr: string): string {
  * One row in the inbox video list. The row hosts:
  * - a multi-select checkbox (shown on hover or when any row is checked)
  * - the unread dot + title + metadata (the clickable link)
- * - star / read-later / snooze (tomorrow) / archive action icons
+ * - star / read-later / archive action icons
  *
  * The action icons are wrapped in buttons that stop propagation so they
  * don't trigger the row's Link navigation.
@@ -119,13 +119,6 @@ export default function VideoRow({ video, isSelected, isChecked, onToggleChecked
   function stop(e: React.MouseEvent | React.KeyboardEvent) {
     e.preventDefault();
     e.stopPropagation();
-  }
-
-  function snoozeTomorrow() {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(9, 0, 0, 0);
-    void triage.snoozeUntil(video.id, tomorrow);
   }
 
   return (
@@ -240,17 +233,6 @@ export default function VideoRow({ video, isSelected, isChecked, onToggleChecked
             ) : (
               <Bookmark className="h-4 w-4" />
             )}
-          </button>
-          <button
-            type="button"
-            onClick={(e) => {
-              stop(e);
-              snoozeTomorrow();
-            }}
-            title="Snooze until tomorrow 9am"
-            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-purple-500"
-          >
-            <Clock className="h-4 w-4" />
           </button>
           <button
             type="button"

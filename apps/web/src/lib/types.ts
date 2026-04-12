@@ -48,21 +48,13 @@ export interface VideoData {
   channelId: string;
   channelName: string;
   channelSourceId: string;
-  // Triage flags (Stream A)
+  // Triage flags
   isStarred: boolean;
   isSaved: boolean;
   isArchived: boolean;
-  snoozedUntil: string | null;
-  // Tags + notes count (Stream 0 decorates, Streams A/D populate)
+  // Tags + notes count
   tags: TagData[];
   noteCount: number;
-}
-
-export interface SavedViewData {
-  id: string;
-  name: string;
-  query: InboxQuery;
-  createdAt: string;
 }
 
 /**
@@ -79,12 +71,6 @@ export interface InboxQuery {
   starred?: boolean;
   saved?: boolean;
   archived?: boolean;
-  // "snoozed=true" means "show ONLY currently-snoozed videos". This is a
-  // different intent from `includeSnoozed`: includeSnoozed=true mixes
-  // snoozed videos back into the main feed, while snoozed=true produces
-  // a dedicated snoozed-only view for the sidebar pseudo-view.
-  snoozed?: boolean;
-  includeSnoozed?: boolean;
   from?: string;
   to?: string;
   sort?: 'newest' | 'oldest';

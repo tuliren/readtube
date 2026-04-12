@@ -7,7 +7,6 @@ describe('resolveInboxView', () => {
     { query: {}, expectedKey: 'inbox', desc: 'empty query → Inbox' },
     { query: { starred: true }, expectedKey: 'starred', desc: 'starred=true → Starred' },
     { query: { saved: true }, expectedKey: 'saved', desc: 'saved=true → Read Later' },
-    { query: { snoozed: true }, expectedKey: 'snoozed', desc: 'snoozed=true → Snoozed' },
     { query: { archived: true }, expectedKey: 'archived', desc: 'archived=true → Archived' },
     { query: { sort: 'oldest' }, expectedKey: null, desc: 'a non-default sort is not Inbox' },
     {

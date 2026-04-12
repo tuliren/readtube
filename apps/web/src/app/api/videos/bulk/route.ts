@@ -17,7 +17,6 @@ const VALID_ACTION_TYPES = new Set([
   'unsave',
   'archive',
   'unarchive',
-  'snooze',
 ]);
 
 export async function POST(request: NextRequest) {
@@ -52,16 +51,6 @@ export async function POST(request: NextRequest) {
   if (action == null || !VALID_ACTION_TYPES.has(action.type)) {
     return NextResponse.json({ error: 'Unknown or missing action' }, { status: 400 });
   }
-  if (action.type === 'snooze') {
-    const until = new Date(action.snoozeUntil);
-    if (Number.isNaN(until.getTime()) || until.getTime() <= Date.now()) {
-      return NextResponse.json(
-        { error: 'snoozeUntil must be a valid future ISO datetime' },
-        { status: 400 }
-      );
-    }
-  }
-
   const result = await applyBulk(prisma, userId, videoIds, action);
   return NextResponse.json(result);
 }

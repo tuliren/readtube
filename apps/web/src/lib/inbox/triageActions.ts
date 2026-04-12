@@ -104,29 +104,6 @@ export async function unarchiveVideo(
   });
 }
 
-export async function snoozeVideo(
-  prisma: PrismaClient,
-  userId: string,
-  videoId: string,
-  snoozeUntil: Date
-): Promise<void> {
-  await prisma.videoSnooze.upsert({
-    where: { video_snooze_unique_user_video: { user_id: userId, video_id: videoId } },
-    create: { user_id: userId, video_id: videoId, snooze_until: snoozeUntil },
-    update: { snooze_until: snoozeUntil },
-  });
-}
-
-export async function unsnoozeVideo(
-  prisma: PrismaClient,
-  userId: string,
-  videoId: string
-): Promise<void> {
-  await prisma.videoSnooze.deleteMany({
-    where: { user_id: userId, video_id: videoId },
-  });
-}
-
 /**
  * Apply a bulk triage action across a set of video ids. Called by
  * /api/videos/bulk. Batches into one deleteMany/createMany per action
@@ -140,8 +117,7 @@ export type BulkAction =
   | { type: 'save' }
   | { type: 'unsave' }
   | { type: 'archive' }
-  | { type: 'unarchive' }
-  | { type: 'snooze'; snoozeUntil: string };
+  | { type: 'unarchive' };
 
 export async function applyBulk(
   prisma: PrismaClient,
@@ -219,16 +195,6 @@ export async function applyBulk(
         where: { user_id: userId, video_id: { in: ownedIds } },
       });
       return { affected: result.count };
-    }
-    case 'snooze': {
-      const until = new Date(action.snoozeUntil);
-      // createMany with skipDuplicates would leave the existing row
-      // untouched, so loop upserts here to preserve the "update the date"
-      // behavior a user expects from re-snoozing.
-      for (const id of ownedIds) {
-        await snoozeVideo(prisma, userId, id, until);
-      }
-      return { affected: ownedIds.length };
     }
   }
 }
