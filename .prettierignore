@@ -13,5 +13,8 @@ packages/database/prisma/migrations
 # Ignore all HTML files:
 **/*.html
 
+# Restate workflow proxy routes (plain JS, not part of the TS project)
+apps/web/src/app/.well-known
+
 # Python
 .mypy_cache

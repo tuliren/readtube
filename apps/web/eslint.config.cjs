@@ -41,6 +41,9 @@ module.exports = [
       // import only resolves after `next dev` has run (not in CI), and
       // the file's own header says "should not be edited".
       'next-env.d.ts',
+      // Restate workflow proxy routes — plain JS files that don't
+      // belong to the TS project and can't be parsed by the TS plugin.
+      'src/app/.well-known/**',
     ],
   },
 ];
