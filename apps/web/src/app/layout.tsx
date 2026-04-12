@@ -61,6 +61,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <PlausibleProvider domain={DOMAIN} enabled={enableAnalytics} />
         <ThemeProvider>
           <ClerkProvider
+            signInUrl="/sign-in"
+            signUpUrl="/sign-up"
             signInFallbackRedirectUrl="/inbox"
             signUpFallbackRedirectUrl="/inbox"
             appearance={{
