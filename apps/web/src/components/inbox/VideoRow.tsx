@@ -191,14 +191,23 @@ export default function VideoRow({
       <div
         className={`flex items-start gap-2 px-4 py-3 transition-colors ${
           isSelected ? 'bg-blue-50' : isChecked ? 'bg-blue-50/50' : 'hover:bg-gray-50'
-        }`}
+        } ${inSelectionMode ? 'select-none' : ''}`}
       >
-        <div className="pt-1" onClick={(e) => stop(e)} role="presentation">
+        <div
+          className="pt-1"
+          onClick={(e) => {
+            stop(e);
+            onToggleChecked(video.id, !isChecked, e.shiftKey);
+          }}
+          role="presentation"
+        >
           <Checkbox
             checked={isChecked}
-            onCheckedChange={(next) => onToggleChecked(video.id, next === true)}
+            // Click is handled by the wrapper div so we can read shiftKey
+            // for range selection. Prevent the default toggle here.
+            onCheckedChange={() => {}}
             aria-label={`Select ${video.title}`}
-            className={isChecked || inSelectionMode ? '' : 'opacity-0 group-hover:opacity-100'}
+            className={`pointer-events-none ${isChecked || inSelectionMode ? '' : 'opacity-0 group-hover:opacity-100'}`}
           />
         </div>
 
