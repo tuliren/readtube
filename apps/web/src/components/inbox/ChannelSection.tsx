@@ -1,5 +1,6 @@
 'use client';
 
+import { TooltipProvider } from '@/components/ui/tooltip';
 import type { ChannelData } from '@/lib/types';
 
 import FolderSection from './FolderSection';
@@ -31,13 +32,15 @@ export default function ChannelSection({
   onAddChannel,
 }: Props) {
   return (
-    <nav className="flex flex-col overflow-y-auto">
-      <ViewsSection inboxUnread={totalUnread} />
-      <FolderSection
-        channels={channels}
-        selectedChannelId={selectedChannelId}
-        onAddChannel={onAddChannel}
-      />
-    </nav>
+    <TooltipProvider delayDuration={300}>
+      <nav className="flex flex-col overflow-y-auto">
+        <ViewsSection inboxUnread={totalUnread} />
+        <FolderSection
+          channels={channels}
+          selectedChannelId={selectedChannelId}
+          onAddChannel={onAddChannel}
+        />
+      </nav>
+    </TooltipProvider>
   );
 }
