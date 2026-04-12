@@ -7,6 +7,7 @@ import rehypeExternalLinks from 'rehype-external-links';
 import rehypeSanitize from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
 
+import { countWords } from '@/lib/format/wordCount';
 import { isProduction } from '@/lib/vercelEnv';
 
 import type { TranscriptStatus } from './VideoReader';
@@ -41,6 +42,17 @@ function SummarySkeleton() {
         <div key={i} className="h-4 rounded bg-gray-200" style={{ width: `${w}%` }} />
       ))}
     </div>
+  );
+}
+
+function WordCountLabel({ count }: { count: number }) {
+  if (count <= 0) {
+    return null;
+  }
+  return (
+    <span className="text-xs font-normal text-gray-400">
+      ({count} {count === 1 ? 'word' : 'words'})
+    </span>
   );
 }
 
@@ -290,6 +302,15 @@ export default function SummaryReader({
   // users in production.
   const showRegenerate = !isProduction();
 
+  // Word counts surfaced next to the multi-sentence section headers
+  // so the reader can size up the density before reading. Computed
+  // on the rendered text, so a streaming generation increments
+  // visibly as new tokens come in. Headline is intentionally
+  // excluded — it's a one-sentence newspaper-style title and a
+  // word count there is just visual noise.
+  const shortWords = countWords(summary.short);
+  const fullWords = countWords(summary.full);
+
   return (
     <div className="space-y-8">
       {/* Headline */}
@@ -311,8 +332,8 @@ export default function SummaryReader({
       {/* Short */}
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-xs font-medium tracking-wide text-gray-400 uppercase">
-            Quick summary
+          <h3 className="text-base font-semibold text-gray-900">
+            Quick summary <WordCountLabel count={shortWords} />
           </h3>
           {showRegenerate && !isRegenerating('short') && (
             <RegenerateButton onClick={() => handleGenerate(['short'])} disabled={isStreaming} />
@@ -334,8 +355,8 @@ export default function SummaryReader({
       {/* Full */}
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-xs font-medium tracking-wide text-gray-400 uppercase">
-            Full summary
+          <h3 className="text-base font-semibold text-gray-900">
+            Full summary <WordCountLabel count={fullWords} />
           </h3>
           {showRegenerate && !isRegenerating('full') && (
             <RegenerateButton onClick={() => handleGenerate(['full'])} disabled={isStreaming} />
