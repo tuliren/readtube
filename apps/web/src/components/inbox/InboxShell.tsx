@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 
 import NotesPanel from '@/components/NotesPanel';
-import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Toaster } from '@/components/ui/sonner';
 import {
   PAGE_SIZE,
@@ -270,10 +270,10 @@ function InboxShellInner({
           regardless of the desktop collapse state. */}
       {isMobile && (
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-          <SheetContent side="left" className="w-72 p-0">
+          <SheetContent side="left" className="w-72 p-0" aria-describedby={undefined}>
             <SidebarExpandedOverride>
               <div className="flex h-14 shrink-0 items-center border-b border-gray-200 px-5">
-                <span className="text-base font-bold text-gray-900">ReadTube</span>
+                <SheetTitle className="text-base font-bold text-gray-900">ReadTube</SheetTitle>
               </div>
               {sidebarContent}
             </SidebarExpandedOverride>
