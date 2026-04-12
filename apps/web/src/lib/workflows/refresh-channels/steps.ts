@@ -27,7 +27,7 @@ export async function fetchStaleChannels(): Promise<StaleChannel[]> {
     where: {
       OR: [{ checked_at: null }, { checked_at: { lt: cutoff } }],
     },
-    orderBy: { checked_at: 'asc' },
+    orderBy: { checked_at: { sort: 'asc', nulls: 'first' } },
     take: BATCH_SIZE,
     select: { id: true, source_id: true, name: true },
   });

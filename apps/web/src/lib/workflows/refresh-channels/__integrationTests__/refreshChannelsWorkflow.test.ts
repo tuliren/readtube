@@ -131,8 +131,8 @@ describe('fetchStaleChannels', () => {
 
     const result = await fetchStaleChannels();
 
-    // Postgres sorts nulls last in ASC, so null comes after the dated rows
-    expect(result.map((c) => c.source_id)).toEqual(['UC_older', 'UC_old', 'UC_null']);
+    // nulls: 'first' ensures never-checked channels are prioritized
+    expect(result.map((c) => c.source_id)).toEqual(['UC_null', 'UC_older', 'UC_old']);
   });
 
   it(`limits results to BATCH_SIZE (${BATCH_SIZE})`, async () => {
