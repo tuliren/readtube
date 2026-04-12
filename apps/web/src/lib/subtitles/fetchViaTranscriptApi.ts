@@ -1,6 +1,6 @@
 import { isEmptyString } from '@/lib/string';
 
-import type { TranscriptSegment } from './types';
+import { SubtitleFetchError, type TranscriptSegment } from './types';
 
 interface TranscriptApiSegment {
   text: string;
@@ -14,22 +14,56 @@ interface TranscriptApiResponse {
   transcript: TranscriptApiSegment[];
 }
 
+/**
+ * Decide whether a given upstream HTTP status should be treated as
+ * a transient blip (worth retrying later) or a permanent "this
+ * video has no captions" answer.
+ *
+ * Permanent: 404 (no record), 410 (gone), 422 (unprocessable —
+ * upstream's signal for "no captions track"). Anything else in 4xx
+ * is conservatively treated as transient because it might be auth /
+ * configuration / quota that the operator can fix.
+ *
+ * Transient: 429 (rate limit), 5xx (server error), and the
+ * conservative 4xx fallback.
+ *
+ * Exported for testing.
+ */
+export function isPermanentTranscriptStatus(status: number): boolean {
+  return status === 404 || status === 410 || status === 422;
+}
+
 export async function fetchSubtitleViaTranscriptApi(
   videoId: string
 ): Promise<{ segments: TranscriptSegment[]; language: string }> {
   const apiKey = process.env.TRANSCRIPT_API_KEY;
   if (isEmptyString(apiKey)) {
-    throw new Error('TRANSCRIPT_API_KEY is not set');
+    // A missing API key is a config bug — the next deploy will fix
+    // it. Treat it as transient so we don't sticky-flag every video
+    // a user opens during a misconfiguration window.
+    throw new SubtitleFetchError('TRANSCRIPT_API_KEY is not set', { transient: true });
   }
 
   const url = `https://transcriptapi.com/api/v2/youtube/transcript?video_url=${videoId}`;
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${apiKey}` },
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+  } catch (err) {
+    // Fetch threw before getting a response — DNS, network, abort,
+    // etc. All transient by definition.
+    const message = err instanceof Error ? err.message : 'Unknown network error';
+    throw new SubtitleFetchError(`TranscriptAPI network error: ${message}`, { transient: true });
+  }
 
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`TranscriptAPI error ${res.status}: ${body}`);
+    const transient = !isPermanentTranscriptStatus(res.status);
+    throw new SubtitleFetchError(`TranscriptAPI error ${res.status}: ${body}`, {
+      transient,
+      status: res.status,
+    });
   }
 
   const data: TranscriptApiResponse = await res.json();

@@ -1,6 +1,6 @@
 import type { PrismaClient } from '@readtube/database';
 
-import { fetchSubtitleViaTranscriptApi } from '@/lib/subtitles';
+import { SubtitleFetchError, fetchSubtitleViaTranscriptApi } from '@/lib/subtitles';
 import type { TranscriptSegment } from '@/lib/subtitles/types';
 
 interface CachedTranscript {
@@ -82,14 +82,20 @@ export async function ensureTranscript(
     fetched = await fetchSubtitleViaTranscriptApi(video.source_id);
   } catch (err) {
     console.error('[ensureTranscript] upstream fetch failed:', err);
-    // Mark sticky-unavailable so subsequent calls short-circuit. We
-    // treat any upstream error (network blip, 429, captions truly
-    // missing) the same way for now — the user can manually clear
-    // the flag in the DB if a captionless video later gains captions.
-    await prisma.video.update({
-      where: { id: video.id },
-      data: { transcript_unavailable: true },
-    });
+    // Only flip the sticky transcript_unavailable flag for failures
+    // that mean "this video has no captions". Transient failures
+    // (network blip, 429, 5xx, missing API key) leave the flag
+    // alone so the next attempt — possibly seconds later, possibly
+    // tomorrow — gets a fresh shot. Without this guard a brief
+    // YouTube outage during a cron refresh would permanently
+    // disable transcripts for every video fetched in the window.
+    const transient = err instanceof SubtitleFetchError ? err.transient : true;
+    if (!transient) {
+      await prisma.video.update({
+        where: { id: video.id },
+        data: { transcript_unavailable: true },
+      });
+    }
     return { ok: false, reason: 'unavailable' };
   }
 
