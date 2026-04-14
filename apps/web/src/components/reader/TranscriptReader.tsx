@@ -17,9 +17,6 @@ interface Props {
   /** Callback into VideoReader so this component can flip the shared
    *  status when its own GET / POST reveals the answer. */
   onTranscriptStatusChange: (next: TranscriptStatus) => void;
-  /** When true, fetch from the unauthenticated public endpoint and
-   *  render a read-only view — no fetch affordance. */
-  publicMode?: boolean;
 }
 
 type LocalStatus = 'checking' | 'notCached' | 'fetching' | 'loaded' | 'error';
@@ -58,9 +55,7 @@ export default function TranscriptReader({
   sourceId,
   transcriptStatus,
   onTranscriptStatusChange,
-  publicMode = false,
 }: Props) {
-  const apiBase = publicMode ? '/api/public/videos' : '/api/videos';
   const [segments, setSegments] = useState<TranscriptSegment[] | null>(null);
   const [localStatus, setLocalStatus] = useState<LocalStatus>('checking');
 
@@ -103,7 +98,7 @@ export default function TranscriptReader({
     setLocalStatus('checking');
     setSegments(null);
 
-    fetch(`${apiBase}/${videoDbId}/transcript`)
+    fetch(`/api/videos/${videoDbId}/transcript`)
       .then(async (res) => {
         if (cancelled) {
           return;
@@ -151,7 +146,7 @@ export default function TranscriptReader({
     return () => {
       cancelled = true;
     };
-  }, [videoDbId, transcriptStatus, onTranscriptStatusChange, apiBase]);
+  }, [videoDbId, transcriptStatus, onTranscriptStatusChange]);
 
   async function handleFetch() {
     setLocalStatus('fetching');
@@ -189,9 +184,6 @@ export default function TranscriptReader({
   }
 
   if (localStatus === 'notCached') {
-    if (publicMode) {
-      return <div className="py-8 text-center text-sm text-gray-500">No transcript available.</div>;
-    }
     return (
       <div className="py-8 text-center">
         <button
@@ -209,21 +201,6 @@ export default function TranscriptReader({
   }
 
   if (localStatus === 'error') {
-    if (publicMode) {
-      return (
-        <div className="flex flex-col items-center gap-3 py-8 text-center text-sm text-gray-500">
-          <p>Transcript is not available right now.</p>
-          <a
-            href={`https://youtube.com/watch?v=${sourceId}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-blue-600 hover:underline"
-          >
-            Watch on YouTube ↗
-          </a>
-        </div>
-      );
-    }
     // Reaches here for transient failures (503 from the server,
     // network errors caught locally, etc.). Distinct from the
     // sticky `transcriptStatus === 'unavailable'` branch above:

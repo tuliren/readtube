@@ -14,6 +14,12 @@ function parseStyle(raw: string | null | undefined): ArticleStyle | null {
   return null;
 }
 
+/**
+ * Sharing-intent gate: mirrors the public video page, which only
+ * renders when a cached Summary or Article exists. A video without
+ * either artifact is treated as 404 even if the internal UUID is
+ * guessed correctly.
+ */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const styleParam = request.nextUrl.searchParams.get('style');
@@ -29,7 +35,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       transcripts: {
         orderBy: { created_at: 'desc' },
         take: 1,
-        select: { id: true },
+        select: {
+          id: true,
+          summary: { select: { transcript_id: true } },
+          articles: { take: 1, select: { id: true } },
+        },
       },
     },
   });
@@ -38,8 +48,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   }
 
   const transcript = video.transcripts[0];
-  if (!transcript) {
-    return NextResponse.json({ error: 'Not cached' }, { status: 404 });
+  const hasAnyPublicArtifact =
+    transcript != null && (transcript.summary != null || transcript.articles.length > 0);
+  if (!hasAnyPublicArtifact) {
+    return NextResponse.json({ error: 'Not public' }, { status: 404 });
   }
 
   const article = await prisma.article.findUnique({
