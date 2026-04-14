@@ -306,7 +306,7 @@ export default function VideoReader({ video, publicMode = false }: Props) {
                 the signal doesn't depend on which tab the user clicked. */}
               <div className="mt-8 border-b border-gray-200">
                 <div className="flex gap-6">
-                  {TABS.map((tab) => {
+                  {TABS.filter((tab) => !(publicMode && tab.key === 'transcript')).map((tab) => {
                     const generated =
                       tab.key === 'summary'
                         ? hasSummary
@@ -359,15 +359,16 @@ export default function VideoReader({ video, publicMode = false }: Props) {
                     publicMode={publicMode}
                   />
                 </div>
-                <div className={activeTab === 'transcript' ? '' : 'hidden'}>
-                  <TranscriptReader
-                    videoDbId={video.id}
-                    sourceId={video.sourceId}
-                    transcriptStatus={transcriptStatus}
-                    onTranscriptStatusChange={setTranscriptStatus}
-                    publicMode={publicMode}
-                  />
-                </div>
+                {!publicMode && (
+                  <div className={activeTab === 'transcript' ? '' : 'hidden'}>
+                    <TranscriptReader
+                      videoDbId={video.id}
+                      sourceId={video.sourceId}
+                      transcriptStatus={transcriptStatus}
+                      onTranscriptStatusChange={setTranscriptStatus}
+                    />
+                  </div>
+                )}
               </div>
             </>
           )}
