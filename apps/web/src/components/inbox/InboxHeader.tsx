@@ -54,9 +54,16 @@ export default function InboxHeader({
       }
       const body = (await res.json()) as { videosProcessed: number };
       toast.success(`Refreshed: ${body.videosProcessed} videos processed`);
-      // The workflow has already written to the DB. Ask Next.js to
-      // re-fetch the current route's server data so the sidebar +
-      // video list render with the fresh metadata/thumbnails.
+      // Two-pronged invalidation:
+      //   1. router.refresh() re-runs the SSR page so the next mount
+      //      picks up the new fallbackData.
+      //   2. SWR's mutate() drops the existing cache entries so any
+      //      currently-mounted hook re-fetches instead of serving stale
+      //      data — fallbackData alone is ignored once an entry exists.
+      await Promise.all([
+        mutate('/api/channels'),
+        mutate((key) => typeof key === 'string' && key.startsWith('/api/videos')),
+      ]);
       router.refresh();
     } finally {
       setRefreshing(false);

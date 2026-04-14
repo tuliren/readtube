@@ -34,6 +34,12 @@ export default async function VideoPage({ params, searchParams }: Props) {
   const { videoId: videoDbId } = await params;
   const rawQuery = searchParamsToInboxQuery(await searchParams);
   const query = await resolveChannelHandle(prisma, userId, rawQuery);
+  // An explicit `?channelHandle=…` that doesn't resolve to a
+  // subscribed channel is a 404 — same gate as /api/videos and
+  // /inbox.
+  if (rawQuery.channelHandle != null && query.channelId == null) {
+    notFound();
+  }
   const selectedChannelId = query.channelId ?? null;
 
   // Fetch the video with IDOR check

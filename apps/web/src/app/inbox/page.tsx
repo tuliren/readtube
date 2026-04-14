@@ -1,6 +1,6 @@
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@readtube/database';
-import { redirect } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 
 import InboxShell from '@/components/inbox/InboxShell';
 import { ensureUserExists } from '@/lib/db/user';
@@ -33,6 +33,13 @@ export default async function InboxPage({ searchParams }: Props) {
 
   const rawQuery = searchParamsToInboxQuery(await searchParams);
   const query = await resolveChannelHandle(prisma, userId, rawQuery);
+  // Match the API behavior: an explicit `?channelHandle=…` that
+  // doesn't resolve to a subscribed channel is a 404, not a silent
+  // fallback to "all channels" (which would briefly flash the full
+  // inbox before the client-side fetch corrects it).
+  if (rawQuery.channelHandle != null && query.channelId == null) {
+    notFound();
+  }
   const selectedChannelId = query.channelId ?? null;
 
   // Single SQL query: subscriptions + channel metadata + per-channel unread
