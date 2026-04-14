@@ -121,7 +121,7 @@ export async function loadInboxVideos(
       thumbnail_url: true,
       transcript_unavailable: true,
       channel_id: true,
-      channel: { select: { id: true, name: true, source_id: true } },
+      channel: { select: { id: true, name: true, source_id: true, handle: true } },
       consumptions: {
         where: { user_id: userId },
         select: { read_at: true },
@@ -185,6 +185,39 @@ export async function loadInboxVideos(
  * `/inbox/<id>?returnTo=channelId%3Dabc%26starred%3D1` the inner
  * query is what we actually want to filter against.
  */
+/**
+ * Resolve an `?channelHandle=@xxx` URL param into a concrete
+ * `channelId`. Does nothing when `channelHandle` is absent or when
+ * `channelId` is already set. The handle lookup is scoped to channels
+ * the user is subscribed to so an attacker can't brute-force handles
+ * to probe channel ids they don't own. Handles in the DB are stored
+ * inconsistently (some with leading `@`, some without), so match both
+ * forms.
+ */
+export async function resolveChannelHandle(
+  prisma: PrismaClient,
+  userId: string,
+  query: InboxQuery
+): Promise<InboxQuery> {
+  if (query.channelHandle == null || query.channelId != null) {
+    return query;
+  }
+  const bare = query.channelHandle.startsWith('@')
+    ? query.channelHandle.slice(1)
+    : query.channelHandle;
+  const channel = await prisma.channel.findFirst({
+    where: {
+      handle: { in: [`@${bare}`, bare] },
+      subscriptions: { some: { user_id: userId } },
+    },
+    select: { id: true },
+  });
+  if (channel == null) {
+    return query;
+  }
+  return { ...query, channelId: channel.id };
+}
+
 export function searchParamsToInboxQuery(
   raw: Record<string, string | string[] | undefined>
 ): InboxQuery {

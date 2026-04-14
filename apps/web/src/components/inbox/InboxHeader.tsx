@@ -2,6 +2,7 @@
 
 import { CheckIcon } from '@heroicons/react/24/outline';
 import { RefreshCw } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { useSWRConfig } from 'swr';
@@ -34,6 +35,7 @@ export default function InboxHeader({
   totalVideos,
 }: Props) {
   const { mutate } = useSWRConfig();
+  const router = useRouter();
   const [marking, setMarking] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const showRefresh = !isProduction() && channelId != null;
@@ -52,12 +54,17 @@ export default function InboxHeader({
       }
       const body = (await res.json()) as { videosProcessed: number };
       toast.success(`Refreshed: ${body.videosProcessed} videos processed`);
-      // Invalidate both the channel list (for updated metadata/logo)
-      // and the video list (for new videos + thumbnails).
+      // Two-pronged invalidation:
+      //   1. router.refresh() re-runs the SSR page so the next mount
+      //      picks up the new fallbackData.
+      //   2. SWR's mutate() drops the existing cache entries so any
+      //      currently-mounted hook re-fetches instead of serving stale
+      //      data — fallbackData alone is ignored once an entry exists.
       await Promise.all([
         mutate('/api/channels'),
         mutate((key) => typeof key === 'string' && key.startsWith('/api/videos')),
       ]);
+      router.refresh();
     } finally {
       setRefreshing(false);
     }

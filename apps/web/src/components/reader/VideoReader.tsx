@@ -19,6 +19,10 @@ import VideoReaderActions from './VideoReaderActions';
 
 interface Props {
   video: VideoData;
+  /** Public, unauthenticated view. Hides user-specific UI (notes,
+   *  triage actions, back link) and swaps the tab readers to the
+   *  public, read-only API routes. */
+  publicMode?: boolean;
 }
 
 type Tab = 'summary' | 'article' | 'transcript';
@@ -37,7 +41,7 @@ function relativeDate(dateStr: string): string {
   });
 }
 
-export default function VideoReader({ video }: Props) {
+export default function VideoReader({ video, publicMode = false }: Props) {
   const searchParams = useSearchParams();
   // The reader URL is `/inbox/<id>?returnTo=<encoded-inbox-query>`. The
   // `returnTo` value is the literal query string
@@ -134,13 +138,15 @@ export default function VideoReader({ video }: Props) {
   // badge updates immediately when notes are added or deleted. The
   // fetcher must match NotesPanel's (throw on error) so SWR doesn't
   // cache [] as valid data on a transient API failure.
-  const { data: notesData } = useSWR<unknown[]>(`/api/videos/${video.id}/notes`, (url: string) =>
-    fetch(url).then((r) => {
-      if (!r.ok) {
-        throw new Error(`Request failed (${r.status})`);
-      }
-      return r.json();
-    })
+  const { data: notesData } = useSWR<unknown[]>(
+    publicMode ? null : `/api/videos/${video.id}/notes`,
+    (url: string) =>
+      fetch(url).then((r) => {
+        if (!r.ok) {
+          throw new Error(`Request failed (${r.status})`);
+        }
+        return r.json();
+      })
   );
   const noteCount = Array.isArray(notesData) ? notesData.length : video.noteCount;
 
@@ -154,32 +160,34 @@ export default function VideoReader({ video }: Props) {
         the sidebar — both category headers should hug the pane edge
         with the same 12px-from-the-edge action rail.
       */}
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-100 bg-white px-3 py-3">
-          <Link
-            href={backHref}
-            className="inline-flex items-center gap-1.5 px-2 text-sm text-gray-500 hover:text-gray-700"
-          >
-            <ArrowLeftIcon className="h-4 w-4" />
-            Back
-          </Link>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="gap-1"
-              onClick={() => setNotesOpen((prev) => !prev)}
+        {!publicMode && (
+          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-100 bg-white px-3 py-3">
+            <Link
+              href={backHref}
+              className="inline-flex items-center gap-1.5 px-2 text-sm text-gray-500 hover:text-gray-700"
             >
-              <NotebookPen className="h-4 w-4" />
-              Notes
-              {noteCount > 0 && (
-                <span className="rounded-full bg-amber-100 px-1.5 text-[10px] font-semibold text-amber-700">
-                  {noteCount}
-                </span>
-              )}
-            </Button>
-            <VideoReaderActions video={video} />
+              <ArrowLeftIcon className="h-4 w-4" />
+              Back
+            </Link>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1"
+                onClick={() => setNotesOpen((prev) => !prev)}
+              >
+                <NotebookPen className="h-4 w-4" />
+                Notes
+                {noteCount > 0 && (
+                  <span className="rounded-full bg-amber-100 px-1.5 text-[10px] font-semibold text-amber-700">
+                    {noteCount}
+                  </span>
+                )}
+              </Button>
+              <VideoReaderActions video={video} />
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Article */}
         <article className="mx-auto w-full max-w-3xl px-6 py-8">
@@ -206,6 +214,18 @@ export default function VideoReader({ video }: Props) {
             >
               Watch on YouTube ↗
             </a>
+            {!publicMode && (hasSummary || hasArticle) && (
+              <>
+                <span>·</span>
+                <Link
+                  href={`/public/${encodeURIComponent(video.channelHandle ?? video.channelSourceId)}/${video.sourceId}`}
+                  target="_blank"
+                  className="text-blue-500 hover:underline"
+                >
+                  Share ↗
+                </Link>
+              </>
+            )}
           </div>
 
           {/* Thumbnail + description row — thumbnail sits to the left
@@ -286,7 +306,7 @@ export default function VideoReader({ video }: Props) {
                 the signal doesn't depend on which tab the user clicked. */}
               <div className="mt-8 border-b border-gray-200">
                 <div className="flex gap-6">
-                  {TABS.map((tab) => {
+                  {TABS.filter((tab) => !(publicMode && tab.key === 'transcript')).map((tab) => {
                     const generated =
                       tab.key === 'summary'
                         ? hasSummary
@@ -327,6 +347,7 @@ export default function VideoReader({ video }: Props) {
                     transcriptStatus={transcriptStatus}
                     onTranscriptStatusChange={setTranscriptStatus}
                     onSummaryAvailable={handleSummaryAvailable}
+                    publicMode={publicMode}
                   />
                 </div>
                 <div className={activeTab === 'article' ? '' : 'hidden'}>
@@ -335,22 +356,27 @@ export default function VideoReader({ video }: Props) {
                     transcriptStatus={transcriptStatus}
                     onTranscriptStatusChange={setTranscriptStatus}
                     onArticleAvailable={handleArticleAvailable}
+                    publicMode={publicMode}
                   />
                 </div>
-                <div className={activeTab === 'transcript' ? '' : 'hidden'}>
-                  <TranscriptReader
-                    videoDbId={video.id}
-                    sourceId={video.sourceId}
-                    transcriptStatus={transcriptStatus}
-                    onTranscriptStatusChange={setTranscriptStatus}
-                  />
-                </div>
+                {!publicMode && (
+                  <div className={activeTab === 'transcript' ? '' : 'hidden'}>
+                    <TranscriptReader
+                      videoDbId={video.id}
+                      sourceId={video.sourceId}
+                      transcriptStatus={transcriptStatus}
+                      onTranscriptStatusChange={setTranscriptStatus}
+                    />
+                  </div>
+                )}
               </div>
             </>
           )}
         </article>
       </div>
-      <NotesPanel videoId={video.id} open={notesOpen} onOpenChange={handleNotesOpenChange} />
+      {!publicMode && (
+        <NotesPanel videoId={video.id} open={notesOpen} onOpenChange={handleNotesOpenChange} />
+      )}
     </div>
   );
 }

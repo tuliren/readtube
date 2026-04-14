@@ -18,6 +18,10 @@ export interface ScrapedChannel {
    *  tag. Typically a 900x900 hosted on yt3.googleusercontent.com.
    *  Null if the meta tag is missing. */
   logoUrl: string | null;
+  /** Channel handle like `@mkbhd`, extracted from the page's
+   *  canonical `<link>` tag. Null for channels without a handle (or
+   *  when YouTube returns a `/channel/UCxxx` canonical instead). */
+  handle: string | null;
   videos: ScrapedVideo[];
 }
 
@@ -147,22 +151,34 @@ export async function scrapeChannel(channelUrl: string): Promise<ScrapedChannel>
   const logoMatch = html.match(/<meta property="og:image" content="([^"]+)"/);
   const logoUrl = logoMatch ? logoMatch[1] : null;
 
+  // Extract the @handle from the `vanityChannelUrl` JSON field that
+  // YouTube embeds in the page. Both `<link rel="canonical">` and
+  // `<meta property="og:url">` resolve to the `/channel/UCxxx` form
+  // even for channels that have a handle, so neither of those works.
+  // The vanity URL is populated only for channels with a handle, so a
+  // missing match legitimately means "no handle". YouTube emits the
+  // URL as `http://` (not `https://`) — match it literally.
+  const handleMatch = html.match(
+    /"vanityChannelUrl":"https?:\\?\/\\?\/www\.youtube\.com\/@([\w.-]+)"/
+  );
+  const handle = handleMatch ? `@${handleMatch[1]}` : null;
+
   // Extract ytInitialData JSON
   const dataMatch = html.match(/var ytInitialData = ({[\s\S]*?});<\/script>/);
   if (!dataMatch) {
     // Return channel info without videos if ytInitialData is missing
-    return { channelId, name, logoUrl, videos: [] };
+    return { channelId, name, logoUrl, handle, videos: [] };
   }
 
   let data: Record<string, unknown>;
   try {
     data = JSON.parse(dataMatch[1]) as Record<string, unknown>;
   } catch {
-    return { channelId, name, logoUrl, videos: [] };
+    return { channelId, name, logoUrl, handle, videos: [] };
   }
 
   const videos = extractVideosFromInitialData(data);
-  return { channelId, name, logoUrl, videos };
+  return { channelId, name, logoUrl, handle, videos };
 }
 
 type YtData = Record<string, unknown>;

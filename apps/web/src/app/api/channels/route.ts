@@ -1,5 +1,5 @@
 import { auth } from '@clerk/nextjs/server';
-import { prisma } from '@readtube/database';
+import { VideoPlatformType, prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { ensureUserExists } from '@/lib/db/user';
@@ -28,6 +28,7 @@ export async function GET() {
       id: row.channel_id,
       sourceId: row.source_id,
       name: row.name,
+      handle: row.handle,
       rssUrl: row.rss_url,
       logoUrl: row.logo_url ?? null,
       createdAt: row.created_at,
@@ -110,12 +111,16 @@ export async function POST(request: NextRequest) {
   // with no UserVideoConsumption rows, so they appear unread for everyone until
   // the user actually opens them.
   const channel = await prisma.channel.upsert({
-    where: { source_id: sourceId },
+    where: {
+      channel_unique_source: { source_type: VideoPlatformType.YOUTUBE, source_id: sourceId },
+    },
     create: {
+      source_type: VideoPlatformType.YOUTUBE,
       source_id: sourceId,
       name: scraped.name,
       rss_url: rssUrl,
       logo_url: scraped.logoUrl,
+      handle: scraped.handle,
       videos: {
         create: scraped.videos.map((v) => ({
           source_id: v.videoId,
@@ -126,10 +131,11 @@ export async function POST(request: NextRequest) {
         })),
       },
     },
-    // On re-create (channel already exists), refresh the logo if
-    // the scraper has one and the channel doesn't yet.
+    // On re-create (channel already exists), refresh the logo and
+    // handle when the scraper has fresh values.
     update: {
       ...(scraped.logoUrl != null ? { logo_url: scraped.logoUrl } : {}),
+      ...(scraped.handle != null ? { handle: scraped.handle } : {}),
     },
   });
 
@@ -186,6 +192,7 @@ export async function POST(request: NextRequest) {
       id: true,
       source_id: true,
       name: true,
+      handle: true,
       rss_url: true,
       logo_url: true,
       created_at: true,
@@ -198,6 +205,7 @@ export async function POST(request: NextRequest) {
       id: channelRow.id,
       sourceId: channelRow.source_id,
       name: channelRow.name,
+      handle: channelRow.handle,
       rssUrl: channelRow.rss_url,
       logoUrl: channelRow.logo_url,
       createdAt: channelRow.created_at,

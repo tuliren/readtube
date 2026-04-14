@@ -22,7 +22,7 @@ import type { InboxQuery } from '@/lib/types';
 export const PAGE_SIZE = 25;
 
 const BOOL_KEYS = ['unread', 'starred', 'saved', 'archived'] as const;
-const STRING_KEYS = ['q', 'channelId', 'folderId', 'from', 'to'] as const;
+const STRING_KEYS = ['q', 'channelId', 'channelHandle', 'folderId', 'from', 'to'] as const;
 type BoolKey = (typeof BOOL_KEYS)[number];
 type StringKey = (typeof STRING_KEYS)[number];
 

@@ -89,6 +89,7 @@ beforeEach(async () => {
     channelId: 'UC_default',
     name: 'Default',
     logoUrl: null,
+    handle: null,
     videos: [],
   });
   await global.testPrisma.video.deleteMany();
@@ -318,6 +319,7 @@ describe('refreshChannel', () => {
       channelId: 'UC_logo',
       name: 'Logo Ch',
       logoUrl: 'https://yt3.googleusercontent.com/logo.jpg',
+      handle: null,
       videos: [
         {
           videoId: 'vid_dur',
@@ -402,6 +404,7 @@ describe('refreshChannel', () => {
       channelId: 'UC_full',
       name: 'Full Ch',
       logoUrl: null,
+      handle: null,
       videos: [],
     });
 

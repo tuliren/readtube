@@ -18,6 +18,9 @@ interface Props {
    *  the Article tab dot can flip from red → blue. Fired on the
    *  initial GET cache hit AND after a successful generation. */
   onArticleAvailable: () => void;
+  /** When true, fetch from the unauthenticated public endpoint and
+   *  render a read-only view — no generate affordance. */
+  publicMode?: boolean;
 }
 
 type Status = 'checking' | 'idle' | 'streaming' | 'done' | 'error';
@@ -29,7 +32,9 @@ export default function ArticleReader({
   transcriptStatus,
   onTranscriptStatusChange,
   onArticleAvailable,
+  publicMode = false,
 }: Props) {
+  const apiBase = publicMode ? '/api/public/videos' : '/api/videos';
   const [status, setStatus] = useState<Status>('checking');
   const [markdown, setMarkdown] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -40,7 +45,7 @@ export default function ArticleReader({
     setMarkdown('');
     setErrorMessage(null);
 
-    fetch(`/api/videos/${videoDbId}/article?style=${STYLE}`)
+    fetch(`${apiBase}/${videoDbId}/article?style=${STYLE}`)
       .then(async (res) => {
         if (cancelled) {
           return;
@@ -69,7 +74,7 @@ export default function ArticleReader({
     return () => {
       cancelled = true;
     };
-  }, [videoDbId, onArticleAvailable]);
+  }, [videoDbId, onArticleAvailable, apiBase]);
 
   async function handleGenerate() {
     setStatus('streaming');
@@ -166,6 +171,9 @@ export default function ArticleReader({
   }
 
   if (status === 'idle') {
+    if (publicMode) {
+      return <div className="py-8 text-center text-sm text-gray-500">No article available.</div>;
+    }
     if (transcriptStatus === 'unavailable') {
       return (
         <div className="py-8 text-center text-sm text-gray-500">
@@ -189,6 +197,13 @@ export default function ArticleReader({
   }
 
   if (status === 'error') {
+    if (publicMode) {
+      return (
+        <div className="py-8 text-center text-sm text-gray-400">
+          {errorMessage ?? 'Article is not available.'}
+        </div>
+      );
+    }
     return (
       <div className="py-8 text-center">
         <p className="mb-4 text-sm text-gray-400">{errorMessage}</p>

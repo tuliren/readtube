@@ -20,6 +20,7 @@ export default async function AskInboxPage() {
     id: row.channel_id,
     sourceId: row.source_id,
     name: row.name,
+    handle: row.handle,
     rssUrl: row.rss_url,
     logoUrl: row.logo_url ?? null,
     createdAt: row.created_at.toISOString(),

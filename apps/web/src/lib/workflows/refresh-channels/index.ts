@@ -1,4 +1,4 @@
-import { fetchStaleChannels, refreshChannel } from './steps';
+import { fetchChannelById, fetchStaleChannels, refreshChannel } from './steps';
 import type { RefreshResult } from './steps';
 
 export const maxDuration = 300;
@@ -27,4 +27,21 @@ export async function refreshChannelsWorkflow(): Promise<WorkflowResult> {
   }
 
   return { results, errors };
+}
+
+/**
+ * Refreshes a single channel by id. Used by the manual Refresh button
+ * in the inbox sidebar so it applies the exact same updates the cron
+ * workflow does (metadata, handle, checked_at, video upserts).
+ */
+export async function refreshSingleChannelWorkflow(
+  channelId: string
+): Promise<RefreshResult | null> {
+  'use workflow';
+
+  const channel = await fetchChannelById(channelId);
+  if (channel == null) {
+    return null;
+  }
+  return refreshChannel(channel);
 }
