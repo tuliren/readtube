@@ -25,6 +25,9 @@ interface Props {
    *  the Summary tab dot can flip from red → blue. Fired on the
    *  initial GET cache hit AND after a successful generation. */
   onSummaryAvailable: () => void;
+  /** When true, fetch from the unauthenticated public endpoint and
+   *  render a read-only view — no generate / regenerate affordances. */
+  publicMode?: boolean;
 }
 
 type SummaryField = 'headline' | 'short' | 'full';
@@ -79,7 +82,9 @@ export default function SummaryReader({
   transcriptStatus,
   onTranscriptStatusChange,
   onSummaryAvailable,
+  publicMode = false,
 }: Props) {
+  const apiBase = publicMode ? '/api/public/videos' : '/api/videos';
   const [status, setStatus] = useState<Status>('checking');
   const [summary, setSummary] = useState<SummaryData | null>(null);
   const [regeneratingFields, setRegeneratingFields] = useState<SummaryField[]>([]);
@@ -92,7 +97,7 @@ export default function SummaryReader({
     setErrorMessage(null);
     setRegeneratingFields([]);
 
-    fetch(`/api/videos/${videoDbId}/summary`)
+    fetch(`${apiBase}/${videoDbId}/summary`)
       .then(async (res) => {
         if (cancelled) {
           return;
@@ -118,7 +123,7 @@ export default function SummaryReader({
     return () => {
       cancelled = true;
     };
-  }, [videoDbId, onSummaryAvailable]);
+  }, [videoDbId, onSummaryAvailable, apiBase]);
 
   async function handleGenerate(targetFields?: SummaryField[]) {
     const fields = targetFields ?? [...ALL_FIELDS];
@@ -277,6 +282,9 @@ export default function SummaryReader({
   }
 
   if (status === 'idle') {
+    if (publicMode) {
+      return <div className="py-8 text-center text-sm text-gray-500">No summary available.</div>;
+    }
     // Sticky-unavailable: hide the Generate affordance entirely so the
     // user isn't tempted to click into a guaranteed-failure state. The
     // server already returns 410 for this case but eliminating the
@@ -304,6 +312,13 @@ export default function SummaryReader({
   }
 
   if (status === 'error') {
+    if (publicMode) {
+      return (
+        <div className="py-8 text-center text-sm text-gray-400">
+          {errorMessage ?? 'Summary is not available.'}
+        </div>
+      );
+    }
     return (
       <div className="py-8 text-center">
         <p className="mb-4 text-sm text-gray-400">{errorMessage}</p>
@@ -327,7 +342,7 @@ export default function SummaryReader({
   // Regenerate is a dev-only escape hatch — costs tokens, can produce
   // worse output than a cached run, and shouldn't be exposed to end
   // users in production.
-  const showRegenerate = !isProduction();
+  const showRegenerate = !isProduction() && !publicMode;
 
   // Word counts surfaced next to the multi-sentence section headers
   // so the reader can size up the density before reading. Computed
