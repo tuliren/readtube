@@ -272,7 +272,10 @@ CREATE UNIQUE INDEX "User_source_id_key" ON "User" ("source_id");
 CREATE UNIQUE INDEX "User_email_key" ON "User" ("email");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Channel_source_id_key" ON "Channel" ("source_id");
+CREATE UNIQUE INDEX "Channel_source_type_source_id_key" ON "Channel" ("source_type", "source_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Channel_source_type_handle_key" ON "Channel" ("source_type", "handle");
 
 -- CreateIndex
 CREATE INDEX "subscription_index_on_channel_id" ON "UserSubscription" ("channel_id");
