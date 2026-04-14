@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { requireUserId } from '@/lib/auth';
 import { parseInboxQuery } from '@/lib/inbox/filter';
-import { loadInboxVideos } from '@/lib/inbox/loadVideos';
+import { loadInboxVideos, resolveChannelHandle } from '@/lib/inbox/loadVideos';
 
 export async function GET(request: NextRequest) {
   const authResult = await requireUserId();
@@ -12,7 +12,8 @@ export async function GET(request: NextRequest) {
   }
   const userId = authResult;
 
-  const query = parseInboxQuery(request.nextUrl.searchParams);
+  const rawQuery = parseInboxQuery(request.nextUrl.searchParams);
+  const query = await resolveChannelHandle(prisma, userId, rawQuery);
 
   // 404 on a channelId that doesn't belong to this user — kept here as
   // a route-level concern (the helper silently widens to the user's

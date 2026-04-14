@@ -5,7 +5,11 @@ import { notFound, redirect } from 'next/navigation';
 import InboxShell from '@/components/inbox/InboxShell';
 import VideoReader from '@/components/reader/VideoReader';
 import { ensureUserExists } from '@/lib/db/user';
-import { loadInboxVideos, searchParamsToInboxQuery } from '@/lib/inbox/loadVideos';
+import {
+  loadInboxVideos,
+  resolveChannelHandle,
+  searchParamsToInboxQuery,
+} from '@/lib/inbox/loadVideos';
 import { decorateVideo, loadTriageContext } from '@/lib/inbox/triage';
 import { getSubscribedChannelsWithUnread } from '@/lib/subscriptions';
 import type { ChannelData, VideoData } from '@/lib/types';
@@ -28,7 +32,8 @@ export default async function VideoPage({ params, searchParams }: Props) {
   await ensureUserExists(userId);
 
   const { videoId: videoDbId } = await params;
-  const query = searchParamsToInboxQuery(await searchParams);
+  const rawQuery = searchParamsToInboxQuery(await searchParams);
+  const query = await resolveChannelHandle(prisma, userId, rawQuery);
   const selectedChannelId = query.channelId ?? null;
 
   // Fetch the video with IDOR check
@@ -90,6 +95,7 @@ export default async function VideoPage({ params, searchParams }: Props) {
     id: row.channel_id,
     sourceId: row.source_id,
     name: row.name,
+    handle: row.handle,
     rssUrl: row.rss_url,
     logoUrl: row.logo_url ?? null,
     createdAt: row.created_at.toISOString(),

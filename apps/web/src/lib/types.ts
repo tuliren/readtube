@@ -2,6 +2,9 @@ export interface ChannelData {
   id: string;
   sourceId: string;
   name: string;
+  /** YouTube handle (e.g. `@mkbhd`). Null when the scraper hasn't
+   *  captured one yet. Used to build nicer sidebar URLs. */
+  handle: string | null;
   rssUrl: string;
   /** URL to the channel's logo/avatar. Populated from the
    *  TranscriptAPI /youtube/channel/latest endpoint. Null for
@@ -75,6 +78,10 @@ export interface VideoData {
 export interface InboxQuery {
   q?: string;
   channelId?: string;
+  /** Sidebar-friendly alternative to `channelId`. When present (and
+   *  `channelId` is not), the loader resolves it to a channel id via a
+   *  scoped handle lookup. URL-visible as `?channelHandle=@mkbhd`. */
+  channelHandle?: string;
   folderId?: string;
   tagIds?: string[];
   unread?: boolean;
