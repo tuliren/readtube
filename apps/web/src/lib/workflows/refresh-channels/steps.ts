@@ -34,6 +34,15 @@ export async function fetchStaleChannels(): Promise<StaleChannel[]> {
   });
 }
 
+export async function fetchChannelById(channelId: string): Promise<StaleChannel | null> {
+  'use step';
+
+  return prisma.channel.findUnique({
+    where: { id: channelId },
+    select: { id: true, source_id: true, name: true },
+  });
+}
+
 export interface RefreshResult {
   channelId: string;
   videosProcessed: number;
@@ -65,9 +74,10 @@ export async function refreshChannel(channel: StaleChannel): Promise<RefreshResu
 
   const needsDuration = videosMissingDuration.size > 0;
 
-  // Best-effort scrape for logo_url and duration_seconds — fields the
-  // TranscriptAPI RSS endpoint doesn't provide. Always scrape to keep
-  // logo_url fresh; only collect durations for videos that lack them.
+  // Best-effort scrape for logo_url, handle, and duration_seconds —
+  // fields the TranscriptAPI RSS endpoint doesn't provide. Always
+  // scrape to keep logo_url / handle fresh; only collect durations for
+  // videos that lack them.
   let logoUrl: string | null = null;
   let handle: string | null = null;
   const durationMap = new Map<string, number>();
