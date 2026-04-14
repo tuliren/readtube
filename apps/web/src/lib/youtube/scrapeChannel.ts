@@ -151,13 +151,15 @@ export async function scrapeChannel(channelUrl: string): Promise<ScrapedChannel>
   const logoMatch = html.match(/<meta property="og:image" content="([^"]+)"/);
   const logoUrl = logoMatch ? logoMatch[1] : null;
 
-  // Extract the @handle from the canonical `<link>` tag. YouTube
-  // rewrites `/channel/UCxxx/videos` fetches to a canonical
-  // `https://www.youtube.com/@handle` when the channel has one; for
-  // legacy channels without a handle the canonical stays on the
-  // `/channel/UCxxx` form, in which case we leave handle null.
+  // Extract the @handle from the `vanityChannelUrl` JSON field that
+  // YouTube embeds in the page. Both `<link rel="canonical">` and
+  // `<meta property="og:url">` resolve to the `/channel/UCxxx` form
+  // even for channels that have a handle, so neither of those works.
+  // The vanity URL is populated only for channels with a handle, so a
+  // missing match legitimately means "no handle". YouTube emits the
+  // URL as `http://` (not `https://`) — match it literally.
   const handleMatch = html.match(
-    /<link rel="canonical" href="https:\/\/www\.youtube\.com\/@([\w.-]+)"/
+    /"vanityChannelUrl":"https?:\\?\/\\?\/www\.youtube\.com\/@([\w.-]+)"/
   );
   const handle = handleMatch ? `@${handleMatch[1]}` : null;
 
