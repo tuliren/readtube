@@ -14,15 +14,19 @@ interface Props {
 export default async function PublicVideoPage({ params }: Props) {
   const { handle, videoId } = await params;
 
-  // The URL segment arrives percent-encoded (`%40mkbhd`). Handles in
-  // the DB are stored inconsistently — some rows include the leading
-  // `@`, some don't — so try both forms.
+  // The first URL segment can be either a YouTube handle (`@mkbhd`,
+  // arriving percent-encoded as `%40mkbhd`) or a raw channel id
+  // (`UCxxx...`) when the channel row doesn't have a handle yet.
+  // Handles in the DB are stored inconsistently — some rows include
+  // the leading `@`, some don't — so match both forms.
   const decoded = decodeURIComponent(handle);
   const bare = decoded.startsWith('@') ? decoded.slice(1) : decoded;
-  const candidates = [`@${bare}`, bare];
+  const handleCandidates = [`@${bare}`, bare];
 
   const channel = await prisma.channel.findFirst({
-    where: { handle: { in: candidates } },
+    where: {
+      OR: [{ handle: { in: handleCandidates } }, { source_id: decoded }],
+    },
     select: { id: true },
   });
   if (channel == null) {

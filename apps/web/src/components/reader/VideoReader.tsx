@@ -214,11 +214,11 @@ export default function VideoReader({ video, publicMode = false }: Props) {
             >
               Watch on YouTube ↗
             </a>
-            {!publicMode && (hasSummary || hasArticle) && video.channelHandle != null && (
+            {!publicMode && (hasSummary || hasArticle) && (
               <>
                 <span>·</span>
                 <Link
-                  href={`/public/${encodeURIComponent(video.channelHandle)}/${video.sourceId}`}
+                  href={`/public/${encodeURIComponent(video.channelHandle ?? video.channelSourceId)}/${video.sourceId}`}
                   target="_blank"
                   className="text-blue-500 hover:underline"
                 >
