@@ -135,7 +135,7 @@ export async function POST(request: NextRequest) {
     // handle when the scraper has fresh values.
     update: {
       ...(scraped.logoUrl != null ? { logo_url: scraped.logoUrl } : {}),
-      ...(scraped.handle != null ? { handle: scraped.handle } : {}),
+      ...(!isEmptyString(scraped.handle) ? { handle: scraped.handle } : {}),
     },
   });
 

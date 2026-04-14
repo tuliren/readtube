@@ -135,7 +135,7 @@ export async function refreshChannel(channel: StaleChannel): Promise<RefreshResu
     data: {
       ...(nameUpdated ? { name: data.channel.title } : {}),
       ...(!isEmptyString(logoUrl) ? { logo_url: logoUrl } : {}),
-      ...(handle != null ? { handle } : {}),
+      ...(!isEmptyString(handle) ? { handle } : {}),
       checked_at: new Date(),
     },
   });

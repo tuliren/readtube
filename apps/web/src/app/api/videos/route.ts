@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireUserId } from '@/lib/auth';
 import { parseInboxQuery } from '@/lib/inbox/filter';
 import { loadInboxVideos, resolveChannelHandle } from '@/lib/inbox/loadVideos';
+import { isEmptyString } from '@/lib/string';
 
 export async function GET(request: NextRequest) {
   const authResult = await requireUserId();
@@ -20,7 +21,7 @@ export async function GET(request: NextRequest) {
   // through to buildVideoWhere with channelId still null, silently
   // widening to every subscribed channel — the caller asked for one
   // specific channel and would get the whole inbox instead.
-  if (rawQuery.channelHandle != null && query.channelId == null) {
+  if (!isEmptyString(rawQuery.channelHandle) && isEmptyString(query.channelId)) {
     return NextResponse.json({ error: 'Channel not found' }, { status: 404 });
   }
 

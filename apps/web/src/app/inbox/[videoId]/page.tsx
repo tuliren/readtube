@@ -11,6 +11,7 @@ import {
   searchParamsToInboxQuery,
 } from '@/lib/inbox/loadVideos';
 import { decorateVideo, loadTriageContext } from '@/lib/inbox/triage';
+import { isEmptyString } from '@/lib/string';
 import { getSubscribedChannelsWithUnread } from '@/lib/subscriptions';
 import type { ChannelData, VideoData } from '@/lib/types';
 
@@ -37,7 +38,7 @@ export default async function VideoPage({ params, searchParams }: Props) {
   // An explicit `?channelHandle=…` that doesn't resolve to a
   // subscribed channel is a 404 — same gate as /api/videos and
   // /inbox.
-  if (rawQuery.channelHandle != null && query.channelId == null) {
+  if (!isEmptyString(rawQuery.channelHandle) && isEmptyString(query.channelId)) {
     notFound();
   }
   const selectedChannelId = query.channelId ?? null;

@@ -9,6 +9,7 @@ import {
   resolveChannelHandle,
   searchParamsToInboxQuery,
 } from '@/lib/inbox/loadVideos';
+import { isEmptyString } from '@/lib/string';
 import { getSubscribedChannelsWithUnread } from '@/lib/subscriptions';
 import type { ChannelData } from '@/lib/types';
 
@@ -37,7 +38,7 @@ export default async function InboxPage({ searchParams }: Props) {
   // doesn't resolve to a subscribed channel is a 404, not a silent
   // fallback to "all channels" (which would briefly flash the full
   // inbox before the client-side fetch corrects it).
-  if (rawQuery.channelHandle != null && query.channelId == null) {
+  if (!isEmptyString(rawQuery.channelHandle) && isEmptyString(query.channelId)) {
     notFound();
   }
   const selectedChannelId = query.channelId ?? null;

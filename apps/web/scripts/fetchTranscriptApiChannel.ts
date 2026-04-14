@@ -13,6 +13,8 @@
  */
 import { program } from 'commander';
 
+import { isEmptyString } from '@/lib/string';
+
 if (process.env.SCRIPT_ENV !== 'development') {
   console.error('This script can only be run in development environment.');
   process.exit(1);
@@ -27,7 +29,7 @@ const BASE_URL = 'https://transcriptapi.com/api/v2';
   const { channel } = program.opts<{ channel: string }>();
 
   const apiKey = process.env.TRANSCRIPT_API_KEY;
-  if (apiKey == null || apiKey.length === 0) {
+  if (isEmptyString(apiKey)) {
     console.error('TRANSCRIPT_API_KEY is not set in the loaded .env file.');
     process.exit(1);
   }

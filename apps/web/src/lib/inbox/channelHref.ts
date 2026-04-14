@@ -1,3 +1,4 @@
+import { isEmptyString } from '@/lib/string';
 import type { ChannelData } from '@/lib/types';
 
 /**
@@ -7,7 +8,7 @@ import type { ChannelData } from '@/lib/types';
  * the opaque DB id for channels without a handle.
  */
 export function channelInboxHref(channel: Pick<ChannelData, 'id' | 'handle'>): string {
-  if (channel.handle != null) {
+  if (!isEmptyString(channel.handle)) {
     return `/inbox?channelHandle=${encodeURIComponent(channel.handle)}`;
   }
   return `/inbox?channelId=${channel.id}`;

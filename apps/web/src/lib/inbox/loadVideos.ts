@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@readtube/database';
 
+import { isEmptyString } from '@/lib/string';
 import type { InboxQuery, VideoData } from '@/lib/types';
 
 import { buildUnreadClause, buildVideoWhere } from './buildWhere';
@@ -199,7 +200,7 @@ export async function resolveChannelHandle(
   userId: string,
   query: InboxQuery
 ): Promise<InboxQuery> {
-  if (query.channelHandle == null || query.channelId != null) {
+  if (isEmptyString(query.channelHandle) || !isEmptyString(query.channelId)) {
     return query;
   }
   const bare = query.channelHandle.startsWith('@')
