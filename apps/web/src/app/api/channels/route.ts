@@ -116,6 +116,7 @@ export async function POST(request: NextRequest) {
       name: scraped.name,
       rss_url: rssUrl,
       logo_url: scraped.logoUrl,
+      handle: scraped.handle,
       videos: {
         create: scraped.videos.map((v) => ({
           source_id: v.videoId,
@@ -126,10 +127,11 @@ export async function POST(request: NextRequest) {
         })),
       },
     },
-    // On re-create (channel already exists), refresh the logo if
-    // the scraper has one and the channel doesn't yet.
+    // On re-create (channel already exists), refresh the logo and
+    // handle when the scraper has fresh values.
     update: {
       ...(scraped.logoUrl != null ? { logo_url: scraped.logoUrl } : {}),
+      ...(scraped.handle != null ? { handle: scraped.handle } : {}),
     },
   });
 

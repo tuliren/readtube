@@ -18,6 +18,10 @@ export interface ScrapedChannel {
    *  tag. Typically a 900x900 hosted on yt3.googleusercontent.com.
    *  Null if the meta tag is missing. */
   logoUrl: string | null;
+  /** Channel handle like `@mkbhd`, extracted from the page's
+   *  canonical `<link>` tag. Null for channels without a handle (or
+   *  when YouTube returns a `/channel/UCxxx` canonical instead). */
+  handle: string | null;
   videos: ScrapedVideo[];
 }
 
@@ -147,22 +151,32 @@ export async function scrapeChannel(channelUrl: string): Promise<ScrapedChannel>
   const logoMatch = html.match(/<meta property="og:image" content="([^"]+)"/);
   const logoUrl = logoMatch ? logoMatch[1] : null;
 
+  // Extract the @handle from the canonical `<link>` tag. YouTube
+  // rewrites `/channel/UCxxx/videos` fetches to a canonical
+  // `https://www.youtube.com/@handle` when the channel has one; for
+  // legacy channels without a handle the canonical stays on the
+  // `/channel/UCxxx` form, in which case we leave handle null.
+  const handleMatch = html.match(
+    /<link rel="canonical" href="https:\/\/www\.youtube\.com\/@([\w.-]+)"/
+  );
+  const handle = handleMatch ? `@${handleMatch[1]}` : null;
+
   // Extract ytInitialData JSON
   const dataMatch = html.match(/var ytInitialData = ({[\s\S]*?});<\/script>/);
   if (!dataMatch) {
     // Return channel info without videos if ytInitialData is missing
-    return { channelId, name, logoUrl, videos: [] };
+    return { channelId, name, logoUrl, handle, videos: [] };
   }
 
   let data: Record<string, unknown>;
   try {
     data = JSON.parse(dataMatch[1]) as Record<string, unknown>;
   } catch {
-    return { channelId, name, logoUrl, videos: [] };
+    return { channelId, name, logoUrl, handle, videos: [] };
   }
 
   const videos = extractVideosFromInitialData(data);
-  return { channelId, name, logoUrl, videos };
+  return { channelId, name, logoUrl, handle, videos };
 }
 
 type YtData = Record<string, unknown>;
