@@ -17,7 +17,7 @@ export interface TriageRawRow {
   thumbnail_url: string | null;
   transcript_unavailable: boolean;
   channel_id: string;
-  channel: { name: string; source_id: string };
+  channel: { name: string; source_id: string; handle: string | null };
   /**
    * Latest Transcript row (or none) plus whether it has a Summary
    * row attached and whether it has at least one Article row. The
@@ -150,6 +150,7 @@ export function decorateVideo(
     channelId: row.channel_id,
     channelName: row.channel.name,
     channelSourceId: row.channel.source_id,
+    channelHandle: row.channel.handle,
     isStarred: context.starredIds.has(row.id),
     isSaved: context.savedIds.has(row.id),
     isArchived: context.archivedIds.has(row.id),

@@ -214,6 +214,18 @@ export default function VideoReader({ video, publicMode = false }: Props) {
             >
               Watch on YouTube ↗
             </a>
+            {!publicMode && (hasSummary || hasArticle) && video.channelHandle != null && (
+              <>
+                <span>·</span>
+                <Link
+                  href={`/public/${encodeURIComponent(video.channelHandle)}/${video.sourceId}`}
+                  target="_blank"
+                  className="text-blue-500 hover:underline"
+                >
+                  Share ↗
+                </Link>
+              </>
+            )}
           </div>
 
           {/* Thumbnail + description row — thumbnail sits to the left

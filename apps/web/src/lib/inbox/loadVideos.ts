@@ -121,7 +121,7 @@ export async function loadInboxVideos(
       thumbnail_url: true,
       transcript_unavailable: true,
       channel_id: true,
-      channel: { select: { id: true, name: true, source_id: true } },
+      channel: { select: { id: true, name: true, source_id: true, handle: true } },
       consumptions: {
         where: { user_id: userId },
         select: { read_at: true },

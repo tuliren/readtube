@@ -41,7 +41,7 @@ export default async function PublicVideoPage({ params }: Props) {
       thumbnail_url: true,
       transcript_unavailable: true,
       channel_id: true,
-      channel: { select: { name: true, source_id: true } },
+      channel: { select: { name: true, source_id: true, handle: true } },
       transcripts: {
         orderBy: { created_at: 'desc' },
         take: 1,

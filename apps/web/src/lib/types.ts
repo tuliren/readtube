@@ -55,6 +55,9 @@ export interface VideoData {
   channelId: string;
   channelName: string;
   channelSourceId: string;
+  // YouTube channel handle (e.g. `@mkbhd`). Null when the scraper
+  // hasn't captured one yet. Used to build the public share URL.
+  channelHandle: string | null;
   // Triage flags
   isStarred: boolean;
   isSaved: boolean;
