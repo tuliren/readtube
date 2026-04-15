@@ -1,6 +1,10 @@
 import { type RssChannel, fetchRssFeed, isYouTubeShort } from '@/lib/youtube/channelRss';
 import { type ScrapedChannel, scrapeChannel } from '@/lib/youtube/channelScrape';
+import { fetchChannelLatest } from '@/lib/youtube/transcriptApi';
 import { buildRssUrl, buildThumbnailUrl } from '@/lib/youtube/urls';
+
+/** Duration threshold (seconds) for filtering Shorts when RSS is unavailable. */
+const SHORTS_DURATION_THRESHOLD = 60;
 
 /**
  * A single ingest-ready video produced by merging RSS + scrape data.
@@ -51,13 +55,18 @@ export interface ChannelSnapshot {
  * via `@handle`), we scrape first to resolve the channel id, then
  * fetch RSS.
  *
- * Behaviour on partial failure:
- * - RSS failure is fatal — without it we have no authoritative video
- *   list and can't safely filter Shorts.
- * - Scrape failure is tolerated — we return the snapshot with
- *   `handle: null`, `logoUrl: null`, and every video's
- *   `durationSeconds: null`. This preserves the refresh workflow's
- *   long-standing "best-effort scrape" posture.
+ * Fallback chain for the video list:
+ * 1. YouTube RSS — full descriptions, real publish times, canonical
+ *    `/shorts/` vs `/watch?v=` links for Shorts filtering.
+ * 2. TranscriptAPI `/channel/latest` — same data shape as RSS
+ *    (including `/shorts/` links). Used when RSS returns 404.
+ * 3. Scrape-only — truncated descriptions, approximate publish times,
+ *    Shorts filtered by duration (≤60s) instead of link pattern.
+ *
+ * Scrape failure is always tolerated — we return the snapshot with
+ * `handle: null`, `logoUrl: null`, and every video's
+ * `durationSeconds: null`. Only when all three video-list sources
+ * fail *and* scrape also failed do we throw.
  */
 export async function fetchChannelSnapshot(args: {
   channelPageUrl: string;
@@ -66,7 +75,7 @@ export async function fetchChannelSnapshot(args: {
   console.info(`Fetching channel snapshot for ${args.channelPageUrl}`);
 
   let scraped: ScrapedChannel | null = null;
-  let feed: RssChannel;
+  let feed: RssChannel | null = null;
 
   if (args.rssUrl != null) {
     const [scrapeResult, rssResult] = await Promise.allSettled([
@@ -74,25 +83,104 @@ export async function fetchChannelSnapshot(args: {
       fetchRssFeed(args.rssUrl),
     ]);
 
-    if (rssResult.status !== 'fulfilled') {
-      throw rssResult.reason instanceof Error
-        ? rssResult.reason
-        : new Error(String(rssResult.reason));
-    }
-    feed = rssResult.value;
-
     if (scrapeResult.status === 'fulfilled') {
       scraped = scrapeResult.value;
     } else {
-      console.warn('[channelSnapshot] scrape failed, continuing RSS-only:', scrapeResult.reason);
+      console.warn('[channelSnapshot] scrape failed:', scrapeResult.reason);
+    }
+
+    if (rssResult.status === 'fulfilled') {
+      feed = rssResult.value;
+    } else {
+      console.warn('[channelSnapshot] RSS failed:', rssResult.reason);
+      feed = await tryTranscriptApiFallback(scraped, args.channelPageUrl);
     }
   } else {
     // Handle-based input — can't build RSS URL until we know the UC id.
     scraped = await scrapeChannel(args.channelPageUrl);
-    feed = await fetchRssFeed(buildRssUrl(scraped.channelId));
+    try {
+      feed = await fetchRssFeed(buildRssUrl(scraped.channelId));
+    } catch (err) {
+      console.warn('[channelSnapshot] RSS failed:', err);
+      feed = await tryTranscriptApiFallback(scraped, args.channelPageUrl);
+    }
   }
 
-  return mergeSnapshot(feed, scraped);
+  if (feed != null) {
+    return mergeSnapshot(feed, scraped);
+  }
+
+  // RSS and TranscriptAPI both unavailable — build from scrape data.
+  if (scraped == null) {
+    throw new Error('RSS, TranscriptAPI, and scrape all failed — cannot fetch channel data');
+  }
+  return buildSnapshotFromScrape(scraped);
+}
+
+/**
+ * Try TranscriptAPI as a fallback when RSS fails. Returns null if the
+ * fallback also fails, so the caller can continue to the next tier.
+ */
+async function tryTranscriptApiFallback(
+  scraped: ScrapedChannel | null,
+  channelPageUrl: string
+): Promise<RssChannel | null> {
+  const channelInput = scraped?.handle ?? scraped?.channelId ?? channelPageUrl;
+  try {
+    const feed = await fetchChannelLatestAsRss(channelInput);
+    console.info('[channelSnapshot] TranscriptAPI fallback succeeded');
+    return feed;
+  } catch (err) {
+    console.warn('[channelSnapshot] TranscriptAPI fallback failed:', err);
+    return null;
+  }
+}
+
+/**
+ * Fetch videos via TranscriptAPI and return them in the same shape as
+ * the YouTube RSS feed so `mergeSnapshot` can consume them unchanged.
+ */
+async function fetchChannelLatestAsRss(channelInput: string): Promise<RssChannel> {
+  const result = await fetchChannelLatest(channelInput);
+  return {
+    channelId: result.channel.channelId,
+    name: result.channel.title,
+    videos: result.videos.map((v) => ({
+      videoId: v.videoId,
+      title: v.title,
+      description: v.description,
+      publishedAt: v.publishedAt,
+      link: v.link,
+      thumbnailUrl: v.thumbnailUrl,
+    })),
+  };
+}
+
+/**
+ * Build a snapshot entirely from scrape data when RSS is unavailable.
+ * Shorts are filtered by duration (≤60s) instead of by link pattern.
+ * Exported for unit testing.
+ */
+export function buildSnapshotFromScrape(scraped: ScrapedChannel): ChannelSnapshot {
+  const videos: SnapshotVideo[] = scraped.videos
+    .filter((v) => v.durationSeconds == null || v.durationSeconds > SHORTS_DURATION_THRESHOLD)
+    .map((v) => ({
+      videoId: v.videoId,
+      title: v.title,
+      description: v.description,
+      publishedAt: v.publishedAt,
+      link: `https://www.youtube.com/watch?v=${v.videoId}`,
+      thumbnailUrl: buildThumbnailUrl(v.videoId),
+      durationSeconds: v.durationSeconds,
+    }));
+
+  return {
+    channelId: scraped.channelId,
+    name: scraped.name,
+    handle: scraped.handle,
+    logoUrl: scraped.logoUrl,
+    videos,
+  };
 }
 
 /**

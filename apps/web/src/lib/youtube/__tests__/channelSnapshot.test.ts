@@ -1,6 +1,6 @@
 import type { RssChannel, RssVideo } from '@/lib/youtube/channelRss';
-import type { ScrapedChannel } from '@/lib/youtube/channelScrape';
-import { mergeSnapshot } from '@/lib/youtube/channelSnapshot';
+import type { ScrapedChannel, ScrapedVideo } from '@/lib/youtube/channelScrape';
+import { buildSnapshotFromScrape, mergeSnapshot } from '@/lib/youtube/channelSnapshot';
 
 function rssVideo(overrides: Partial<RssVideo> & Pick<RssVideo, 'videoId'>): RssVideo {
   const { videoId } = overrides;
@@ -132,5 +132,62 @@ describe('mergeSnapshot', () => {
     expect(snap.videos[0]!.durationSeconds).toBeNull();
     // Thumbnail still populated via buildThumbnailUrl fallback.
     expect(snap.videos[0]!.thumbnailUrl).toBe('https://i.ytimg.com/vi/v1/hqdefault.jpg');
+  });
+});
+
+function scrapedVideo(
+  overrides: Partial<ScrapedVideo> & Pick<ScrapedVideo, 'videoId'>
+): ScrapedVideo {
+  const { videoId } = overrides;
+  return {
+    title: `Title ${videoId}`,
+    description: `Desc ${videoId}`,
+    publishedAt: new Date('2026-04-01T00:00:00Z'),
+    durationSeconds: 300,
+    ...overrides,
+  };
+}
+
+describe('buildSnapshotFromScrape', () => {
+  it('builds a snapshot from scrape data with correct links and thumbnails', () => {
+    const scraped = scrapedChannel({
+      handle: '@testchannel',
+      logoUrl: 'https://logo.example/pic.jpg',
+      videos: [scrapedVideo({ videoId: 'v1', durationSeconds: 600 })],
+    });
+
+    const snap = buildSnapshotFromScrape(scraped);
+
+    expect(snap.channelId).toBe('UC_abc');
+    expect(snap.handle).toBe('@testchannel');
+    expect(snap.logoUrl).toBe('https://logo.example/pic.jpg');
+    expect(snap.videos).toHaveLength(1);
+    expect(snap.videos[0]!.link).toBe('https://www.youtube.com/watch?v=v1');
+    expect(snap.videos[0]!.thumbnailUrl).toBe('https://i.ytimg.com/vi/v1/hqdefault.jpg');
+  });
+
+  it('filters Shorts by duration (≤60s)', () => {
+    const scraped = scrapedChannel({
+      videos: [
+        scrapedVideo({ videoId: 'v_long', durationSeconds: 300 }),
+        scrapedVideo({ videoId: 'v_short', durationSeconds: 45 }),
+        scrapedVideo({ videoId: 'v_edge', durationSeconds: 60 }),
+      ],
+    });
+
+    const snap = buildSnapshotFromScrape(scraped);
+
+    expect(snap.videos.map((v) => v.videoId)).toEqual(['v_long']);
+  });
+
+  it('keeps videos with null duration (unknown length)', () => {
+    const scraped = scrapedChannel({
+      videos: [scrapedVideo({ videoId: 'v1', durationSeconds: null })],
+    });
+
+    const snap = buildSnapshotFromScrape(scraped);
+
+    expect(snap.videos).toHaveLength(1);
+    expect(snap.videos[0]!.durationSeconds).toBeNull();
   });
 });

@@ -43,6 +43,13 @@ jest.mock('@/lib/youtube/channelScrape', () => ({
   scrapeChannel: (url: string) => mockScrapeChannel(url),
 }));
 
+const mockFetchChannelLatest = jest.fn();
+
+jest.mock('@/lib/youtube/transcriptApi', () => ({
+  ...jest.requireActual('@/lib/youtube/transcriptApi'),
+  fetchChannelLatest: (input: string) => mockFetchChannelLatest(input),
+}));
+
 // ─── Helpers ─────────────────────────────────────────────────────
 
 function daysAgo(n: number): Date {
@@ -113,6 +120,9 @@ function makeRssFeed(
 beforeEach(async () => {
   mockFetchRssFeed.mockReset();
   mockScrapeChannel.mockReset();
+  mockFetchChannelLatest.mockReset();
+  // Default: TranscriptAPI is unavailable (no API key in test env)
+  mockFetchChannelLatest.mockRejectedValue(new Error('TRANSCRIPT_API_KEY is not set'));
   // Default: scrape returns no extra data (logo/duration tests override this)
   mockScrapeChannel.mockResolvedValue({
     channelId: 'UC_default',
@@ -683,6 +693,15 @@ describe('refreshChannelsWorkflow', () => {
         },
       ])
     );
+
+    // Scrape must also fail for ch1 so all fallbacks are exhausted
+    mockScrapeChannel.mockRejectedValueOnce(new Error('YouTube blocked')).mockResolvedValueOnce({
+      channelId: 'UC_ok',
+      name: 'OK',
+      logoUrl: null,
+      handle: null,
+      videos: [],
+    });
 
     const result = await refreshChannelsWorkflow();
 

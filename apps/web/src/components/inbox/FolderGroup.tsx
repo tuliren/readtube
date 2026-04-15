@@ -81,7 +81,7 @@ export default function FolderGroup({
         <button
           type="button"
           onClick={onToggle}
-          className={`${sidebarRowClass(false)} flex-1 text-left`}
+          className={`${sidebarRowClass(false)} min-w-0 flex-1 text-left`}
         >
           {isCollapsed ? (
             <ChevronRight className="-ml-1 h-3.5 w-3.5 shrink-0" />
