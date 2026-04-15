@@ -50,9 +50,8 @@ interface Props {
  * table-backed views.
  *
  * Clicking a view does a full navigation to `/inbox?<key>=1` so the bucket
- * is a clean slate. FilterBar chips at the top of the list provide the
- * "narrow within current context" behavior; these sidebar rows are the
- * "jump to a bucket from anywhere" behavior.
+ * is a clean slate — these sidebar rows are the "jump to a bucket from
+ * anywhere" entry points.
  */
 export default function ViewsSection({ inboxUnread }: Props) {
   const { query } = useInboxQuery();
