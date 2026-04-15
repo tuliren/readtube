@@ -99,9 +99,13 @@ export default function InboxHeader({
       <div className="flex h-12 items-center justify-center gap-2 overflow-hidden px-4 sm:justify-start">
         <div className="flex min-w-0 items-center gap-2">
           {channelLogoUrl != null && (
-            <ChannelAvatar url={channelLogoUrl} size={40} cssSize="h-6 w-6" />
+            <div className="hidden sm:block">
+              <ChannelAvatar url={channelLogoUrl} size={40} cssSize="h-6 w-6" />
+            </div>
           )}
-          <h1 className="min-w-0 truncate text-sm font-semibold text-gray-900">{channelName}</h1>
+          <h1 className="hidden min-w-0 truncate text-sm font-semibold text-gray-900 sm:block">
+            {channelName}
+          </h1>
           {unreadCount > 0 && (
             <span className="shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-700">
               {unreadCount}

@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 
 import AddChannelModal from '@/components/inbox/AddChannelModal';
+import ChannelAvatar from '@/components/inbox/ChannelAvatar';
 import ChannelSection from '@/components/inbox/ChannelSection';
 import { CommandPaletteProvider } from '@/components/inbox/CommandPalette';
 import { KeyboardShortcutsProvider } from '@/components/inbox/KeyboardShortcutsProvider';
@@ -78,6 +79,8 @@ function DashboardShellInner({ initialChannels, children }: Props) {
   );
 
   const selectedChannelId = useSelectedChannelId(channels);
+  const selectedChannel =
+    selectedChannelId != null ? (channels.find((c) => c.id === selectedChannelId) ?? null) : null;
 
   // Auto-uncollapse: when the current URL points at a descendant of a
   // collapsed entry, clear that collapse flag so the active item
@@ -164,17 +167,26 @@ function DashboardShellInner({ initialChannels, children }: Props) {
         {/* Main content */}
         <div className="flex min-w-0 flex-1 flex-col">
           {isMobile && (
-            <div className="flex h-14 shrink-0 items-center gap-3 border-b border-gray-200 px-4">
+            <div className="flex h-14 shrink-0 items-center gap-2 border-b border-gray-200 px-4">
               <button
                 type="button"
                 onClick={() => setMobileOpen(true)}
-                className="rounded p-1.5 text-gray-500 hover:bg-gray-100"
+                className="shrink-0 rounded p-1.5 text-gray-500 hover:bg-gray-100"
                 aria-label="Open sidebar"
               >
                 <Menu className="h-5 w-5" />
               </button>
-              <span className="text-base font-bold text-gray-900">ReadTube</span>
-              <div className="ml-auto">
+              {selectedChannel != null && (
+                <div className="flex min-w-0 flex-1 items-center gap-2">
+                  {selectedChannel.logoUrl != null && (
+                    <ChannelAvatar url={selectedChannel.logoUrl} size={40} cssSize="h-6 w-6" />
+                  )}
+                  <span className="truncate text-base font-semibold text-gray-900">
+                    {selectedChannel.name}
+                  </span>
+                </div>
+              )}
+              <div className="ml-auto shrink-0">
                 <UserButton />
               </div>
             </div>
