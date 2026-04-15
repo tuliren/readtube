@@ -93,8 +93,15 @@ function DashboardShellInner({ initialChannels, children }: Props) {
 
   const { width, collapsed, mobileOpen, isMobile, toggleCollapsed, setMobileOpen } = useSidebar();
 
-  const sidebarContent = (
-    <div className="flex flex-1 flex-col overflow-y-auto pb-6">
+  // Collapsed desktop sidebar keeps scrolling but hides the bar —
+  // a visible scrollbar inside a 56px rail looks noisy. The sheet
+  // and expanded sidebar keep their default scrollbars.
+  const renderSidebarContent = (hideScrollbar: boolean) => (
+    <div
+      className={`flex flex-1 flex-col overflow-y-auto pb-6 ${
+        hideScrollbar ? '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden' : ''
+      }`}
+    >
       <ChannelSection
         channels={channels}
         selectedChannelId={selectedChannelId}
@@ -120,7 +127,7 @@ function DashboardShellInner({ initialChannels, children }: Props) {
                 <div className="flex h-14 shrink-0 items-center border-b border-gray-200 px-5">
                   <SheetTitle className="text-base font-bold text-gray-900">ReadTube</SheetTitle>
                 </div>
-                {sidebarContent}
+                {renderSidebarContent(false)}
               </SidebarExpandedOverride>
             </SheetContent>
           </Sheet>
@@ -162,7 +169,7 @@ function DashboardShellInner({ initialChannels, children }: Props) {
               )}
             </div>
 
-            {sidebarContent}
+            {renderSidebarContent(collapsed)}
             {!collapsed && <SidebarResizeHandle />}
           </aside>
         )}
