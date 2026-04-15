@@ -96,7 +96,7 @@ export default function InboxHeader({
       {/* Title row — action buttons sit next to the title/badge,
           search stays on the right edge. This keeps the actions
           contextually close to the thing they act on. */}
-      <div className="flex h-12 items-center justify-center gap-2 overflow-hidden px-4 sm:justify-start">
+      <div className="hidden h-12 items-center justify-start gap-2 overflow-hidden px-4 sm:flex">
         <div className="flex min-w-0 items-center gap-2">
           {channelLogoUrl != null && (
             <div className="hidden sm:block">
