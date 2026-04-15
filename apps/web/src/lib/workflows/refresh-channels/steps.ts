@@ -14,10 +14,13 @@ export const BATCH_SIZE = 10;
 const RATE_LIMIT_DELAY_MS = 250;
 
 /**
- * Videos at or under this duration are treated as YouTube Shorts and
- * skipped during ingest. YouTube's own definition of a Short is ≤60s.
+ * YouTube's channel RSS uses `https://www.youtube.com/shorts/<id>` for
+ * Shorts and `https://www.youtube.com/watch?v=<id>` for regular videos.
+ * The `/shorts/` path segment is the canonical signal — Shorts are a
+ * distinct content type on YouTube, not just a duration threshold, so
+ * matching the URL is more reliable than inferring from duration.
  */
-const SHORTS_MAX_DURATION_SECONDS = 60;
+const SHORTS_URL_PATTERN = /\/shorts\//;
 
 export interface StaleChannel {
   id: string;
@@ -62,32 +65,56 @@ export async function refreshChannel(channel: StaleChannel): Promise<RefreshResu
 
   const data = await fetchChannelLatest(channel.source_id);
 
-  const videoSourceIds = data.videos.map((v) => v.videoId);
-  const existingVideos = await prisma.video.findMany({
-    where: { channel_id: channel.id, source_id: { in: videoSourceIds } },
-    select: { source_id: true, duration_seconds: true },
+  // Drop Shorts up-front — YouTube's RSS marks them with a `/shorts/`
+  // URL path, which is the canonical signal for this content type.
+  const ingestableVideos = data.videos.filter((video) => {
+    if (isShort(video)) {
+      console.log(
+        `[refresh-channels] skipping Short ${video.videoId} (${video.link}) for channel ${channel.id}`
+      );
+      return false;
+    }
+    return true;
   });
+
+  const videoSourceIds = ingestableVideos.map((v) => v.videoId);
+  const existingVideos =
+    videoSourceIds.length === 0
+      ? []
+      : await prisma.video.findMany({
+          where: { channel_id: channel.id, source_id: { in: videoSourceIds } },
+          select: { source_id: true, duration_seconds: true },
+        });
+  const videosMissingDuration = new Set(
+    existingVideos.filter((v) => v.duration_seconds == null).map((v) => v.source_id)
+  );
+  // Videos not yet in the DB also need duration
   const existingSourceIds = new Set(existingVideos.map((v) => v.source_id));
+  for (const v of ingestableVideos) {
+    if (!existingSourceIds.has(v.videoId)) {
+      videosMissingDuration.add(v.videoId);
+    }
+  }
+
+  const needsDuration = videosMissingDuration.size > 0;
 
   // Best-effort scrape for logo_url, handle, and duration_seconds —
   // fields the TranscriptAPI RSS endpoint doesn't provide. Always
-  // scrape to keep logo_url / handle fresh and to detect Shorts (which
-  // are excluded from the regular `videoRenderer` shelf).
+  // scrape to keep logo_url / handle fresh; only collect durations for
+  // videos that lack them.
   let logoUrl: string | null = null;
   let handle: string | null = null;
-  let scrapeSucceeded = false;
   const durationMap = new Map<string, number>();
-  const scrapedVideoIds = new Set<string>();
   try {
     const channelPageUrl = `https://www.youtube.com/channel/${channel.source_id}`;
     const scraped = await scrapeChannel(channelPageUrl);
-    scrapeSucceeded = true;
     logoUrl = scraped.logoUrl;
     handle = scraped.handle;
-    for (const v of scraped.videos) {
-      scrapedVideoIds.add(v.videoId);
-      if (v.durationSeconds != null) {
-        durationMap.set(v.videoId, v.durationSeconds);
+    if (needsDuration) {
+      for (const v of scraped.videos) {
+        if (v.durationSeconds != null && videosMissingDuration.has(v.videoId)) {
+          durationMap.set(v.videoId, v.durationSeconds);
+        }
       }
     }
   } catch (err) {
@@ -99,19 +126,8 @@ export async function refreshChannel(channel: StaleChannel): Promise<RefreshResu
 
   const nameUpdated = data.channel.title !== channel.name;
 
-  let videosProcessed = 0;
-  for (const video of data.videos) {
+  for (const video of ingestableVideos) {
     const durationSeconds = durationMap.get(video.videoId) ?? null;
-    const isExisting = existingSourceIds.has(video.videoId);
-
-    if (!isExisting && isShort({ durationSeconds, scrapeSucceeded, scrapedVideoIds, video })) {
-      console.log(
-        `[refresh-channels] skipping Short ${video.videoId} (duration=${durationSeconds ?? 'unknown'}) for channel ${channel.id}`
-      );
-      continue;
-    }
-
-    videosProcessed++;
     await prisma.video.upsert({
       where: {
         video_unique_channel_source: {
@@ -149,31 +165,16 @@ export async function refreshChannel(channel: StaleChannel): Promise<RefreshResu
 
   return {
     channelId: channel.id,
-    videosProcessed,
+    videosProcessed: ingestableVideos.length,
     nameUpdated,
   };
 }
 
 /**
- * A video is treated as a Short if either:
- *   1. We know its duration from the channel page scrape and it's ≤60s, or
- *   2. The scrape succeeded but the video wasn't in the regular videos
- *      shelf — Shorts live in a separate shelf with no `lengthText`,
- *      so their absence is the strongest signal we have when duration
- *      is unknown.
- *
- * If the scrape failed entirely, we err on the side of storing the
- * video — better to ingest a Short than to silently drop a real one.
+ * A video is a YouTube Short when its RSS entry link points at the
+ * `/shorts/` path rather than `/watch`. This is how YouTube's own
+ * channel RSS distinguishes the two formats.
  */
-function isShort(args: {
-  durationSeconds: number | null;
-  scrapeSucceeded: boolean;
-  scrapedVideoIds: Set<string>;
-  video: { videoId: string };
-}): boolean {
-  const { durationSeconds, scrapeSucceeded, scrapedVideoIds, video } = args;
-  if (durationSeconds != null) {
-    return durationSeconds <= SHORTS_MAX_DURATION_SECONDS;
-  }
-  return scrapeSucceeded && !scrapedVideoIds.has(video.videoId);
+function isShort(video: { link: string }): boolean {
+  return SHORTS_URL_PATTERN.test(video.link);
 }

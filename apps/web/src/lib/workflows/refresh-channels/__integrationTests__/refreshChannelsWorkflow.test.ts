@@ -65,7 +65,13 @@ async function createChannel(opts: { sourceId: string; name: string; checkedAt?:
 
 function makeApiResponse(
   channelTitle: string,
-  videos: Array<{ videoId: string; title: string; published: string; description: string }>
+  videos: Array<{
+    videoId: string;
+    title: string;
+    published: string;
+    description: string;
+    isShort?: boolean;
+  }>
 ): { channel: ChannelMeta; videos: ChannelVideoMeta[] } {
   return {
     channel: { channelId: 'UC_test', title: channelTitle },
@@ -75,6 +81,10 @@ function makeApiResponse(
       description: v.description,
       publishedAt: new Date(v.published),
       thumbnailUrl: `https://i.ytimg.com/vi/${v.videoId}/hqdefault.jpg`,
+      link:
+        v.isShort === true
+          ? `https://www.youtube.com/shorts/${v.videoId}`
+          : `https://www.youtube.com/watch?v=${v.videoId}`,
     })),
   };
 }
@@ -427,10 +437,7 @@ describe('refreshChannel', () => {
 });
 
 describe('refreshChannel — Shorts filtering', () => {
-  it.each([
-    { duration: 30, label: 'duration well under 60s' },
-    { duration: 60, label: 'duration exactly 60s' },
-  ])('skips new videos with $label', async ({ duration }) => {
+  it('skips videos whose RSS link uses the /shorts/ path', async () => {
     const ch = await createChannel({ sourceId: 'UC_short', name: 'Short Ch' });
     mockFetchChannelLatest.mockResolvedValueOnce(
       makeApiResponse('Short Ch', [
@@ -439,36 +446,8 @@ describe('refreshChannel — Shorts filtering', () => {
           title: 'A Short',
           published: '2026-03-01T00:00:00Z',
           description: '',
+          isShort: true,
         },
-      ])
-    );
-    mockScrapeChannel.mockResolvedValueOnce({
-      channelId: 'UC_short',
-      name: 'Short Ch',
-      logoUrl: null,
-      handle: null,
-      videos: [
-        {
-          videoId: 'vid_short',
-          title: 'A Short',
-          description: '',
-          publishedAt: new Date('2026-03-01T00:00:00Z'),
-          durationSeconds: duration,
-        },
-      ],
-    });
-
-    const result = await refreshChannel({ id: ch.id, source_id: ch.source_id, name: ch.name });
-
-    expect(result.videosProcessed).toBe(0);
-    const stored = await global.testPrisma.video.findMany({ where: { channel_id: ch.id } });
-    expect(stored).toHaveLength(0);
-  });
-
-  it('stores videos with duration > 60s', async () => {
-    const ch = await createChannel({ sourceId: 'UC_long', name: 'Long Ch' });
-    mockFetchChannelLatest.mockResolvedValueOnce(
-      makeApiResponse('Long Ch', [
         {
           videoId: 'vid_long',
           title: 'A Real Video',
@@ -477,18 +456,40 @@ describe('refreshChannel — Shorts filtering', () => {
         },
       ])
     );
+
+    const result = await refreshChannel({ id: ch.id, source_id: ch.source_id, name: ch.name });
+
+    expect(result.videosProcessed).toBe(1);
+    const stored = await global.testPrisma.video.findMany({ where: { channel_id: ch.id } });
+    expect(stored.map((v) => v.source_id)).toEqual(['vid_long']);
+  });
+
+  it('ignores short-duration videos that are not marked as Shorts in the RSS link', async () => {
+    // A regular video under 60 seconds (e.g. a teaser) should still be
+    // stored — the duration threshold is not the filter signal.
+    const ch = await createChannel({ sourceId: 'UC_teaser', name: 'Teaser Ch' });
+    mockFetchChannelLatest.mockResolvedValueOnce(
+      makeApiResponse('Teaser Ch', [
+        {
+          videoId: 'vid_teaser',
+          title: 'Short teaser, not a Short',
+          published: '2026-03-01T00:00:00Z',
+          description: '',
+        },
+      ])
+    );
     mockScrapeChannel.mockResolvedValueOnce({
-      channelId: 'UC_long',
-      name: 'Long Ch',
+      channelId: 'UC_teaser',
+      name: 'Teaser Ch',
       logoUrl: null,
       handle: null,
       videos: [
         {
-          videoId: 'vid_long',
-          title: 'A Real Video',
+          videoId: 'vid_teaser',
+          title: 'Short teaser, not a Short',
           description: '',
           publishedAt: new Date('2026-03-01T00:00:00Z'),
-          durationSeconds: 61,
+          durationSeconds: 45,
         },
       ],
     });
@@ -496,73 +497,9 @@ describe('refreshChannel — Shorts filtering', () => {
     const result = await refreshChannel({ id: ch.id, source_id: ch.source_id, name: ch.name });
 
     expect(result.videosProcessed).toBe(1);
-    const stored = await global.testPrisma.video.findMany({ where: { channel_id: ch.id } });
-    expect(stored).toHaveLength(1);
-  });
-
-  it('skips new videos absent from the scraped /videos shelf when scrape succeeds', async () => {
-    // Shorts live in a separate shelf with no `lengthText`, so the
-    // scraper omits them entirely. Use that absence as the signal.
-    const ch = await createChannel({ sourceId: 'UC_shelf', name: 'Shelf Ch' });
-    mockFetchChannelLatest.mockResolvedValueOnce(
-      makeApiResponse('Shelf Ch', [
-        {
-          videoId: 'vid_short_unscraped',
-          title: 'Likely Short',
-          published: '2026-03-01T00:00:00Z',
-          description: '',
-        },
-        {
-          videoId: 'vid_real',
-          title: 'Real Video',
-          published: '2026-03-01T00:00:00Z',
-          description: '',
-        },
-      ])
-    );
-    mockScrapeChannel.mockResolvedValueOnce({
-      channelId: 'UC_shelf',
-      name: 'Shelf Ch',
-      logoUrl: null,
-      handle: null,
-      videos: [
-        {
-          videoId: 'vid_real',
-          title: 'Real Video',
-          description: '',
-          publishedAt: new Date('2026-03-01T00:00:00Z'),
-          durationSeconds: 600,
-        },
-      ],
-    });
-
-    const result = await refreshChannel({ id: ch.id, source_id: ch.source_id, name: ch.name });
-
-    expect(result.videosProcessed).toBe(1);
-    const stored = await global.testPrisma.video.findMany({ where: { channel_id: ch.id } });
-    expect(stored.map((v) => v.source_id)).toEqual(['vid_real']);
-  });
-
-  it('stores videos with unknown duration when scrape fails (avoids false positives)', async () => {
-    const ch = await createChannel({ sourceId: 'UC_unknown', name: 'Unknown Ch' });
-    mockFetchChannelLatest.mockResolvedValueOnce(
-      makeApiResponse('Unknown Ch', [
-        {
-          videoId: 'vid_unknown',
-          title: 'Unknown Duration',
-          published: '2026-03-01T00:00:00Z',
-          description: '',
-        },
-      ])
-    );
-    mockScrapeChannel.mockRejectedValueOnce(new Error('YouTube blocked'));
-
-    const result = await refreshChannel({ id: ch.id, source_id: ch.source_id, name: ch.name });
-
-    expect(result.videosProcessed).toBe(1);
-    const stored = await global.testPrisma.video.findMany({ where: { channel_id: ch.id } });
-    expect(stored).toHaveLength(1);
-    expect(stored[0]!.duration_seconds).toBeNull();
+    const stored = await global.testPrisma.video.findFirst({ where: { channel_id: ch.id } });
+    expect(stored!.source_id).toBe('vid_teaser');
+    expect(stored!.duration_seconds).toBe(45);
   });
 
   it('does not delete existing Shorts already in the database', async () => {
@@ -585,32 +522,19 @@ describe('refreshChannel — Shorts filtering', () => {
           title: 'Old Short Updated',
           published: '2026-01-01T00:00:00Z',
           description: 'Updated',
+          isShort: true,
         },
       ])
     );
-    mockScrapeChannel.mockResolvedValueOnce({
-      channelId: 'UC_existing_short',
-      name: 'Existing',
-      logoUrl: null,
-      handle: null,
-      videos: [
-        {
-          videoId: 'vid_existing_short',
-          title: 'Old Short Updated',
-          description: '',
-          publishedAt: new Date('2026-01-01T00:00:00Z'),
-          durationSeconds: 30,
-        },
-      ],
-    });
 
     const result = await refreshChannel({ id: ch.id, source_id: ch.source_id, name: ch.name });
 
-    expect(result.videosProcessed).toBe(1);
+    // Filtered out of ingest — no upsert ran, stored row unchanged.
+    expect(result.videosProcessed).toBe(0);
     const stored = await global.testPrisma.video.findFirst({
       where: { channel_id: ch.id, source_id: 'vid_existing_short' },
     });
-    expect(stored!.title).toBe('Old Short Updated');
+    expect(stored!.title).toBe('Old Short');
   });
 });
 

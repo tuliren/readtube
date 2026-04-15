@@ -81,6 +81,7 @@ describe('fetchChannelLatest', () => {
       description: 'A description',
       publishedAt: new Date('2026-01-15T12:00:00Z'),
       thumbnailUrl: 'https://i.ytimg.com/vi/vid_1/hqdefault.jpg',
+      link: 'https://youtube.com/watch?v=vid_1',
     });
     // null description maps to empty string
     expect(result.videos[1]!.description).toBe('');

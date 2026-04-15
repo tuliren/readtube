@@ -67,6 +67,13 @@ export interface ChannelVideoMeta {
   description: string;
   publishedAt: Date;
   thumbnailUrl: string | null;
+  /**
+   * The original entry link from YouTube's RSS feed. Shorts use
+   * `https://www.youtube.com/shorts/<id>` while regular videos use
+   * `https://www.youtube.com/watch?v=<id>` — this is the canonical
+   * signal for distinguishing the two formats.
+   */
+  link: string;
 }
 
 // ── Functions ──────────────────────────────────────────────────────
@@ -108,6 +115,7 @@ export async function fetchChannelLatest(
     description: v.description ?? '',
     publishedAt: new Date(v.published),
     thumbnailUrl: v.thumbnail?.url || null,
+    link: v.link,
   }));
 
   return {
