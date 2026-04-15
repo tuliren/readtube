@@ -13,13 +13,12 @@ interface Props {
 
 /**
  * Authenticated video reader. Auth is enforced centrally by
- * `proxy.ts`, which protects every non-public route. Authenticated
- * users who aren't subscribed to the channel are redirected to the
- * public mirror at `/p/videos/[sourceId]` — they can still read the
- * video, they just don't get subscription-scoped UI.
+ * `proxy.ts`, which protects every non-public route. The dashboard
+ * layout owns the sidebar, so this page just renders the reader.
  *
- * The dashboard layout owns the sidebar, so this page is just the
- * reader — no sidebar-scope prefetch is needed.
+ * Access control: the `findFirst` below joins through
+ * `channel.subscriptions` so a logged-in user who isn't subscribed
+ * to the channel gets a 404 (IDOR guard).
  */
 export default async function VideoPage({ params }: Props) {
   const { videoId } = await params;
@@ -33,14 +32,6 @@ export default async function VideoPage({ params }: Props) {
   const stub = await resolveVideoSourceId(prisma, videoId);
   if (stub == null) {
     notFound();
-  }
-
-  const subscribed = await prisma.userSubscription.findFirst({
-    where: { user_id: userId, channel_id: stub.channel_id },
-    select: { id: true },
-  });
-  if (subscribed == null) {
-    redirect(`/p/videos/${encodeURIComponent(stub.source_id)}`);
   }
 
   const video = await prisma.video.findFirst({
