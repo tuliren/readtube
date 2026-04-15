@@ -50,8 +50,18 @@ export default function VideoReader({ video, publicMode = false }: Props) {
   // back to plain `/inbox` on deep links. The param name is
   // intentionally NOT `from` because that collides with
   // InboxQuery.from (date range).
+  //
+  // Reject anything that isn't a same-origin path — the value is
+  // attacker-controllable via the URL, and <Link> happily navigates
+  // to `https://evil.com` or a protocol-relative `//evil.com`. The
+  // allowlist is "starts with `/` AND the second char isn't `/`".
   const returnToParam = searchParams.get('returnTo');
-  const backHref = returnToParam != null && returnToParam.length > 0 ? returnToParam : '/inbox';
+  const isSafeReturnTo =
+    returnToParam != null &&
+    returnToParam.length > 0 &&
+    returnToParam.startsWith('/') &&
+    !returnToParam.startsWith('//');
+  const backHref = isSafeReturnTo ? returnToParam : '/inbox';
   const watchUrl = `https://youtube.com/watch?v=${video.sourceId}`;
 
   // Default to Summary because that's the cheapest scannable view —
@@ -216,8 +226,17 @@ export default function VideoReader({ video, publicMode = false }: Props) {
             {!publicMode && (hasSummary || hasArticle) && (
               <>
                 <span>·</span>
+                {/*
+                  The sharer is authenticated and subscribed, so opening
+                  the plain /videos/<id> route would show them their own
+                  authed reader rather than the stripped-down view a
+                  recipient sees. `?preview=1` forces the public render
+                  so the sharer can QA the shared experience; the param
+                  is harmless on the recipient's side (they see the
+                  public view either way).
+                */}
                 <Link
-                  href={videoHref(video)}
+                  href={`${videoHref(video)}?preview=1`}
                   target="_blank"
                   className="text-blue-500 hover:underline"
                 >

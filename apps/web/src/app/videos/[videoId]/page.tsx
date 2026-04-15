@@ -6,6 +6,7 @@ import Footer from '@/components/Footer';
 import Header from '@/components/Header';
 import InboxShell from '@/components/inbox/InboxShell';
 import VideoReader from '@/components/reader/VideoReader';
+import { resolveChannelSlug } from '@/lib/channels/resolveChannelSlug';
 import { ensureUserExists } from '@/lib/db/user';
 import { loadInboxVideos, searchParamsToInboxQuery } from '@/lib/inbox/loadVideos';
 import { decorateVideo, loadTriageContext } from '@/lib/inbox/triage';
@@ -21,6 +22,7 @@ interface Props {
 export default async function VideoPage({ params, searchParams }: Props) {
   const { videoId } = await params;
   const { userId } = await auth();
+  const resolvedSearchParams = await searchParams;
 
   // Resolve by platform source_id + source_type. source_id alone
   // isn't globally unique across platforms — see the
@@ -30,6 +32,12 @@ export default async function VideoPage({ params, searchParams }: Props) {
     notFound();
   }
 
+  // `?preview=1` forces the public render so a signed-in sharer can
+  // QA what a recipient sees. Always goes through the public branch.
+  if (resolvedSearchParams.preview === '1') {
+    return renderPublicReader(stub.id);
+  }
+
   if (userId != null) {
     await ensureUserExists(userId);
     const subscribed = await prisma.userSubscription.findFirst({
@@ -37,7 +45,7 @@ export default async function VideoPage({ params, searchParams }: Props) {
       select: { id: true },
     });
     if (subscribed != null) {
-      return renderAuthedReader(userId, stub.id, await searchParams);
+      return renderAuthedReader(userId, stub.id, resolvedSearchParams);
     }
   }
 
@@ -49,7 +57,18 @@ async function renderAuthedReader(
   videoDbId: string,
   rawSearchParams: Record<string, string | string[] | undefined>
 ) {
-  const query = searchParamsToInboxQuery(rawSearchParams);
+  const baseQuery = searchParamsToInboxQuery(rawSearchParams);
+  // When the reader was opened from `/channels/[slug]`, the channel
+  // scope lives in the returnTo path rather than the query string.
+  // Resolve it so the sidebar's video list stays narrowed to that
+  // channel while the user is reading. Falls through to the
+  // user's full inbox for `/inbox` or deep links.
+  const channelIdFromReturnTo = await resolveChannelIdFromReturnTo(
+    rawSearchParams.returnTo,
+    userId
+  );
+  const query =
+    channelIdFromReturnTo != null ? { ...baseQuery, channelId: channelIdFromReturnTo } : baseQuery;
 
   const video = await prisma.video.findFirst({
     where: { id: videoDbId, channel: { subscriptions: { some: { user_id: userId } } } },
@@ -129,6 +148,37 @@ async function renderAuthedReader(
       </InboxShell>
     </div>
   );
+}
+
+/**
+ * Extract the channel scope from a `returnTo` URL pointing at
+ * `/channels/[slug]`. Returns the DB channel id if the slug resolves
+ * AND the caller is subscribed (so we don't silently scope the
+ * sidebar to an unrelated channel because of a tampered query
+ * param). Returns null otherwise.
+ */
+async function resolveChannelIdFromReturnTo(
+  rawReturnTo: string | string[] | undefined,
+  userId: string
+): Promise<string | null> {
+  const returnTo = typeof rawReturnTo === 'string' ? rawReturnTo : null;
+  if (returnTo == null || !returnTo.startsWith('/channels/')) {
+    return null;
+  }
+  const afterPrefix = returnTo.slice('/channels/'.length);
+  const slug = afterPrefix.split(/[/?#]/)[0];
+  if (slug.length === 0) {
+    return null;
+  }
+  const channel = await resolveChannelSlug(prisma, slug);
+  if (channel == null) {
+    return null;
+  }
+  const subscribed = await prisma.userSubscription.findFirst({
+    where: { user_id: userId, channel_id: channel.id },
+    select: { id: true },
+  });
+  return subscribed != null ? channel.id : null;
 }
 
 async function renderPublicReader(videoDbId: string) {
