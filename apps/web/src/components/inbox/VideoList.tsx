@@ -1,6 +1,6 @@
 'use client';
 
-import { useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { VideoData } from '@/lib/types';
@@ -57,23 +57,28 @@ export default function VideoList({
   onOpenNotes,
 }: Props) {
   const searchParams = useSearchParams();
+  const pathname = usePathname();
 
-  // Build the "filter context" we want to forward into the reader as
-  // a single ?returnTo=<encoded-query> param so the reader's Back
-  // button can land back in the exact filtered list.
+  // Build the full path-and-query the reader's Back link should
+  // return to, forwarded as `?returnTo=<encoded-url>`.
   //
   // Two cases:
-  //   1. We're on `/inbox?starred=1` (or similar) — searchParams IS
-  //      the filter context, so use its toString().
-  //   2. We're already in the reader at `/inbox/<id>?returnTo=<inner>`
-  //      — forward the same `returnTo` value verbatim so navigating
-  //      between sibling videos doesn't lose the back-target.
-  const filterContext = (() => {
-    const returnToInUrl = searchParams.get('returnTo');
-    if (returnToInUrl != null) {
-      return returnToInUrl;
+  //   1. We're on a list page (`/inbox?starred=1`, `/channels/@mkbhd`)
+  //      — compose pathname + searchParams so the back link can
+  //      restore the exact list, whether the scope was in the path
+  //      or the query string.
+  //   2. We're already in the reader at `/videos/<id>?returnTo=<url>`
+  //      — forward that value verbatim so navigating between sibling
+  //      videos doesn't lose the back-target.
+  const returnTo = (() => {
+    const existing = searchParams.get('returnTo');
+    if (existing != null && existing.length > 0) {
+      return existing;
     }
-    return searchParams.toString();
+    const listParams = new URLSearchParams(searchParams);
+    listParams.delete('returnTo');
+    const qs = listParams.toString();
+    return qs.length > 0 ? `${pathname}?${qs}` : pathname;
   })();
 
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
@@ -185,10 +190,7 @@ export default function VideoList({
       <ul className="divide-y divide-gray-100">
         {videos.map((video) => {
           const isSelected = selectedVideoId === video.id;
-          const href =
-            filterContext.length > 0
-              ? `/videos/${encodeURIComponent(video.sourceId)}?returnTo=${encodeURIComponent(filterContext)}`
-              : `/videos/${encodeURIComponent(video.sourceId)}`;
+          const href = `/videos/${encodeURIComponent(video.sourceId)}?returnTo=${encodeURIComponent(returnTo)}`;
 
           return (
             <VideoRow

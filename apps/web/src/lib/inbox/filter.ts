@@ -146,22 +146,23 @@ export function isDefaultQuery(query: InboxQuery): boolean {
 export const RETURN_TO_PARAM = 'returnTo';
 
 /**
- * The reader navigates to `/inbox/<videoId>?returnTo=<encoded-inbox-query>`
- * so the Back link can restore the exact filtered list the user came
- * from. Both the SSR pages and the client-side hooks need to look at
- * the inner query for filtering, not the wrapper `returnTo` param.
+ * The reader navigates to `/videos/<sourceId>?returnTo=<encoded-path>`
+ * where `<encoded-path>` is a full path + query string — e.g.
+ * `/inbox?starred=1` or `/channels/%40mkbhd`. The Back link uses it
+ * verbatim; the inbox sidebar reads the query portion so its filter
+ * chips match the list the user came from.
  *
- * This helper takes the raw URLSearchParams and returns either:
- *   - the URLSearchParams parsed from the `returnTo` value, if present, or
+ * This helper returns a fresh URLSearchParams containing either:
+ *   - the query portion of the `returnTo` value, if present, or
  *   - a copy of the original with `returnTo` stripped out, otherwise.
- *
- * Always returns a fresh URLSearchParams so callers can mutate it
- * without aliasing the React searchParams instance.
  */
 export function extractInboxSearchParams(raw: URLSearchParams): URLSearchParams {
   const returnToValue = raw.get(RETURN_TO_PARAM);
   if (returnToValue != null && returnToValue.length > 0) {
-    return new URLSearchParams(returnToValue);
+    // returnTo is a full path+query. Extract just the query.
+    const queryIndex = returnToValue.indexOf('?');
+    const querySource = queryIndex >= 0 ? returnToValue.slice(queryIndex + 1) : '';
+    return new URLSearchParams(querySource);
   }
   const copy = new URLSearchParams(raw);
   copy.delete(RETURN_TO_PARAM);

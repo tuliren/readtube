@@ -44,16 +44,14 @@ function relativeDate(dateStr: string): string {
 
 export default function VideoReader({ video, publicMode = false }: Props) {
   const searchParams = useSearchParams();
-  // The reader URL is `/inbox/<id>?returnTo=<encoded-inbox-query>`. The
-  // `returnTo` value is the literal query string
-  // (channelId=abc&starred=1) that the user came from, so the Back
-  // link can re-mount the inbox with the exact same filter state.
-  // Falls back to plain `/inbox` when there's no `returnTo` (deep
-  // links, fresh sessions). The param name is intentionally NOT
-  // `from` because that collides with InboxQuery.from (date range).
+  // The reader URL is `/videos/<sourceId>?returnTo=<encoded-path>`.
+  // `returnTo` carries the full path + query of the list the user
+  // came from (e.g. `/inbox?starred=1` or `/channels/@mkbhd`). Falls
+  // back to plain `/inbox` on deep links. The param name is
+  // intentionally NOT `from` because that collides with
+  // InboxQuery.from (date range).
   const returnToParam = searchParams.get('returnTo');
-  const backHref =
-    returnToParam != null && returnToParam.length > 0 ? `/inbox?${returnToParam}` : '/inbox';
+  const backHref = returnToParam != null && returnToParam.length > 0 ? returnToParam : '/inbox';
   const watchUrl = `https://youtube.com/watch?v=${video.sourceId}`;
 
   // Default to Summary because that's the cheapest scannable view —
