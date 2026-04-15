@@ -262,7 +262,7 @@ export default function VideoRow({
         } ${inSelectionMode ? 'select-none' : ''}`}
       >
         <div
-          className={`pt-1 ${inSelectionMode || isChecked ? '' : 'hidden sm:block'}`}
+          className={`pt-1 ${inSelectionMode || isChecked ? '' : 'hidden lg:block'}`}
           onClick={(e) => {
             stop(e);
             onToggleChecked(video.id, !isChecked, e.shiftKey);

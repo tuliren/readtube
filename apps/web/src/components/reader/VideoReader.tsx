@@ -179,7 +179,7 @@ export default function VideoReader({ video, publicMode = false }: Props) {
               <ArrowLeftIcon className="h-4 w-4" />
               Back
             </Link>
-            <div className="flex items-center gap-0.5 sm:gap-2">
+            <div className="flex items-center gap-0.5 lg:gap-2">
               <Button
                 variant="ghost"
                 size="sm"
@@ -188,7 +188,7 @@ export default function VideoReader({ video, publicMode = false }: Props) {
                 title="Notes"
               >
                 <NotebookPen className="h-4 w-4" />
-                <span className="hidden sm:inline">Notes</span>
+                <span className="hidden lg:inline">Notes</span>
                 {noteCount > 0 && (
                   <span className="rounded-full bg-amber-100 px-1.5 text-[10px] font-semibold text-amber-700">
                     {noteCount}

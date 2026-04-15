@@ -96,14 +96,14 @@ export default function InboxHeader({
       {/* Title row — action buttons sit next to the title/badge,
           search stays on the right edge. This keeps the actions
           contextually close to the thing they act on. */}
-      <div className="hidden h-12 items-center justify-start gap-2 overflow-hidden px-4 sm:flex">
+      <div className="hidden h-12 items-center justify-start gap-2 overflow-hidden px-4 lg:flex">
         <div className="flex min-w-0 items-center gap-2">
           {channelLogoUrl != null && (
-            <div className="hidden sm:block">
+            <div className="hidden lg:block">
               <ChannelAvatar url={channelLogoUrl} size={40} cssSize="h-6 w-6" />
             </div>
           )}
-          <h1 className="hidden min-w-0 truncate text-sm font-semibold text-gray-900 sm:block">
+          <h1 className="hidden min-w-0 truncate text-sm font-semibold text-gray-900 lg:block">
             {channelName}
           </h1>
           {unreadCount > 0 && (
@@ -115,11 +115,11 @@ export default function InboxHeader({
             <button
               onClick={handleRefreshChannel}
               disabled={refreshing}
-              className="hidden shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50 disabled:hover:bg-transparent sm:inline-flex"
+              className="hidden shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50 disabled:hover:bg-transparent lg:inline-flex"
               title="Pull latest videos + metadata for this channel"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline">{refreshing ? 'Refreshing…' : 'Refresh'}</span>
+              <span className="hidden lg:inline">{refreshing ? 'Refreshing…' : 'Refresh'}</span>
             </button>
           )}
           {unreadCount > 0 && (
@@ -130,7 +130,7 @@ export default function InboxHeader({
               title="Mark all as read"
             >
               <CheckIcon className="h-4 w-4" />
-              <span className="hidden sm:inline">{marking ? 'Marking…' : 'Mark all as read'}</span>
+              <span className="hidden lg:inline">{marking ? 'Marking…' : 'Mark all as read'}</span>
             </button>
           )}
         </div>
@@ -139,7 +139,7 @@ export default function InboxHeader({
           header itself sits above the scrolling video list and never
           scrolls away, so the pagination control is always reachable
           while the user is reading rows. */}
-      <div className="flex items-center justify-between gap-2 px-4 py-2 sm:pt-0">
+      <div className="flex items-center justify-between gap-2 px-4 py-2 lg:pt-0">
         <FilterBar />
         <div className="flex items-center gap-2">
           <SearchInput />
