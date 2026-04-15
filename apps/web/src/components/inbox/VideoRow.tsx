@@ -86,10 +86,33 @@ interface Props {
   href: string;
   inSelectionMode: boolean;
   onOpenNotes: (videoId: string, videoTitle: string) => void;
+  /**
+   * Client-side `Date.now()` snapshot captured once after mount by the
+   * parent list. `null` during SSR and the first client render so we
+   * render a stable absolute date and avoid the "3m ago" vs "4m ago"
+   * hydration mismatch; the list swaps to relative strings a tick
+   * after hydration.
+   */
+  now: number | null;
 }
 
-function relativeTime(dateStr: string): string {
-  const now = Date.now();
+/**
+ * Locale-locked absolute date used for the SSR + first-client-render
+ * pass. Server and browser both format through the same `en-US`
+ * template so the rendered string is byte-identical.
+ */
+function absoluteDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+function relativeTime(dateStr: string, now: number | null): string {
+  if (now == null) {
+    return absoluteDate(dateStr);
+  }
   const then = new Date(dateStr).getTime();
   const diffMs = now - then;
   const diffSeconds = Math.floor(diffMs / 1000);
@@ -109,7 +132,7 @@ function relativeTime(dateStr: string): string {
   if (diffDays < 30) {
     return `${diffDays}d ago`;
   }
-  return new Date(dateStr).toLocaleDateString();
+  return absoluteDate(dateStr);
 }
 
 /**
@@ -134,6 +157,7 @@ export default function VideoRow({
   href,
   inSelectionMode,
   onOpenNotes,
+  now,
 }: Props) {
   const triage = useTriage();
   const { isMobile } = useSidebar();
@@ -179,7 +203,7 @@ export default function VideoRow({
         </p>
         <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-gray-400">
           <span>
-            {video.channelName} · {relativeTime(video.publishedAt)}
+            {video.channelName} · {relativeTime(video.publishedAt, now)}
             {(() => {
               const duration = formatDurationSeconds(video.durationSeconds);
               return duration != null ? ` · ${duration}` : null;

@@ -59,6 +59,16 @@ export default function VideoList({
   const searchParams = useSearchParams();
   const pathname = usePathname();
 
+  // Capture `Date.now()` once after mount so VideoRow's relative-time
+  // label is deterministic across the SSR pass and the first client
+  // render. Staying `null` during SSR + hydration lets VideoRow fall
+  // back to a locale-locked absolute date; the effect swaps to
+  // relative labels a tick after hydration.
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    setNow(Date.now());
+  }, []);
+
   // Build the full path-and-query the reader's Back link should
   // return to, forwarded as `?returnTo=<encoded-url>`.
   //
@@ -202,6 +212,7 @@ export default function VideoList({
               href={href}
               inSelectionMode={inSelectionMode}
               onOpenNotes={onOpenNotes}
+              now={now}
             />
           );
         })}
