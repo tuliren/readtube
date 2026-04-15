@@ -1,5 +1,6 @@
 import { type RssChannel, fetchRssFeed, isYouTubeShort } from '@/lib/youtube/channelRss';
 import { type ScrapedChannel, scrapeChannel } from '@/lib/youtube/channelScrape';
+import { fetchChannelLatest } from '@/lib/youtube/transcriptApi';
 import { buildRssUrl, buildThumbnailUrl } from '@/lib/youtube/urls';
 
 /** Duration threshold (seconds) for filtering Shorts when RSS is unavailable. */
@@ -102,11 +103,42 @@ export async function fetchChannelSnapshot(args: {
     return mergeSnapshot(feed, scraped);
   }
 
-  // RSS unavailable — build snapshot entirely from scrape data.
+  // RSS unavailable — try TranscriptAPI as a fallback. It returns the
+  // same data shape (video list with /shorts/ links for filtering).
+  const channelInput = scraped?.handle ?? scraped?.channelId ?? args.channelPageUrl;
+  try {
+    feed = await fetchChannelLatestAsRss(channelInput);
+    console.info('[channelSnapshot] TranscriptAPI fallback succeeded');
+    return mergeSnapshot(feed, scraped);
+  } catch (err) {
+    console.warn('[channelSnapshot] TranscriptAPI fallback failed:', err);
+  }
+
+  // Both RSS and TranscriptAPI unavailable — build from scrape data.
   if (scraped == null) {
-    throw new Error('Both RSS and scrape failed — cannot fetch channel data');
+    throw new Error('RSS, TranscriptAPI, and scrape all failed — cannot fetch channel data');
   }
   return buildSnapshotFromScrape(scraped);
+}
+
+/**
+ * Fetch videos via TranscriptAPI and return them in the same shape as
+ * the YouTube RSS feed so `mergeSnapshot` can consume them unchanged.
+ */
+async function fetchChannelLatestAsRss(channelInput: string): Promise<RssChannel> {
+  const result = await fetchChannelLatest(channelInput);
+  return {
+    channelId: result.channel.channelId,
+    name: result.channel.title,
+    videos: result.videos.map((v) => ({
+      videoId: v.videoId,
+      title: v.title,
+      description: v.description,
+      publishedAt: v.publishedAt,
+      link: v.link,
+      thumbnailUrl: v.thumbnailUrl,
+    })),
+  };
 }
 
 /**
