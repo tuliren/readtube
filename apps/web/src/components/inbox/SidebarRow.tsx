@@ -24,7 +24,7 @@
  */
 import type { LucideIcon } from 'lucide-react';
 
-const BASE_ROW_CLASS = 'flex items-center gap-2 rounded-md px-3 py-1.5 text-sm';
+const BASE_ROW_CLASS = 'flex min-w-0 items-center gap-2 rounded-md px-3 py-1.5 text-sm';
 const ACTIVE_ROW_CLASS = 'bg-blue-50 font-medium text-blue-700';
 const INACTIVE_ROW_CLASS = 'text-gray-700 hover:bg-gray-100';
 

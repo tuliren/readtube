@@ -33,7 +33,7 @@ export default function ChannelSection({
 }: Props) {
   return (
     <TooltipProvider delayDuration={300}>
-      <nav className="flex flex-col overflow-y-auto">
+      <nav className="flex min-w-0 flex-col overflow-x-hidden overflow-y-auto">
         <ViewsSection inboxUnread={totalUnread} />
         <FolderSection
           channels={channels}

@@ -62,7 +62,7 @@ export default function DraggableChannelLink({
           {...attributes}
           {...listeners}
           href={channelHref(channel)}
-          className={`${sidebarRowClass(isSelected)} flex-1 cursor-grab active:cursor-grabbing`}
+          className={`${sidebarRowClass(isSelected)} min-w-0 flex-1 cursor-grab active:cursor-grabbing`}
           title="Click to open · drag to move to a folder"
         >
           {channel.logoUrl != null && (
