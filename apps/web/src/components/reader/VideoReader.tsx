@@ -268,7 +268,7 @@ export default function VideoReader({ video, publicMode = false }: Props) {
               {video.description != null && (
                 <div className="min-w-0 flex-1">
                   <blockquote
-                    className={`border-l-2 border-gray-200 pl-4 text-sm leading-relaxed text-gray-500 italic ${
+                    className={`whitespace-pre-line border-l-2 border-gray-200 pl-4 text-sm leading-relaxed text-gray-500 italic ${
                       descriptionExpanded ? '' : 'line-clamp-4'
                     }`}
                   >
