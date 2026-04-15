@@ -11,10 +11,11 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { FolderPlus, Plus, Radio } from 'lucide-react';
+import { ChevronDown, ChevronRight, FolderPlus, Plus, Radio } from 'lucide-react';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 
+import { useCollapseState } from '@/components/dashboard/CollapseStateContext';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -57,7 +58,7 @@ interface Props {
 export default function FolderSection({ channels, selectedChannelId, onAddChannel }: Props) {
   const { collapsed: sidebarCollapsed } = useSidebar();
   const { folders, moveChannel } = useFolders();
-  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
+  const { channelsCollapsed, toggleChannels, isFolderCollapsed, toggleFolder } = useCollapseState();
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
@@ -80,18 +81,6 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
       activeChannelId != null ? (channels.find((c) => c.id === activeChannelId) ?? null) : null,
     [activeChannelId, channels]
   );
-
-  function toggleCollapsed(folderId: string) {
-    setCollapsedFolders((prev) => {
-      const copy = new Set(prev);
-      if (copy.has(folderId)) {
-        copy.delete(folderId);
-      } else {
-        copy.add(folderId);
-      }
-      return copy;
-    });
-  }
 
   function handleDragStart(event: DragStartEvent) {
     setActiveChannelId(event.active.id as string);
@@ -240,7 +229,20 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
         right rail as the per-row ⋯ menus on channels and folders.
       */}
       <div className="mb-1 mt-4 flex items-center justify-between px-3">
-        <p className="px-2 text-base font-semibold text-gray-900">Channels</p>
+        <button
+          type="button"
+          onClick={toggleChannels}
+          className="flex flex-1 items-center gap-1 px-2 text-left"
+          aria-expanded={!channelsCollapsed}
+          aria-label={channelsCollapsed ? 'Expand channels' : 'Collapse channels'}
+        >
+          {channelsCollapsed ? (
+            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-gray-500" />
+          ) : (
+            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-gray-500" />
+          )}
+          <span className="text-base font-semibold text-gray-900">Channels</span>
+        </button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
@@ -265,51 +267,55 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
         </DropdownMenu>
       </div>
 
-      {/* Root (unfoldered) channels */}
-      <RootDropZone>
-        {rootChannels.length === 0 ? (
-          <p className="px-3 py-1 text-xs text-gray-500">
-            Drop channels here to move channels out of folders
-          </p>
-        ) : (
-          <ul className="space-y-0.5">
-            {rootChannels.map((channel) => (
-              <DraggableChannelLink
-                key={channel.id}
-                channel={channel}
-                isSelected={selectedChannelId === channel.id}
+      {channelsCollapsed ? null : (
+        <>
+          {/* Root (unfoldered) channels */}
+          <RootDropZone>
+            {rootChannels.length === 0 ? (
+              <p className="px-3 py-1 text-xs text-gray-500">
+                Drop channels here to move channels out of folders
+              </p>
+            ) : (
+              <ul className="space-y-0.5">
+                {rootChannels.map((channel) => (
+                  <DraggableChannelLink
+                    key={channel.id}
+                    channel={channel}
+                    isSelected={selectedChannelId === channel.id}
+                    folders={folders}
+                    onMoveTo={moveTo}
+                    onRemove={setPendingRemoveChannel}
+                  />
+                ))}
+              </ul>
+            )}
+          </RootDropZone>
+
+          {/* Folders */}
+          {folders.map((folder) => {
+            const folderChannels = byFolder.get(folder.id) ?? [];
+            const folderUnread = folderChannels.reduce((sum, c) => sum + c.unreadCount, 0);
+            const isCollapsed = isFolderCollapsed(folder.id);
+
+            return (
+              <FolderGroup
+                key={folder.id}
+                folder={folder}
+                channels={folderChannels}
+                unread={folderUnread}
+                selectedChannelId={selectedChannelId}
+                isCollapsed={isCollapsed}
+                onToggle={() => toggleFolder(folder.id)}
+                onRename={() => setPendingRename({ id: folder.id, name: folder.name })}
+                onDelete={() => setPendingDelete({ id: folder.id, name: folder.name })}
                 folders={folders}
                 onMoveTo={moveTo}
-                onRemove={setPendingRemoveChannel}
+                onRemoveChannel={setPendingRemoveChannel}
               />
-            ))}
-          </ul>
-        )}
-      </RootDropZone>
-
-      {/* Folders */}
-      {folders.map((folder) => {
-        const folderChannels = byFolder.get(folder.id) ?? [];
-        const folderUnread = folderChannels.reduce((sum, c) => sum + c.unreadCount, 0);
-        const isCollapsed = collapsedFolders.has(folder.id);
-
-        return (
-          <FolderGroup
-            key={folder.id}
-            folder={folder}
-            channels={folderChannels}
-            unread={folderUnread}
-            selectedChannelId={selectedChannelId}
-            isCollapsed={isCollapsed}
-            onToggle={() => toggleCollapsed(folder.id)}
-            onRename={() => setPendingRename({ id: folder.id, name: folder.name })}
-            onDelete={() => setPendingDelete({ id: folder.id, name: folder.name })}
-            folders={folders}
-            onMoveTo={moveTo}
-            onRemoveChannel={setPendingRemoveChannel}
-          />
-        );
-      })}
+            );
+          })}
+        </>
+      )}
 
       <NewFolderDialog open={newFolderOpen} onOpenChange={setNewFolderOpen} />
       <RenameFolderDialog target={pendingRename} onClose={() => setPendingRename(null)} />
