@@ -1,6 +1,7 @@
 'use client';
 
 import { UserButton } from '@clerk/nextjs';
+import { CheckIcon } from '@heroicons/react/24/outline';
 import { Menu, PanelLeft, RefreshCw } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
@@ -172,6 +173,7 @@ function DashboardShellInner({ initialChannels, children }: Props) {
             <MobileTopBar
               onOpenSidebar={() => setMobileOpen(true)}
               selectedChannel={selectedChannel}
+              totalUnread={totalUnread}
             />
           )}
           {children}
@@ -191,14 +193,19 @@ function DashboardShellInner({ initialChannels, children }: Props) {
 function MobileTopBar({
   onOpenSidebar,
   selectedChannel,
+  totalUnread,
 }: {
   onOpenSidebar: () => void;
   selectedChannel: ChannelData | null;
+  totalUnread: number;
 }) {
   const { mutate } = useSWRConfig();
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
+  const [marking, setMarking] = useState(false);
   const showRefresh = !isProduction() && selectedChannel != null;
+  const unreadCount = selectedChannel != null ? selectedChannel.unreadCount : totalUnread;
+  const showMarkAll = unreadCount > 0;
 
   async function handleRefreshChannel() {
     if (selectedChannel == null || refreshing) {
@@ -221,6 +228,29 @@ function MobileTopBar({
       router.refresh();
     } finally {
       setRefreshing(false);
+    }
+  }
+
+  async function handleMarkAllRead() {
+    if (marking) {
+      return;
+    }
+    setMarking(true);
+    try {
+      const res = await fetch('/api/videos/mark-all-read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(selectedChannel != null ? { channelId: selectedChannel.id } : {}),
+      });
+      if (!res.ok) {
+        return;
+      }
+      await Promise.all([
+        mutate('/api/channels'),
+        mutate((key) => typeof key === 'string' && key.startsWith('/api/videos')),
+      ]);
+    } finally {
+      setMarking(false);
     }
   }
 
@@ -256,7 +286,19 @@ function MobileTopBar({
           )}
         </div>
       )}
-      <div className="ml-auto shrink-0">
+      <div className="ml-auto flex shrink-0 items-center gap-1">
+        {showMarkAll && (
+          <button
+            type="button"
+            onClick={handleMarkAllRead}
+            disabled={marking}
+            className="rounded p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50 disabled:hover:bg-transparent"
+            aria-label="Mark all as read"
+            title="Mark all as read"
+          >
+            <CheckIcon className="h-5 w-5" />
+          </button>
+        )}
         <UserButton />
       </div>
     </div>
