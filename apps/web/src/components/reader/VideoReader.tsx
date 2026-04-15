@@ -10,6 +10,7 @@ import useSWR from 'swr';
 import { Button } from '@/components/ui/button';
 import { formatDurationSeconds } from '@/lib/format/duration';
 import type { VideoData } from '@/lib/types';
+import { videoHref } from '@/lib/urls/videoHref';
 
 import ArticleReader from './ArticleReader';
 import NotesPanel from './NotesPanel';
@@ -218,7 +219,7 @@ export default function VideoReader({ video, publicMode = false }: Props) {
               <>
                 <span>·</span>
                 <Link
-                  href={`/public/${encodeURIComponent(video.channelHandle ?? video.channelSourceId)}/${video.sourceId}`}
+                  href={videoHref(video)}
                   target="_blank"
                   className="text-blue-500 hover:underline"
                 >

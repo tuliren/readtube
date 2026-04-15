@@ -8,6 +8,7 @@ import { headerSafeJson } from '@/lib/http/headerSafeJson';
 
 interface RetrievedChunk {
   video_id: string;
+  video_source_id: string;
   title: string;
   channel_name: string;
   summary: string | null;
@@ -57,6 +58,7 @@ export async function POST(request: NextRequest) {
   // can't ask questions against another user's history.
   interface RetrievalRow {
     video_id: string;
+    video_source_id: string;
     title: string;
     channel_name: string;
     summary: string | null;
@@ -71,6 +73,7 @@ export async function POST(request: NextRequest) {
   const rows: RetrievalRow[] = await prisma.$queryRaw<RetrievalRow[]>`
     SELECT
       v."id"         AS video_id,
+      v."source_id"  AS video_source_id,
       v."title"      AS title,
       c."name"       AS channel_name,
       ts."short"     AS summary,
@@ -117,6 +120,7 @@ export async function POST(request: NextRequest) {
 
   const chunks: RetrievedChunk[] = rows.map((row) => ({
     video_id: row.video_id,
+    video_source_id: row.video_source_id,
     title: row.title,
     channel_name: row.channel_name,
     summary: row.summary,
@@ -160,6 +164,7 @@ Answer with citations in the form [1], [2], etc. pointing to the numbered videos
       'X-Citations': headerSafeJson(
         chunks.map((c) => ({
           videoId: c.video_id,
+          videoSourceId: c.video_source_id,
           title: c.title,
           channelName: c.channel_name,
         }))

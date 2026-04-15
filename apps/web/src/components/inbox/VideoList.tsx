@@ -187,8 +187,8 @@ export default function VideoList({
           const isSelected = selectedVideoId === video.id;
           const href =
             filterContext.length > 0
-              ? `/inbox/${video.id}?returnTo=${encodeURIComponent(filterContext)}`
-              : `/inbox/${video.id}`;
+              ? `/videos/${encodeURIComponent(video.sourceId)}?returnTo=${encodeURIComponent(filterContext)}`
+              : `/videos/${encodeURIComponent(video.sourceId)}`;
 
           return (
             <VideoRow

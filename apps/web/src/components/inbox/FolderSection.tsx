@@ -22,9 +22,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { channelInboxHref } from '@/lib/inbox/channelHref';
 import { displayChannelName } from '@/lib/inbox/channelName';
 import type { ChannelData } from '@/lib/types';
+import { channelHref } from '@/lib/urls/channelHref';
 
 import ChannelAvatar from './ChannelAvatar';
 import DeleteFolderDialog from './DeleteFolderDialog';
@@ -175,7 +175,7 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
             <Tooltip key={channel.id}>
               <TooltipTrigger asChild>
                 <Link
-                  href={channelInboxHref(channel)}
+                  href={channelHref(channel)}
                   className={`flex items-center justify-center rounded-md p-1.5 ${
                     active ? 'bg-blue-50 ring-2 ring-blue-200' : 'hover:bg-gray-100'
                   }`}

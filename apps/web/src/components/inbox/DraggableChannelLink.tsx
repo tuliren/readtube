@@ -14,9 +14,9 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { channelInboxHref } from '@/lib/inbox/channelHref';
 import { displayChannelName } from '@/lib/inbox/channelName';
 import type { ChannelData, FolderData } from '@/lib/types';
+import { channelHref } from '@/lib/urls/channelHref';
 
 import ChannelAvatar from './ChannelAvatar';
 import { SidebarBadge, SidebarRowContent, sidebarRowClass } from './SidebarRow';
@@ -61,7 +61,7 @@ export default function DraggableChannelLink({
           ref={setNodeRef}
           {...attributes}
           {...listeners}
-          href={channelInboxHref(channel)}
+          href={channelHref(channel)}
           className={`${sidebarRowClass(isSelected)} flex-1 cursor-grab active:cursor-grabbing`}
           title="Click to open · drag to move to a folder"
         >

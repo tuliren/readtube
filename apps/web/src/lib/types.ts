@@ -77,11 +77,12 @@ export interface VideoData {
  */
 export interface InboxQuery {
   q?: string;
+  /** Set server-side by `/channels/[slug]` to scope the inbox to a
+   *  single channel. Not user-facing in the URL (the UI uses the
+   *  canonical `/channels/[slug]` path instead). The client
+   *  `InboxShell` injects it when building the `/api/videos` SWR
+   *  fetch key so the server sees the same scope as SSR. */
   channelId?: string;
-  /** Sidebar-friendly alternative to `channelId`. When present (and
-   *  `channelId` is not), the loader resolves it to a channel id via a
-   *  scoped handle lookup. URL-visible as `?channelHandle=@mkbhd`. */
-  channelHandle?: string;
   folderId?: string;
   tagIds?: string[];
   unread?: boolean;

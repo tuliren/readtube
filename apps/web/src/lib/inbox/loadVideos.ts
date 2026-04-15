@@ -1,6 +1,5 @@
 import type { PrismaClient } from '@readtube/database';
 
-import { isEmptyString } from '@/lib/string';
 import type { InboxQuery, VideoData } from '@/lib/types';
 
 import { buildUnreadClause, buildVideoWhere } from './buildWhere';
@@ -186,39 +185,6 @@ export async function loadInboxVideos(
  * `/inbox/<id>?returnTo=channelId%3Dabc%26starred%3D1` the inner
  * query is what we actually want to filter against.
  */
-/**
- * Resolve an `?channelHandle=@xxx` URL param into a concrete
- * `channelId`. Does nothing when `channelHandle` is absent or when
- * `channelId` is already set. The handle lookup is scoped to channels
- * the user is subscribed to so an attacker can't brute-force handles
- * to probe channel ids they don't own. Handles in the DB are stored
- * inconsistently (some with leading `@`, some without), so match both
- * forms.
- */
-export async function resolveChannelHandle(
-  prisma: PrismaClient,
-  userId: string,
-  query: InboxQuery
-): Promise<InboxQuery> {
-  if (isEmptyString(query.channelHandle) || !isEmptyString(query.channelId)) {
-    return query;
-  }
-  const bare = query.channelHandle.startsWith('@')
-    ? query.channelHandle.slice(1)
-    : query.channelHandle;
-  const channel = await prisma.channel.findFirst({
-    where: {
-      handle: { in: [`@${bare}`, bare] },
-      subscriptions: { some: { user_id: userId } },
-    },
-    select: { id: true },
-  });
-  if (channel == null) {
-    return query;
-  }
-  return { ...query, channelId: channel.id };
-}
-
 export function searchParamsToInboxQuery(
   raw: Record<string, string | string[] | undefined>
 ): InboxQuery {

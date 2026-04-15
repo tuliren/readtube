@@ -1,22 +1,20 @@
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@readtube/database';
-import { redirect } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 
 import InboxShell from '@/components/inbox/InboxShell';
+import { resolveChannelSlug } from '@/lib/channels/resolveChannelSlug';
 import { ensureUserExists } from '@/lib/db/user';
 import { loadInboxVideos, searchParamsToInboxQuery } from '@/lib/inbox/loadVideos';
 import { getSubscribedChannelsWithUnread } from '@/lib/subscriptions';
 import type { ChannelData } from '@/lib/types';
 
 interface Props {
-  // Wide Next.js shape — we forward the whole bag through
-  // searchParamsToInboxQuery / parseInboxQuery so SSR honors every
-  // filter the client codec knows about (starred, saved, snoozed,
-  // archived, unread, q, from, to, tagIds, sort, …).
+  params: Promise<{ slug: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-export default async function InboxPage({ searchParams }: Props) {
+export default async function ChannelPage({ params, searchParams }: Props) {
   const { userId } = await auth();
   if (userId == null) {
     redirect('/');
@@ -24,12 +22,28 @@ export default async function InboxPage({ searchParams }: Props) {
 
   await ensureUserExists(userId);
 
-  const query = searchParamsToInboxQuery(await searchParams);
+  const { slug } = await params;
+  const channel = await resolveChannelSlug(prisma, slug);
+  if (channel == null) {
+    notFound();
+  }
 
-  // Single SQL query: subscriptions + channel metadata + per-channel unread
-  // counts (with watermark + consumption filter), all in one round-trip.
+  // IDOR: only show the channel if the user is subscribed to it.
+  const subscribed = await prisma.userSubscription.findFirst({
+    where: { user_id: userId, channel_id: channel.id },
+    select: { id: true },
+  });
+  if (subscribed == null) {
+    notFound();
+  }
+
+  // Scope the inbox loader to this channel. channelId is injected
+  // server-side — it's not in the user-visible URL (the canonical
+  // form is /channels/[slug]).
+  const baseQuery = searchParamsToInboxQuery(await searchParams);
+  const query = { ...baseQuery, channelId: channel.id };
+
   const subscriptionRows = await getSubscribedChannelsWithUnread(prisma, userId);
-
   const channels: ChannelData[] = subscriptionRows.map((row) => ({
     id: row.channel_id,
     sourceId: row.source_id,
@@ -44,12 +58,6 @@ export default async function InboxPage({ searchParams }: Props) {
     muteUntil: row.mute_until != null ? row.mute_until.toISOString() : null,
   }));
 
-  // loadInboxVideos is the same helper /api/videos uses, so the SSR
-  // payload is byte-for-byte identical to what SWR would have fetched
-  // for this URL — the InboxShell fallback is now correct for any key
-  // a user can land on directly (bookmark, shared link, sidebar nav).
-  // Returns one page of videos plus the unpaginated total so the
-  // header can render Page X of N controls.
   const initial = await loadInboxVideos(prisma, userId, query);
 
   return (
@@ -57,7 +65,7 @@ export default async function InboxPage({ searchParams }: Props) {
       initialChannels={channels}
       initialVideos={initial.videos}
       initialTotal={initial.total}
-      selectedChannelId={null}
+      selectedChannelId={channel.id}
       selectedVideoId={null}
     />
   );
