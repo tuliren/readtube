@@ -105,7 +105,11 @@ function DashboardShellInner({ initialChannels, children }: Props) {
             regardless of the desktop collapse state. */}
         {isMobile && (
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-            <SheetContent side="left" className="w-72 p-0" aria-describedby={undefined}>
+            <SheetContent
+              side="left"
+              className="flex w-72 flex-col gap-0 p-0"
+              aria-describedby={undefined}
+            >
               <SidebarExpandedOverride>
                 <div className="flex h-14 shrink-0 items-center border-b border-gray-200 px-5">
                   <SheetTitle className="text-base font-bold text-gray-900">ReadTube</SheetTitle>
