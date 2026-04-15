@@ -1,8 +1,7 @@
 import { prisma } from '@readtube/database';
 
 import { isEmptyString } from '@/lib/string';
-import { fetchRssFeed, isYouTubeShort } from '@/lib/youtube/rss';
-import { scrapeChannel } from '@/lib/youtube/scrapeChannel';
+import { fetchChannelSnapshot } from '@/lib/youtube/channelSnapshot';
 
 /** Number of days before a channel is considered stale and eligible for refresh. */
 export const STALE_DAYS = 5;
@@ -59,71 +58,14 @@ export async function refreshChannel(channel: StaleChannel): Promise<RefreshResu
 
   await new Promise((r) => setTimeout(r, RATE_LIMIT_DELAY_MS));
 
-  const feed = await fetchRssFeed(channel.rss_url);
-
-  // Drop Shorts up-front — YouTube's RSS marks them with a `/shorts/`
-  // URL path, which is the canonical signal for this content type.
-  const ingestableVideos = feed.videos.filter((video) => {
-    if (isYouTubeShort(video)) {
-      console.log(
-        `[refresh-channels] skipping Short ${video.videoId} (${video.link}) for channel ${channel.id}`
-      );
-      return false;
-    }
-    return true;
+  const snapshot = await fetchChannelSnapshot({
+    channelPageUrl: `https://www.youtube.com/channel/${channel.source_id}`,
+    rssUrl: channel.rss_url,
   });
 
-  const videoSourceIds = ingestableVideos.map((v) => v.videoId);
-  const existingVideos =
-    videoSourceIds.length === 0
-      ? []
-      : await prisma.video.findMany({
-          where: { channel_id: channel.id, source_id: { in: videoSourceIds } },
-          select: { source_id: true, duration_seconds: true },
-        });
-  const videosMissingDuration = new Set(
-    existingVideos.filter((v) => v.duration_seconds == null).map((v) => v.source_id)
-  );
-  // Videos not yet in the DB also need duration
-  const existingSourceIds = new Set(existingVideos.map((v) => v.source_id));
-  for (const v of ingestableVideos) {
-    if (!existingSourceIds.has(v.videoId)) {
-      videosMissingDuration.add(v.videoId);
-    }
-  }
+  const nameUpdated = snapshot.name !== channel.name;
 
-  const needsDuration = videosMissingDuration.size > 0;
-
-  // Best-effort scrape for logo_url, handle, and duration_seconds —
-  // fields YouTube's RSS doesn't expose. Always scrape to keep
-  // logo_url / handle fresh; only collect durations for videos that
-  // lack them.
-  let logoUrl: string | null = null;
-  let handle: string | null = null;
-  const durationMap = new Map<string, number>();
-  try {
-    const channelPageUrl = `https://www.youtube.com/channel/${channel.source_id}`;
-    const scraped = await scrapeChannel(channelPageUrl);
-    logoUrl = scraped.logoUrl;
-    handle = scraped.handle;
-    if (needsDuration) {
-      for (const v of scraped.videos) {
-        if (v.durationSeconds != null && videosMissingDuration.has(v.videoId)) {
-          durationMap.set(v.videoId, v.durationSeconds);
-        }
-      }
-    }
-  } catch (err) {
-    console.warn(
-      `[refresh-channels] scrape failed for ${channel.id}, skipping logo/duration:`,
-      err
-    );
-  }
-
-  const nameUpdated = feed.name !== channel.name;
-
-  for (const video of ingestableVideos) {
-    const durationSeconds = durationMap.get(video.videoId) ?? null;
+  for (const video of snapshot.videos) {
     await prisma.video.upsert({
       where: {
         video_unique_channel_source: {
@@ -138,13 +80,13 @@ export async function refreshChannel(channel: StaleChannel): Promise<RefreshResu
         description: video.description,
         published_at: video.publishedAt,
         thumbnail_url: video.thumbnailUrl,
-        duration_seconds: durationSeconds,
+        duration_seconds: video.durationSeconds,
       },
       update: {
         title: video.title,
         ...(isEmptyString(video.description) ? {} : { description: video.description }),
-        ...(!isEmptyString(video.thumbnailUrl) ? { thumbnail_url: video.thumbnailUrl } : {}),
-        ...(durationSeconds != null ? { duration_seconds: durationSeconds } : {}),
+        thumbnail_url: video.thumbnailUrl,
+        ...(video.durationSeconds != null ? { duration_seconds: video.durationSeconds } : {}),
       },
     });
   }
@@ -152,16 +94,16 @@ export async function refreshChannel(channel: StaleChannel): Promise<RefreshResu
   await prisma.channel.update({
     where: { id: channel.id },
     data: {
-      ...(nameUpdated ? { name: feed.name } : {}),
-      ...(!isEmptyString(logoUrl) ? { logo_url: logoUrl } : {}),
-      ...(!isEmptyString(handle) ? { handle } : {}),
+      ...(nameUpdated ? { name: snapshot.name } : {}),
+      ...(!isEmptyString(snapshot.logoUrl) ? { logo_url: snapshot.logoUrl } : {}),
+      ...(!isEmptyString(snapshot.handle) ? { handle: snapshot.handle } : {}),
       checked_at: new Date(),
     },
   });
 
   return {
     channelId: channel.id,
-    videosProcessed: ingestableVideos.length,
+    videosProcessed: snapshot.videos.length,
     nameUpdated,
   };
 }
