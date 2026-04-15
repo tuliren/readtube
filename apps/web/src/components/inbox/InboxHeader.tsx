@@ -139,7 +139,7 @@ export default function InboxHeader({
           header itself sits above the scrolling video list and never
           scrolls away, so the pagination control is always reachable
           while the user is reading rows. */}
-      <div className="flex items-center justify-between gap-2 px-4 pb-2 pt-0">
+      <div className="flex items-center justify-between gap-2 px-4 py-2">
         <FilterBar />
         <div className="flex items-center gap-2">
           <SearchInput />
