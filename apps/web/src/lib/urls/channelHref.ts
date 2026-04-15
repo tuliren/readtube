@@ -15,7 +15,17 @@ import { isEmptyString } from '@/lib/string';
 export function channelHref(channel: { handle: string | null; sourceId: string }): string {
   if (!isEmptyString(channel.handle)) {
     const handle = channel.handle.startsWith('@') ? channel.handle : `@${channel.handle}`;
-    return `/channels/${encodeURIComponent(handle)}`;
+    return `/channels/${encodeSlug(handle)}`;
   }
-  return `/channels/${encodeURIComponent(channel.sourceId)}`;
+  return `/channels/${encodeSlug(channel.sourceId)}`;
+}
+
+/**
+ * Percent-encode a path segment, but preserve `@` as-is. `@` is a
+ * valid sub-delim in RFC 3986 path segments, and leaving it literal
+ * keeps `/channels/@mkbhd` readable in the address bar instead of the
+ * uglier `/channels/%40mkbhd`.
+ */
+function encodeSlug(value: string): string {
+  return encodeURIComponent(value).replace(/%40/g, '@');
 }

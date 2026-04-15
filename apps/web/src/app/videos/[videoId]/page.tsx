@@ -1,9 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@readtube/database';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 
-import Footer from '@/components/Footer';
-import Header from '@/components/Header';
 import InboxShell from '@/components/inbox/InboxShell';
 import VideoReader from '@/components/reader/VideoReader';
 import { resolveChannelSlug } from '@/lib/channels/resolveChannelSlug';
@@ -19,50 +17,42 @@ interface Props {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
+/**
+ * Authenticated video reader. Requires a signed-in user who is
+ * subscribed to the video's channel — everyone else is redirected
+ * to the public mirror at `/p/videos/[id]`. That way stray links
+ * still work for anonymous recipients, while the canonical URL
+ * stays clean (no `?preview=...` flags).
+ */
 export default async function VideoPage({ params, searchParams }: Props) {
   const { videoId } = await params;
   const { userId } = await auth();
-  const resolvedSearchParams = await searchParams;
 
-  // Resolve by platform source_id + source_type. source_id alone
-  // isn't globally unique across platforms — see the
-  // `video_unique_source` index on [source_type, source_id].
   const stub = await resolveVideoSourceId(prisma, videoId);
   if (stub == null) {
     notFound();
   }
 
-  // `?preview=1` forces the public render so a signed-in sharer can
-  // QA what a recipient sees. Always goes through the public branch.
-  if (resolvedSearchParams.preview === '1') {
-    return renderPublicReader(stub.id);
+  if (userId == null) {
+    redirect(`/p/videos/${encodeURIComponent(stub.source_id)}`);
   }
 
-  if (userId != null) {
-    await ensureUserExists(userId);
-    const subscribed = await prisma.userSubscription.findFirst({
-      where: { user_id: userId, channel_id: stub.channel_id },
-      select: { id: true },
-    });
-    if (subscribed != null) {
-      return renderAuthedReader(userId, stub.id, resolvedSearchParams);
-    }
+  await ensureUserExists(userId);
+  const subscribed = await prisma.userSubscription.findFirst({
+    where: { user_id: userId, channel_id: stub.channel_id },
+    select: { id: true },
+  });
+  if (subscribed == null) {
+    redirect(`/p/videos/${encodeURIComponent(stub.source_id)}`);
   }
 
-  return renderPublicReader(stub.id);
-}
-
-async function renderAuthedReader(
-  userId: string,
-  videoDbId: string,
-  rawSearchParams: Record<string, string | string[] | undefined>
-) {
+  const rawSearchParams = await searchParams;
   const baseQuery = searchParamsToInboxQuery(rawSearchParams);
   // When the reader was opened from `/channels/[slug]`, the channel
   // scope lives in the returnTo path rather than the query string.
   // Resolve it so the sidebar's video list stays narrowed to that
-  // channel while the user is reading. Falls through to the
-  // user's full inbox for `/inbox` or deep links.
+  // channel while the user is reading. Falls through to the user's
+  // full inbox for `/inbox` or deep links.
   const channelIdFromReturnTo = await resolveChannelIdFromReturnTo(
     rawSearchParams.returnTo,
     userId
@@ -71,7 +61,7 @@ async function renderAuthedReader(
     channelIdFromReturnTo != null ? { ...baseQuery, channelId: channelIdFromReturnTo } : baseQuery;
 
   const video = await prisma.video.findFirst({
-    where: { id: videoDbId, channel: { subscriptions: { some: { user_id: userId } } } },
+    where: { id: stub.id, channel: { subscriptions: { some: { user_id: userId } } } },
     select: {
       id: true,
       source_id: true,
@@ -131,10 +121,6 @@ async function renderAuthedReader(
 
   const initial = await loadInboxVideos(prisma, userId, query);
 
-  // InboxShell expects its ancestor to provide a bounded height —
-  // it uses `h-full min-h-0` internally so the sidebar + main scroll
-  // independently. The public branch renders without that wrapper so
-  // the whole page can scroll normally.
   return (
     <div className="h-screen overflow-hidden">
       <InboxShell
@@ -179,62 +165,4 @@ async function resolveChannelIdFromReturnTo(
     select: { id: true },
   });
   return subscribed != null ? channel.id : null;
-}
-
-async function renderPublicReader(videoDbId: string) {
-  const video = await prisma.video.findUnique({
-    where: { id: videoDbId },
-    select: {
-      id: true,
-      source_id: true,
-      title: true,
-      description: true,
-      published_at: true,
-      duration_seconds: true,
-      thumbnail_url: true,
-      transcript_unavailable: true,
-      channel_id: true,
-      channel: { select: { name: true, source_id: true, handle: true } },
-      transcripts: {
-        orderBy: { created_at: 'desc' },
-        take: 1,
-        select: {
-          summary: { select: { transcript_id: true } },
-          articles: { take: 1, select: { id: true } },
-        },
-      },
-    },
-  });
-  if (video == null) {
-    notFound();
-  }
-
-  const latest = video.transcripts[0];
-  const hasSummary = latest?.summary != null;
-  const hasArticle = (latest?.articles.length ?? 0) > 0;
-  if (!hasSummary && !hasArticle) {
-    notFound();
-  }
-
-  const videoData: VideoData = decorateVideo(
-    video,
-    {
-      starredIds: new Set(),
-      savedIds: new Set(),
-      archivedIds: new Set(),
-      tagsByVideoId: new Map(),
-      noteCountsByVideoId: new Map(),
-    },
-    null
-  );
-
-  return (
-    <div className="flex min-h-screen flex-col">
-      <Header />
-      <main className="flex flex-1 flex-col">
-        <VideoReader video={videoData} publicMode />
-      </main>
-      <Footer />
-    </div>
-  );
 }

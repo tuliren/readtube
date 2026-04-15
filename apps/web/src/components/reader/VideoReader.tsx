@@ -227,16 +227,13 @@ export default function VideoReader({ video, publicMode = false }: Props) {
               <>
                 <span>·</span>
                 {/*
-                  The sharer is authenticated and subscribed, so opening
-                  the plain /videos/<id> route would show them their own
-                  authed reader rather than the stripped-down view a
-                  recipient sees. `?preview=1` forces the public render
-                  so the sharer can QA the shared experience; the param
-                  is harmless on the recipient's side (they see the
-                  public view either way).
+                  Link to the public mirror so the sharer (who is
+                  authenticated + subscribed) sees the same
+                  stripped-down view a recipient does, and the URL
+                  they paste elsewhere is the canonical share URL.
                 */}
                 <Link
-                  href={`${videoHref(video)}?preview=1`}
+                  href={`/p${videoHref(video)}`}
                   target="_blank"
                   className="text-blue-500 hover:underline"
                 >
