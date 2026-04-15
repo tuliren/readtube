@@ -169,7 +169,11 @@ export async function fetchVideoSnapshot(videoId: string): Promise<VideoSnapshot
   if (channelPageUrl != null) {
     const m = channelPageUrl.match(/\/@([\w.-]+)/);
     if (m != null) {
-      handle = m[1];
+      // Store with the leading `@` to match channelScrape.ts and the
+      // `channel_unique_handle` constraint — otherwise the same row
+      // flip-flops between "@mkbhd" and "mkbhd" as different code
+      // paths touch it.
+      handle = `@${m[1]}`;
     }
   }
 

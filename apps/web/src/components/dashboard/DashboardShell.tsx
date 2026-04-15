@@ -396,7 +396,14 @@ function useAutoUncollapse(channels: ChannelData[], selectedChannelId: string | 
     return folders.some((f) => f.id === channel.folderId) ? channel.folderId : null;
   }, [selectedChannelId, channels, folders]);
 
-  const videosSelected = pathname != null && pathname.startsWith('/videos');
+  // Match only the library sub-routes — not the reader at
+  // /videos/[videoId], which is reachable from the inbox for
+  // non-library videos and shouldn't auto-expand the Videos section.
+  const videosSelected =
+    pathname != null &&
+    (pathname === '/videos' ||
+      pathname === '/videos/standalone' ||
+      pathname.startsWith('/videos/playlists/'));
 
   useEffect(() => {
     ensureExpandedFor({
