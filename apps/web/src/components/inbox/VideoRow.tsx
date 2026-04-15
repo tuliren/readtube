@@ -206,10 +206,10 @@ export default function VideoRow({
     if (inSelectionMode || !isMobile) {
       return;
     }
-    const touch = e.touches[0];
-    touchOriginRef.current = touch != null ? { x: touch.clientX, y: touch.clientY } : null;
     longPressedRef.current = false;
     clearLongPress();
+    const touch = e.touches[0];
+    touchOriginRef.current = touch != null ? { x: touch.clientX, y: touch.clientY } : null;
     longPressTimer.current = setTimeout(() => {
       longPressedRef.current = true;
       if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
