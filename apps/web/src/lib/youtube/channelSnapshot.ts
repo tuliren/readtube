@@ -55,13 +55,18 @@ export interface ChannelSnapshot {
  * via `@handle`), we scrape first to resolve the channel id, then
  * fetch RSS.
  *
- * Behaviour on partial failure:
- * - RSS failure is fatal — without it we have no authoritative video
- *   list and can't safely filter Shorts.
- * - Scrape failure is tolerated — we return the snapshot with
- *   `handle: null`, `logoUrl: null`, and every video's
- *   `durationSeconds: null`. This preserves the refresh workflow's
- *   long-standing "best-effort scrape" posture.
+ * Fallback chain for the video list:
+ * 1. YouTube RSS — full descriptions, real publish times, canonical
+ *    `/shorts/` vs `/watch?v=` links for Shorts filtering.
+ * 2. TranscriptAPI `/channel/latest` — same data shape as RSS
+ *    (including `/shorts/` links). Used when RSS returns 404.
+ * 3. Scrape-only — truncated descriptions, approximate publish times,
+ *    Shorts filtered by duration (≤60s) instead of link pattern.
+ *
+ * Scrape failure is always tolerated — we return the snapshot with
+ * `handle: null`, `logoUrl: null`, and every video's
+ * `durationSeconds: null`. Only when all three video-list sources
+ * fail *and* scrape also failed do we throw.
  */
 export async function fetchChannelSnapshot(args: {
   channelPageUrl: string;
