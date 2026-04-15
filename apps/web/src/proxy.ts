@@ -1,9 +1,28 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 
-const isInboxRoute = createRouteMatcher(['/inbox(.*)', '/inbox']);
+/**
+ * Routes that do not require a signed-in Clerk session. Everything
+ * else is protected by default, so new authenticated routes get
+ * coverage automatically instead of relying on each page to remember
+ * its own `redirect()` guard.
+ *
+ * `/api(.*)` is public because API handlers self-enforce auth and
+ * need to return 401 JSON (not a sign-in HTML redirect) to
+ * unauthenticated callers. Cron and Clerk webhook routes also live
+ * under /api and use their own secret-based auth.
+ */
+const isPublicRoute = createRouteMatcher([
+  '/',
+  '/sign-in(.*)',
+  '/sign-up(.*)',
+  '/privacy',
+  '/terms',
+  '/p/(.*)',
+  '/api(.*)',
+]);
 
 export default clerkMiddleware(async (auth, req) => {
-  if (isInboxRoute(req)) {
+  if (!isPublicRoute(req)) {
     await auth.protect();
   }
 });
