@@ -10,7 +10,6 @@ import { useSWRConfig } from 'swr';
 import { isProduction } from '@/lib/vercelEnv';
 
 import ChannelAvatar from './ChannelAvatar';
-import FilterBar from './FilterBar';
 import Pagination from './Pagination';
 import SearchInput from './SearchInput';
 
@@ -139,16 +138,13 @@ export default function InboxHeader({
           )}
         </div>
       </div>
-      {/* Filter chips row + search + pagination on the right. The
-          header itself sits above the scrolling video list and never
-          scrolls away, so the pagination control is always reachable
-          while the user is reading rows. */}
+      {/* Video count + pagination on the left, search on the right.
+          The header itself sits above the scrolling video list and
+          never scrolls away, so the pagination control is always
+          reachable while the user is reading rows. */}
       <div className="flex items-center justify-between gap-2 px-4 py-2 sidebar:pt-0">
-        <FilterBar />
-        <div className="flex items-center gap-2">
-          <SearchInput />
-          <Pagination total={totalVideos} />
-        </div>
+        <Pagination total={totalVideos} />
+        <SearchInput />
       </div>
     </div>
   );

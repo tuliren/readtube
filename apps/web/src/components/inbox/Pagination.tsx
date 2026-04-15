@@ -30,9 +30,7 @@ export default function Pagination({ total }: Props) {
   const { query, patchQuery } = useInboxQuery();
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  if (totalPages <= 1) {
-    return null;
-  }
+  const hasMultiplePages = totalPages > 1;
 
   // Clamp the displayed current page to the valid range — if the user
   // hand-edits the URL to a too-large page, render as if they're on
@@ -61,33 +59,35 @@ export default function Pagination({ total }: Props) {
   return (
     <div className="flex items-center gap-2 text-xs text-gray-500">
       <span className="tabular-nums">
-        {firstRow}–{lastRow} of {total}
+        {hasMultiplePages ? `${firstRow}–${lastRow} of ${total}` : `${total} videos`}
       </span>
-      <div className="flex items-center gap-0.5">
-        <button
-          type="button"
-          onClick={() => goTo(currentPage - 1)}
-          disabled={isFirst}
-          aria-label="Previous page"
-          title="Previous page"
-          className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-gray-500"
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </button>
-        <span className="px-1 tabular-nums">
-          Page {currentPage} of {totalPages}
-        </span>
-        <button
-          type="button"
-          onClick={() => goTo(currentPage + 1)}
-          disabled={isLast}
-          aria-label="Next page"
-          title="Next page"
-          className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-gray-500"
-        >
-          <ChevronRight className="h-4 w-4" />
-        </button>
-      </div>
+      {hasMultiplePages && (
+        <div className="flex items-center gap-0.5">
+          <button
+            type="button"
+            onClick={() => goTo(currentPage - 1)}
+            disabled={isFirst}
+            aria-label="Previous page"
+            title="Previous page"
+            className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-gray-500"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <span className="px-1 tabular-nums">
+            Page {currentPage} of {totalPages}
+          </span>
+          <button
+            type="button"
+            onClick={() => goTo(currentPage + 1)}
+            disabled={isLast}
+            aria-label="Next page"
+            title="Next page"
+            className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-gray-500"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
