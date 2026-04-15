@@ -33,7 +33,7 @@ export default function BulkActionBar({ selectedIds, onClear }: Props) {
   }
 
   return (
-    <div className="flex items-center gap-0.5 border-b border-gray-200 bg-blue-50 px-4 py-2 lg:gap-2">
+    <div className="flex items-center gap-0.5 border-b border-gray-200 bg-blue-50 px-4 py-2 sidebar:gap-2">
       <button
         type="button"
         onClick={onClear}
@@ -51,7 +51,7 @@ export default function BulkActionBar({ selectedIds, onClear }: Props) {
         className="flex items-center gap-1 rounded px-2 py-1 text-sm text-gray-700 hover:bg-white"
       >
         <Check className="h-4 w-4" />
-        <span className="hidden lg:inline">Mark read</span>
+        <span className="hidden sidebar:inline">Mark read</span>
       </button>
       <button
         type="button"
@@ -60,7 +60,7 @@ export default function BulkActionBar({ selectedIds, onClear }: Props) {
         className="flex items-center gap-1 rounded px-2 py-1 text-sm text-gray-700 hover:bg-white"
       >
         <Star className="h-4 w-4" />
-        <span className="hidden lg:inline">Star</span>
+        <span className="hidden sidebar:inline">Star</span>
       </button>
       <button
         type="button"
@@ -69,7 +69,7 @@ export default function BulkActionBar({ selectedIds, onClear }: Props) {
         className="flex items-center gap-1 rounded px-2 py-1 text-sm text-gray-700 hover:bg-white"
       >
         <Bookmark className="h-4 w-4" />
-        <span className="hidden lg:inline">Save</span>
+        <span className="hidden sidebar:inline">Save</span>
       </button>
       <button
         type="button"
@@ -78,7 +78,7 @@ export default function BulkActionBar({ selectedIds, onClear }: Props) {
         className="flex items-center gap-1 rounded px-2 py-1 text-sm text-gray-700 hover:bg-white"
       >
         <Archive className="h-4 w-4" />
-        <span className="hidden lg:inline">Archive</span>
+        <span className="hidden sidebar:inline">Archive</span>
       </button>
     </div>
   );

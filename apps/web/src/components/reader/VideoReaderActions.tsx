@@ -63,7 +63,7 @@ export default function VideoReaderActions({ video }: Props) {
   const tightGap = 'gap-1';
 
   return (
-    <div className="flex items-center gap-0 lg:gap-1">
+    <div className="flex items-center gap-0 sidebar:gap-1">
       <Button
         variant="ghost"
         size="sm"
@@ -72,7 +72,7 @@ export default function VideoReaderActions({ video }: Props) {
         title={isStarred ? 'Unstar' : 'Star'}
       >
         <Star className={`h-4 w-4 ${isStarred ? 'fill-yellow-400' : ''}`} />
-        <span className="hidden lg:inline">{isStarred ? 'Starred' : 'Star'}</span>
+        <span className="hidden sidebar:inline">{isStarred ? 'Starred' : 'Star'}</span>
       </Button>
 
       <Button
@@ -83,7 +83,7 @@ export default function VideoReaderActions({ video }: Props) {
         title={isSaved ? 'Remove from Read Later' : 'Read Later'}
       >
         {isSaved ? <BookmarkCheck className="h-4 w-4" /> : <Bookmark className="h-4 w-4" />}
-        <span className="hidden lg:inline">{isSaved ? 'Saved' : 'Save'}</span>
+        <span className="hidden sidebar:inline">{isSaved ? 'Saved' : 'Save'}</span>
       </Button>
 
       <Button
@@ -94,7 +94,7 @@ export default function VideoReaderActions({ video }: Props) {
         title={isArchived ? 'Unarchive' : 'Archive'}
       >
         <Archive className="h-4 w-4" />
-        <span className="hidden lg:inline">{isArchived ? 'Archived' : 'Archive'}</span>
+        <span className="hidden sidebar:inline">{isArchived ? 'Archived' : 'Archive'}</span>
       </Button>
     </div>
   );

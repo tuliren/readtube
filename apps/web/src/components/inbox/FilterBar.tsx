@@ -80,7 +80,7 @@ export default function FilterBar() {
             }`}
           >
             <Icon className="h-3 w-3" />
-            <span className="hidden lg:inline">{chip.label}</span>
+            <span className="hidden sidebar:inline">{chip.label}</span>
           </button>
         );
       })}
