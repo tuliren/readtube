@@ -59,10 +59,13 @@ export async function loadLibraryVideos(
     });
     videoIds = rows.map((r) => r.video_id);
   } else if (scope.kind === 'standalone') {
+    // PlaylistVideo is a global junction — scope the "none" check to
+    // THIS user's playlists so another user filing the same video
+    // into their playlist doesn't kick it out of our Standalone view.
     const rows = await prisma.standaloneVideo.findMany({
       where: {
         user_id: userId,
-        video: { playlist_items: { none: {} } },
+        video: { playlist_items: { none: { playlist: { user_id: userId } } } },
       },
       select: { video_id: true },
       orderBy: { created_at: 'desc' },

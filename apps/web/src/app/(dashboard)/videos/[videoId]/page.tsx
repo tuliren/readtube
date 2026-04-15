@@ -61,7 +61,18 @@ export default async function VideoPage({ params }: Props) {
   }
 
   const video = await prisma.video.findFirst({
-    where: { id: stub.id, channel: { subscriptions: { some: { user_id: userId } } } },
+    // Reader access mirrors assertUserCanTouchVideo: either the user
+    // subscribes to the video's channel, or the video lives in their
+    // personal library (StandaloneVideo). Without the OR, clicking any
+    // video added via the "+ Add video" flow would 404 since those
+    // videos hang off an unsubscribed shadow channel.
+    where: {
+      id: stub.id,
+      OR: [
+        { channel: { subscriptions: { some: { user_id: userId } } } },
+        { standalone: { some: { user_id: userId } } },
+      ],
+    },
     select: {
       id: true,
       source_id: true,

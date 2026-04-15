@@ -45,10 +45,15 @@ export function useTriage() {
   function invalidateLists() {
     // SWR's mutate matches the fetcher key; since /api/videos is used both
     // with and without a channelId query string, we invalidate via a
-    // predicate that matches any /api/videos URL.
-    void mutate((key) => typeof key === 'string' && key.startsWith('/api/videos'), undefined, {
-      revalidate: true,
-    });
+    // predicate that matches any /api/videos URL. /api/playlists is
+    // included because playlist video counts (displayed in the sidebar)
+    // shift when library membership changes.
+    void mutate(
+      (key) =>
+        typeof key === 'string' && (key.startsWith('/api/videos') || key === '/api/playlists'),
+      undefined,
+      { revalidate: true }
+    );
     void mutate('/api/channels', undefined, { revalidate: true });
   }
 

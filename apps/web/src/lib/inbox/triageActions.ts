@@ -133,13 +133,18 @@ export async function applyBulk(
     return { affected: 0 };
   }
 
-  // Scope: only videos from channels the user is subscribed to. Anything
-  // else is silently filtered. This keeps IDOR out of bulk without needing
-  // to fail loudly on every stray id.
+  // Scope: videos the user reaches via a channel subscription OR via
+  // their personal library (StandaloneVideo). Anything else is silently
+  // filtered. Mirrors the OR in assertUserCanTouchVideo — keeps IDOR out
+  // of bulk without needing to fail loudly on every stray id, and lets
+  // future library-scoped bulk actions work without a second fix.
   const ownedVideos = await prisma.video.findMany({
     where: {
       id: { in: videoIds },
-      channel: { subscriptions: { some: { user_id: userId } } },
+      OR: [
+        { channel: { subscriptions: { some: { user_id: userId } } } },
+        { standalone: { some: { user_id: userId } } },
+      ],
     },
     select: { id: true },
   });
