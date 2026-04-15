@@ -127,6 +127,9 @@ export async function scrapeChannel(channelUrl: string): Promise<ScrapedChannel>
 
   const response = await fetch(videosUrl, {
     headers: { 'User-Agent': YT_USER_AGENT },
+    // See channelRss.ts for why we opt out of Next.js's fetch cache
+    // here — this runs inside a workflow step, not a request.
+    cache: 'no-store',
   });
 
   if (!response.ok) {

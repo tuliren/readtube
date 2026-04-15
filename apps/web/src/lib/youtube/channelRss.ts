@@ -39,8 +39,13 @@ const parser = new XMLParser({
 });
 
 export async function fetchRssFeed(rssUrl: string): Promise<RssChannel> {
+  // `cache: 'no-store'` rather than `next: { revalidate: 0 }` — the
+  // workflow step runs outside a Next.js request context, so the
+  // `next` options aren't valid there and the monkey-patched fetch
+  // can throw "detached ArrayBuffer" when the cache machinery tries
+  // to slice the already-consumed response body.
   const response = await fetch(rssUrl, {
-    next: { revalidate: 0 },
+    cache: 'no-store',
   });
 
   if (!response.ok) {
