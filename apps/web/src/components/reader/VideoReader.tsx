@@ -7,6 +7,7 @@ import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import useSWR from 'swr';
 
+import CopyButton from '@/components/CopyButton';
 import { Button } from '@/components/ui/button';
 import { formatDurationSeconds } from '@/lib/format/duration';
 import type { VideoData } from '@/lib/types';
@@ -215,14 +216,17 @@ export default function VideoReader({ video, publicMode = false }: Props) {
               </>
             )}
             <span>·</span>
-            <a
-              href={watchUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-500 hover:underline"
-            >
-              Watch on YouTube ↗
-            </a>
+            <span className="inline-flex items-center gap-0.5">
+              <a
+                href={watchUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-500 hover:underline"
+              >
+                Watch on YouTube ↗
+              </a>
+              <CopyButton value={watchUrl} label="Copy YouTube link" />
+            </span>
             {!publicMode && (hasSummary || hasArticle) && (
               <>
                 <span>·</span>
@@ -232,13 +236,16 @@ export default function VideoReader({ video, publicMode = false }: Props) {
                   stripped-down view a recipient does, and the URL
                   they paste elsewhere is the canonical share URL.
                 */}
-                <Link
-                  href={`/p${videoHref(video)}`}
-                  target="_blank"
-                  className="text-blue-500 hover:underline"
-                >
-                  Share ↗
-                </Link>
+                <span className="inline-flex items-center gap-0.5">
+                  <Link
+                    href={`/p${videoHref(video)}`}
+                    target="_blank"
+                    className="text-blue-500 hover:underline"
+                  >
+                    Share ↗
+                  </Link>
+                  <CopyButton value={`/p${videoHref(video)}`} label="Copy share link" />
+                </span>
               </>
             )}
           </div>
