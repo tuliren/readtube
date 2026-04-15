@@ -87,7 +87,8 @@ export async function fetchChannelSnapshot(args: {
     if (rssResult.status === 'fulfilled') {
       feed = rssResult.value;
     } else {
-      console.warn('[channelSnapshot] RSS failed, falling back to scrape-only:', rssResult.reason);
+      console.warn('[channelSnapshot] RSS failed:', rssResult.reason);
+      feed = await tryTranscriptApiFallback(scraped, args.channelPageUrl);
     }
   } else {
     // Handle-based input — can't build RSS URL until we know the UC id.
@@ -95,7 +96,8 @@ export async function fetchChannelSnapshot(args: {
     try {
       feed = await fetchRssFeed(buildRssUrl(scraped.channelId));
     } catch (err) {
-      console.warn('[channelSnapshot] RSS failed, falling back to scrape-only:', err);
+      console.warn('[channelSnapshot] RSS failed:', err);
+      feed = await tryTranscriptApiFallback(scraped, args.channelPageUrl);
     }
   }
 
@@ -103,22 +105,30 @@ export async function fetchChannelSnapshot(args: {
     return mergeSnapshot(feed, scraped);
   }
 
-  // RSS unavailable — try TranscriptAPI as a fallback. It returns the
-  // same data shape (video list with /shorts/ links for filtering).
-  const channelInput = scraped?.handle ?? scraped?.channelId ?? args.channelPageUrl;
-  try {
-    feed = await fetchChannelLatestAsRss(channelInput);
-    console.info('[channelSnapshot] TranscriptAPI fallback succeeded');
-    return mergeSnapshot(feed, scraped);
-  } catch (err) {
-    console.warn('[channelSnapshot] TranscriptAPI fallback failed:', err);
-  }
-
-  // Both RSS and TranscriptAPI unavailable — build from scrape data.
+  // RSS and TranscriptAPI both unavailable — build from scrape data.
   if (scraped == null) {
     throw new Error('RSS, TranscriptAPI, and scrape all failed — cannot fetch channel data');
   }
   return buildSnapshotFromScrape(scraped);
+}
+
+/**
+ * Try TranscriptAPI as a fallback when RSS fails. Returns null if the
+ * fallback also fails, so the caller can continue to the next tier.
+ */
+async function tryTranscriptApiFallback(
+  scraped: ScrapedChannel | null,
+  channelPageUrl: string
+): Promise<RssChannel | null> {
+  const channelInput = scraped?.handle ?? scraped?.channelId ?? channelPageUrl;
+  try {
+    const feed = await fetchChannelLatestAsRss(channelInput);
+    console.info('[channelSnapshot] TranscriptAPI fallback succeeded');
+    return feed;
+  } catch (err) {
+    console.warn('[channelSnapshot] TranscriptAPI fallback failed:', err);
+    return null;
+  }
 }
 
 /**
