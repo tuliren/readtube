@@ -63,7 +63,7 @@ export default function VideoReaderActions({ video }: Props) {
   const tightGap = 'gap-1';
 
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex items-center gap-0 sm:gap-1">
       <Button
         variant="ghost"
         size="sm"

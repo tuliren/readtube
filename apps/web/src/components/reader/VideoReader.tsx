@@ -179,7 +179,7 @@ export default function VideoReader({ video, publicMode = false }: Props) {
               <ArrowLeftIcon className="h-4 w-4" />
               Back
             </Link>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-0.5 sm:gap-2">
               <Button
                 variant="ghost"
                 size="sm"
