@@ -2,6 +2,7 @@
 
 import { Archive, Bookmark, BookmarkCheck, MoreHorizontal, NotebookPen, Star } from 'lucide-react';
 import Link from 'next/link';
+import { useRef } from 'react';
 
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -163,12 +164,47 @@ export default function VideoRow({
   const { isMobile } = useSidebar();
   const isUnread = video.readAt == null;
 
+  // Long-press (mobile): touchstart arms a 500ms timer; if it fires
+  // without a cancelling touchmove/end, we flip this row into
+  // selection mode. `longPressedRef` suppresses the synthetic click
+  // that follows touchend so the row doesn't also navigate.
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressedRef = useRef(false);
+
   function stop(e: React.MouseEvent | React.KeyboardEvent) {
     e.preventDefault();
     e.stopPropagation();
   }
 
+  function clearLongPress() {
+    if (longPressTimer.current != null) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  }
+
+  function handleTouchStart() {
+    if (inSelectionMode || !isMobile) {
+      return;
+    }
+    longPressedRef.current = false;
+    clearLongPress();
+    longPressTimer.current = setTimeout(() => {
+      longPressedRef.current = true;
+      if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+        navigator.vibrate(15);
+      }
+      onToggleChecked(video.id, true);
+    }, 500);
+  }
+
   function handleRowClick(e: React.MouseEvent) {
+    if (longPressedRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      longPressedRef.current = false;
+      return;
+    }
     if (inSelectionMode) {
       e.preventDefault();
       e.stopPropagation();
@@ -226,7 +262,7 @@ export default function VideoRow({
         } ${inSelectionMode ? 'select-none' : ''}`}
       >
         <div
-          className="pt-1"
+          className={`pt-1 ${inSelectionMode || isChecked ? '' : 'hidden sm:block'}`}
           onClick={(e) => {
             stop(e);
             onToggleChecked(video.id, !isChecked, e.shiftKey);
@@ -253,7 +289,15 @@ export default function VideoRow({
             {rowContent}
           </div>
         ) : (
-          <Link href={href} className="flex min-w-0 flex-1 items-start gap-2">
+          <Link
+            href={href}
+            className="flex min-w-0 flex-1 items-start gap-2"
+            onClick={handleRowClick}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={clearLongPress}
+            onTouchMove={clearLongPress}
+            onTouchCancel={clearLongPress}
+          >
             {rowContent}
           </Link>
         )}
