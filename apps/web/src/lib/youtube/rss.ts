@@ -16,6 +16,16 @@ export interface RssVideo {
   thumbnailUrl: string | null;
 }
 
+/**
+ * YouTube's channel RSS marks Shorts by using `/shorts/<id>` as the
+ * entry link's path, rather than `/watch?v=<id>`. This is the
+ * canonical signal — Shorts are a distinct content type on YouTube,
+ * not just a duration threshold.
+ */
+export function isYouTubeShort(video: { link: string }): boolean {
+  return video.link.includes('/shorts/');
+}
+
 export interface RssChannel {
   channelId: string;
   name: string;

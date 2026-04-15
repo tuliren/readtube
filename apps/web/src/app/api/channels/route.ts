@@ -11,6 +11,7 @@ import {
 } from '@/lib/subscriptions';
 import { buildThumbnailUrl, fetchChannelLatest } from '@/lib/youtube/channelMetadata';
 import { buildRssUrl, extractChannelId, extractHandle } from '@/lib/youtube/channelUrl';
+import { fetchRssFeed, isYouTubeShort } from '@/lib/youtube/rss';
 import { scrapeChannel } from '@/lib/youtube/scrapeChannel';
 
 export async function GET() {
@@ -106,6 +107,28 @@ export async function POST(request: NextRequest) {
 
   const rssUrl = buildRssUrl(sourceId);
 
+  // Best-effort RSS fetch so we can drop Shorts from the initial
+  // import. The `/videos` tab the scraper reads from already excludes
+  // Shorts in practice, but YouTube's RSS is the authoritative signal
+  // (via the `/shorts/<id>` link path) and keeps this flow consistent
+  // with how `refreshChannel` filters later updates. If the RSS fetch
+  // fails we fall back to the scraped list as-is.
+  const shortVideoIds = new Set<string>();
+  try {
+    const feed = await fetchRssFeed(rssUrl);
+    for (const video of feed.videos) {
+      if (isYouTubeShort(video)) {
+        shortVideoIds.add(video.videoId);
+      }
+    }
+  } catch (err) {
+    console.warn(
+      '[channels/POST] RSS fetch failed, skipping Shorts filter on initial import:',
+      err
+    );
+  }
+  const ingestableVideos = scraped.videos.filter((v) => !shortVideoIds.has(v.videoId));
+
   // Upsert the channel atomically — avoids a race condition where two users
   // concurrently subscribe to the same brand-new channel. New videos are created
   // with no UserVideoConsumption rows, so they appear unread for everyone until
@@ -122,7 +145,7 @@ export async function POST(request: NextRequest) {
       logo_url: scraped.logoUrl,
       handle: scraped.handle,
       videos: {
-        create: scraped.videos.map((v) => ({
+        create: ingestableVideos.map((v) => ({
           source_id: v.videoId,
           title: v.title,
           description: v.description,
@@ -159,7 +182,7 @@ export async function POST(request: NextRequest) {
       err
     );
     // Fallback: construct thumbnail URLs directly from videoId.
-    for (const video of scraped.videos) {
+    for (const video of ingestableVideos) {
       await prisma.video.updateMany({
         where: { channel_id: channel.id, source_id: video.videoId },
         data: { thumbnail_url: buildThumbnailUrl(video.videoId) },

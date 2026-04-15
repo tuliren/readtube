@@ -1,7 +1,7 @@
 import { prisma } from '@readtube/database';
 
 import { isEmptyString } from '@/lib/string';
-import { fetchRssFeed } from '@/lib/youtube/rss';
+import { fetchRssFeed, isYouTubeShort } from '@/lib/youtube/rss';
 import { scrapeChannel } from '@/lib/youtube/scrapeChannel';
 
 /** Number of days before a channel is considered stale and eligible for refresh. */
@@ -16,15 +16,6 @@ export const BATCH_SIZE = 10;
  * requests in parallel.
  */
 const RATE_LIMIT_DELAY_MS = 250;
-
-/**
- * YouTube's channel RSS uses `https://www.youtube.com/shorts/<id>` for
- * Shorts and `https://www.youtube.com/watch?v=<id>` for regular videos.
- * The `/shorts/` path segment is the canonical signal — Shorts are a
- * distinct content type on YouTube, not just a duration threshold, so
- * matching the URL is more reliable than inferring from duration.
- */
-const SHORTS_URL_PATTERN = /\/shorts\//;
 
 export interface StaleChannel {
   id: string;
@@ -73,7 +64,7 @@ export async function refreshChannel(channel: StaleChannel): Promise<RefreshResu
   // Drop Shorts up-front — YouTube's RSS marks them with a `/shorts/`
   // URL path, which is the canonical signal for this content type.
   const ingestableVideos = feed.videos.filter((video) => {
-    if (isShort(video)) {
+    if (isYouTubeShort(video)) {
       console.log(
         `[refresh-channels] skipping Short ${video.videoId} (${video.link}) for channel ${channel.id}`
       );
@@ -173,13 +164,4 @@ export async function refreshChannel(channel: StaleChannel): Promise<RefreshResu
     videosProcessed: ingestableVideos.length,
     nameUpdated,
   };
-}
-
-/**
- * A video is a YouTube Short when its RSS entry link points at the
- * `/shorts/` path rather than `/watch`. This is how YouTube's own
- * channel RSS distinguishes the two formats.
- */
-function isShort(video: { link: string }): boolean {
-  return SHORTS_URL_PATTERN.test(video.link);
 }
