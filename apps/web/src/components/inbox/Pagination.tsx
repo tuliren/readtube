@@ -59,7 +59,9 @@ export default function Pagination({ total }: Props) {
   return (
     <div className="flex items-center gap-2 text-xs text-gray-500">
       <span className="tabular-nums">
-        {hasMultiplePages ? `${firstRow}–${lastRow} of ${total}` : `${total} videos`}
+        {hasMultiplePages
+          ? `${firstRow}–${lastRow} of ${total}`
+          : `${total} ${total === 1 ? 'video' : 'videos'}`}
       </span>
       {hasMultiplePages && (
         <div className="flex items-center gap-0.5">
