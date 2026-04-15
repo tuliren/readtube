@@ -33,7 +33,7 @@ export default function BulkActionBar({ selectedIds, onClear }: Props) {
   }
 
   return (
-    <div className="flex items-center gap-2 border-b border-gray-200 bg-blue-50 px-4 py-2">
+    <div className="flex items-center gap-0.5 border-b border-gray-200 bg-blue-50 px-4 py-2 sm:gap-2">
       <button
         type="button"
         onClick={onClear}
@@ -47,34 +47,38 @@ export default function BulkActionBar({ selectedIds, onClear }: Props) {
       <button
         type="button"
         onClick={() => void run({ type: 'mark_read' }, 'marked read')}
+        title="Mark read"
         className="flex items-center gap-1 rounded px-2 py-1 text-sm text-gray-700 hover:bg-white"
       >
         <Check className="h-4 w-4" />
-        Mark read
+        <span className="hidden sm:inline">Mark read</span>
       </button>
       <button
         type="button"
         onClick={() => void run({ type: 'star' }, 'starred')}
+        title="Star"
         className="flex items-center gap-1 rounded px-2 py-1 text-sm text-gray-700 hover:bg-white"
       >
         <Star className="h-4 w-4" />
-        Star
+        <span className="hidden sm:inline">Star</span>
       </button>
       <button
         type="button"
         onClick={() => void run({ type: 'save' }, 'saved')}
+        title="Save"
         className="flex items-center gap-1 rounded px-2 py-1 text-sm text-gray-700 hover:bg-white"
       >
         <Bookmark className="h-4 w-4" />
-        Save
+        <span className="hidden sm:inline">Save</span>
       </button>
       <button
         type="button"
         onClick={() => void run({ type: 'archive' }, 'archived')}
+        title="Archive"
         className="flex items-center gap-1 rounded px-2 py-1 text-sm text-gray-700 hover:bg-white"
       >
         <Archive className="h-4 w-4" />
-        Archive
+        <span className="hidden sm:inline">Archive</span>
       </button>
     </div>
   );

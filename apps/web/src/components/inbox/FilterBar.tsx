@@ -72,6 +72,7 @@ export default function FilterBar() {
             key={chip.key}
             type="button"
             onClick={() => handleChipClick(chip.key)}
+            title={chip.label}
             className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs transition-colors ${
               active
                 ? 'bg-blue-600 text-white hover:bg-blue-700'
@@ -79,7 +80,7 @@ export default function FilterBar() {
             }`}
           >
             <Icon className="h-3 w-3" />
-            {chip.label}
+            <span className="hidden sm:inline">{chip.label}</span>
           </button>
         );
       })}

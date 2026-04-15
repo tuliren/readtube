@@ -96,7 +96,7 @@ export default function InboxHeader({
       {/* Title row — action buttons sit next to the title/badge,
           search stays on the right edge. This keeps the actions
           contextually close to the thing they act on. */}
-      <div className="flex h-12 items-center justify-between gap-2 overflow-hidden px-4">
+      <div className="flex h-12 items-center justify-center gap-2 overflow-hidden px-4 sm:justify-start">
         <div className="flex min-w-0 items-center gap-2">
           {channelLogoUrl != null && (
             <ChannelAvatar url={channelLogoUrl} size={40} cssSize="h-6 w-6" />
@@ -130,15 +130,17 @@ export default function InboxHeader({
             </button>
           )}
         </div>
-        <SearchInput />
       </div>
-      {/* Filter chips row + pagination on the right. The header
-          itself sits above the scrolling video list and never
-          scrolls away, so the pagination control is always
-          reachable while the user is reading rows. */}
-      <div className="flex items-center justify-between px-4 pb-2 pt-0">
+      {/* Filter chips row + search + pagination on the right. The
+          header itself sits above the scrolling video list and never
+          scrolls away, so the pagination control is always reachable
+          while the user is reading rows. */}
+      <div className="flex items-center justify-between gap-2 px-4 pb-2 pt-0">
         <FilterBar />
-        <Pagination total={totalVideos} />
+        <div className="flex items-center gap-2">
+          <SearchInput />
+          <Pagination total={totalVideos} />
+        </div>
       </div>
     </div>
   );
