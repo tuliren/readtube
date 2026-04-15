@@ -1,4 +1,4 @@
-import { parseDurationText } from '../youtube/scrapeChannel';
+import { parseDurationText } from '../channelScrape';
 
 describe('parseDurationText', () => {
   it.each<{ input: string | null | undefined; expected: number | null; desc: string }>([

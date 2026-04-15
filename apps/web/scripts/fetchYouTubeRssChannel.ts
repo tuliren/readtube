@@ -17,7 +17,7 @@
  */
 import { program } from 'commander';
 
-import { fetchRssFeed } from '@/lib/youtube/rss';
+import { fetchRssFeed } from '@/lib/youtube/channelRss';
 
 if (process.env.SCRIPT_ENV !== 'development') {
   console.error('This script can only be run in development environment.');

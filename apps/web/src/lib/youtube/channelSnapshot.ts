@@ -1,7 +1,6 @@
-import { buildThumbnailUrl } from '@/lib/youtube/channelMetadata';
-import { buildRssUrl } from '@/lib/youtube/channelUrl';
-import { type RssChannel, fetchRssFeed, isYouTubeShort } from '@/lib/youtube/rss';
-import { type ScrapedChannel, scrapeChannel } from '@/lib/youtube/scrapeChannel';
+import { type RssChannel, fetchRssFeed, isYouTubeShort } from '@/lib/youtube/channelRss';
+import { type ScrapedChannel, scrapeChannel } from '@/lib/youtube/channelScrape';
+import { buildRssUrl, buildThumbnailUrl } from '@/lib/youtube/urls';
 
 /**
  * A single ingest-ready video produced by merging RSS + scrape data.

@@ -1,6 +1,4 @@
-import { buildThumbnailUrl, fetchChannelLatest } from '../youtube/channelMetadata';
-
-// ─── fetchChannelLatest ──────────────────────────────────────────
+import { fetchChannelLatest } from '../transcriptApi';
 
 describe('fetchChannelLatest', () => {
   const originalEnv = process.env;
@@ -162,16 +160,5 @@ describe('fetchChannelLatest', () => {
     const result = await fetchChannelLatest('UC_no_thumb');
 
     expect(result.videos[0]!.thumbnailUrl).toBeNull();
-  });
-});
-
-// ─── buildThumbnailUrl ───────────────────────────────────────────
-
-describe('buildThumbnailUrl', () => {
-  it.each([
-    ['dQw4w9WgXcQ', 'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg'],
-    ['abc123', 'https://i.ytimg.com/vi/abc123/hqdefault.jpg'],
-  ])('builds thumbnail URL for %s', (videoId, expected) => {
-    expect(buildThumbnailUrl(videoId)).toBe(expected);
   });
 });

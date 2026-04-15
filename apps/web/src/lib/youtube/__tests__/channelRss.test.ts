@@ -1,4 +1,4 @@
-import { fetchRssFeed } from '@/lib/youtube/rss';
+import { fetchRssFeed } from '@/lib/youtube/channelRss';
 
 // Minimal fixture built from a real `feeds/videos.xml` response: one
 // regular video and one Short, so we can lock in the `/watch?v=` vs

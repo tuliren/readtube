@@ -126,14 +126,3 @@ export async function fetchChannelLatest(
     videos,
   };
 }
-
-/**
- * Construct a YouTube video thumbnail URL from the videoId.
- * Always available — doesn't require any API call.
- *
- * Uses `hqdefault.jpg` (480x360) which is guaranteed to exist for
- * all public videos.
- */
-export function buildThumbnailUrl(videoId: string): string {
-  return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
-}

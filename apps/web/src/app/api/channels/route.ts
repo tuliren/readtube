@@ -10,7 +10,7 @@ import {
   getSubscribedChannelsWithUnread,
 } from '@/lib/subscriptions';
 import { fetchChannelSnapshot } from '@/lib/youtube/channelSnapshot';
-import { buildRssUrl, extractChannelId, extractHandle } from '@/lib/youtube/channelUrl';
+import { buildRssUrl, extractChannelId, extractHandle } from '@/lib/youtube/urls';
 
 export async function GET() {
   const { userId } = await auth();

@@ -1,6 +1,6 @@
+import type { RssChannel, RssVideo } from '@/lib/youtube/channelRss';
+import type { ScrapedChannel } from '@/lib/youtube/channelScrape';
 import { mergeSnapshot } from '@/lib/youtube/channelSnapshot';
-import type { RssChannel, RssVideo } from '@/lib/youtube/rss';
-import type { ScrapedChannel } from '@/lib/youtube/scrapeChannel';
 
 function rssVideo(overrides: Partial<RssVideo> & Pick<RssVideo, 'videoId'>): RssVideo {
   const { videoId } = overrides;
