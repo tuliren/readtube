@@ -1,10 +1,11 @@
 'use client';
 
 import { UserButton } from '@clerk/nextjs';
-import { Menu, PanelLeft } from 'lucide-react';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { Menu, PanelLeft, RefreshCw } from 'lucide-react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import useSWR from 'swr';
+import { toast } from 'sonner';
+import useSWR, { useSWRConfig } from 'swr';
 
 import AddChannelModal from '@/components/inbox/AddChannelModal';
 import ChannelAvatar from '@/components/inbox/ChannelAvatar';
@@ -23,6 +24,7 @@ import { Toaster } from '@/components/ui/sonner';
 import { extractInboxSearchParams, parseInboxQuery } from '@/lib/inbox/filter';
 import { resolveInboxView } from '@/lib/inbox/views';
 import type { ChannelData } from '@/lib/types';
+import { isProduction } from '@/lib/vercelEnv';
 
 import { CollapseStateProvider, useCollapseState } from './CollapseStateContext';
 import { DashboardCtx, type DashboardState } from './DashboardContext';
@@ -167,29 +169,10 @@ function DashboardShellInner({ initialChannels, children }: Props) {
         {/* Main content */}
         <div className="flex min-w-0 flex-1 flex-col">
           {isMobile && (
-            <div className="flex h-14 shrink-0 items-center gap-2 border-b border-gray-200 px-4">
-              <button
-                type="button"
-                onClick={() => setMobileOpen(true)}
-                className="shrink-0 rounded p-1.5 text-gray-500 hover:bg-gray-100"
-                aria-label="Open sidebar"
-              >
-                <Menu className="h-5 w-5" />
-              </button>
-              {selectedChannel != null && (
-                <div className="flex min-w-0 flex-1 items-center gap-2">
-                  {selectedChannel.logoUrl != null && (
-                    <ChannelAvatar url={selectedChannel.logoUrl} size={40} cssSize="h-6 w-6" />
-                  )}
-                  <span className="truncate text-base font-semibold text-gray-900">
-                    {selectedChannel.name}
-                  </span>
-                </div>
-              )}
-              <div className="ml-auto shrink-0">
-                <UserButton />
-              </div>
-            </div>
+            <MobileTopBar
+              onOpenSidebar={() => setMobileOpen(true)}
+              selectedChannel={selectedChannel}
+            />
           )}
           {children}
         </div>
@@ -202,6 +185,81 @@ function DashboardShellInner({ initialChannels, children }: Props) {
         <Toaster />
       </div>
     </DashboardCtx.Provider>
+  );
+}
+
+function MobileTopBar({
+  onOpenSidebar,
+  selectedChannel,
+}: {
+  onOpenSidebar: () => void;
+  selectedChannel: ChannelData | null;
+}) {
+  const { mutate } = useSWRConfig();
+  const router = useRouter();
+  const [refreshing, setRefreshing] = useState(false);
+  const showRefresh = !isProduction() && selectedChannel != null;
+
+  async function handleRefreshChannel() {
+    if (selectedChannel == null || refreshing) {
+      return;
+    }
+    setRefreshing(true);
+    try {
+      const res = await fetch(`/api/channels/${selectedChannel.id}/refresh`, { method: 'POST' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ error: 'Refresh failed' }));
+        toast.error(body.error ?? 'Refresh failed');
+        return;
+      }
+      const body = (await res.json()) as { videosProcessed: number };
+      toast.success(`Refreshed: ${body.videosProcessed} videos processed`);
+      await Promise.all([
+        mutate('/api/channels'),
+        mutate((key) => typeof key === 'string' && key.startsWith('/api/videos')),
+      ]);
+      router.refresh();
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  return (
+    <div className="flex h-14 shrink-0 items-center gap-2 border-b border-gray-200 px-4">
+      <button
+        type="button"
+        onClick={onOpenSidebar}
+        className="shrink-0 rounded p-1.5 text-gray-500 hover:bg-gray-100"
+        aria-label="Open sidebar"
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+      {selectedChannel != null && (
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          {selectedChannel.logoUrl != null && (
+            <ChannelAvatar url={selectedChannel.logoUrl} size={40} cssSize="h-6 w-6" />
+          )}
+          <span className="truncate text-base font-semibold text-gray-900">
+            {selectedChannel.name}
+          </span>
+          {showRefresh && (
+            <button
+              type="button"
+              onClick={handleRefreshChannel}
+              disabled={refreshing}
+              className="shrink-0 rounded p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50 disabled:hover:bg-transparent"
+              aria-label="Refresh channel"
+              title="Pull latest videos + metadata for this channel"
+            >
+              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+            </button>
+          )}
+        </div>
+      )}
+      <div className="ml-auto shrink-0">
+        <UserButton />
+      </div>
+    </div>
   );
 }
 

@@ -1,5 +1,6 @@
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@readtube/database';
+import type { Metadata } from 'next';
 import { notFound, redirect } from 'next/navigation';
 
 import VideoReader from '@/components/reader/VideoReader';
@@ -9,6 +10,31 @@ import { resolveVideoSourceId } from '@/lib/videos/resolveVideoSourceId';
 
 interface Props {
   params: Promise<{ videoId: string }>;
+}
+
+const TITLE_CAP = 60;
+
+function capTitle(title: string): string {
+  if (title.length <= TITLE_CAP) {
+    return title;
+  }
+  return `${title.slice(0, TITLE_CAP - 1).trimEnd()}…`;
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { videoId } = await params;
+  const stub = await resolveVideoSourceId(prisma, videoId);
+  if (stub == null) {
+    return {};
+  }
+  const video = await prisma.video.findUnique({
+    where: { id: stub.id },
+    select: { title: true },
+  });
+  if (video == null) {
+    return {};
+  }
+  return { title: capTitle(video.title) };
 }
 
 /**

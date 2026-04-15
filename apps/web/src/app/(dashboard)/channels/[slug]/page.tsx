@@ -1,5 +1,6 @@
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@readtube/database';
+import type { Metadata } from 'next';
 import { notFound, redirect } from 'next/navigation';
 
 import InboxListView from '@/components/inbox/InboxListView';
@@ -9,6 +10,15 @@ import { loadInboxVideos, searchParamsToInboxQuery } from '@/lib/inbox/loadVideo
 interface Props {
   params: Promise<{ slug: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { slug } = await params;
+  const channel = await resolveChannelSlug(prisma, slug);
+  if (channel == null) {
+    return {};
+  }
+  return { title: channel.name };
 }
 
 export default async function ChannelPage({ params, searchParams }: Props) {
