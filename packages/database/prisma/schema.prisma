@@ -124,6 +124,7 @@ model UserSubscription {
 model Video {
   id                     String                   @id @default(cuid())
   channel_id             String
+  source_type            VideoPlatformType        @default(YOUTUBE)
   // source platform video id
   source_id              String
   title                  String
@@ -162,8 +163,8 @@ model Video {
   embedding    VideoEmbedding?
 
   @@unique([channel_id, source_id], name: "video_unique_channel_source")
+  @@unique([source_type, source_id], name: "video_unique_source")
   @@index([channel_id, published_at], name: "video_index_on_channel_published_at")
-  @@index([source_id], name: "video_index_on_source_id")
 }
 
 model UserVideoConsumption {

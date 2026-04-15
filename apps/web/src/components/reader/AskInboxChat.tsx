@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 
 interface Citation {
   videoId: string;
+  videoSourceId: string;
   title: string;
   channelName: string;
 }
@@ -148,7 +149,7 @@ export default function AskInboxChat() {
                       {turn.citations.map((c, i) => (
                         <li key={c.videoId}>
                           <Link
-                            href={`/inbox/${c.videoId}`}
+                            href={`/videos/${encodeURIComponent(c.videoSourceId)}`}
                             className="text-blue-600 hover:underline"
                           >
                             [{i + 1}] {c.title}

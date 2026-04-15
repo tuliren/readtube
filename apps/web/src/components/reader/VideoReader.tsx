@@ -7,9 +7,11 @@ import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import useSWR from 'swr';
 
+import CopyButton from '@/components/CopyButton';
 import { Button } from '@/components/ui/button';
 import { formatDurationSeconds } from '@/lib/format/duration';
 import type { VideoData } from '@/lib/types';
+import { videoHref } from '@/lib/urls/videoHref';
 
 import ArticleReader from './ArticleReader';
 import NotesPanel from './NotesPanel';
@@ -43,16 +45,24 @@ function relativeDate(dateStr: string): string {
 
 export default function VideoReader({ video, publicMode = false }: Props) {
   const searchParams = useSearchParams();
-  // The reader URL is `/inbox/<id>?returnTo=<encoded-inbox-query>`. The
-  // `returnTo` value is the literal query string
-  // (channelId=abc&starred=1) that the user came from, so the Back
-  // link can re-mount the inbox with the exact same filter state.
-  // Falls back to plain `/inbox` when there's no `returnTo` (deep
-  // links, fresh sessions). The param name is intentionally NOT
-  // `from` because that collides with InboxQuery.from (date range).
+  // The reader URL is `/videos/<sourceId>?returnTo=<encoded-path>`.
+  // `returnTo` carries the full path + query of the list the user
+  // came from (e.g. `/inbox?starred=1` or `/channels/@mkbhd`). Falls
+  // back to plain `/inbox` on deep links. The param name is
+  // intentionally NOT `from` because that collides with
+  // InboxQuery.from (date range).
+  //
+  // Reject anything that isn't a same-origin path — the value is
+  // attacker-controllable via the URL, and <Link> happily navigates
+  // to `https://evil.com` or a protocol-relative `//evil.com`. The
+  // allowlist is "starts with `/` AND the second char isn't `/`".
   const returnToParam = searchParams.get('returnTo');
-  const backHref =
-    returnToParam != null && returnToParam.length > 0 ? `/inbox?${returnToParam}` : '/inbox';
+  const isSafeReturnTo =
+    returnToParam != null &&
+    returnToParam.length > 0 &&
+    returnToParam.startsWith('/') &&
+    !returnToParam.startsWith('//');
+  const backHref = isSafeReturnTo ? returnToParam : '/inbox';
   const watchUrl = `https://youtube.com/watch?v=${video.sourceId}`;
 
   // Default to Summary because that's the cheapest scannable view —
@@ -206,24 +216,36 @@ export default function VideoReader({ video, publicMode = false }: Props) {
               </>
             )}
             <span>·</span>
-            <a
-              href={watchUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-500 hover:underline"
-            >
-              Watch on YouTube ↗
-            </a>
+            <span className="inline-flex items-center gap-0.5">
+              <a
+                href={watchUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-500 hover:underline"
+              >
+                Watch on YouTube ↗
+              </a>
+              <CopyButton value={watchUrl} label="Copy YouTube link" />
+            </span>
             {!publicMode && (hasSummary || hasArticle) && (
               <>
                 <span>·</span>
-                <Link
-                  href={`/public/${encodeURIComponent(video.channelHandle ?? video.channelSourceId)}/${video.sourceId}`}
-                  target="_blank"
-                  className="text-blue-500 hover:underline"
-                >
-                  Share ↗
-                </Link>
+                {/*
+                  Link to the public mirror so the sharer (who is
+                  authenticated + subscribed) sees the same
+                  stripped-down view a recipient does, and the URL
+                  they paste elsewhere is the canonical share URL.
+                */}
+                <span className="inline-flex items-center gap-0.5">
+                  <Link
+                    href={`/p${videoHref(video)}`}
+                    target="_blank"
+                    className="text-blue-500 hover:underline"
+                  >
+                    Share ↗
+                  </Link>
+                  <CopyButton value={`/p${videoHref(video)}`} label="Copy share link" />
+                </span>
               </>
             )}
           </div>

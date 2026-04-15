@@ -83,6 +83,7 @@ CREATE TABLE "Video" (
   "duration_seconds" INTEGER,
   "transcript_unavailable" BOOLEAN NOT NULL DEFAULT false,
   "thumbnail_url" TEXT,
+  "source_type" "VideoPlatformType" NOT NULL DEFAULT 'YOUTUBE',
   CONSTRAINT "Video_pkey" PRIMARY KEY ("id")
 );
 
@@ -290,13 +291,13 @@ CREATE UNIQUE INDEX "UserSubscription_user_id_channel_id_key" ON "UserSubscripti
 CREATE INDEX "video_index_on_channel_published_at" ON "Video" ("channel_id", "published_at");
 
 -- CreateIndex
-CREATE INDEX "video_index_on_source_id" ON "Video" ("source_id");
-
--- CreateIndex
 CREATE INDEX "video_search_tsv_idx" ON "Video" USING GIN ("search_tsv");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Video_channel_id_source_id_key" ON "Video" ("channel_id", "source_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Video_source_type_source_id_key" ON "Video" ("source_type", "source_id");
 
 -- CreateIndex
 CREATE INDEX "user_video_consumption_index_on_video_id" ON "UserVideoConsumption" ("video_id");
