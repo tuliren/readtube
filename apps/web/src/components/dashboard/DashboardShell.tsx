@@ -1,12 +1,15 @@
 'use client';
 
 import { UserButton } from '@clerk/nextjs';
-import { Menu, PanelLeft } from 'lucide-react';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { CheckIcon } from '@heroicons/react/24/outline';
+import { Menu, PanelLeft, RefreshCw } from 'lucide-react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import useSWR from 'swr';
+import { toast } from 'sonner';
+import useSWR, { useSWRConfig } from 'swr';
 
 import AddChannelModal from '@/components/inbox/AddChannelModal';
+import ChannelAvatar from '@/components/inbox/ChannelAvatar';
 import ChannelSection from '@/components/inbox/ChannelSection';
 import { CommandPaletteProvider } from '@/components/inbox/CommandPalette';
 import { KeyboardShortcutsProvider } from '@/components/inbox/KeyboardShortcutsProvider';
@@ -22,6 +25,7 @@ import { Toaster } from '@/components/ui/sonner';
 import { extractInboxSearchParams, parseInboxQuery } from '@/lib/inbox/filter';
 import { resolveInboxView } from '@/lib/inbox/views';
 import type { ChannelData } from '@/lib/types';
+import { isProduction } from '@/lib/vercelEnv';
 
 import { CollapseStateProvider, useCollapseState } from './CollapseStateContext';
 import { DashboardCtx, type DashboardState } from './DashboardContext';
@@ -78,6 +82,8 @@ function DashboardShellInner({ initialChannels, children }: Props) {
   );
 
   const selectedChannelId = useSelectedChannelId(channels);
+  const selectedChannel =
+    selectedChannelId != null ? (channels.find((c) => c.id === selectedChannelId) ?? null) : null;
 
   // Auto-uncollapse: when the current URL points at a descendant of a
   // collapsed entry, clear that collapse flag so the active item
@@ -87,8 +93,15 @@ function DashboardShellInner({ initialChannels, children }: Props) {
 
   const { width, collapsed, mobileOpen, isMobile, toggleCollapsed, setMobileOpen } = useSidebar();
 
-  const sidebarContent = (
-    <div className="flex flex-1 flex-col overflow-y-auto pb-6">
+  // Collapsed desktop sidebar keeps scrolling but hides the bar —
+  // a visible scrollbar inside a 56px rail looks noisy. The sheet
+  // and expanded sidebar keep their default scrollbars.
+  const renderSidebarContent = (hideScrollbar: boolean) => (
+    <div
+      className={`flex flex-1 flex-col overflow-y-auto pb-6 ${
+        hideScrollbar ? '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden' : ''
+      }`}
+    >
       <ChannelSection
         channels={channels}
         selectedChannelId={selectedChannelId}
@@ -105,12 +118,16 @@ function DashboardShellInner({ initialChannels, children }: Props) {
             regardless of the desktop collapse state. */}
         {isMobile && (
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-            <SheetContent side="left" className="w-72 p-0" aria-describedby={undefined}>
+            <SheetContent
+              side="left"
+              className="flex w-72 flex-col gap-0 p-0"
+              aria-describedby={undefined}
+            >
               <SidebarExpandedOverride>
                 <div className="flex h-14 shrink-0 items-center border-b border-gray-200 px-5">
                   <SheetTitle className="text-base font-bold text-gray-900">ReadTube</SheetTitle>
                 </div>
-                {sidebarContent}
+                {renderSidebarContent(false)}
               </SidebarExpandedOverride>
             </SheetContent>
           </Sheet>
@@ -152,7 +169,7 @@ function DashboardShellInner({ initialChannels, children }: Props) {
               )}
             </div>
 
-            {sidebarContent}
+            {renderSidebarContent(collapsed)}
             {!collapsed && <SidebarResizeHandle />}
           </aside>
         )}
@@ -160,20 +177,11 @@ function DashboardShellInner({ initialChannels, children }: Props) {
         {/* Main content */}
         <div className="flex min-w-0 flex-1 flex-col">
           {isMobile && (
-            <div className="flex h-14 shrink-0 items-center gap-3 border-b border-gray-200 px-4">
-              <button
-                type="button"
-                onClick={() => setMobileOpen(true)}
-                className="rounded p-1.5 text-gray-500 hover:bg-gray-100"
-                aria-label="Open sidebar"
-              >
-                <Menu className="h-5 w-5" />
-              </button>
-              <span className="text-base font-bold text-gray-900">ReadTube</span>
-              <div className="ml-auto">
-                <UserButton />
-              </div>
-            </div>
+            <MobileTopBar
+              onOpenSidebar={() => setMobileOpen(true)}
+              selectedChannel={selectedChannel}
+              totalUnread={totalUnread}
+            />
           )}
           {children}
         </div>
@@ -186,6 +194,121 @@ function DashboardShellInner({ initialChannels, children }: Props) {
         <Toaster />
       </div>
     </DashboardCtx.Provider>
+  );
+}
+
+function MobileTopBar({
+  onOpenSidebar,
+  selectedChannel,
+  totalUnread,
+}: {
+  onOpenSidebar: () => void;
+  selectedChannel: ChannelData | null;
+  totalUnread: number;
+}) {
+  const { mutate } = useSWRConfig();
+  const router = useRouter();
+  const [refreshing, setRefreshing] = useState(false);
+  const [marking, setMarking] = useState(false);
+  const showRefresh = !isProduction() && selectedChannel != null;
+  const unreadCount = selectedChannel != null ? selectedChannel.unreadCount : totalUnread;
+  const showMarkAll = unreadCount > 0;
+
+  async function handleRefreshChannel() {
+    if (selectedChannel == null || refreshing) {
+      return;
+    }
+    setRefreshing(true);
+    try {
+      const res = await fetch(`/api/channels/${selectedChannel.id}/refresh`, { method: 'POST' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ error: 'Refresh failed' }));
+        toast.error(body.error ?? 'Refresh failed');
+        return;
+      }
+      const body = (await res.json()) as { videosProcessed: number };
+      toast.success(`Refreshed: ${body.videosProcessed} videos processed`);
+      await Promise.all([
+        mutate('/api/channels'),
+        mutate((key) => typeof key === 'string' && key.startsWith('/api/videos')),
+      ]);
+      router.refresh();
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  async function handleMarkAllRead() {
+    if (marking) {
+      return;
+    }
+    setMarking(true);
+    try {
+      const res = await fetch('/api/videos/mark-all-read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(selectedChannel != null ? { channelId: selectedChannel.id } : {}),
+      });
+      if (!res.ok) {
+        return;
+      }
+      await Promise.all([
+        mutate('/api/channels'),
+        mutate((key) => typeof key === 'string' && key.startsWith('/api/videos')),
+      ]);
+    } finally {
+      setMarking(false);
+    }
+  }
+
+  return (
+    <div className="flex h-14 shrink-0 items-center gap-2 border-b border-gray-200 px-4">
+      <button
+        type="button"
+        onClick={onOpenSidebar}
+        className="shrink-0 rounded p-1.5 text-gray-500 hover:bg-gray-100"
+        aria-label="Open sidebar"
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+      {selectedChannel != null && (
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          {selectedChannel.logoUrl != null && (
+            <ChannelAvatar url={selectedChannel.logoUrl} size={40} cssSize="h-6 w-6" />
+          )}
+          <span className="truncate text-base font-semibold text-gray-900">
+            {selectedChannel.name}
+          </span>
+          {showRefresh && (
+            <button
+              type="button"
+              onClick={handleRefreshChannel}
+              disabled={refreshing}
+              className="shrink-0 rounded p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50 disabled:hover:bg-transparent"
+              aria-label="Refresh channel"
+              title="Pull latest videos + metadata for this channel"
+            >
+              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+            </button>
+          )}
+        </div>
+      )}
+      <div className="ml-auto flex shrink-0 items-center gap-1">
+        {showMarkAll && (
+          <button
+            type="button"
+            onClick={handleMarkAllRead}
+            disabled={marking}
+            className="rounded p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50 disabled:hover:bg-transparent"
+            aria-label="Mark all as read"
+            title="Mark all as read"
+          >
+            <CheckIcon className="h-5 w-5" />
+          </button>
+        )}
+        <UserButton />
+      </div>
+    </div>
   );
 }
 

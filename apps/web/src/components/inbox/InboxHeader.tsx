@@ -10,7 +10,6 @@ import { useSWRConfig } from 'swr';
 import { isProduction } from '@/lib/vercelEnv';
 
 import ChannelAvatar from './ChannelAvatar';
-import FilterBar from './FilterBar';
 import Pagination from './Pagination';
 import SearchInput from './SearchInput';
 
@@ -96,14 +95,18 @@ export default function InboxHeader({
       {/* Title row — action buttons sit next to the title/badge,
           search stays on the right edge. This keeps the actions
           contextually close to the thing they act on. */}
-      <div className="flex h-12 items-center justify-between px-4">
+      <div className="hidden h-12 items-center justify-start gap-2 overflow-hidden px-4 sidebar:flex">
         <div className="flex min-w-0 items-center gap-2">
           {channelLogoUrl != null && (
-            <ChannelAvatar url={channelLogoUrl} size={40} cssSize="h-6 w-6" />
+            <div className="hidden sidebar:block">
+              <ChannelAvatar url={channelLogoUrl} size={40} cssSize="h-6 w-6" />
+            </div>
           )}
-          <h1 className="truncate text-sm font-semibold text-gray-900">{channelName}</h1>
+          <h1 className="hidden min-w-0 truncate text-sm font-semibold text-gray-900 sidebar:block">
+            {channelName}
+          </h1>
           {unreadCount > 0 && (
-            <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-700">
+            <span className="shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-700">
               {unreadCount}
             </span>
           )}
@@ -111,34 +114,37 @@ export default function InboxHeader({
             <button
               onClick={handleRefreshChannel}
               disabled={refreshing}
-              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50 disabled:hover:bg-transparent"
+              className="hidden shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50 disabled:hover:bg-transparent sidebar:inline-flex"
               title="Pull latest videos + metadata for this channel"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-              {refreshing ? 'Refreshing…' : 'Refresh'}
+              <span className="hidden sidebar:inline">
+                {refreshing ? 'Refreshing…' : 'Refresh'}
+              </span>
             </button>
           )}
           {unreadCount > 0 && (
             <button
               onClick={handleMarkAllRead}
               disabled={marking}
-              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50 disabled:hover:bg-transparent"
+              className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50 disabled:hover:bg-transparent"
               title="Mark all as read"
             >
               <CheckIcon className="h-4 w-4" />
-              {marking ? 'Marking…' : 'Mark all as read'}
+              <span className="hidden sidebar:inline">
+                {marking ? 'Marking…' : 'Mark all as read'}
+              </span>
             </button>
           )}
         </div>
-        <SearchInput />
       </div>
-      {/* Filter chips row + pagination on the right. The header
-          itself sits above the scrolling video list and never
-          scrolls away, so the pagination control is always
+      {/* Video count + pagination on the left, search on the right.
+          The header itself sits above the scrolling video list and
+          never scrolls away, so the pagination control is always
           reachable while the user is reading rows. */}
-      <div className="flex items-center justify-between px-4 pb-2 pt-0">
-        <FilterBar />
+      <div className="flex items-center justify-between gap-2 px-4 py-2 sidebar:pt-0">
         <Pagination total={totalVideos} />
+        <SearchInput />
       </div>
     </div>
   );

@@ -2,6 +2,7 @@
 
 import { Archive, Bookmark, BookmarkCheck, MoreHorizontal, NotebookPen, Star } from 'lucide-react';
 import Link from 'next/link';
+import { useEffect, useRef } from 'react';
 
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -163,12 +164,84 @@ export default function VideoRow({
   const { isMobile } = useSidebar();
   const isUnread = video.readAt == null;
 
+  // Long-press (mobile): touchstart arms a 500ms timer; if it fires
+  // without the finger moving more than LONG_PRESS_SLOP pixels or
+  // lifting off, we flip this row into selection mode.
+  // `longPressedRef` suppresses the synthetic click that follows
+  // touchend so the row doesn't also navigate. Stationary-finger
+  // jitter often fires sub-pixel touchmove events, so we require a
+  // real movement before cancelling the timer.
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressedRef = useRef(false);
+  const touchOriginRef = useRef<{ x: number; y: number } | null>(null);
+  const LONG_PRESS_SLOP = 10;
+
+  useEffect(() => {
+    // Clear any pending long-press timer if the row unmounts mid-hold
+    // (SWR refresh, pagination, navigation). Without this the timer
+    // callback fires against a video id that's no longer in view and
+    // flips the list into an unexpected selection state.
+    return () => {
+      if (longPressTimer.current != null) {
+        clearTimeout(longPressTimer.current);
+        longPressTimer.current = null;
+      }
+    };
+  }, []);
+
   function stop(e: React.MouseEvent | React.KeyboardEvent) {
     e.preventDefault();
     e.stopPropagation();
   }
 
+  function clearLongPress() {
+    if (longPressTimer.current != null) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+    touchOriginRef.current = null;
+  }
+
+  function handleTouchStart(e: React.TouchEvent) {
+    if (inSelectionMode || !isMobile) {
+      return;
+    }
+    longPressedRef.current = false;
+    clearLongPress();
+    const touch = e.touches[0];
+    touchOriginRef.current = touch != null ? { x: touch.clientX, y: touch.clientY } : null;
+    longPressTimer.current = setTimeout(() => {
+      longPressedRef.current = true;
+      if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+        navigator.vibrate(15);
+      }
+      onToggleChecked(video.id, true);
+    }, 500);
+  }
+
+  function handleTouchMove(e: React.TouchEvent) {
+    const origin = touchOriginRef.current;
+    if (origin == null) {
+      return;
+    }
+    const touch = e.touches[0];
+    if (touch == null) {
+      return;
+    }
+    const dx = touch.clientX - origin.x;
+    const dy = touch.clientY - origin.y;
+    if (dx * dx + dy * dy > LONG_PRESS_SLOP * LONG_PRESS_SLOP) {
+      clearLongPress();
+    }
+  }
+
   function handleRowClick(e: React.MouseEvent) {
+    if (longPressedRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      longPressedRef.current = false;
+      return;
+    }
     if (inSelectionMode) {
       e.preventDefault();
       e.stopPropagation();
@@ -226,7 +299,7 @@ export default function VideoRow({
         } ${inSelectionMode ? 'select-none' : ''}`}
       >
         <div
-          className="pt-1"
+          className={`pt-1 ${inSelectionMode || isChecked ? '' : 'hidden sidebar:block'}`}
           onClick={(e) => {
             stop(e);
             onToggleChecked(video.id, !isChecked, e.shiftKey);
@@ -253,7 +326,15 @@ export default function VideoRow({
             {rowContent}
           </div>
         ) : (
-          <Link href={href} className="flex min-w-0 flex-1 items-start gap-2">
+          <Link
+            href={href}
+            className="flex min-w-0 flex-1 items-start gap-2"
+            onClick={handleRowClick}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={clearLongPress}
+            onTouchMove={handleTouchMove}
+            onTouchCancel={clearLongPress}
+          >
             {rowContent}
           </Link>
         )}

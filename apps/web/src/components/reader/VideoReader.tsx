@@ -179,15 +179,16 @@ export default function VideoReader({ video, publicMode = false }: Props) {
               <ArrowLeftIcon className="h-4 w-4" />
               Back
             </Link>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-0.5 sidebar:gap-2">
               <Button
                 variant="ghost"
                 size="sm"
                 className="gap-1"
                 onClick={() => setNotesOpen((prev) => !prev)}
+                title="Notes"
               >
                 <NotebookPen className="h-4 w-4" />
-                Notes
+                <span className="hidden sidebar:inline">Notes</span>
                 {noteCount > 0 && (
                   <span className="rounded-full bg-amber-100 px-1.5 text-[10px] font-semibold text-amber-700">
                     {noteCount}
