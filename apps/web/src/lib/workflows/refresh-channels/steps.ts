@@ -1,8 +1,7 @@
 import { prisma } from '@readtube/database';
 
 import { isEmptyString } from '@/lib/string';
-import { fetchChannelLatest } from '@/lib/youtube/channelMetadata';
-import { scrapeChannel } from '@/lib/youtube/scrapeChannel';
+import { fetchChannelSnapshot } from '@/lib/youtube/channelSnapshot';
 
 /** Number of days before a channel is considered stale and eligible for refresh. */
 export const STALE_DAYS = 5;
@@ -10,13 +9,18 @@ export const STALE_DAYS = 5;
 /** Maximum number of channels to refresh per workflow run. */
 export const BATCH_SIZE = 10;
 
-/** Delay in ms between API calls to stay well under the 300 req/min rate limit. */
+/**
+ * Small delay between per-channel fetches so we stay polite toward
+ * YouTube's public RSS endpoint and don't burst a large batch of
+ * requests in parallel.
+ */
 const RATE_LIMIT_DELAY_MS = 250;
 
 export interface StaleChannel {
   id: string;
   source_id: string;
   name: string;
+  rss_url: string;
 }
 
 export async function fetchStaleChannels(): Promise<StaleChannel[]> {
@@ -30,7 +34,7 @@ export async function fetchStaleChannels(): Promise<StaleChannel[]> {
     },
     orderBy: { checked_at: { sort: 'asc', nulls: 'first' } },
     take: BATCH_SIZE,
-    select: { id: true, source_id: true, name: true },
+    select: { id: true, source_id: true, name: true, rss_url: true },
   });
 }
 
@@ -39,7 +43,7 @@ export async function fetchChannelById(channelId: string): Promise<StaleChannel 
 
   return prisma.channel.findUnique({
     where: { id: channelId },
-    select: { id: true, source_id: true, name: true },
+    select: { id: true, source_id: true, name: true, rss_url: true },
   });
 }
 
@@ -54,57 +58,14 @@ export async function refreshChannel(channel: StaleChannel): Promise<RefreshResu
 
   await new Promise((r) => setTimeout(r, RATE_LIMIT_DELAY_MS));
 
-  const data = await fetchChannelLatest(channel.source_id);
-
-  const videoSourceIds = data.videos.map((v) => v.videoId);
-  const existingVideos = await prisma.video.findMany({
-    where: { channel_id: channel.id, source_id: { in: videoSourceIds } },
-    select: { source_id: true, duration_seconds: true },
+  const snapshot = await fetchChannelSnapshot({
+    channelPageUrl: `https://www.youtube.com/channel/${channel.source_id}`,
+    rssUrl: channel.rss_url,
   });
-  const videosMissingDuration = new Set(
-    existingVideos.filter((v) => v.duration_seconds == null).map((v) => v.source_id)
-  );
-  // Videos not yet in the DB also need duration
-  const existingSourceIds = new Set(existingVideos.map((v) => v.source_id));
-  for (const v of data.videos) {
-    if (!existingSourceIds.has(v.videoId)) {
-      videosMissingDuration.add(v.videoId);
-    }
-  }
 
-  const needsDuration = videosMissingDuration.size > 0;
+  const nameUpdated = snapshot.name !== channel.name;
 
-  // Best-effort scrape for logo_url, handle, and duration_seconds —
-  // fields the TranscriptAPI RSS endpoint doesn't provide. Always
-  // scrape to keep logo_url / handle fresh; only collect durations for
-  // videos that lack them.
-  let logoUrl: string | null = null;
-  let handle: string | null = null;
-  const durationMap = new Map<string, number>();
-  try {
-    const channelPageUrl = `https://www.youtube.com/channel/${channel.source_id}`;
-    const scraped = await scrapeChannel(channelPageUrl);
-    logoUrl = scraped.logoUrl;
-    handle = scraped.handle;
-    if (needsDuration) {
-      for (const v of scraped.videos) {
-        if (v.durationSeconds != null && videosMissingDuration.has(v.videoId)) {
-          durationMap.set(v.videoId, v.durationSeconds);
-        }
-      }
-    }
-  } catch (err) {
-    console.warn(
-      `[refresh-channels] scrape failed for ${channel.id}, skipping logo/duration:`,
-      err
-    );
-  }
-
-  const nameUpdated = data.channel.title !== channel.name;
-
-  for (const video of data.videos) {
-    const durationSeconds = durationMap.get(video.videoId) ?? null;
-
+  for (const video of snapshot.videos) {
     await prisma.video.upsert({
       where: {
         video_unique_channel_source: {
@@ -119,13 +80,13 @@ export async function refreshChannel(channel: StaleChannel): Promise<RefreshResu
         description: video.description,
         published_at: video.publishedAt,
         thumbnail_url: video.thumbnailUrl,
-        duration_seconds: durationSeconds,
+        duration_seconds: video.durationSeconds,
       },
       update: {
         title: video.title,
         ...(isEmptyString(video.description) ? {} : { description: video.description }),
-        ...(video.thumbnailUrl != null ? { thumbnail_url: video.thumbnailUrl } : {}),
-        ...(durationSeconds != null ? { duration_seconds: durationSeconds } : {}),
+        thumbnail_url: video.thumbnailUrl,
+        ...(video.durationSeconds != null ? { duration_seconds: video.durationSeconds } : {}),
       },
     });
   }
@@ -133,16 +94,16 @@ export async function refreshChannel(channel: StaleChannel): Promise<RefreshResu
   await prisma.channel.update({
     where: { id: channel.id },
     data: {
-      ...(nameUpdated ? { name: data.channel.title } : {}),
-      ...(!isEmptyString(logoUrl) ? { logo_url: logoUrl } : {}),
-      ...(!isEmptyString(handle) ? { handle } : {}),
+      ...(nameUpdated ? { name: snapshot.name } : {}),
+      ...(!isEmptyString(snapshot.logoUrl) ? { logo_url: snapshot.logoUrl } : {}),
+      ...(!isEmptyString(snapshot.handle) ? { handle: snapshot.handle } : {}),
       checked_at: new Date(),
     },
   });
 
   return {
     channelId: channel.id,
-    videosProcessed: data.videos.length,
+    videosProcessed: snapshot.videos.length,
     nameUpdated,
   };
 }

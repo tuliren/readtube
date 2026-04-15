@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@readtube/database';
 
 import type { TagData, VideoData } from '@/lib/types';
+import { buildThumbnailUrl } from '@/lib/youtube/urls';
 
 /**
  * Minimal raw row shape that a caller must supply when it wants triage
@@ -142,7 +143,10 @@ export function decorateVideo(
     publishedAt: row.published_at.toISOString(),
     readAt: readAt != null ? readAt.toISOString() : null,
     durationSeconds: row.duration_seconds,
-    thumbnailUrl: row.thumbnail_url,
+    // Some older rows predate the always-populate-thumbnail rule and
+    // still have null `thumbnail_url`. Fall back to the deterministic
+    // hqdefault URL so the UI never renders a broken/missing image.
+    thumbnailUrl: row.thumbnail_url ?? buildThumbnailUrl(row.source_id),
     transcriptUnavailable: row.transcript_unavailable,
     hasTranscript,
     hasSummary,

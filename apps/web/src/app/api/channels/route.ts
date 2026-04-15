@@ -9,9 +9,8 @@ import {
   countUnreadVideos,
   getSubscribedChannelsWithUnread,
 } from '@/lib/subscriptions';
-import { buildThumbnailUrl, fetchChannelLatest } from '@/lib/youtube/channelMetadata';
-import { buildRssUrl, extractChannelId, extractHandle } from '@/lib/youtube/channelUrl';
-import { scrapeChannel } from '@/lib/youtube/scrapeChannel';
+import { fetchChannelSnapshot } from '@/lib/youtube/channelSnapshot';
+import { buildRssUrl, extractChannelId, extractHandle } from '@/lib/youtube/urls';
 
 export async function GET() {
   const { userId } = await auth();
@@ -59,6 +58,7 @@ export async function POST(request: NextRequest) {
   }
 
   let channelPageUrl: string | null = null;
+  let preresolvedRssUrl: string | undefined;
 
   const handle = extractHandle(input);
   if (handle != null) {
@@ -67,6 +67,7 @@ export async function POST(request: NextRequest) {
     const bareId = extractChannelId(input);
     if (bareId != null) {
       channelPageUrl = `https://www.youtube.com/channel/${bareId}`;
+      preresolvedRssUrl = buildRssUrl(bareId);
     }
   }
 
@@ -80,18 +81,18 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  let scraped;
+  let snapshot;
   try {
-    scraped = await scrapeChannel(channelPageUrl);
+    snapshot = await fetchChannelSnapshot({ channelPageUrl, rssUrl: preresolvedRssUrl });
   } catch (err) {
-    console.error('[channels/POST] scrapeChannel failed:', err);
+    console.error('[channels/POST] fetchChannelSnapshot failed:', err);
     return NextResponse.json(
       { error: 'Channel not found or not accessible. Check the URL and try again.' },
       { status: 400 }
     );
   }
 
-  const sourceId = scraped.channelId;
+  const sourceId = snapshot.channelId;
 
   // Ensure user exists in DB before writing FK reference
   await ensureUserExists(userId);
@@ -117,55 +118,28 @@ export async function POST(request: NextRequest) {
     create: {
       source_type: VideoPlatformType.YOUTUBE,
       source_id: sourceId,
-      name: scraped.name,
+      name: snapshot.name,
       rss_url: rssUrl,
-      logo_url: scraped.logoUrl,
-      handle: scraped.handle,
+      logo_url: snapshot.logoUrl,
+      handle: snapshot.handle,
       videos: {
-        create: scraped.videos.map((v) => ({
+        create: snapshot.videos.map((v) => ({
           source_id: v.videoId,
           title: v.title,
           description: v.description,
           published_at: v.publishedAt,
+          thumbnail_url: v.thumbnailUrl,
           duration_seconds: v.durationSeconds,
         })),
       },
     },
     // On re-create (channel already exists), refresh the logo and
-    // handle when the scraper has fresh values.
+    // handle when the snapshot has fresh values.
     update: {
-      ...(scraped.logoUrl != null ? { logo_url: scraped.logoUrl } : {}),
-      ...(!isEmptyString(scraped.handle) ? { handle: scraped.handle } : {}),
+      ...(snapshot.logoUrl != null ? { logo_url: snapshot.logoUrl } : {}),
+      ...(!isEmptyString(snapshot.handle) ? { handle: snapshot.handle } : {}),
     },
   });
-
-  // Best-effort metadata enrichment via TranscriptAPI's RSS endpoint.
-  // This gives us per-video thumbnails + view counts. If it fails
-  // (network, rate limit, etc.) we fall back to constructing thumbnail
-  // URLs from the videoId directly.
-  try {
-    const meta = await fetchChannelLatest(sourceId);
-    for (const videoMeta of meta.videos) {
-      await prisma.video.updateMany({
-        where: { channel_id: channel.id, source_id: videoMeta.videoId },
-        data: {
-          thumbnail_url: videoMeta.thumbnailUrl,
-        },
-      });
-    }
-  } catch (err) {
-    console.warn(
-      '[channels/POST] TranscriptAPI enrichment failed, using fallback thumbnails:',
-      err
-    );
-    // Fallback: construct thumbnail URLs directly from videoId.
-    for (const video of scraped.videos) {
-      await prisma.video.updateMany({
-        where: { channel_id: channel.id, source_id: video.videoId },
-        data: { thumbnail_url: buildThumbnailUrl(video.videoId) },
-      });
-    }
-  }
 
   // Compute the initial read watermark per the configured subscription mode
   // (all_new / none_new / recent_n_new). Done after the channel + its videos

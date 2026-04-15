@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-import { resizeGoogleAvatar } from '@/lib/youtube/avatarUrl';
+import { resizeGoogleAvatar } from '@/lib/youtube/urls';
 
 interface Props {
   url: string;

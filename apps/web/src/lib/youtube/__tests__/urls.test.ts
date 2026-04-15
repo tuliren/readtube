@@ -1,4 +1,10 @@
-import { buildRssUrl, extractChannelId, extractHandle } from '../youtube/channelUrl';
+import {
+  buildRssUrl,
+  buildThumbnailUrl,
+  extractChannelId,
+  extractHandle,
+  resizeGoogleAvatar,
+} from '../urls';
 
 const VALID_CHANNEL_ID = 'UCVHFbw7woebytA3UMoHJSNw';
 
@@ -56,5 +62,33 @@ describe('buildRssUrl', () => {
     expect(buildRssUrl(VALID_CHANNEL_ID)).toBe(
       `https://www.youtube.com/feeds/videos.xml?channel_id=${VALID_CHANNEL_ID}`
     );
+  });
+});
+
+describe('buildThumbnailUrl', () => {
+  it.each([
+    ['dQw4w9WgXcQ', 'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg'],
+    ['abc123', 'https://i.ytimg.com/vi/abc123/hqdefault.jpg'],
+  ])('builds thumbnail URL for %s', (videoId, expected) => {
+    expect(buildThumbnailUrl(videoId)).toBe(expected);
+  });
+});
+
+describe('resizeGoogleAvatar', () => {
+  it.each([
+    {
+      name: 'rewrites =sN token',
+      input: 'https://yt3.googleusercontent.com/abc=s900-c-k-c0x00ffffff-no-rj',
+      size: 40,
+      expected: 'https://yt3.googleusercontent.com/abc=s40-c-k-c0x00ffffff-no-rj',
+    },
+    {
+      name: 'returns unchanged when no =sN token is present',
+      input: 'https://example.com/logo.png',
+      size: 40,
+      expected: 'https://example.com/logo.png',
+    },
+  ])('$name', ({ input, size, expected }) => {
+    expect(resizeGoogleAvatar(input, size)).toBe(expected);
   });
 });

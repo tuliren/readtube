@@ -1,6 +1,4 @@
-import { buildThumbnailUrl, fetchChannelLatest } from '../youtube/channelMetadata';
-
-// ─── fetchChannelLatest ──────────────────────────────────────────
+import { fetchChannelLatest } from '../transcriptApi';
 
 describe('fetchChannelLatest', () => {
   const originalEnv = process.env;
@@ -81,6 +79,7 @@ describe('fetchChannelLatest', () => {
       description: 'A description',
       publishedAt: new Date('2026-01-15T12:00:00Z'),
       thumbnailUrl: 'https://i.ytimg.com/vi/vid_1/hqdefault.jpg',
+      link: 'https://youtube.com/watch?v=vid_1',
     });
     // null description maps to empty string
     expect(result.videos[1]!.description).toBe('');
@@ -161,16 +160,5 @@ describe('fetchChannelLatest', () => {
     const result = await fetchChannelLatest('UC_no_thumb');
 
     expect(result.videos[0]!.thumbnailUrl).toBeNull();
-  });
-});
-
-// ─── buildThumbnailUrl ───────────────────────────────────────────
-
-describe('buildThumbnailUrl', () => {
-  it.each([
-    ['dQw4w9WgXcQ', 'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg'],
-    ['abc123', 'https://i.ytimg.com/vi/abc123/hqdefault.jpg'],
-  ])('builds thumbnail URL for %s', (videoId, expected) => {
-    expect(buildThumbnailUrl(videoId)).toBe(expected);
   });
 });
