@@ -29,15 +29,5 @@ if (process.env.SCRIPT_ENV !== 'development') {
   console.info('Scraping:', url);
 
   const result = await scrapeChannel(url);
-
-  console.info('\nChannel:');
-  console.info('  channelId:', result.channelId);
-  console.info('  name:     ', result.name);
-  console.info('  handle:   ', result.handle);
-  console.info('  logoUrl:  ', result.logoUrl);
-  console.info(`\nVideos (${result.videos.length}):`);
-  for (const v of result.videos) {
-    const duration = v.durationSeconds != null ? `${v.durationSeconds}s` : 'null';
-    console.info(`  - ${v.videoId}  [${duration}]  ${v.publishedAt.toISOString()}  ${v.title}`);
-  }
+  console.info(JSON.stringify(result, null, 2));
 })();
