@@ -98,7 +98,7 @@ function DashboardShellInner({ initialChannels, children }: Props) {
   // and expanded sidebar keep their default scrollbars.
   const renderSidebarContent = (hideScrollbar: boolean) => (
     <div
-      className={`flex flex-1 flex-col overflow-y-auto pb-6 ${
+      className={`flex flex-1 flex-col overflow-x-hidden overflow-y-auto pb-6 ${
         hideScrollbar ? '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden' : ''
       }`}
     >
