@@ -112,16 +112,22 @@ async function renderAuthedReader(
 
   const initial = await loadInboxVideos(prisma, userId, query);
 
+  // InboxShell expects its ancestor to provide a bounded height —
+  // it uses `h-full min-h-0` internally so the sidebar + main scroll
+  // independently. The public branch renders without that wrapper so
+  // the whole page can scroll normally.
   return (
-    <InboxShell
-      initialChannels={channels}
-      initialVideos={initial.videos}
-      initialTotal={initial.total}
-      selectedChannelId={query.channelId ?? null}
-      selectedVideoId={video.id}
-    >
-      <VideoReader video={videoData} />
-    </InboxShell>
+    <div className="h-screen overflow-hidden">
+      <InboxShell
+        initialChannels={channels}
+        initialVideos={initial.videos}
+        initialTotal={initial.total}
+        selectedChannelId={query.channelId ?? null}
+        selectedVideoId={video.id}
+      >
+        <VideoReader video={videoData} />
+      </InboxShell>
+    </div>
   );
 }
 

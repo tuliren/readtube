@@ -16,7 +16,6 @@ export default function Header() {
   const navigation = [
     { name: 'Home', href: '/' },
     ...(isSignedIn ? [{ name: 'Inbox', href: '/inbox' }] : []),
-    ...(isSignedIn ? [{ name: 'Channels', href: '/channels' }] : []),
   ];
 
   const linkClass = 'font-semibold leading-6 text-slate-700';
