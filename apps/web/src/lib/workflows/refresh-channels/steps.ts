@@ -13,6 +13,12 @@ export const BATCH_SIZE = 10;
 /** Delay in ms between API calls to stay well under the 300 req/min rate limit. */
 const RATE_LIMIT_DELAY_MS = 250;
 
+/**
+ * Videos at or under this duration are treated as YouTube Shorts and
+ * skipped during ingest. YouTube's own definition of a Short is ≤60s.
+ */
+const SHORTS_MAX_DURATION_SECONDS = 60;
+
 export interface StaleChannel {
   id: string;
   source_id: string;
@@ -61,36 +67,27 @@ export async function refreshChannel(channel: StaleChannel): Promise<RefreshResu
     where: { channel_id: channel.id, source_id: { in: videoSourceIds } },
     select: { source_id: true, duration_seconds: true },
   });
-  const videosMissingDuration = new Set(
-    existingVideos.filter((v) => v.duration_seconds == null).map((v) => v.source_id)
-  );
-  // Videos not yet in the DB also need duration
   const existingSourceIds = new Set(existingVideos.map((v) => v.source_id));
-  for (const v of data.videos) {
-    if (!existingSourceIds.has(v.videoId)) {
-      videosMissingDuration.add(v.videoId);
-    }
-  }
-
-  const needsDuration = videosMissingDuration.size > 0;
 
   // Best-effort scrape for logo_url, handle, and duration_seconds —
   // fields the TranscriptAPI RSS endpoint doesn't provide. Always
-  // scrape to keep logo_url / handle fresh; only collect durations for
-  // videos that lack them.
+  // scrape to keep logo_url / handle fresh and to detect Shorts (which
+  // are excluded from the regular `videoRenderer` shelf).
   let logoUrl: string | null = null;
   let handle: string | null = null;
+  let scrapeSucceeded = false;
   const durationMap = new Map<string, number>();
+  const scrapedVideoIds = new Set<string>();
   try {
     const channelPageUrl = `https://www.youtube.com/channel/${channel.source_id}`;
     const scraped = await scrapeChannel(channelPageUrl);
+    scrapeSucceeded = true;
     logoUrl = scraped.logoUrl;
     handle = scraped.handle;
-    if (needsDuration) {
-      for (const v of scraped.videos) {
-        if (v.durationSeconds != null && videosMissingDuration.has(v.videoId)) {
-          durationMap.set(v.videoId, v.durationSeconds);
-        }
+    for (const v of scraped.videos) {
+      scrapedVideoIds.add(v.videoId);
+      if (v.durationSeconds != null) {
+        durationMap.set(v.videoId, v.durationSeconds);
       }
     }
   } catch (err) {
@@ -102,9 +99,19 @@ export async function refreshChannel(channel: StaleChannel): Promise<RefreshResu
 
   const nameUpdated = data.channel.title !== channel.name;
 
+  let videosProcessed = 0;
   for (const video of data.videos) {
     const durationSeconds = durationMap.get(video.videoId) ?? null;
+    const isExisting = existingSourceIds.has(video.videoId);
 
+    if (!isExisting && isShort({ durationSeconds, scrapeSucceeded, scrapedVideoIds, video })) {
+      console.log(
+        `[refresh-channels] skipping Short ${video.videoId} (duration=${durationSeconds ?? 'unknown'}) for channel ${channel.id}`
+      );
+      continue;
+    }
+
+    videosProcessed++;
     await prisma.video.upsert({
       where: {
         video_unique_channel_source: {
@@ -142,7 +149,31 @@ export async function refreshChannel(channel: StaleChannel): Promise<RefreshResu
 
   return {
     channelId: channel.id,
-    videosProcessed: data.videos.length,
+    videosProcessed,
     nameUpdated,
   };
+}
+
+/**
+ * A video is treated as a Short if either:
+ *   1. We know its duration from the channel page scrape and it's ≤60s, or
+ *   2. The scrape succeeded but the video wasn't in the regular videos
+ *      shelf — Shorts live in a separate shelf with no `lengthText`,
+ *      so their absence is the strongest signal we have when duration
+ *      is unknown.
+ *
+ * If the scrape failed entirely, we err on the side of storing the
+ * video — better to ingest a Short than to silently drop a real one.
+ */
+function isShort(args: {
+  durationSeconds: number | null;
+  scrapeSucceeded: boolean;
+  scrapedVideoIds: Set<string>;
+  video: { videoId: string };
+}): boolean {
+  const { durationSeconds, scrapeSucceeded, scrapedVideoIds, video } = args;
+  if (durationSeconds != null) {
+    return durationSeconds <= SHORTS_MAX_DURATION_SECONDS;
+  }
+  return scrapeSucceeded && !scrapedVideoIds.has(video.videoId);
 }
