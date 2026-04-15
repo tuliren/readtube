@@ -5,6 +5,6 @@
 //   - components/inbox/SidebarContext.tsx (the matchMedia check that
 //     drives `useSidebar().isMobile`)
 // Change this one value to move the breakpoint across every surface.
-const MOBILE_BREAKPOINT = 1024;
+const MOBILE_BREAKPOINT = 768;
 
 module.exports = { MOBILE_BREAKPOINT };
