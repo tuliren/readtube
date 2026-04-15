@@ -39,6 +39,7 @@ interface TriageContext {
   starredIds: Set<string>;
   savedIds: Set<string>;
   archivedIds: Set<string>;
+  standaloneIds: Set<string>;
   tagsByVideoId: Map<string, TagData[]>;
   noteCountsByVideoId: Map<string, number>;
 }
@@ -59,12 +60,13 @@ export async function loadTriageContext(
       starredIds: new Set(),
       savedIds: new Set(),
       archivedIds: new Set(),
+      standaloneIds: new Set(),
       tagsByVideoId: new Map(),
       noteCountsByVideoId: new Map(),
     };
   }
 
-  const [stars, saves, archives, videoTags, noteCounts] = await Promise.all([
+  const [stars, saves, archives, standalones, videoTags, noteCounts] = await Promise.all([
     prisma.videoStar.findMany({
       where: { user_id: userId, video_id: { in: videoIds } },
       select: { video_id: true },
@@ -74,6 +76,10 @@ export async function loadTriageContext(
       select: { video_id: true },
     }),
     prisma.videoArchive.findMany({
+      where: { user_id: userId, video_id: { in: videoIds } },
+      select: { video_id: true },
+    }),
+    prisma.standaloneVideo.findMany({
       where: { user_id: userId, video_id: { in: videoIds } },
       select: { video_id: true },
     }),
@@ -111,6 +117,7 @@ export async function loadTriageContext(
     starredIds: new Set(stars.map((r) => r.video_id)),
     savedIds: new Set(saves.map((r) => r.video_id)),
     archivedIds: new Set(archives.map((r) => r.video_id)),
+    standaloneIds: new Set(standalones.map((r) => r.video_id)),
     tagsByVideoId,
     noteCountsByVideoId,
   };
@@ -158,6 +165,7 @@ export function decorateVideo(
     isStarred: context.starredIds.has(row.id),
     isSaved: context.savedIds.has(row.id),
     isArchived: context.archivedIds.has(row.id),
+    isStandalone: context.standaloneIds.has(row.id),
     tags: context.tagsByVideoId.get(row.id) ?? [],
     noteCount: context.noteCountsByVideoId.get(row.id) ?? 0,
   };

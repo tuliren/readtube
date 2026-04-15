@@ -28,9 +28,15 @@ export async function fetchStaleChannels(): Promise<StaleChannel[]> {
 
   const cutoff = new Date(Date.now() - STALE_DAYS * 24 * 60 * 60 * 1000);
 
+  // Only refresh channels with at least one active UserSubscription.
+  // "Shadow" channel rows created by the individual-video add flow exist
+  // so that a standalone video always has a valid Channel FK, but until
+  // a user actually subscribes to them we don't need to hit the RSS
+  // endpoint. They get picked up lazily on first subscribe.
   return prisma.channel.findMany({
     where: {
       OR: [{ checked_at: null }, { checked_at: { lt: cutoff } }],
+      subscriptions: { some: {} },
     },
     orderBy: { checked_at: { sort: 'asc', nulls: 'first' } },
     take: BATCH_SIZE,

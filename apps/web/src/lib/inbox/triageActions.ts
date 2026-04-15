@@ -20,9 +20,10 @@ interface AssertArgs {
 }
 
 /**
- * Returns true when the user has a subscription whose channel owns the
- * given video. Used by every triage endpoint to prevent IDOR before
- * touching state. A single JOIN, no separate findFirst round-trips.
+ * Returns true when the user can act on the video — either they have
+ * a subscription to the video's channel, or they've added it directly
+ * via the individual-video / playlist flow (StandaloneVideo row).
+ * Used by every triage endpoint to prevent IDOR before touching state.
  */
 export async function assertUserCanTouchVideo(
   prisma: PrismaClient,
@@ -31,7 +32,10 @@ export async function assertUserCanTouchVideo(
   const row = await prisma.video.findFirst({
     where: {
       id: videoId,
-      channel: { subscriptions: { some: { user_id: userId } } },
+      OR: [
+        { channel: { subscriptions: { some: { user_id: userId } } } },
+        { standalone: { some: { user_id: userId } } },
+      ],
     },
     select: { id: true },
   });

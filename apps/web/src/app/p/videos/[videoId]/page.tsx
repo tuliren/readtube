@@ -67,6 +67,7 @@ export default async function PublicVideoPage({ params }: Props) {
       starredIds: new Set(),
       savedIds: new Set(),
       archivedIds: new Set(),
+      standaloneIds: new Set(),
       tagsByVideoId: new Map(),
       noteCountsByVideoId: new Map(),
     },

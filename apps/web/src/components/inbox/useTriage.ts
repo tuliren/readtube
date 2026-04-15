@@ -98,6 +98,41 @@ export function useTriage() {
       }
     },
 
+    async addToPlaylist(videoId: string, playlistId: string): Promise<boolean> {
+      try {
+        await call('POST', `/api/playlists/${playlistId}/videos`, { videoId });
+        invalidateLists();
+        toast.success('Added to playlist');
+        return true;
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to add to playlist');
+        return false;
+      }
+    },
+
+    async removeFromPlaylist(videoId: string, playlistId: string): Promise<boolean> {
+      try {
+        await call('DELETE', `/api/playlists/${playlistId}/videos?videoId=${videoId}`);
+        invalidateLists();
+        return true;
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to remove from playlist');
+        return false;
+      }
+    },
+
+    async removeFromLibrary(videoId: string): Promise<boolean> {
+      try {
+        await call('DELETE', `/api/videos/${videoId}/standalone`);
+        invalidateLists();
+        toast.success('Removed from library');
+        return true;
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to remove from library');
+        return false;
+      }
+    },
+
     async bulk(videoIds: string[], action: BulkAction): Promise<number> {
       try {
         const res = await call('POST', '/api/videos/bulk', { videoIds, action });

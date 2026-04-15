@@ -9,12 +9,14 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { formatDurationSeconds } from '@/lib/format/duration';
 import type { VideoData } from '@/lib/types';
 
 import { useSidebar } from './SidebarContext';
+import VideoLibraryMenuItems from './VideoLibraryMenuItems';
 import { useTriage } from './useTriage';
 
 /**
@@ -383,6 +385,8 @@ export default function VideoRow({
                     <Archive className="mr-2 h-4 w-4 text-gray-400" />
                     Archive
                   </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <VideoLibraryMenuItems video={video} />
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -456,6 +460,22 @@ export default function VideoRow({
               >
                 <Archive className="h-4 w-4" />
               </button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={stop}
+                    title="More actions"
+                    aria-label="More actions"
+                    className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <VideoLibraryMenuItems video={video} />
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           ))}
       </div>

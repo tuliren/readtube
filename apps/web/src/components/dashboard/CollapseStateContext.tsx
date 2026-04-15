@@ -21,6 +21,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 interface PersistedState {
   viewsCollapsed: boolean;
   channelsCollapsed: boolean;
+  videosCollapsed: boolean;
   collapsedFolderIds: string[];
 }
 
@@ -28,6 +29,7 @@ const STORAGE_KEY = 'readtube.sidebar.collapse';
 const DEFAULT_STATE: PersistedState = {
   viewsCollapsed: false,
   channelsCollapsed: false,
+  videosCollapsed: false,
   collapsedFolderIds: [],
 };
 
@@ -38,14 +40,18 @@ interface EnsureExpandedInput {
   channelSelected?: boolean;
   /** True when a non-default view (Starred / Read Later / Archived) is active. */
   nonDefaultView?: boolean;
+  /** True when the active page is under /videos (All/Standalone/playlist). */
+  videosSelected?: boolean;
 }
 
 interface CollapseState {
   viewsCollapsed: boolean;
   channelsCollapsed: boolean;
+  videosCollapsed: boolean;
   isFolderCollapsed: (folderId: string) => boolean;
   toggleViews: () => void;
   toggleChannels: () => void;
+  toggleVideos: () => void;
   toggleFolder: (folderId: string) => void;
   ensureExpandedFor: (input: EnsureExpandedInput) => void;
 }
@@ -61,6 +67,7 @@ function parseStored(raw: string | null): PersistedState {
     return {
       viewsCollapsed: parsed.viewsCollapsed === true,
       channelsCollapsed: parsed.channelsCollapsed === true,
+      videosCollapsed: parsed.videosCollapsed === true,
       collapsedFolderIds: Array.isArray(parsed.collapsedFolderIds)
         ? parsed.collapsedFolderIds.filter((id): id is string => typeof id === 'string')
         : [],
@@ -100,6 +107,10 @@ export function CollapseStateProvider({ children }: { children: React.ReactNode 
     setState((prev) => ({ ...prev, channelsCollapsed: !prev.channelsCollapsed }));
   }, []);
 
+  const toggleVideos = useCallback(() => {
+    setState((prev) => ({ ...prev, videosCollapsed: !prev.videosCollapsed }));
+  }, []);
+
   const toggleFolder = useCallback((folderId: string) => {
     setState((prev) => {
       const set = new Set(prev.collapsedFolderIds);
@@ -121,6 +132,9 @@ export function CollapseStateProvider({ children }: { children: React.ReactNode 
       if (input.nonDefaultView === true && prev.viewsCollapsed) {
         next = { ...next, viewsCollapsed: false };
       }
+      if (input.videosSelected === true && prev.videosCollapsed) {
+        next = { ...next, videosCollapsed: false };
+      }
       if (input.folderId != null && prev.collapsedFolderIds.includes(input.folderId)) {
         const folderId = input.folderId;
         next = {
@@ -141,18 +155,22 @@ export function CollapseStateProvider({ children }: { children: React.ReactNode 
     () => ({
       viewsCollapsed: state.viewsCollapsed,
       channelsCollapsed: state.channelsCollapsed,
+      videosCollapsed: state.videosCollapsed,
       isFolderCollapsed: (folderId: string) => collapsedFolderSet.has(folderId),
       toggleViews,
       toggleChannels,
+      toggleVideos,
       toggleFolder,
       ensureExpandedFor,
     }),
     [
       state.viewsCollapsed,
       state.channelsCollapsed,
+      state.videosCollapsed,
       collapsedFolderSet,
       toggleViews,
       toggleChannels,
+      toggleVideos,
       toggleFolder,
       ensureExpandedFor,
     ]

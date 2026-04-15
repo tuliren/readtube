@@ -396,11 +396,21 @@ function useAutoUncollapse(channels: ChannelData[], selectedChannelId: string | 
     return folders.some((f) => f.id === channel.folderId) ? channel.folderId : null;
   }, [selectedChannelId, channels, folders]);
 
+  const videosSelected = pathname != null && pathname.startsWith('/videos');
+
   useEffect(() => {
     ensureExpandedFor({
       channelSelected: selectedChannelId != null,
       nonDefaultView,
       folderId: folderIdForSelection,
+      videosSelected,
     });
-  }, [ensureExpandedFor, selectedChannelId, nonDefaultView, folderIdForSelection, pathname]);
+  }, [
+    ensureExpandedFor,
+    selectedChannelId,
+    nonDefaultView,
+    folderIdForSelection,
+    videosSelected,
+    pathname,
+  ]);
 }

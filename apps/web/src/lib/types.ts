@@ -65,6 +65,9 @@ export interface VideoData {
   isStarred: boolean;
   isSaved: boolean;
   isArchived: boolean;
+  // True when this video has a StandaloneVideo row for the viewer —
+  // i.e. it lives in the user's personal library (Videos sidebar).
+  isStandalone: boolean;
   // Tags + notes count
   tags: TagData[];
   noteCount: number;
