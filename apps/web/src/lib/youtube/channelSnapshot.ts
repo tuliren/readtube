@@ -63,6 +63,8 @@ export async function fetchChannelSnapshot(args: {
   channelPageUrl: string;
   rssUrl?: string;
 }): Promise<ChannelSnapshot> {
+  console.info(`Fetching channel snapshot for ${args.channelPageUrl}`);
+
   let scraped: ScrapedChannel | null = null;
   let feed: RssChannel;
 
