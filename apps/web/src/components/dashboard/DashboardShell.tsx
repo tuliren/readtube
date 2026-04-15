@@ -193,28 +193,50 @@ function DashboardShellInner({ initialChannels, children }: Props) {
  * Client-side slug→channel resolution so the sidebar knows which
  * channel row to highlight. Mirrors `resolveChannelSlug` (server) —
  * `@handle` (with or without the leading `@`) or a platform source_id.
+ *
+ * On `/videos/[videoId]`, falls back to the `returnTo` query param so
+ * the sidebar keeps the origin channel highlighted while the reader
+ * is open. We only resolve slugs that match a channel the user is
+ * subscribed to (the `channels` array is exactly that set), which
+ * preserves the server-side IDOR guard the old page performed.
  */
 function useSelectedChannelId(channels: ChannelData[]): string | null {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   return useMemo(() => {
-    if (pathname == null || !pathname.startsWith('/channels/')) {
+    if (pathname == null) {
       return null;
     }
-    const raw = pathname.slice('/channels/'.length).split('/')[0];
-    if (raw.length === 0) {
-      return null;
+    if (pathname.startsWith('/channels/')) {
+      return resolveChannelSlugClient(channels, pathname.slice('/channels/'.length));
     }
-    const decoded = decodeURIComponent(raw);
-    if (decoded.startsWith('@')) {
-      const bare = decoded.slice(1);
-      const match = channels.find(
-        (c) => c.handle === decoded || c.handle === bare || c.handle === `@${bare}`
-      );
-      return match?.id ?? null;
+    if (pathname.startsWith('/videos/')) {
+      const returnTo = searchParams.get('returnTo');
+      if (returnTo != null && returnTo.startsWith('/channels/')) {
+        const afterPrefix = returnTo.slice('/channels/'.length);
+        const slug = afterPrefix.split(/[/?#]/)[0];
+        return resolveChannelSlugClient(channels, slug);
+      }
     }
-    const match = channels.find((c) => c.sourceId === decoded);
+    return null;
+  }, [pathname, searchParams, channels]);
+}
+
+function resolveChannelSlugClient(channels: ChannelData[], raw: string): string | null {
+  const firstSegment = raw.split('/')[0];
+  if (firstSegment.length === 0) {
+    return null;
+  }
+  const decoded = decodeURIComponent(firstSegment);
+  if (decoded.startsWith('@')) {
+    const bare = decoded.slice(1);
+    const match = channels.find(
+      (c) => c.handle === decoded || c.handle === bare || c.handle === `@${bare}`
+    );
     return match?.id ?? null;
-  }, [pathname, channels]);
+  }
+  const match = channels.find((c) => c.sourceId === decoded);
+  return match?.id ?? null;
 }
 
 /**
