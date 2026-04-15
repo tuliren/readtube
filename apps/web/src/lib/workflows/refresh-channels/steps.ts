@@ -1,7 +1,7 @@
 import { prisma } from '@readtube/database';
 
 import { isEmptyString } from '@/lib/string';
-import { fetchChannelLatest } from '@/lib/youtube/channelMetadata';
+import { fetchRssFeed } from '@/lib/youtube/rss';
 import { scrapeChannel } from '@/lib/youtube/scrapeChannel';
 
 /** Number of days before a channel is considered stale and eligible for refresh. */
@@ -10,7 +10,11 @@ export const STALE_DAYS = 5;
 /** Maximum number of channels to refresh per workflow run. */
 export const BATCH_SIZE = 10;
 
-/** Delay in ms between API calls to stay well under the 300 req/min rate limit. */
+/**
+ * Small delay between per-channel fetches so we stay polite toward
+ * YouTube's public RSS endpoint and don't burst a large batch of
+ * requests in parallel.
+ */
 const RATE_LIMIT_DELAY_MS = 250;
 
 /**
@@ -26,6 +30,7 @@ export interface StaleChannel {
   id: string;
   source_id: string;
   name: string;
+  rss_url: string;
 }
 
 export async function fetchStaleChannels(): Promise<StaleChannel[]> {
@@ -39,7 +44,7 @@ export async function fetchStaleChannels(): Promise<StaleChannel[]> {
     },
     orderBy: { checked_at: { sort: 'asc', nulls: 'first' } },
     take: BATCH_SIZE,
-    select: { id: true, source_id: true, name: true },
+    select: { id: true, source_id: true, name: true, rss_url: true },
   });
 }
 
@@ -48,7 +53,7 @@ export async function fetchChannelById(channelId: string): Promise<StaleChannel 
 
   return prisma.channel.findUnique({
     where: { id: channelId },
-    select: { id: true, source_id: true, name: true },
+    select: { id: true, source_id: true, name: true, rss_url: true },
   });
 }
 
@@ -63,11 +68,11 @@ export async function refreshChannel(channel: StaleChannel): Promise<RefreshResu
 
   await new Promise((r) => setTimeout(r, RATE_LIMIT_DELAY_MS));
 
-  const data = await fetchChannelLatest(channel.source_id);
+  const feed = await fetchRssFeed(channel.rss_url);
 
   // Drop Shorts up-front — YouTube's RSS marks them with a `/shorts/`
   // URL path, which is the canonical signal for this content type.
-  const ingestableVideos = data.videos.filter((video) => {
+  const ingestableVideos = feed.videos.filter((video) => {
     if (isShort(video)) {
       console.log(
         `[refresh-channels] skipping Short ${video.videoId} (${video.link}) for channel ${channel.id}`
@@ -99,9 +104,9 @@ export async function refreshChannel(channel: StaleChannel): Promise<RefreshResu
   const needsDuration = videosMissingDuration.size > 0;
 
   // Best-effort scrape for logo_url, handle, and duration_seconds —
-  // fields the TranscriptAPI RSS endpoint doesn't provide. Always
-  // scrape to keep logo_url / handle fresh; only collect durations for
-  // videos that lack them.
+  // fields YouTube's RSS doesn't expose. Always scrape to keep
+  // logo_url / handle fresh; only collect durations for videos that
+  // lack them.
   let logoUrl: string | null = null;
   let handle: string | null = null;
   const durationMap = new Map<string, number>();
@@ -124,7 +129,7 @@ export async function refreshChannel(channel: StaleChannel): Promise<RefreshResu
     );
   }
 
-  const nameUpdated = data.channel.title !== channel.name;
+  const nameUpdated = feed.name !== channel.name;
 
   for (const video of ingestableVideos) {
     const durationSeconds = durationMap.get(video.videoId) ?? null;
@@ -147,7 +152,7 @@ export async function refreshChannel(channel: StaleChannel): Promise<RefreshResu
       update: {
         title: video.title,
         ...(isEmptyString(video.description) ? {} : { description: video.description }),
-        ...(video.thumbnailUrl != null ? { thumbnail_url: video.thumbnailUrl } : {}),
+        ...(!isEmptyString(video.thumbnailUrl) ? { thumbnail_url: video.thumbnailUrl } : {}),
         ...(durationSeconds != null ? { duration_seconds: durationSeconds } : {}),
       },
     });
@@ -156,7 +161,7 @@ export async function refreshChannel(channel: StaleChannel): Promise<RefreshResu
   await prisma.channel.update({
     where: { id: channel.id },
     data: {
-      ...(nameUpdated ? { name: data.channel.title } : {}),
+      ...(nameUpdated ? { name: feed.name } : {}),
       ...(!isEmptyString(logoUrl) ? { logo_url: logoUrl } : {}),
       ...(!isEmptyString(handle) ? { handle } : {}),
       checked_at: new Date(),

@@ -9,7 +9,7 @@ import {
   fetchStaleChannels,
   refreshChannel,
 } from '@/lib/workflows/refresh-channels/steps';
-import type { ChannelMeta, ChannelVideoMeta } from '@/lib/youtube/channelMetadata';
+import type { RssChannel } from '@/lib/youtube/rss';
 import type { ScrapedChannel } from '@/lib/youtube/scrapeChannel';
 
 // ─── Module mocks (hoisted by Jest) ──────────────────────────────
@@ -29,14 +29,11 @@ jest.mock('@readtube/database', () => {
   return { ...actual, prisma: prismaProxy };
 });
 
-const mockFetchChannelLatest = jest.fn<
-  Promise<{ channel: ChannelMeta; videos: ChannelVideoMeta[] }>,
-  [string]
->();
+const mockFetchRssFeed = jest.fn<Promise<RssChannel>, [string]>();
 
-jest.mock('@/lib/youtube/channelMetadata', () => ({
-  ...jest.requireActual('@/lib/youtube/channelMetadata'),
-  fetchChannelLatest: (input: string) => mockFetchChannelLatest(input),
+jest.mock('@/lib/youtube/rss', () => ({
+  ...jest.requireActual('@/lib/youtube/rss'),
+  fetchRssFeed: (url: string) => mockFetchRssFeed(url),
 }));
 
 const mockScrapeChannel = jest.fn<Promise<ScrapedChannel>, [string]>();
@@ -63,8 +60,8 @@ async function createChannel(opts: { sourceId: string; name: string; checkedAt?:
   });
 }
 
-function makeApiResponse(
-  channelTitle: string,
+function makeRssFeed(
+  channelName: string,
   videos: Array<{
     videoId: string;
     title: string;
@@ -72,9 +69,10 @@ function makeApiResponse(
     description: string;
     isShort?: boolean;
   }>
-): { channel: ChannelMeta; videos: ChannelVideoMeta[] } {
+): RssChannel {
   return {
-    channel: { channelId: 'UC_test', title: channelTitle },
+    channelId: 'UC_test',
+    name: channelName,
     videos: videos.map((v) => ({
       videoId: v.videoId,
       title: v.title,
@@ -92,7 +90,7 @@ function makeApiResponse(
 // ─── Setup / Teardown ────────────────────────────────────────────
 
 beforeEach(async () => {
-  mockFetchChannelLatest.mockReset();
+  mockFetchRssFeed.mockReset();
   mockScrapeChannel.mockReset();
   // Default: scrape returns no extra data (logo/duration tests override this)
   mockScrapeChannel.mockResolvedValue({
@@ -178,8 +176,8 @@ describe('fetchStaleChannels', () => {
 describe('refreshChannel', () => {
   it('upserts videos and updates checked_at', async () => {
     const ch = await createChannel({ sourceId: 'UC_refresh', name: 'My Channel' });
-    mockFetchChannelLatest.mockResolvedValueOnce(
-      makeApiResponse('My Channel', [
+    mockFetchRssFeed.mockResolvedValueOnce(
+      makeRssFeed('My Channel', [
         {
           videoId: 'vid_1',
           title: 'First Video',
@@ -199,6 +197,7 @@ describe('refreshChannel', () => {
       id: ch.id,
       source_id: ch.source_id,
       name: ch.name,
+      rss_url: ch.rss_url,
     };
     const result = await refreshChannel(staleChannel);
 
@@ -221,12 +220,13 @@ describe('refreshChannel', () => {
 
   it('updates channel name when it changes', async () => {
     const ch = await createChannel({ sourceId: 'UC_rename', name: 'Old Name' });
-    mockFetchChannelLatest.mockResolvedValueOnce(makeApiResponse('New Name', []));
+    mockFetchRssFeed.mockResolvedValueOnce(makeRssFeed('New Name', []));
 
     const result = await refreshChannel({
       id: ch.id,
       source_id: ch.source_id,
       name: ch.name,
+      rss_url: ch.rss_url,
     });
 
     expect(result.nameUpdated).toBe(true);
@@ -247,8 +247,8 @@ describe('refreshChannel', () => {
       },
     });
 
-    mockFetchChannelLatest.mockResolvedValueOnce(
-      makeApiResponse('Desc Ch', [
+    mockFetchRssFeed.mockResolvedValueOnce(
+      makeRssFeed('Desc Ch', [
         {
           videoId: 'vid_existing',
           title: 'Updated Title',
@@ -258,7 +258,12 @@ describe('refreshChannel', () => {
       ])
     );
 
-    await refreshChannel({ id: ch.id, source_id: ch.source_id, name: ch.name });
+    await refreshChannel({
+      id: ch.id,
+      source_id: ch.source_id,
+      name: ch.name,
+      rss_url: ch.rss_url,
+    });
 
     const video = await global.testPrisma.video.findFirst({
       where: { channel_id: ch.id, source_id: 'vid_existing' },
@@ -279,8 +284,8 @@ describe('refreshChannel', () => {
       },
     });
 
-    mockFetchChannelLatest.mockResolvedValueOnce(
-      makeApiResponse('Mix Ch', [
+    mockFetchRssFeed.mockResolvedValueOnce(
+      makeRssFeed('Mix Ch', [
         {
           videoId: 'vid_old',
           title: 'New Title',
@@ -296,7 +301,12 @@ describe('refreshChannel', () => {
       ])
     );
 
-    const result = await refreshChannel({ id: ch.id, source_id: ch.source_id, name: ch.name });
+    const result = await refreshChannel({
+      id: ch.id,
+      source_id: ch.source_id,
+      name: ch.name,
+      rss_url: ch.rss_url,
+    });
 
     expect(result.videosProcessed).toBe(2);
 
@@ -315,8 +325,8 @@ describe('refreshChannel', () => {
 
   it('persists logo_url from scrape and duration_seconds per video', async () => {
     const ch = await createChannel({ sourceId: 'UC_logo', name: 'Logo Ch' });
-    mockFetchChannelLatest.mockResolvedValueOnce(
-      makeApiResponse('Logo Ch', [
+    mockFetchRssFeed.mockResolvedValueOnce(
+      makeRssFeed('Logo Ch', [
         {
           videoId: 'vid_dur',
           title: 'With Duration',
@@ -341,7 +351,12 @@ describe('refreshChannel', () => {
       ],
     });
 
-    await refreshChannel({ id: ch.id, source_id: ch.source_id, name: ch.name });
+    await refreshChannel({
+      id: ch.id,
+      source_id: ch.source_id,
+      name: ch.name,
+      rss_url: ch.rss_url,
+    });
 
     const updated = await global.testPrisma.channel.findUnique({ where: { id: ch.id } });
     expect(updated!.logo_url).toBe('https://yt3.googleusercontent.com/logo.jpg');
@@ -354,8 +369,8 @@ describe('refreshChannel', () => {
 
   it('still succeeds when scraping fails (best-effort)', async () => {
     const ch = await createChannel({ sourceId: 'UC_scrape_fail', name: 'Scrape Fail' });
-    mockFetchChannelLatest.mockResolvedValueOnce(
-      makeApiResponse('Scrape Fail', [
+    mockFetchRssFeed.mockResolvedValueOnce(
+      makeRssFeed('Scrape Fail', [
         {
           videoId: 'vid_ok',
           title: 'Still Works',
@@ -366,7 +381,12 @@ describe('refreshChannel', () => {
     );
     mockScrapeChannel.mockRejectedValueOnce(new Error('YouTube blocked'));
 
-    const result = await refreshChannel({ id: ch.id, source_id: ch.source_id, name: ch.name });
+    const result = await refreshChannel({
+      id: ch.id,
+      source_id: ch.source_id,
+      name: ch.name,
+      rss_url: ch.rss_url,
+    });
 
     expect(result.videosProcessed).toBe(1);
 
@@ -399,8 +419,8 @@ describe('refreshChannel', () => {
       },
     });
 
-    mockFetchChannelLatest.mockResolvedValueOnce(
-      makeApiResponse('Full Ch', [
+    mockFetchRssFeed.mockResolvedValueOnce(
+      makeRssFeed('Full Ch', [
         {
           videoId: 'vid_has_dur',
           title: 'Updated',
@@ -418,7 +438,12 @@ describe('refreshChannel', () => {
       videos: [],
     });
 
-    await refreshChannel({ id: ch.id, source_id: ch.source_id, name: ch.name });
+    await refreshChannel({
+      id: ch.id,
+      source_id: ch.source_id,
+      name: ch.name,
+      rss_url: ch.rss_url,
+    });
 
     // Scrape is always called now (for logo freshness)
     expect(mockScrapeChannel).toHaveBeenCalled();
@@ -439,8 +464,8 @@ describe('refreshChannel', () => {
 describe('refreshChannel — Shorts filtering', () => {
   it('skips videos whose RSS link uses the /shorts/ path', async () => {
     const ch = await createChannel({ sourceId: 'UC_short', name: 'Short Ch' });
-    mockFetchChannelLatest.mockResolvedValueOnce(
-      makeApiResponse('Short Ch', [
+    mockFetchRssFeed.mockResolvedValueOnce(
+      makeRssFeed('Short Ch', [
         {
           videoId: 'vid_short',
           title: 'A Short',
@@ -457,7 +482,12 @@ describe('refreshChannel — Shorts filtering', () => {
       ])
     );
 
-    const result = await refreshChannel({ id: ch.id, source_id: ch.source_id, name: ch.name });
+    const result = await refreshChannel({
+      id: ch.id,
+      source_id: ch.source_id,
+      name: ch.name,
+      rss_url: ch.rss_url,
+    });
 
     expect(result.videosProcessed).toBe(1);
     const stored = await global.testPrisma.video.findMany({ where: { channel_id: ch.id } });
@@ -468,8 +498,8 @@ describe('refreshChannel — Shorts filtering', () => {
     // A regular video under 60 seconds (e.g. a teaser) should still be
     // stored — the duration threshold is not the filter signal.
     const ch = await createChannel({ sourceId: 'UC_teaser', name: 'Teaser Ch' });
-    mockFetchChannelLatest.mockResolvedValueOnce(
-      makeApiResponse('Teaser Ch', [
+    mockFetchRssFeed.mockResolvedValueOnce(
+      makeRssFeed('Teaser Ch', [
         {
           videoId: 'vid_teaser',
           title: 'Short teaser, not a Short',
@@ -494,7 +524,12 @@ describe('refreshChannel — Shorts filtering', () => {
       ],
     });
 
-    const result = await refreshChannel({ id: ch.id, source_id: ch.source_id, name: ch.name });
+    const result = await refreshChannel({
+      id: ch.id,
+      source_id: ch.source_id,
+      name: ch.name,
+      rss_url: ch.rss_url,
+    });
 
     expect(result.videosProcessed).toBe(1);
     const stored = await global.testPrisma.video.findFirst({ where: { channel_id: ch.id } });
@@ -515,8 +550,8 @@ describe('refreshChannel — Shorts filtering', () => {
       },
     });
 
-    mockFetchChannelLatest.mockResolvedValueOnce(
-      makeApiResponse('Existing', [
+    mockFetchRssFeed.mockResolvedValueOnce(
+      makeRssFeed('Existing', [
         {
           videoId: 'vid_existing_short',
           title: 'Old Short Updated',
@@ -527,7 +562,12 @@ describe('refreshChannel — Shorts filtering', () => {
       ])
     );
 
-    const result = await refreshChannel({ id: ch.id, source_id: ch.source_id, name: ch.name });
+    const result = await refreshChannel({
+      id: ch.id,
+      source_id: ch.source_id,
+      name: ch.name,
+      rss_url: ch.rss_url,
+    });
 
     // Filtered out of ingest — no upsert ran, stored row unchanged.
     expect(result.videosProcessed).toBe(0);
@@ -549,8 +589,8 @@ describe('refreshChannelsWorkflow', () => {
       checkedAt: new Date(),
     });
 
-    mockFetchChannelLatest.mockResolvedValueOnce(
-      makeApiResponse('Stale', [
+    mockFetchRssFeed.mockResolvedValueOnce(
+      makeRssFeed('Stale', [
         {
           videoId: 'vid_wf_1',
           title: 'Workflow Video',
@@ -567,8 +607,10 @@ describe('refreshChannelsWorkflow', () => {
     expect(result.errors).toBe(0);
 
     // Fresh channel should not have been touched
-    expect(mockFetchChannelLatest).toHaveBeenCalledTimes(1);
-    expect(mockFetchChannelLatest).toHaveBeenCalledWith('UC_stale_wf');
+    expect(mockFetchRssFeed).toHaveBeenCalledTimes(1);
+    expect(mockFetchRssFeed).toHaveBeenCalledWith(
+      'https://www.youtube.com/feeds/videos.xml?channel_id=UC_stale_wf'
+    );
   });
 
   it('continues processing remaining channels after one fails', async () => {
@@ -581,8 +623,8 @@ describe('refreshChannelsWorkflow', () => {
       checkedAt: daysAgo(STALE_DAYS + 1),
     });
 
-    mockFetchChannelLatest.mockRejectedValueOnce(new Error('API down')).mockResolvedValueOnce(
-      makeApiResponse('OK', [
+    mockFetchRssFeed.mockRejectedValueOnce(new Error('API down')).mockResolvedValueOnce(
+      makeRssFeed('OK', [
         {
           videoId: 'vid_ok',
           title: 'OK Video',
