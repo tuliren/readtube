@@ -2,6 +2,9 @@ import { type RssChannel, fetchRssFeed, isYouTubeShort } from '@/lib/youtube/cha
 import { type ScrapedChannel, scrapeChannel } from '@/lib/youtube/channelScrape';
 import { buildRssUrl, buildThumbnailUrl } from '@/lib/youtube/urls';
 
+/** Duration threshold (seconds) for filtering Shorts when RSS is unavailable. */
+const SHORTS_DURATION_THRESHOLD = 60;
+
 /**
  * A single ingest-ready video produced by merging RSS + scrape data.
  *
@@ -66,7 +69,7 @@ export async function fetchChannelSnapshot(args: {
   console.info(`Fetching channel snapshot for ${args.channelPageUrl}`);
 
   let scraped: ScrapedChannel | null = null;
-  let feed: RssChannel;
+  let feed: RssChannel | null = null;
 
   if (args.rssUrl != null) {
     const [scrapeResult, rssResult] = await Promise.allSettled([
@@ -74,25 +77,63 @@ export async function fetchChannelSnapshot(args: {
       fetchRssFeed(args.rssUrl),
     ]);
 
-    if (rssResult.status !== 'fulfilled') {
-      throw rssResult.reason instanceof Error
-        ? rssResult.reason
-        : new Error(String(rssResult.reason));
-    }
-    feed = rssResult.value;
-
     if (scrapeResult.status === 'fulfilled') {
       scraped = scrapeResult.value;
     } else {
-      console.warn('[channelSnapshot] scrape failed, continuing RSS-only:', scrapeResult.reason);
+      console.warn('[channelSnapshot] scrape failed:', scrapeResult.reason);
+    }
+
+    if (rssResult.status === 'fulfilled') {
+      feed = rssResult.value;
+    } else {
+      console.warn('[channelSnapshot] RSS failed, falling back to scrape-only:', rssResult.reason);
     }
   } else {
     // Handle-based input — can't build RSS URL until we know the UC id.
     scraped = await scrapeChannel(args.channelPageUrl);
-    feed = await fetchRssFeed(buildRssUrl(scraped.channelId));
+    try {
+      feed = await fetchRssFeed(buildRssUrl(scraped.channelId));
+    } catch (err) {
+      console.warn('[channelSnapshot] RSS failed, falling back to scrape-only:', err);
+    }
   }
 
-  return mergeSnapshot(feed, scraped);
+  if (feed != null) {
+    return mergeSnapshot(feed, scraped);
+  }
+
+  // RSS unavailable — build snapshot entirely from scrape data.
+  if (scraped == null) {
+    throw new Error('Both RSS and scrape failed — cannot fetch channel data');
+  }
+  return buildSnapshotFromScrape(scraped);
+}
+
+/**
+ * Build a snapshot entirely from scrape data when RSS is unavailable.
+ * Shorts are filtered by duration (≤60s) instead of by link pattern.
+ * Exported for unit testing.
+ */
+export function buildSnapshotFromScrape(scraped: ScrapedChannel): ChannelSnapshot {
+  const videos: SnapshotVideo[] = scraped.videos
+    .filter((v) => v.durationSeconds == null || v.durationSeconds > SHORTS_DURATION_THRESHOLD)
+    .map((v) => ({
+      videoId: v.videoId,
+      title: v.title,
+      description: v.description,
+      publishedAt: v.publishedAt,
+      link: `https://www.youtube.com/watch?v=${v.videoId}`,
+      thumbnailUrl: buildThumbnailUrl(v.videoId),
+      durationSeconds: v.durationSeconds,
+    }));
+
+  return {
+    channelId: scraped.channelId,
+    name: scraped.name,
+    handle: scraped.handle,
+    logoUrl: scraped.logoUrl,
+    videos,
+  };
 }
 
 /**
