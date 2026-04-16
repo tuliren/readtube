@@ -110,6 +110,30 @@ export async function loadLibraryVideos(
   });
   const consumptionByVideoId = new Map(consumptions.map((c) => [c.video_id, c.read_at]));
 
+  // For 'all' and 'standalone' scopes, also check playlist watermarks
+  // so videos covered by a playlist's read_at show as read even when
+  // there's no explicit UserVideoConsumption row.
+  const watermarkReadIds = new Set<string>();
+  if (scope.kind !== 'playlist') {
+    const playlists = await prisma.playlist.findMany({
+      where: { user_id: userId, read_at: { not: null } },
+      select: {
+        read_at: true,
+        items: { select: { video_id: true, video: { select: { published_at: true } } } },
+      },
+    });
+    for (const pl of playlists) {
+      if (pl.read_at == null) {
+        continue;
+      }
+      for (const item of pl.items) {
+        if (item.video.published_at <= pl.read_at) {
+          watermarkReadIds.add(item.video_id);
+        }
+      }
+    }
+  }
+
   const decorated: VideoData[] = [];
   for (const id of videoIds) {
     const row = byId.get(id);
@@ -121,6 +145,9 @@ export async function loadLibraryVideos(
     let readAt: Date | null = explicitRead;
     if (readAt == null && playlistReadAt != null && row.published_at <= playlistReadAt) {
       readAt = playlistReadAt;
+    }
+    if (readAt == null && watermarkReadIds.has(id)) {
+      readAt = row.published_at; // use published_at as the effective read time
     }
     decorated.push(decorateVideo(row, triage, readAt));
   }

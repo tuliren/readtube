@@ -29,6 +29,10 @@ interface Props {
   totalVideos: number;
   /** Optional trailing content after the title (e.g. ExternalLinkActions). */
   trailing?: React.ReactNode;
+  /** Override the body sent to POST /api/videos/mark-all-read.
+   *  Defaults to `{ channelId }` or `{}` for the inbox. Library views
+   *  pass `{ library: true }` or `{ playlistId }`. */
+  markAllReadBody?: Record<string, unknown>;
 }
 
 export default function InboxHeader({
@@ -39,6 +43,7 @@ export default function InboxHeader({
   unreadCount,
   totalVideos,
   trailing,
+  markAllReadBody,
 }: Props) {
   const { mutate } = useSWRConfig();
   const router = useRouter();
@@ -82,7 +87,7 @@ export default function InboxHeader({
       const res = await fetch('/api/videos/mark-all-read', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(channelId != null ? { channelId } : {}),
+        body: JSON.stringify(markAllReadBody ?? (channelId != null ? { channelId } : {})),
       });
       if (!res.ok) {
         return;
@@ -90,6 +95,7 @@ export default function InboxHeader({
       // Refresh the sidebar unread badges and any /api/videos* keys.
       await Promise.all([
         mutate('/api/channels'),
+        mutate('/api/playlists'),
         mutate((key) => typeof key === 'string' && key.startsWith('/api/videos')),
       ]);
     } finally {

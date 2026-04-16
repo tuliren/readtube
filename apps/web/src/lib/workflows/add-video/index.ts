@@ -97,16 +97,20 @@ export async function addVideoForUser(args: {
   });
   const createdChannel = existingChannel == null;
 
+  // Use video_unique_source (globally unique) so we match a video
+  // that was previously created under a different channel (e.g. from
+  // a playlist add). Also corrects channel_id to the video's actual
+  // channel since we have accurate metadata from the watch page.
   const existingVideo = await prisma.video.findUnique({
     where: {
-      video_unique_channel_source: { channel_id: channel.id, source_id: snapshot.videoId },
+      video_unique_source: { source_type: VideoPlatformType.YOUTUBE, source_id: snapshot.videoId },
     },
     select: { id: true },
   });
 
   const video = await prisma.video.upsert({
     where: {
-      video_unique_channel_source: { channel_id: channel.id, source_id: snapshot.videoId },
+      video_unique_source: { source_type: VideoPlatformType.YOUTUBE, source_id: snapshot.videoId },
     },
     create: {
       channel_id: channel.id,
@@ -118,6 +122,7 @@ export async function addVideoForUser(args: {
       duration_seconds: snapshot.durationSeconds,
     },
     update: {
+      channel_id: channel.id,
       title: snapshot.title,
       ...(isEmptyString(snapshot.description) ? {} : { description: snapshot.description }),
       thumbnail_url: snapshot.thumbnailUrl,

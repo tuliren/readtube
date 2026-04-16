@@ -15,6 +15,9 @@ interface Props {
   /** YouTube URL for the entity (playlist). Renders an external-link
    *  icon + copy button next to the title in the header. */
   youtubeUrl?: string;
+  /** Playlist DB id. When set, mark-all-as-read sets the playlist's
+   *  read_at watermark. When absent, marks all library videos as read. */
+  playlistId?: string;
 }
 
 /**
@@ -23,7 +26,7 @@ interface Props {
  * (with mark-all-as-read), VideoList with S·A·T badges and triage
  * icons, plus the notes side panel.
  */
-export default function LibraryListView({ title, videos, youtubeUrl }: Props) {
+export default function LibraryListView({ title, videos, youtubeUrl, playlistId }: Props) {
   const { isMobile } = useSidebar();
   const [notesVideo, setNotesVideo] = useState<{ id: string; title: string } | null>(null);
 
@@ -47,6 +50,7 @@ export default function LibraryListView({ title, videos, youtubeUrl }: Props) {
           channelLogoUrl={null}
           unreadCount={unreadCount}
           totalVideos={videos.length}
+          markAllReadBody={playlistId != null ? { playlistId } : { library: true }}
           trailing={
             youtubeUrl != null ? (
               <ExternalLinkActions url={youtubeUrl} label="Open on YouTube" />

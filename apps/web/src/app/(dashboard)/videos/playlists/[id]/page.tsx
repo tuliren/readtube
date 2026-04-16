@@ -35,6 +35,7 @@ export default async function PlaylistPage({ params }: Props) {
       title={playlist.name}
       videos={videos}
       youtubeUrl={`https://www.youtube.com/playlist?list=${playlist.source_id}`}
+      playlistId={playlist.id}
     />
   );
 }
