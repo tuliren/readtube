@@ -7,6 +7,12 @@ import { useState } from 'react';
 import useSWR from 'swr';
 
 import { useCollapseState } from '@/components/dashboard/CollapseStateContext';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 import AddVideoModal from './AddVideoModal';
@@ -38,14 +44,16 @@ const fetcher = (url: string) =>
  *   - All        — every video the user has added (union, incl. in playlists)
  *   - Standalone — videos NOT in any playlist
  *   - <playlist> — one row per user playlist
- *   - + New playlist / + Add video actions
+ *
+ * The "+" dropdown next to the section header (matching the Channels
+ * section pattern) contains "Add video" and "Add playlist".
  */
 export default function VideosSection() {
   const pathname = usePathname();
   const { collapsed } = useSidebar();
   const { videosCollapsed, toggleVideos } = useCollapseState();
   const [addVideoOpen, setAddVideoOpen] = useState(false);
-  const [newPlaylistOpen, setNewPlaylistOpen] = useState(false);
+  const [addPlaylistOpen, setAddPlaylistOpen] = useState(false);
 
   const { data: playlists = [], mutate } = useSWR<PlaylistRow[]>('/api/playlists', fetcher);
 
@@ -60,20 +68,44 @@ export default function VideosSection() {
   return (
     <div className={collapsed ? 'px-1 pt-4' : 'px-3 pt-4'}>
       {!collapsed && (
-        <button
-          type="button"
-          onClick={toggleVideos}
-          className="mb-1 flex w-full items-center gap-1 px-2 text-left"
-          aria-expanded={!sectionCollapsed}
-          aria-label={sectionCollapsed ? 'Expand videos' : 'Collapse videos'}
-        >
-          {sectionCollapsed ? (
-            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-gray-500" />
-          ) : (
-            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-gray-500" />
-          )}
-          <span className="text-base font-semibold text-gray-900">Videos</span>
-        </button>
+        <div className="mb-1 flex items-center justify-between px-2">
+          <button
+            type="button"
+            onClick={toggleVideos}
+            className="flex items-center gap-1 text-left"
+            aria-expanded={!sectionCollapsed}
+            aria-label={sectionCollapsed ? 'Expand videos' : 'Collapse videos'}
+          >
+            {sectionCollapsed ? (
+              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-gray-500" />
+            ) : (
+              <ChevronDown className="h-3.5 w-3.5 shrink-0 text-gray-500" />
+            )}
+            <span className="text-base font-semibold text-gray-900">Videos</span>
+          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 data-[state=open]:bg-gray-100 data-[state=open]:text-gray-600"
+                aria-label="Add video or playlist"
+                title="Add video or playlist"
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem onSelect={() => setAddVideoOpen(true)}>
+                <Video className="mr-2 h-4 w-4 text-gray-500" />
+                Add video
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setAddPlaylistOpen(true)}>
+                <ListMusic className="mr-2 h-4 w-4 text-gray-500" />
+                Add playlist
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       )}
       {sectionCollapsed ? null : (
         <ul className="space-y-0.5">
@@ -101,35 +133,13 @@ export default function VideosSection() {
               sidebarCollapsed={collapsed}
             />
           ))}
-          {!collapsed && (
-            <>
-              <li>
-                <button
-                  type="button"
-                  onClick={() => setAddVideoOpen(true)}
-                  className={`${sidebarRowClass(false)} w-full text-left`}
-                >
-                  <SidebarRowContent icon={Plus} label="Add video" />
-                </button>
-              </li>
-              <li>
-                <button
-                  type="button"
-                  onClick={() => setNewPlaylistOpen(true)}
-                  className={`${sidebarRowClass(false)} w-full text-left`}
-                >
-                  <SidebarRowContent icon={Plus} label="New playlist" />
-                </button>
-              </li>
-            </>
-          )}
         </ul>
       )}
 
       <AddVideoModal open={addVideoOpen} onOpenChange={setAddVideoOpen} />
       <NewPlaylistDialog
-        open={newPlaylistOpen}
-        onOpenChange={setNewPlaylistOpen}
+        open={addPlaylistOpen}
+        onOpenChange={setAddPlaylistOpen}
         onCreated={() => void mutate()}
       />
     </div>

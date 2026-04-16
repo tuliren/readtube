@@ -65,11 +65,53 @@ export function extractHandle(input: string): string | null {
   }
 }
 
+// ─── Playlist URL parsing ────────────────────────────────────────
+
+/**
+ * Extracts a YouTube playlist ID from:
+ *   - Bare playlist ID (starts with PL/UU/OL/LL/FL/RD etc., 10+ chars)
+ *   - /playlist?list=PLxxx
+ *   - /watch?v=...&list=PLxxx
+ */
+export function extractPlaylistId(input: string): string | null {
+  if (input == null || typeof input !== 'string') {
+    return null;
+  }
+  const trimmed = input.trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+
+  // Bare playlist ID
+  if (/^[A-Z]{2}[\w-]{10,}$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  try {
+    const url = new URL(trimmed);
+    if (!url.hostname.includes('youtube.com')) {
+      return null;
+    }
+    const list = url.searchParams.get('list');
+    if (list != null && /^[A-Z]{2}[\w-]{10,}$/.test(list)) {
+      return list;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 // ─── URL builders ────────────────────────────────────────────────
 
 /** Build the YouTube channel RSS feed URL from a UC-prefixed channel id. */
 export function buildRssUrl(channelId: string): string {
   return `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
+}
+
+/** Build the YouTube playlist RSS feed URL from a playlist ID. */
+export function buildPlaylistRssUrl(playlistId: string): string {
+  return `https://www.youtube.com/feeds/videos.xml?playlist_id=${playlistId}`;
 }
 
 /**

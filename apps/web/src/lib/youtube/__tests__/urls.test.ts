@@ -1,8 +1,10 @@
 import {
+  buildPlaylistRssUrl,
   buildRssUrl,
   buildThumbnailUrl,
   extractChannelId,
   extractHandle,
+  extractPlaylistId,
   resizeGoogleAvatar,
 } from '../urls';
 
@@ -54,6 +56,51 @@ describe('extractHandle', () => {
     ['empty string', ''],
   ])('returns null for %s', (_label, input) => {
     expect(extractHandle(input)).toBeNull();
+  });
+});
+
+const VALID_PLAYLIST_ID = 'PL5Nnuy0hm7urlZC8j4UgBwTHZS-qUL9iW';
+
+describe('extractPlaylistId', () => {
+  it.each([
+    ['bare playlist ID', VALID_PLAYLIST_ID, VALID_PLAYLIST_ID],
+    [
+      '/playlist?list= URL',
+      `https://www.youtube.com/playlist?list=${VALID_PLAYLIST_ID}`,
+      VALID_PLAYLIST_ID,
+    ],
+    [
+      '/watch?v=...&list= URL',
+      `https://www.youtube.com/watch?v=qE_Al_GcV9M&list=${VALID_PLAYLIST_ID}`,
+      VALID_PLAYLIST_ID,
+    ],
+    [
+      'playlist URL without www',
+      `https://youtube.com/playlist?list=${VALID_PLAYLIST_ID}`,
+      VALID_PLAYLIST_ID,
+    ],
+  ])('extracts playlist ID from %s', (_label, input, expected) => {
+    expect(extractPlaylistId(input)).toBe(expected);
+  });
+
+  it.each([
+    ['channel URL', `https://youtube.com/channel/${VALID_CHANNEL_ID}`],
+    ['watch URL without list', 'https://youtube.com/watch?v=abc123'],
+    ['non-youtube URL', 'https://vimeo.com/playlist?list=PL123456789abc'],
+    ['empty string', ''],
+    ['null', null as unknown as string],
+    ['random text', 'not a url'],
+    ['short bare id', 'PLabc'],
+  ])('returns null for %s', (_label, input) => {
+    expect(extractPlaylistId(input)).toBeNull();
+  });
+});
+
+describe('buildPlaylistRssUrl', () => {
+  it('builds correct playlist RSS URL', () => {
+    expect(buildPlaylistRssUrl(VALID_PLAYLIST_ID)).toBe(
+      `https://www.youtube.com/feeds/videos.xml?playlist_id=${VALID_PLAYLIST_ID}`
+    );
   });
 });
 

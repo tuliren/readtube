@@ -114,45 +114,80 @@ function firstMatch(html: string, re: RegExp): string | null {
 }
 
 /**
- * Fetches the watch page for `videoId` and extracts a VideoSnapshot.
- * Throws if the page is unreachable or missing required fields
- * (channel id, title, published date).
+ * YouTube oEmbed response — the subset of fields we use.
+ * Public endpoint, no API key required. Always available for
+ * public videos. More reliable than scraping meta tags because
+ * it isn't subject to consent-wall HTML variations.
+ */
+interface OEmbedResponse {
+  title: string;
+  author_name: string;
+  author_url: string;
+  thumbnail_url: string;
+}
+
+async function fetchOEmbed(videoId: string): Promise<OEmbedResponse | null> {
+  try {
+    const url = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) {
+      return null;
+    }
+    return (await res.json()) as OEmbedResponse;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetches video metadata via oEmbed (title, channel name, handle)
+ * plus a watch-page scrape for fields oEmbed doesn't expose
+ * (channelId, publishedAt, duration). Falls back gracefully when
+ * specific scrape regexes miss — the only hard requirement is
+ * channelId.
  */
 export async function fetchVideoSnapshot(videoId: string): Promise<VideoSnapshot> {
+  // Fire oEmbed and page fetch in parallel — they're independent.
   const watchUrl = `https://www.youtube.com/watch?v=${videoId}`;
-  const response = await fetch(watchUrl, {
-    headers: { 'User-Agent': YT_USER_AGENT },
-    cache: 'no-store',
-  });
+  const [oembed, response] = await Promise.all([
+    fetchOEmbed(videoId),
+    fetch(watchUrl, { headers: { 'User-Agent': YT_USER_AGENT }, cache: 'no-store' }),
+  ]);
   if (!response.ok) {
     throw new Error(`Failed to fetch video page: ${response.status}`);
   }
   const html = await response.text();
 
-  const channelId = firstMatch(html, /<meta itemprop="identifier" content="(UC[\w-]{20,})"/);
-  // Fallback: channelId may appear inside the richly-embedded JSON blob
-  // but the <meta itemprop="channelId"> form is standard on modern pages.
-  const channelIdAlt = channelId ?? firstMatch(html, /"channelId":"(UC[\w-]{20,})"/);
-  const resolvedChannelId = channelId ?? channelIdAlt;
-  if (resolvedChannelId == null) {
+  // ── Channel ID (required) — scrape-only; oEmbed doesn't expose it ──
+  const channelId =
+    firstMatch(html, /<meta itemprop="identifier" content="(UC[\w-]{20,})"/) ??
+    firstMatch(html, /"channelId":"(UC[\w-]{20,})"/);
+  if (channelId == null) {
     throw new Error('Could not extract channel id from watch page');
   }
 
+  // ── Title — prefer oEmbed (always present for public videos) ──
   const title =
-    firstMatch(html, /<meta name="title" content="([^"]+)"/) ??
-    firstMatch(html, /<meta property="og:title" content="([^"]+)"/);
+    oembed?.title ??
+    firstMatch(html, /<meta name="title" content="([^"]*)"/) ??
+    firstMatch(html, /<meta property="og:title" content="([^"]*)"/) ??
+    firstMatch(html, /"title":"([^"]+)"/);
   if (title == null) {
     throw new Error('Could not extract video title');
   }
 
+  // ── Description — scrape; oEmbed doesn't include it ──
   const description =
-    firstMatch(html, /<meta name="description" content="([^"]+)"/) ??
-    firstMatch(html, /<meta property="og:description" content="([^"]+)"/) ??
+    firstMatch(html, /<meta name="description" content="([^"]*)"/) ??
+    firstMatch(html, /<meta property="og:description" content="([^"]*)"/) ??
     '';
 
   const thumbnailUrl =
-    firstMatch(html, /<meta property="og:image" content="([^"]+)"/) ?? buildThumbnailUrl(videoId);
+    oembed?.thumbnail_url ??
+    firstMatch(html, /<meta property="og:image" content="([^"]+)"/) ??
+    buildThumbnailUrl(videoId);
 
+  // ── Published date — scrape-only ──
   const publishedRaw = firstMatch(html, /<meta itemprop="datePublished" content="([^"]+)"/);
   const publishedAt = publishedRaw != null ? new Date(publishedRaw) : null;
   if (publishedAt == null || Number.isNaN(publishedAt.getTime())) {
@@ -162,22 +197,15 @@ export async function fetchVideoSnapshot(videoId: string): Promise<VideoSnapshot
   const durationIso = firstMatch(html, /<meta itemprop="duration" content="([^"]+)"/);
   const durationSeconds = parseIsoDurationSeconds(durationIso);
 
+  // ── Channel metadata — prefer oEmbed for name; scrape for handle ──
   const channelName =
-    firstMatch(html, /"author":"([^"]+)"/) ??
-    firstMatch(html, /<link itemprop="name" content="([^"]+)"/) ??
-    'Unknown Channel';
+    oembed?.author_name ?? firstMatch(html, /"author":"([^"]+)"/) ?? 'Unknown Channel';
 
-  const channelPageUrl =
-    firstMatch(html, /<span itemprop="author"[^>]*>\s*<link itemprop="url" href="([^"]+)"/) ??
-    firstMatch(html, /"ownerProfileUrl":"([^"]+)"/);
+  const channelPageUrl = oembed?.author_url ?? firstMatch(html, /"ownerProfileUrl":"([^"]+)"/);
   let handle: string | null = null;
   if (channelPageUrl != null) {
     const m = channelPageUrl.match(/\/@([\w.-]+)/);
     if (m != null) {
-      // Store with the leading `@` to match channelScrape.ts and the
-      // `channel_unique_handle` constraint — otherwise the same row
-      // flip-flops between "@mkbhd" and "mkbhd" as different code
-      // paths touch it.
       handle = `@${m[1]}`;
     }
   }
@@ -190,7 +218,7 @@ export async function fetchVideoSnapshot(videoId: string): Promise<VideoSnapshot
     publishedAt,
     durationSeconds,
     channel: {
-      sourceId: resolvedChannelId,
+      sourceId: channelId,
       name: channelName,
       handle,
       logoUrl: null,

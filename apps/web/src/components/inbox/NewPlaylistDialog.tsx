@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { useSWRConfig } from 'swr';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -21,27 +22,27 @@ interface Props {
 }
 
 /**
- * shadcn Dialog for creating a playlist. Mirrors NewFolderDialog.
- * The caller (VideosSection) owns the open state + SWR revalidation
- * via the onCreated callback.
+ * Dialog for adding a YouTube playlist by URL. Hits POST /api/playlists
+ * which fetches the playlist RSS feed, creates a Playlist row with
+ * the title from the feed, and ingests each video.
  */
 export default function NewPlaylistDialog({ open, onOpenChange, onCreated }: Props) {
-  const [name, setName] = useState('');
+  const [url, setUrl] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const { mutate } = useSWRConfig();
 
   useEffect(() => {
     if (open) {
-      setName('');
+      setUrl('');
       setBusy(false);
       setError('');
     }
   }, [open]);
 
-  async function handleSubmit(event: React.FormEvent) {
+  async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    const trimmed = name.trim();
-    if (trimmed.length === 0 || busy) {
+    if (busy) {
       return;
     }
     setError('');
@@ -50,15 +51,20 @@ export default function NewPlaylistDialog({ open, onOpenChange, onCreated }: Pro
       const res = await fetch('/api/playlists', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: trimmed }),
+        body: JSON.stringify({ url }),
       });
       if (res.ok) {
-        toast.success('Playlist created');
+        const data = (await res.json()) as { playlistName: string; videosProcessed: number };
+        toast.success(`Added "${data.playlistName}" with ${data.videosProcessed} videos`);
         onCreated();
+        await mutate(
+          (key) =>
+            typeof key === 'string' && (key.startsWith('/api/videos') || key === '/api/playlists')
+        );
         onOpenChange(false);
       } else {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(data.error ?? 'Failed to create playlist.');
+        setError(data.error ?? 'Failed to add playlist.');
       }
     } catch {
       setError('Network error. Please try again.');
@@ -67,23 +73,33 @@ export default function NewPlaylistDialog({ open, onOpenChange, onCreated }: Pro
     }
   }
 
+  function handleOpenChange(nextOpen: boolean) {
+    if (!nextOpen && busy) {
+      return;
+    }
+    onOpenChange(nextOpen);
+  }
+
   return (
-    <Dialog open={open} onOpenChange={busy ? undefined : onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>New playlist</DialogTitle>
+          <DialogTitle>Add playlist</DialogTitle>
           <DialogDescription>
-            Group videos across channels into your own curated list.
+            Paste a YouTube playlist URL:{' '}
+            <code className="rounded bg-gray-100 px-1">youtube.com/playlist?list=PL…</code>,{' '}
+            <code className="rounded bg-gray-100 px-1">youtube.com/watch?v=…&list=PL…</code>, or a
+            bare playlist ID.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="mt-2 space-y-4">
           <Input
             autoFocus
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. AI talks"
-            maxLength={80}
+            type="text"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://youtube.com/playlist?list=PL…"
             disabled={busy}
           />
 
@@ -93,13 +109,13 @@ export default function NewPlaylistDialog({ open, onOpenChange, onCreated }: Pro
             <Button
               type="button"
               variant="ghost"
-              onClick={() => onOpenChange(false)}
+              onClick={() => handleOpenChange(false)}
               disabled={busy}
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={busy || name.trim().length === 0}>
-              {busy ? 'Creating…' : 'Create playlist'}
+            <Button type="submit" disabled={busy || url.trim().length === 0}>
+              {busy ? 'Adding…' : 'Add playlist'}
             </Button>
           </DialogFooter>
         </form>

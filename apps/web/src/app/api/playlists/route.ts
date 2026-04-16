@@ -1,7 +1,10 @@
-import { Prisma, prisma } from '@readtube/database';
+import { prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { requireUserId } from '@/lib/auth';
+import { ensureUserExists } from '@/lib/db/user';
+import { isEmptyString } from '@/lib/string';
+import { AddPlaylistError, addPlaylistForUser } from '@/lib/workflows/add-playlist';
 
 export interface PlaylistData {
   id: string;
@@ -45,6 +48,11 @@ export async function GET() {
   return NextResponse.json(rows.map(toPlaylistData));
 }
 
+/**
+ * Add a YouTube playlist by URL. Fetches the playlist RSS feed,
+ * creates a Playlist row with the title from the feed, and ingests
+ * each video (shadow Channel + Video + StandaloneVideo + PlaylistVideo).
+ */
 export async function POST(request: NextRequest) {
   const authResult = await requireUserId();
   if (authResult instanceof NextResponse) {
@@ -52,44 +60,28 @@ export async function POST(request: NextRequest) {
   }
   const userId = authResult;
 
-  let body: { name?: string };
+  let body: { url?: string };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
   }
-  const name = body.name?.trim() ?? '';
-  if (name.length === 0) {
-    return NextResponse.json({ error: 'Playlist name required' }, { status: 400 });
-  }
-  if (name.length > 80) {
-    return NextResponse.json({ error: 'Playlist name too long' }, { status: 400 });
+  const input = body.url?.trim() ?? '';
+  if (isEmptyString(input)) {
+    return NextResponse.json({ error: 'Missing URL' }, { status: 400 });
   }
 
-  const max = await prisma.playlist.aggregate({
-    where: { user_id: userId },
-    _max: { sort_order: true },
-  });
-  const nextOrder = (max._max.sort_order ?? -1) + 1;
+  await ensureUserExists(userId);
 
   try {
-    const row = await prisma.playlist.create({
-      data: { user_id: userId, name, sort_order: nextOrder },
-      select: {
-        id: true,
-        name: true,
-        sort_order: true,
-        _count: { select: { items: true } },
-      },
-    });
-    return NextResponse.json(toPlaylistData(row), { status: 201 });
+    const result = await addPlaylistForUser({ userId, input });
+    return NextResponse.json(result, { status: 201 });
   } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-      return NextResponse.json(
-        { error: `A playlist named "${name}" already exists.` },
-        { status: 409 }
-      );
+    if (err instanceof AddPlaylistError) {
+      const status = err.code === 'INVALID_URL' ? 400 : 502;
+      return NextResponse.json({ error: err.message }, { status });
     }
-    throw err;
+    console.error('[playlists/POST] addPlaylistForUser failed:', err);
+    return NextResponse.json({ error: 'Failed to add playlist' }, { status: 500 });
   }
 }
