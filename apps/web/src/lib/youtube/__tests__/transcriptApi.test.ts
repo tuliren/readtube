@@ -98,7 +98,7 @@ describe('fetchChannelLatest', () => {
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
       'https://transcriptapi.com/api/v2/youtube/channel/latest?channel=%40TestHandle',
-      { headers: { Authorization: 'Bearer test-key' } }
+      { headers: { Authorization: 'Bearer test-key' }, cache: 'no-store' }
     );
   });
 
