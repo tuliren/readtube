@@ -38,6 +38,8 @@ export async function upsertChannelWithVideos(
   sourceId: string,
   snapshot: ChannelSnapshot
 ): Promise<UpsertChannelResult> {
+  console.info(`Upsert channel with video source id ${sourceId}`);
+
   const existing = await prisma.channel.findUnique({
     where: {
       channel_unique_source: { source_type: VideoPlatformType.YOUTUBE, source_id: sourceId },
@@ -47,6 +49,7 @@ export async function upsertChannelWithVideos(
   const hasHandle = !isEmptyString(snapshot.handle);
 
   if (existing != null) {
+    console.info(`Channel with video source id ${sourceId} already exists, updating...`);
     // Update path: only refresh the handle when no other row owns it.
     // If the existing row already has the same handle, the update is a
     // no-op for that column; Prisma generates SET handle = '@x' which
@@ -63,14 +66,13 @@ export async function upsertChannelWithVideos(
         select: { id: true },
       })) != null;
 
-    const updated = await prisma.channel.update({
+    return prisma.channel.update({
       where: { id: existing.id },
       data: {
         ...(snapshot.logoUrl != null ? { logo_url: snapshot.logoUrl } : {}),
         ...(hasHandle && !conflictOnHandle ? { handle: snapshot.handle } : {}),
       },
     });
-    return updated;
   }
 
   // Create path: only include handle when no existing row has it.
@@ -81,6 +83,7 @@ export async function upsertChannelWithVideos(
       select: { id: true },
     })) != null;
 
+  console.info(`Channel does not exist, creating...`);
   return prisma.channel.create({
     data: {
       source_type: VideoPlatformType.YOUTUBE,

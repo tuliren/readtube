@@ -79,11 +79,17 @@ export async function fetchRssFeed(rssUrl: string): Promise<RssChannel> {
     throw new Error('Invalid RSS feed: missing feed element');
   }
 
-  // Channel ID from yt:channelId element
-  const channelId = (feed['yt:channelId'] as string | undefined)?.trim();
-  if (!channelId) {
+  // Channel ID from yt:channelId element. YouTube's RSS is inconsistent:
+  // the feed-level <yt:channelId> drops the "UC" prefix (e.g. emits
+  // "2cRwTuSWxxEtrRnT4lrlQA" for channel UC2cRwTuSWxxEtrRnT4lrlQA),
+  // while every entry-level <yt:channelId> keeps the full "UC..."
+  // form. Normalize so downstream code always sees the canonical ID
+  // that matches the rest of YouTube.
+  const rawChannelId = (feed['yt:channelId'] as string | undefined)?.trim();
+  if (!rawChannelId) {
     throw new Error('Invalid RSS feed: missing channel ID');
   }
+  const channelId = rawChannelId.startsWith('UC') ? rawChannelId : `UC${rawChannelId}`;
 
   const channelName = (feed.title as string | undefined)?.trim() ?? 'Unknown Channel';
   const feedAuthor = feed.author as Record<string, unknown> | undefined;
