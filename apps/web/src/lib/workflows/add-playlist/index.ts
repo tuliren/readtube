@@ -89,7 +89,7 @@ async function fetchPlaylistData(playlistId: string): Promise<PlaylistFeed> {
  * Adds a YouTube playlist to the user's library. Tries the playlist
  * RSS feed first, then falls back to scraping the playlist page.
  * Creates a Playlist row and for each video upserts a shadow
- * Channel + Video + StandaloneVideo + PlaylistVideo row.
+ * Channel + Video + PlaylistVideo row.
  *
  * The playlist name comes from the feed/page title. If a playlist
  * with that name already exists for the user, a numeric suffix is
@@ -200,12 +200,6 @@ export async function addPlaylistForUser(args: {
       select: { id: true },
     });
 
-    // Intentionally NOT creating a StandaloneVideo row here — the
-    // video is in the playlist, that's all. Library membership is
-    // resolved via (StandaloneVideo OR user's PlaylistVideo). Deleting
-    // the playlist then removes the video from library views naturally,
-    // unless the user has ALSO added it individually (which creates a
-    // StandaloneVideo row via the add-video flow).
     await prisma.playlistVideo.upsert({
       where: {
         playlist_video_unique_playlist_video: { playlist_id: playlist.id, video_id: video.id },
