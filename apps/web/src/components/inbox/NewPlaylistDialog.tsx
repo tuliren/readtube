@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { FormEvent, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useSWRConfig } from 'swr';
@@ -31,6 +32,7 @@ export default function NewPlaylistDialog({ open, onOpenChange, onCreated }: Pro
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const { mutate } = useSWRConfig();
+  const router = useRouter();
 
   useEffect(() => {
     if (open) {
@@ -54,14 +56,19 @@ export default function NewPlaylistDialog({ open, onOpenChange, onCreated }: Pro
         body: JSON.stringify({ url }),
       });
       if (res.ok) {
-        const data = (await res.json()) as { playlistName: string; videosProcessed: number };
+        const data = (await res.json()) as {
+          playlistId: string;
+          playlistName: string;
+          videosProcessed: number;
+        };
         toast.success(`Added "${data.playlistName}" with ${data.videosProcessed} videos`);
         onCreated();
-        await mutate(
+        void mutate(
           (key) =>
             typeof key === 'string' && (key.startsWith('/api/videos') || key === '/api/playlists')
         );
         onOpenChange(false);
+        router.push(`/videos/playlists/${data.playlistId}`);
       } else {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
         setError(data.error ?? 'Failed to add playlist.');
