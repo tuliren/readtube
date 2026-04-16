@@ -8,8 +8,7 @@ interface Params {
 }
 
 /**
- * Add a video to a playlist. Also implicitly adds a `StandaloneVideo`
- * row if one doesn't already exist — playlist membership implies the
+ * Add a video to a playlist. Playlist membership implies the
  * video is part of the user's personal library.
  */
 export async function POST(request: NextRequest, { params }: Params) {
