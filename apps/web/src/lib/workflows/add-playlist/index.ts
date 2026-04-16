@@ -3,7 +3,7 @@ import { VideoPlatformType, prisma } from '@readtube/database';
 import { isEmptyString } from '@/lib/string';
 import type { RssChannel } from '@/lib/youtube/channelRss';
 import { fetchRssFeed, isYouTubeShort } from '@/lib/youtube/channelRss';
-import { scrapePlaylist } from '@/lib/youtube/playlistScrape';
+import { PrivatePlaylistError, scrapePlaylist } from '@/lib/youtube/playlistScrape';
 import { buildPlaylistRssUrl, buildRssUrl, extractPlaylistId } from '@/lib/youtube/urls';
 
 export interface AddPlaylistResult {
@@ -15,7 +15,7 @@ export interface AddPlaylistResult {
 export class AddPlaylistError extends Error {
   constructor(
     message: string,
-    public readonly code: 'INVALID_URL' | 'FETCH_FAILED'
+    public readonly code: 'INVALID_URL' | 'FETCH_FAILED' | 'PRIVATE_PLAYLIST'
   ) {
     super(message);
     this.name = 'AddPlaylistError';
@@ -116,6 +116,9 @@ export async function addPlaylistForUser(args: {
     feed = await fetchPlaylistData(ytPlaylistId);
   } catch (err) {
     console.error('[add-playlist] fetchPlaylistData failed:', err);
+    if (err instanceof PrivatePlaylistError) {
+      throw new AddPlaylistError(err.message, 'PRIVATE_PLAYLIST');
+    }
     throw new AddPlaylistError(
       err instanceof Error ? err.message : 'Failed to fetch playlist',
       'FETCH_FAILED'

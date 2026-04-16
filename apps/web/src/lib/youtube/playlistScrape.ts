@@ -31,6 +31,21 @@ export interface ScrapedPlaylist {
 }
 
 /**
+ * Thrown when a playlist can't be read because it's private (or its
+ * owner has restricted access). Used to surface a friendly hint to
+ * the user: unlisted playlists work, private ones don't.
+ */
+export class PrivatePlaylistError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PrivatePlaylistError';
+  }
+}
+
+const PRIVATE_ERROR_MESSAGE =
+  'This playlist is private, so we cannot import it. Change the playlist visibility to Unlisted (not Public) on YouTube and try again — unlisted playlists stay out of YouTube search but are importable here.';
+
+/**
  * Fetches and parses a YouTube playlist page. Extracts metadata from
  * the `ytInitialData` JSON blob embedded in the page source.
  */
@@ -56,6 +71,25 @@ export async function scrapePlaylist(playlistId: string): Promise<ScrapedPlaylis
     data = JSON.parse(dataMatch[1]);
   } catch {
     throw new Error('Failed to parse ytInitialData JSON');
+  }
+
+  // Private / deleted / restricted playlists surface as an alerts
+  // array on ytInitialData. The alertRenderer's text usually reads
+  // "This playlist does not exist" or similar.
+  const alerts = data?.alerts as any[] | undefined;
+  if (Array.isArray(alerts) && alerts.length > 0) {
+    const firstAlert = alerts[0]?.alertRenderer ?? alerts[0]?.alertWithButtonRenderer;
+    const alertText =
+      firstAlert?.text?.simpleText ??
+      (firstAlert?.text?.runs as any[] | undefined)?.map((r) => r.text).join('') ??
+      '';
+    // Any alert here (private, deleted, restricted) — surface as a
+    // private-playlist hint since that's the fixable case.
+    throw new PrivatePlaylistError(
+      alertText.length > 0
+        ? `${PRIVATE_ERROR_MESSAGE} (YouTube says: "${alertText}")`
+        : PRIVATE_ERROR_MESSAGE
+    );
   }
 
   // Navigate the deeply nested YouTube data structure.

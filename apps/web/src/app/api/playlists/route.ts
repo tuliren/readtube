@@ -94,8 +94,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(result, { status: 201 });
   } catch (err) {
     if (err instanceof AddPlaylistError) {
-      const status = err.code === 'INVALID_URL' ? 400 : 502;
-      return NextResponse.json({ error: err.message }, { status });
+      // 400 for user-fixable inputs (invalid URL, private playlist),
+      // 502 for upstream fetch failures.
+      const status = err.code === 'INVALID_URL' || err.code === 'PRIVATE_PLAYLIST' ? 400 : 502;
+      return NextResponse.json({ error: err.message, code: err.code }, { status });
     }
     console.error('[playlists/POST] addPlaylistForUser failed:', err);
     return NextResponse.json({ error: 'Failed to add playlist' }, { status: 500 });
