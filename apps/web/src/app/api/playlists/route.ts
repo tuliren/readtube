@@ -64,9 +64,10 @@ export async function GET() {
 }
 
 /**
- * Add a YouTube playlist by URL. Fetches the playlist RSS feed,
- * creates a Playlist row with the title from the feed, and ingests
- * each video (shadow Channel + Video + StandaloneVideo + PlaylistVideo).
+ * Add a YouTube playlist by URL. Fetches the playlist RSS feed (or
+ * falls back to scraping the playlist page), creates a Playlist row
+ * with the title from the feed, and ingests each video (shadow
+ * Channel + Video + PlaylistVideo).
  */
 export async function POST(request: NextRequest) {
   const authResult = await requireUserId();

@@ -88,8 +88,8 @@ async function fetchPlaylistData(playlistId: string): Promise<PlaylistFeed> {
 /**
  * Adds a YouTube playlist to the user's library. Tries the playlist
  * RSS feed first, then falls back to scraping the playlist page.
- * Creates a Playlist row and for each video upserts a shadow
- * Channel + Video + PlaylistVideo row.
+ * Creates a Playlist row and for each video upserts a shadow Channel
+ * + Video + PlaylistVideo row.
  *
  * The playlist name comes from the feed/page title. If a playlist
  * with that name already exists for the user, a numeric suffix is

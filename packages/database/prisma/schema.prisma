@@ -153,18 +153,18 @@ model Video {
   // (generated) and for raw-SQL reads.
   search_tsv             Unsupported("tsvector")?
 
-  channel         Channel                @relation(fields: [channel_id], references: [id], onDelete: Cascade)
-  transcripts     Transcript[]
-  consumptions    UserVideoConsumption[]
-  tags            VideoTag[]
-  stars           VideoStar[]
-  saves           VideoSave[]
-  archives        VideoArchive[]
-  standalone      StandaloneVideo[]
-  playlist_items  PlaylistVideo[]
-  notes           Note[]
-  highlights      Highlight[]
-  embedding       VideoEmbedding?
+  channel        Channel                @relation(fields: [channel_id], references: [id], onDelete: Cascade)
+  transcripts    Transcript[]
+  consumptions   UserVideoConsumption[]
+  tags           VideoTag[]
+  stars          VideoStar[]
+  saves          VideoSave[]
+  archives       VideoArchive[]
+  standalone     StandaloneVideo[]
+  playlist_items PlaylistVideo[]
+  notes          Note[]
+  highlights     Highlight[]
+  embedding      VideoEmbedding?
 
   @@unique([channel_id, source_id], name: "video_unique_channel_source")
   @@unique([source_type, source_id], name: "video_unique_source")
@@ -338,12 +338,6 @@ model VideoArchive {
 // (via the "+ Add video" flow). The Video row still lives under a
 // Channel — we auto-upsert a "shadow" Channel when the video's actual
 // channel isn't in the user's subscriptions.
-//
-// Library membership is the UNION of StandaloneVideo (this table) and
-// PlaylistVideo rows whose playlist belongs to the user. Videos added
-// via a playlist do NOT get a StandaloneVideo row, so deleting the
-// playlist removes them from the library unless they were also added
-// individually or exist in another of the user's playlists.
 model StandaloneVideo {
   id         String   @id @default(cuid())
   user_id    String

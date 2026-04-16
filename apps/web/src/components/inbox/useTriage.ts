@@ -1,10 +1,27 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { useSWRConfig } from 'swr';
 
 import type { BulkAction } from '@/lib/inbox/triageActions';
+
+/**
+ * True for the library list routes whose video data is server-rendered
+ * without a SWR fallback: /videos, /videos/standalone, and
+ * /videos/playlists/[id]. Excludes the reader (/videos/[sourceId])
+ * which renders a single video and doesn't need a list refresh.
+ */
+function isLibraryListRoute(pathname: string | null): boolean {
+  if (pathname == null) {
+    return false;
+  }
+  return (
+    pathname === '/videos' ||
+    pathname === '/videos/standalone' ||
+    pathname.startsWith('/videos/playlists/')
+  );
+}
 
 /**
  * Small client-side hook that hides fetch + SWR invalidation behind
@@ -22,6 +39,7 @@ import type { BulkAction } from '@/lib/inbox/triageActions';
 export function useTriage() {
   const { mutate } = useSWRConfig();
   const router = useRouter();
+  const pathname = usePathname();
 
   async function call(method: 'POST' | 'DELETE', url: string, body?: unknown): Promise<Response> {
     const res = await fetch(url, {
@@ -57,11 +75,15 @@ export function useTriage() {
       { revalidate: true }
     );
     void mutate('/api/channels', undefined, { revalidate: true });
-    // The library pages (/videos, /videos/standalone, /videos/playlists/[id])
+    // Library pages (/videos, /videos/standalone, /videos/playlists/[id])
     // are server-rendered — their video list comes from a loader at page
-    // load time, not SWR. router.refresh() re-runs the RSC so removed
-    // videos disappear without a full page reload.
-    router.refresh();
+    // load time, not SWR. router.refresh() re-runs the RSC so the list
+    // updates without a full page reload. Skip on the inbox/channel
+    // routes where SWR revalidation alone suffices, to avoid an extra
+    // RSC round-trip per rapid triage action.
+    if (isLibraryListRoute(pathname)) {
+      router.refresh();
+    }
   }
 
   return {
