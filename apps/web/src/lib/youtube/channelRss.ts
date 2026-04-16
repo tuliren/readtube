@@ -34,7 +34,14 @@ export function isYouTubeShort(video: { link: string }): boolean {
 
 export interface RssChannel {
   channelId: string;
+  /** Feed-level `<title>`. For channel feeds this is the channel
+   *  name; for playlist feeds it's the playlist title. Callers that
+   *  want the owning channel's display name should prefer `authorName`. */
   name: string;
+  /** Feed-level `<author><name>` — the owning channel's display name
+   *  regardless of whether the feed is a channel or playlist feed.
+   *  Null if the feed omitted author info. */
+  authorName: string | null;
   videos: RssVideo[];
 }
 
@@ -79,6 +86,8 @@ export async function fetchRssFeed(rssUrl: string): Promise<RssChannel> {
   }
 
   const channelName = (feed.title as string | undefined)?.trim() ?? 'Unknown Channel';
+  const feedAuthor = feed.author as Record<string, unknown> | undefined;
+  const authorName = (feedAuthor?.name as string | undefined)?.trim() ?? null;
 
   const entries = (feed.entry as Record<string, unknown>[] | undefined) ?? [];
 
@@ -120,7 +129,7 @@ export async function fetchRssFeed(rssUrl: string): Promise<RssChannel> {
     })
     .filter((v): v is RssVideo => v !== null);
 
-  return { channelId, name: channelName, videos };
+  return { channelId, name: channelName, authorName, videos };
 }
 
 /**

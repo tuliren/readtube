@@ -145,6 +145,7 @@ async function fetchChannelLatestAsRss(channelInput: string): Promise<RssChannel
   return {
     channelId: result.channel.channelId,
     name: result.channel.title,
+    authorName: result.channel.title,
     videos: result.videos.map((v) => ({
       videoId: v.videoId,
       title: v.title,

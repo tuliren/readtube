@@ -56,7 +56,9 @@ async function fetchPlaylistData(playlistId: string): Promise<PlaylistFeed> {
     const rss: RssChannel = await fetchRssFeed(buildPlaylistRssUrl(playlistId));
     return {
       channelId: rss.channelId,
-      channelName: rss.name,
+      // For playlist RSS feeds the feed-level <title> is the playlist
+      // title; the playlist owner's channel name comes from <author>.
+      channelName: rss.authorName ?? rss.name,
       name: rss.name,
       videos: rss.videos
         .filter((v) => !isYouTubeShort(v))

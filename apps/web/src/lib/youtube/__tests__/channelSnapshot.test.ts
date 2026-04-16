@@ -17,7 +17,7 @@ function rssVideo(overrides: Partial<RssVideo> & Pick<RssVideo, 'videoId'>): Rss
 }
 
 function rssFeed(videos: RssVideo[]): RssChannel {
-  return { channelId: 'UC_abc', name: 'Test Channel', videos };
+  return { channelId: 'UC_abc', name: 'Test Channel', authorName: 'Test Channel', videos };
 }
 
 function scrapedChannel(overrides: Partial<ScrapedChannel> = {}): ScrapedChannel {

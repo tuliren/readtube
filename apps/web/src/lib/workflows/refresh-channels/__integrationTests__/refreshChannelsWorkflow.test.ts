@@ -101,6 +101,7 @@ function makeRssFeed(
   return {
     channelId: 'UC_test',
     name: channelName,
+    authorName: channelName,
     videos: videos.map((v) => ({
       videoId: v.videoId,
       title: v.title,

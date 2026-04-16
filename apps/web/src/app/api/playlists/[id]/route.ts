@@ -84,5 +84,5 @@ export async function DELETE(_request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  return NextResponse.json({ deleted: true, standaloneRemoved: result.standaloneRemoved });
+  return NextResponse.json({ deleted: true });
 }

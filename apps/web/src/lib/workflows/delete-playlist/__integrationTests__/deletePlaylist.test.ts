@@ -94,7 +94,7 @@ describe('deletePlaylistForUser', () => {
     expect(await global.testPrisma.playlistVideo.count()).toBe(0);
   });
 
-  it('removes StandaloneVideo rows for videos only in the deleted playlist', async () => {
+  it('leaves StandaloneVideo rows alone — they represent explicit individual adds', async () => {
     const channel = await createChannel('UC_test_2', 'Test Channel');
     const videoA = await createVideo(channel.id, 'vid_a', 'A');
     const videoB = await createVideo(channel.id, 'vid_b', 'B');
@@ -105,7 +105,7 @@ describe('deletePlaylistForUser', () => {
         { playlist_id: playlist.id, video_id: videoB.id },
       ],
     });
-    // Legacy: both videos have StandaloneVideo rows (auto-created before fix).
+    // User also individually added both videos.
     await global.testPrisma.standaloneVideo.createMany({
       data: [
         { user_id: TEST_USER_SOURCE_ID, video_id: videoA.id },
@@ -116,34 +116,27 @@ describe('deletePlaylistForUser', () => {
     const result = await deletePlaylistForUser(global.testPrisma, TEST_USER_SOURCE_ID, playlist.id);
 
     expect(result.deleted).toBe(true);
-    expect(result.standaloneRemoved).toBe(2);
+    // StandaloneVideo rows survive — deleting a playlist must not
+    // remove individually-added videos from the library.
     expect(
       await global.testPrisma.standaloneVideo.count({
         where: { user_id: TEST_USER_SOURCE_ID },
       })
-    ).toBe(0);
+    ).toBe(2);
     // Underlying Video and Channel rows survive — other users may access them.
     expect(await global.testPrisma.video.count()).toBe(2);
     expect(await global.testPrisma.channel.count()).toBe(1);
   });
 
-  it('keeps StandaloneVideo rows for videos also in another playlist', async () => {
+  it('removes PlaylistVideo membership for a shared video without touching other playlists', async () => {
     const channel = await createChannel('UC_test_3', 'Test Channel');
     const videoShared = await createVideo(channel.id, 'vid_shared', 'Shared');
-    const videoOrphan = await createVideo(channel.id, 'vid_orphan', 'Orphan');
     const playlistA = await createPlaylist('A', 'PLtestA');
     const playlistB = await createPlaylist('B', 'PLtestB');
     await global.testPrisma.playlistVideo.createMany({
       data: [
         { playlist_id: playlistA.id, video_id: videoShared.id },
-        { playlist_id: playlistA.id, video_id: videoOrphan.id },
         { playlist_id: playlistB.id, video_id: videoShared.id },
-      ],
-    });
-    await global.testPrisma.standaloneVideo.createMany({
-      data: [
-        { user_id: TEST_USER_SOURCE_ID, video_id: videoShared.id },
-        { user_id: TEST_USER_SOURCE_ID, video_id: videoOrphan.id },
       ],
     });
 
@@ -154,21 +147,17 @@ describe('deletePlaylistForUser', () => {
     );
 
     expect(result.deleted).toBe(true);
-    // Only the orphan's StandaloneVideo is removed — the shared one is
-    // still in playlist B so we leave it alone.
-    expect(result.standaloneRemoved).toBe(1);
-    const remaining = await global.testPrisma.standaloneVideo.findMany({
-      where: { user_id: TEST_USER_SOURCE_ID },
-      select: { video_id: true },
+    // Only playlistA's PlaylistVideo row is gone; B still has the video.
+    const remaining = await global.testPrisma.playlistVideo.findMany({
+      select: { playlist_id: true, video_id: true },
     });
-    expect(remaining.map((r: { video_id: string }) => r.video_id)).toEqual([videoShared.id]);
+    expect(remaining).toEqual([{ playlist_id: playlistB.id, video_id: videoShared.id }]);
   });
 
   it('handles an empty playlist (no videos)', async () => {
     const playlist = await createPlaylist('Empty', 'PLempty');
     const result = await deletePlaylistForUser(global.testPrisma, TEST_USER_SOURCE_ID, playlist.id);
     expect(result.deleted).toBe(true);
-    expect(result.standaloneRemoved).toBe(0);
   });
 
   it('returns { deleted: false } when playlist does not exist', async () => {
@@ -178,7 +167,6 @@ describe('deletePlaylistForUser', () => {
       'nonexistent_id'
     );
     expect(result.deleted).toBe(false);
-    expect(result.standaloneRemoved).toBe(0);
   });
 
   it('returns { deleted: false } when playlist belongs to another user', async () => {
