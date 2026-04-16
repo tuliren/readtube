@@ -12,6 +12,8 @@ CREATE TABLE "StandaloneVideo" (
 CREATE TABLE "Playlist" (
     "id" TEXT NOT NULL,
     "user_id" TEXT NOT NULL,
+    "source_type" "VideoPlatformType" NOT NULL DEFAULT 'YOUTUBE',
+    "source_id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "sort_order" INTEGER NOT NULL DEFAULT 0,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,

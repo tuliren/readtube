@@ -1,6 +1,3 @@
--- CreateExtension
-CREATE EXTENSION IF NOT EXISTS "plpgsql" WITH SCHEMA "pg_catalog" VERSION "1.0";
-
 -- DropForeignKey
 ALTER TABLE "StandaloneVideo" DROP CONSTRAINT "StandaloneVideo_user_id_fkey";
 

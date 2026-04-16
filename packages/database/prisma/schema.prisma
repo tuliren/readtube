@@ -357,12 +357,16 @@ model StandaloneVideo {
 // User-owned playlists: a named grouping of videos that may span multiple
 // channels. Sort order is manual, mirrors Folder.
 model Playlist {
-  id         String   @id @default(cuid())
-  user_id    String
-  name       String
-  sort_order Int      @default(0)
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
+  id          String            @id @default(cuid())
+  user_id     String
+  source_type VideoPlatformType @default(YOUTUBE)
+  // Platform playlist ID (e.g. PLxxxxxxx for YouTube). Used to link
+  // back to the original playlist on the platform.
+  source_id   String
+  name        String
+  sort_order  Int               @default(0)
+  created_at  DateTime          @default(now())
+  updated_at  DateTime          @updatedAt
 
   user  User            @relation(fields: [user_id], references: [source_id], onDelete: Cascade)
   items PlaylistVideo[]
