@@ -43,7 +43,7 @@ export function SidebarBadge({ count }: { count: number }) {
     return null;
   }
   return (
-    <span className="ml-auto shrink-0 rounded-full bg-blue-600 px-1.5 py-0.5 text-xs font-medium text-white">
+    <span className="ml-auto flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 px-1.5 text-xs font-medium text-white">
       {count}
     </span>
   );
