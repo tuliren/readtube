@@ -2,7 +2,7 @@
 
 import { CheckIcon } from '@heroicons/react/24/outline';
 import { RefreshCw } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { useSWRConfig } from 'swr';
@@ -47,6 +47,7 @@ export default function InboxHeader({
 }: Props) {
   const { mutate } = useSWRConfig();
   const router = useRouter();
+  const pathname = usePathname();
   const [marking, setMarking] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const showRefresh = !isProduction() && channelId != null;
@@ -98,6 +99,16 @@ export default function InboxHeader({
         mutate('/api/playlists'),
         mutate((key) => typeof key === 'string' && key.startsWith('/api/videos')),
       ]);
+      // Library pages (/videos*) render the list from a server-side
+      // loader without a SWR fallback; without a router.refresh they
+      // keep showing stale readAt on each row.
+      if (
+        pathname === '/videos' ||
+        pathname === '/videos/standalone' ||
+        pathname?.startsWith('/videos/playlists/') === true
+      ) {
+        router.refresh();
+      }
     } finally {
       setMarking(false);
     }

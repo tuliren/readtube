@@ -39,16 +39,22 @@ export async function GET() {
     },
   });
 
-  // Count unread videos per playlist using the watermark. A video is
-  // unread if its published_at > playlist.read_at (or read_at is null).
-  // One query per playlist but only counts — no full row fetches.
+  // Count unread videos per playlist. A video is unread iff:
+  //   - it has no UserVideoConsumption row for this user, AND
+  //   - the playlist has no watermark, OR the video's published_at > read_at.
+  // The consumption check ensures videos the user explicitly opened
+  // are counted as read even when the watermark predates them.
   const playlists: PlaylistData[] = await Promise.all(
     rows.map(async (row) => {
-      const unreadWhere =
-        row.read_at != null
-          ? { playlist_id: row.id, video: { published_at: { gt: row.read_at } } }
-          : { playlist_id: row.id };
-      const unreadCount = await prisma.playlistVideo.count({ where: unreadWhere });
+      const unreadCount = await prisma.playlistVideo.count({
+        where: {
+          playlist_id: row.id,
+          video: {
+            consumptions: { none: { user_id: userId } },
+            ...(row.read_at != null ? { published_at: { gt: row.read_at } } : {}),
+          },
+        },
+      });
       return {
         id: row.id,
         name: row.name,
