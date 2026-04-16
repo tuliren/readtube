@@ -382,7 +382,20 @@ export default function SummaryReader({
           )}
         </div>
         {summary.short ? (
-          <p className="font-sans text-[17px] leading-[1.8] text-gray-700">{summary.short}</p>
+          // Render through the same Markdown pipeline as Full summary
+          // since the short-summary prompt may emit `**bold**` or other
+          // inline formatting.
+          <article className="prose prose-gray max-w-none font-sans text-[17px] leading-[1.8] text-gray-700">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              rehypePlugins={[
+                rehypeSanitize,
+                [rehypeExternalLinks, { target: '_blank', rel: ['noopener', 'noreferrer'] }],
+              ]}
+            >
+              {summary.short}
+            </ReactMarkdown>
+          </article>
         ) : isRegenerating('short') ? (
           <div className="space-y-2">
             <div className="h-4 w-full animate-pulse rounded bg-gray-200" />
