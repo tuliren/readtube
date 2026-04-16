@@ -1,14 +1,6 @@
 'use client';
 
-import {
-  Archive,
-  Bookmark,
-  BookmarkCheck,
-  MoreHorizontal,
-  NotebookPen,
-  Star,
-  Trash2,
-} from 'lucide-react';
+import { Archive, Bookmark, BookmarkCheck, MoreHorizontal, NotebookPen, Star } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useRef } from 'react';
 
@@ -398,7 +390,7 @@ export default function VideoRow({
                     Archive
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <VideoLibraryMenuItems video={video} />
+                  <VideoLibraryMenuItems video={video} showRemove={showRemoveFromLibrary} />
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -472,19 +464,6 @@ export default function VideoRow({
               >
                 <Archive className="h-4 w-4" />
               </button>
-              {showRemoveFromLibrary && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    stop(e);
-                    void triage.removeFromLibrary(video.id);
-                  }}
-                  title="Remove from library"
-                  className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-red-600"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              )}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
@@ -498,7 +477,7 @@ export default function VideoRow({
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
-                  <VideoLibraryMenuItems video={video} />
+                  <VideoLibraryMenuItems video={video} showRemove={showRemoveFromLibrary} />
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>

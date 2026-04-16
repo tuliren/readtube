@@ -17,6 +17,7 @@ const VALID_ACTION_TYPES = new Set([
   'unsave',
   'archive',
   'unarchive',
+  'remove_from_library',
 ]);
 
 export async function POST(request: NextRequest) {

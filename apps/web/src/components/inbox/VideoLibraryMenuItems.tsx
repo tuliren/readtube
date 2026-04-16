@@ -32,15 +32,24 @@ const fetcher = (url: string) =>
 /**
  * Drop-in dropdown items for the "library" actions on a VideoRow:
  *   - Add to playlist… (submenu with the user's playlists)
- *   - Remove from library (only when the video is in the user's
- *     StandaloneVideo set)
+ *   - Remove from library (when showRemove is true or video is
+ *     already in the user's StandaloneVideo set)
  *
  * Kept as shared JSX so the mobile all-in-one dropdown and the
  * desktop dedicated library dropdown stay in sync.
  */
-export default function VideoLibraryMenuItems({ video }: { video: VideoData }) {
+export default function VideoLibraryMenuItems({
+  video,
+  showRemove,
+}: {
+  video: VideoData;
+  /** When true, show the Remove item regardless of isStandalone.
+   *  Set by library list views; false/undefined for the inbox. */
+  showRemove?: boolean;
+}) {
   const triage = useTriage();
   const { data: playlists = [] } = useSWR<PlaylistRow[]>('/api/playlists', fetcher);
+  const showRemoveItem = showRemove === true || video.isStandalone;
 
   return (
     <>
@@ -68,7 +77,7 @@ export default function VideoLibraryMenuItems({ video }: { video: VideoData }) {
         </DropdownMenuSubContent>
       </DropdownMenuSub>
 
-      {video.isStandalone && (
+      {showRemoveItem && (
         <>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => void triage.removeFromLibrary(video.id)}>
