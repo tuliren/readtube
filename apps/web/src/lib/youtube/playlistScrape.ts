@@ -20,6 +20,10 @@ export interface PlaylistVideoItem {
   thumbnailUrl: string;
   /** Scraped from lengthText; null for live / premiere entries. */
   durationSeconds: number | null;
+  /** Actual channel that uploaded the video (not the playlist owner).
+   *  null when YouTube didn't expose the byline in the scrape. */
+  channelId: string | null;
+  channelName: string | null;
 }
 
 export interface ScrapedPlaylist {
@@ -172,12 +176,22 @@ export async function scrapePlaylist(playlistId: string): Promise<ScrapedPlaylis
         ? (thumbnails[thumbnails.length - 1].url as string)
         : buildThumbnailUrl(videoId);
 
+    // Per-video channel — the actual uploader, not the playlist owner.
+    // shortBylineText.runs[0] carries the byline; navigationEndpoint's
+    // browseId is the UC channel id.
+    const byline = (renderer.shortBylineText?.runs as any[] | undefined)?.[0] ?? null;
+    const videoChannelId: string | null =
+      byline?.navigationEndpoint?.browseEndpoint?.browseId ?? null;
+    const videoChannelName: string | null = byline?.text ?? null;
+
     videos.push({
       videoId,
       title: videoTitle,
       description: '',
       thumbnailUrl,
       durationSeconds,
+      channelId: videoChannelId,
+      channelName: videoChannelName,
     });
   }
 

@@ -152,6 +152,8 @@ async function fetchChannelLatestAsRss(channelInput: string): Promise<RssChannel
       publishedAt: v.publishedAt,
       link: v.link,
       thumbnailUrl: v.thumbnailUrl,
+      channelId: result.channel.channelId,
+      channelName: result.channel.title,
     })),
   };
 }

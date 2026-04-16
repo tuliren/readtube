@@ -30,6 +30,11 @@ interface PlaylistVideo {
   publishedAt: Date | null;
   thumbnailUrl: string | null;
   durationSeconds: number | null;
+  /** The uploader's actual channel — not the playlist owner's. Falls
+   *  back to feed-level channel when the source didn't expose per-video
+   *  info. */
+  channelId: string | null;
+  channelName: string | null;
 }
 
 /** Normalised shape for playlist metadata from either source. */
@@ -62,6 +67,8 @@ async function fetchPlaylistData(playlistId: string): Promise<PlaylistFeed> {
           publishedAt: v.publishedAt,
           thumbnailUrl: v.thumbnailUrl,
           durationSeconds: null,
+          channelId: v.channelId,
+          channelName: v.channelName,
         })),
     };
   } catch {
@@ -81,6 +88,8 @@ async function fetchPlaylistData(playlistId: string): Promise<PlaylistFeed> {
       publishedAt: null,
       thumbnailUrl: v.thumbnailUrl,
       durationSeconds: v.durationSeconds,
+      channelId: v.channelId,
+      channelName: v.channelName,
     })),
   };
 }
@@ -149,11 +158,11 @@ export async function addPlaylistForUser(args: {
   for (let i = 0; i < feed.videos.length; i++) {
     const v = feed.videos[i];
 
-    // Use the playlist owner's channel as the owning channel for all
-    // videos. If the user later subscribes to the actual video's
-    // channel, the refresh cron's upsert (keyed on video_unique_source)
-    // reuses the existing row.
-    const channelId = feed.channelId || 'UC_unknown';
+    // Use the video's actual uploader channel (from per-entry byline)
+    // rather than the playlist owner. Falls back to the feed-level
+    // channel when the source didn't expose per-video info.
+    const channelId = v.channelId || feed.channelId || 'UC_unknown';
+    const channelName = v.channelName || feed.channelName || 'Unknown Channel';
     const channel = await prisma.channel.upsert({
       where: {
         channel_unique_source: {
@@ -164,7 +173,7 @@ export async function addPlaylistForUser(args: {
       create: {
         source_type: VideoPlatformType.YOUTUBE,
         source_id: channelId,
-        name: feed.channelName || 'Unknown Channel',
+        name: channelName,
         rss_url: buildRssUrl(channelId),
       },
       update: {},

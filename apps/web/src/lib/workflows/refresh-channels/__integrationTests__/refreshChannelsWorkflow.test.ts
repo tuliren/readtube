@@ -111,6 +111,8 @@ function makeRssFeed(
         v.isShort === true
           ? `https://www.youtube.com/shorts/${v.videoId}`
           : `https://www.youtube.com/watch?v=${v.videoId}`,
+      channelId: 'UC_test',
+      channelName: channelName,
     })),
   };
 }

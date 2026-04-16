@@ -14,6 +14,12 @@ export interface RssVideo {
   link: string;
   /** From `<media:thumbnail url="…" />`; may be absent on some entries. */
   thumbnailUrl: string | null;
+  /** Per-entry author/channel info. For channel RSS feeds this equals
+   *  the feed-level channel. For playlist RSS feeds each entry may
+   *  carry a different channel (the actual uploader), so we extract
+   *  it per-entry from `<author>` and `<yt:channelId>`. */
+  channelId: string | null;
+  channelName: string | null;
 }
 
 /**
@@ -95,7 +101,22 @@ export async function fetchRssFeed(rssUrl: string): Promise<RssChannel> {
         return null;
       }
 
-      return { videoId, title, description, publishedAt, link, thumbnailUrl };
+      // Per-entry channel — for playlist RSS feeds, each entry's
+      // author is the actual uploader rather than the playlist owner.
+      const entryChannelId = (entry['yt:channelId'] as string | undefined)?.trim() ?? null;
+      const author = entry.author as Record<string, unknown> | undefined;
+      const entryChannelName = (author?.name as string | undefined)?.trim() ?? null;
+
+      return {
+        videoId,
+        title,
+        description,
+        publishedAt,
+        link,
+        thumbnailUrl,
+        channelId: entryChannelId,
+        channelName: entryChannelName,
+      };
     })
     .filter((v): v is RssVideo => v !== null);
 
