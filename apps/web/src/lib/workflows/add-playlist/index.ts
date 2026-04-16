@@ -122,6 +122,17 @@ export async function addPlaylistForUser(args: {
     );
   }
 
+  // Idempotent: if the user already has this YouTube playlist, return
+  // the existing row without re-fetching. The dialog will navigate to
+  // its page, which is the same behavior as a fresh add.
+  const existing = await prisma.playlist.findFirst({
+    where: { user_id: args.userId, source_id: ytPlaylistId },
+    select: { id: true, name: true },
+  });
+  if (existing != null) {
+    return { playlistId: existing.id, playlistName: existing.name, videosProcessed: 0 };
+  }
+
   let feed: PlaylistFeed;
   try {
     feed = await fetchPlaylistData(ytPlaylistId);

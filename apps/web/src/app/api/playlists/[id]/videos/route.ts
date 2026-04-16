@@ -43,9 +43,6 @@ export async function POST(request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'Video not found' }, { status: 404 });
   }
 
-  // Playlist membership alone grants library access — no implicit
-  // StandaloneVideo row. This way, deleting the playlist removes the
-  // video from library views unless the user also added it individually.
   await prisma.playlistVideo.upsert({
     where: {
       playlist_video_unique_playlist_video: { playlist_id: playlistId, video_id: videoId },
