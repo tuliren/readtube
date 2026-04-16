@@ -27,6 +27,8 @@ interface Props {
   /** Total videos that match the current filter (across all pages).
    *  Drives the Page X of Y control on the right side of the header. */
   totalVideos: number;
+  /** Optional trailing content after the title (e.g. ExternalLinkActions). */
+  trailing?: React.ReactNode;
 }
 
 export default function InboxHeader({
@@ -36,6 +38,7 @@ export default function InboxHeader({
   channelLogoUrl,
   unreadCount,
   totalVideos,
+  trailing,
 }: Props) {
   const { mutate } = useSWRConfig();
   const router = useRouter();
@@ -115,6 +118,7 @@ export default function InboxHeader({
               label="Open channel on YouTube"
             />
           )}
+          {trailing}
           {channelId == null && unreadCount > 0 && (
             <span className="shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-700">
               {unreadCount}
