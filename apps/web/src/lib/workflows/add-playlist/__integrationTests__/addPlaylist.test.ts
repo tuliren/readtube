@@ -269,8 +269,8 @@ describe('addPlaylistForUser', () => {
       videos: [],
     });
     // Different source_id so the idempotent short-circuit doesn't trigger.
-    await addPlaylistForUser({ userId: TEST_USER_ID, input: 'PLfirst' });
-    await addPlaylistForUser({ userId: TEST_USER_ID, input: 'PLsecond' });
+    await addPlaylistForUser({ userId: TEST_USER_ID, input: 'PLaaaaaaaaaaa' });
+    await addPlaylistForUser({ userId: TEST_USER_ID, input: 'PLbbbbbbbbbbb' });
 
     const playlists = await global.testPrisma.playlist.findMany({
       where: { user_id: TEST_USER_ID },

@@ -27,10 +27,10 @@ const TEST_USER_ID = 'clerk_add_video_user';
 
 function fakeSnapshot(overrides: Partial<VideoSnapshot> = {}): VideoSnapshot {
   return {
-    videoId: 'vid_abc',
+    videoId: 'dQw4w9WgXcQ',
     title: 'Test Video',
     description: 'Hello',
-    thumbnailUrl: 'https://i.ytimg.com/vi/vid_abc/hqdefault.jpg',
+    thumbnailUrl: 'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg',
     publishedAt: new Date('2026-02-01T00:00:00Z'),
     durationSeconds: 300,
     channel: {
@@ -75,11 +75,11 @@ describe('addVideoForUser', () => {
   it('creates a shadow Channel + Video + StandaloneVideo on first add', async () => {
     mockFetchVideoSnapshot.mockResolvedValueOnce(fakeSnapshot());
 
-    const res = await addVideoForUser({ userId: TEST_USER_ID, input: 'vid_abc' });
+    const res = await addVideoForUser({ userId: TEST_USER_ID, input: 'dQw4w9WgXcQ' });
     expect(res.createdVideo).toBe(true);
     expect(res.createdChannel).toBe(true);
     expect(res.createdStandalone).toBe(true);
-    expect(res.sourceId).toBe('vid_abc');
+    expect(res.sourceId).toBe('dQw4w9WgXcQ');
 
     const channel = await global.testPrisma.channel.findUnique({
       where: {
@@ -95,7 +95,7 @@ describe('addVideoForUser', () => {
 
   it('marks the newly added video as read via UserVideoConsumption', async () => {
     mockFetchVideoSnapshot.mockResolvedValueOnce(fakeSnapshot());
-    await addVideoForUser({ userId: TEST_USER_ID, input: 'vid_abc' });
+    await addVideoForUser({ userId: TEST_USER_ID, input: 'dQw4w9WgXcQ' });
 
     const consumed = await global.testPrisma.userVideoConsumption.count({
       where: { user_id: TEST_USER_ID },
@@ -106,8 +106,8 @@ describe('addVideoForUser', () => {
   it('is idempotent on re-add: same StandaloneVideo row, no new Video row', async () => {
     mockFetchVideoSnapshot.mockResolvedValue(fakeSnapshot());
 
-    const first = await addVideoForUser({ userId: TEST_USER_ID, input: 'vid_abc' });
-    const second = await addVideoForUser({ userId: TEST_USER_ID, input: 'vid_abc' });
+    const first = await addVideoForUser({ userId: TEST_USER_ID, input: 'dQw4w9WgXcQ' });
+    const second = await addVideoForUser({ userId: TEST_USER_ID, input: 'dQw4w9WgXcQ' });
 
     expect(second.standaloneVideoId).toBe(first.standaloneVideoId);
     expect(second.createdVideo).toBe(false);
@@ -129,7 +129,7 @@ describe('addVideoForUser', () => {
     });
 
     mockFetchVideoSnapshot.mockResolvedValueOnce(fakeSnapshot());
-    const res = await addVideoForUser({ userId: TEST_USER_ID, input: 'vid_abc' });
+    const res = await addVideoForUser({ userId: TEST_USER_ID, input: 'dQw4w9WgXcQ' });
 
     expect(res.createdChannel).toBe(false);
     expect(res.channelId).toBe(existing.id);
@@ -151,14 +151,14 @@ describe('addVideoForUser', () => {
       data: {
         channel_id: playlistOwner.id,
         source_type: 'YOUTUBE',
-        source_id: 'vid_abc',
+        source_id: 'dQw4w9WgXcQ',
         title: 'Stale Title',
         published_at: new Date('2026-01-01'),
       },
     });
 
     mockFetchVideoSnapshot.mockResolvedValueOnce(fakeSnapshot());
-    const res = await addVideoForUser({ userId: TEST_USER_ID, input: 'vid_abc' });
+    const res = await addVideoForUser({ userId: TEST_USER_ID, input: 'dQw4w9WgXcQ' });
 
     // Same Video row — no P2002, no duplicate.
     expect(res.createdVideo).toBe(false);
@@ -166,7 +166,7 @@ describe('addVideoForUser', () => {
     // channel_id should have been updated to the actual channel.
     const video = await global.testPrisma.video.findUnique({
       where: {
-        video_unique_source: { source_type: 'YOUTUBE', source_id: 'vid_abc' },
+        video_unique_source: { source_type: 'YOUTUBE', source_id: 'dQw4w9WgXcQ' },
       },
       select: { channel_id: true, title: true },
     });
