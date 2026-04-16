@@ -40,6 +40,33 @@ beforeEach(async () => {
 // ─── Tests ───────────────────────────────────────────────────────
 
 describe('upsertChannelWithVideos', () => {
+  it('does not throw when the channel already exists with the correct handle (cross-user add)', async () => {
+    // Simulates: user A subscribed to channel X earlier, creating the
+    // Channel row with source_id=UC_x and handle=@x. User B now tries
+    // to subscribe to the same channel. Prisma.upsert would have
+    // failed here because the INSERT violates the handle constraint
+    // and Postgres can raise that instead of the ON CONFLICT target.
+    await global.testPrisma.channel.create({
+      data: {
+        source_id: 'UC_x',
+        name: 'Existing',
+        rss_url: 'https://example.com/x.xml',
+        handle: '@x',
+      },
+    });
+
+    const ch = await upsertChannelWithVideos(
+      global.testPrisma,
+      'UC_x',
+      snapshot({ channelId: 'UC_x', name: 'Refreshed', handle: '@x' })
+    );
+
+    expect(ch.source_id).toBe('UC_x');
+    expect(ch.handle).toBe('@x');
+    // Still exactly one Channel row.
+    expect(await global.testPrisma.channel.count()).toBe(1);
+  });
+
   it('creates a new channel with the scraped handle when no conflict', async () => {
     const ch = await upsertChannelWithVideos(
       global.testPrisma,
@@ -149,7 +176,7 @@ describe('upsertChannelWithVideos', () => {
             description: '',
             publishedAt: new Date('2026-01-01T00:00:00Z'),
             link: 'https://www.youtube.com/watch?v=vid1',
-            thumbnailUrl: null,
+            thumbnailUrl: 'https://thumb/default',
             durationSeconds: null,
           },
           {
@@ -158,7 +185,7 @@ describe('upsertChannelWithVideos', () => {
             description: 'desc',
             publishedAt: new Date('2026-01-02T00:00:00Z'),
             link: 'https://www.youtube.com/watch?v=vid2',
-            thumbnailUrl: null,
+            thumbnailUrl: 'https://thumb/default',
             durationSeconds: 300,
           },
         ],

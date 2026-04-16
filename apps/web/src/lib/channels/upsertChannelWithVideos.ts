@@ -19,42 +19,76 @@ export interface UpsertChannelResult {
 /**
  * Upsert a Channel + its initial video list from a fresh snapshot.
  *
- * The per-row `handle` column has a `@@unique([source_type, handle])`
- * constraint, and older channel rows can end up holding a stale handle
- * (e.g. an early scrape captured the handle, the owner later renamed,
- * and now a different UC id resolves to the same handle string). To
- * avoid tripping the constraint, we check whether another row already
- * owns the scraped handle; if so, we skip the handle update on the
- * current row and let the refresh cron reconcile later. The correct
- * pointer lives on the canonical row identified by `source_id`.
+ * Intentionally does NOT use prisma.channel.upsert. Prisma compiles
+ * that to `INSERT ... ON CONFLICT (source_type, source_id) DO UPDATE`.
+ * If the row also already owns the scraped handle — i.e. exactly the
+ * common case of "this channel is already in the DB" — the INSERT
+ * simultaneously violates the `(source_type, handle)` unique
+ * constraint, and Postgres can raise that P2002 instead of routing
+ * through ON CONFLICT. The ON CONFLICT clause only catches conflicts
+ * on the constraint it names.
+ *
+ * Split into findUnique + create / update so the INSERT path only
+ * runs when there's truly no existing row. Handle updates are also
+ * guarded: if *another* row owns the scraped handle (stale data,
+ * rename upstream), we skip writing it here.
  */
 export async function upsertChannelWithVideos(
   prisma: PrismaClient,
   sourceId: string,
   snapshot: ChannelSnapshot
 ): Promise<UpsertChannelResult> {
-  const conflictingHandle =
-    !isEmptyString(snapshot.handle) &&
-    (await prisma.channel.findFirst({
-      where: {
-        source_type: VideoPlatformType.YOUTUBE,
-        handle: snapshot.handle,
-        NOT: { source_id: sourceId },
-      },
-      select: { id: true },
-    })) != null;
-
-  return prisma.channel.upsert({
+  const existing = await prisma.channel.findUnique({
     where: {
       channel_unique_source: { source_type: VideoPlatformType.YOUTUBE, source_id: sourceId },
     },
-    create: {
+  });
+
+  const hasHandle = !isEmptyString(snapshot.handle);
+
+  if (existing != null) {
+    // Update path: only refresh the handle when no other row owns it.
+    // If the existing row already has the same handle, the update is a
+    // no-op for that column; Prisma generates SET handle = '@x' which
+    // is fine — Postgres doesn't re-check the unique constraint for
+    // unchanged values.
+    const conflictOnHandle =
+      hasHandle &&
+      (await prisma.channel.findFirst({
+        where: {
+          source_type: VideoPlatformType.YOUTUBE,
+          handle: snapshot.handle,
+          NOT: { id: existing.id },
+        },
+        select: { id: true },
+      })) != null;
+
+    const updated = await prisma.channel.update({
+      where: { id: existing.id },
+      data: {
+        ...(snapshot.logoUrl != null ? { logo_url: snapshot.logoUrl } : {}),
+        ...(hasHandle && !conflictOnHandle ? { handle: snapshot.handle } : {}),
+      },
+    });
+    return updated;
+  }
+
+  // Create path: only include handle when no existing row has it.
+  const handleAlreadyUsed =
+    hasHandle &&
+    (await prisma.channel.findFirst({
+      where: { source_type: VideoPlatformType.YOUTUBE, handle: snapshot.handle },
+      select: { id: true },
+    })) != null;
+
+  return prisma.channel.create({
+    data: {
       source_type: VideoPlatformType.YOUTUBE,
       source_id: sourceId,
       name: snapshot.name,
       rss_url: buildRssUrl(sourceId),
       logo_url: snapshot.logoUrl,
-      ...(conflictingHandle ? {} : { handle: snapshot.handle }),
+      ...(hasHandle && !handleAlreadyUsed ? { handle: snapshot.handle } : {}),
       videos: {
         create: snapshot.videos.map((v) => ({
           source_id: v.videoId,
@@ -65,10 +99,6 @@ export async function upsertChannelWithVideos(
           duration_seconds: v.durationSeconds,
         })),
       },
-    },
-    update: {
-      ...(snapshot.logoUrl != null ? { logo_url: snapshot.logoUrl } : {}),
-      ...(conflictingHandle || isEmptyString(snapshot.handle) ? {} : { handle: snapshot.handle }),
     },
   });
 }
