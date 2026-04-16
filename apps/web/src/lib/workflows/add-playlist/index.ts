@@ -137,9 +137,6 @@ export async function addPlaylistForUser(args: {
       source_id: ytPlaylistId,
       name,
       sort_order: nextOrder,
-      // Mark all initial videos as read via watermark so they don't
-      // appear unread — same pattern as UserSubscription.read_at.
-      read_at: new Date(),
     },
     select: { id: true },
   });
@@ -215,6 +212,24 @@ export async function addPlaylistForUser(args: {
     });
 
     videosProcessed++;
+  }
+
+  // Set read_at to just after the latest video's published_at so all
+  // initial videos are marked as read. Query the actual max published_at
+  // from the ingested videos rather than guessing with new Date().
+  if (videosProcessed > 0) {
+    const latest = await prisma.playlistVideo.findFirst({
+      where: { playlist_id: playlist.id },
+      select: { video: { select: { published_at: true } } },
+      orderBy: { video: { published_at: 'desc' } },
+    });
+    if (latest != null) {
+      const readAt = new Date(latest.video.published_at.getTime() + 1000);
+      await prisma.playlist.update({
+        where: { id: playlist.id },
+        data: { read_at: readAt },
+      });
+    }
   }
 
   return { playlistId: playlist.id, playlistName: name, videosProcessed };
