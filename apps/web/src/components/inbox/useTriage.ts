@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { useSWRConfig } from 'swr';
 
@@ -20,6 +21,7 @@ import type { BulkAction } from '@/lib/inbox/triageActions';
  */
 export function useTriage() {
   const { mutate } = useSWRConfig();
+  const router = useRouter();
 
   async function call(method: 'POST' | 'DELETE', url: string, body?: unknown): Promise<Response> {
     const res = await fetch(url, {
@@ -55,6 +57,11 @@ export function useTriage() {
       { revalidate: true }
     );
     void mutate('/api/channels', undefined, { revalidate: true });
+    // The library pages (/videos, /videos/standalone, /videos/playlists/[id])
+    // are server-rendered — their video list comes from a loader at page
+    // load time, not SWR. router.refresh() re-runs the RSC so removed
+    // videos disappear without a full page reload.
+    router.refresh();
   }
 
   return {
