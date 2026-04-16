@@ -132,7 +132,7 @@ export async function addPlaylistForUser(args: {
   const nextOrder = (max._max.sort_order ?? -1) + 1;
 
   const playlist = await prisma.playlist.create({
-    data: { user_id: args.userId, name, sort_order: nextOrder },
+    data: { user_id: args.userId, source_id: ytPlaylistId, name, sort_order: nextOrder },
     select: { id: true },
   });
 

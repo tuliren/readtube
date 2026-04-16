@@ -8,6 +8,7 @@ import { useCallback, useEffect, useState } from 'react';
 import useSWR from 'swr';
 
 import CopyButton from '@/components/CopyButton';
+import ExternalLinkActions from '@/components/ExternalLinkActions';
 import { Button } from '@/components/ui/button';
 import { formatDurationSeconds } from '@/lib/format/duration';
 import type { VideoData } from '@/lib/types';
@@ -207,7 +208,13 @@ export default function VideoReader({ video, publicMode = false }: Props) {
 
           {/* Meta line */}
           <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-gray-400">
-            <span>{video.channelName}</span>
+            <span className="inline-flex items-center gap-0.5">
+              <span>{video.channelName}</span>
+              <ExternalLinkActions
+                url={`https://www.youtube.com/channel/${video.channelSourceId}`}
+                label="Open channel on YouTube"
+              />
+            </span>
             <span>·</span>
             <span>{relativeDate(video.publishedAt)}</span>
             {durationLabel != null && (

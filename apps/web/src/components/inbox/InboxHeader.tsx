@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { useSWRConfig } from 'swr';
 
+import ExternalLinkActions from '@/components/ExternalLinkActions';
 import { isProduction } from '@/lib/vercelEnv';
 
 import ChannelAvatar from './ChannelAvatar';
@@ -15,6 +16,8 @@ import SearchInput from './SearchInput';
 
 interface Props {
   channelId: string | null;
+  /** YouTube channel source ID (UC-prefixed). Null for aggregate views. */
+  channelSourceId: string | null;
   channelName: string;
   /** Channel logo URL. Only available when viewing a single channel
    *  that has a logo persisted from the scraper. Null for the
@@ -28,6 +31,7 @@ interface Props {
 
 export default function InboxHeader({
   channelId,
+  channelSourceId,
   channelName,
   channelLogoUrl,
   unreadCount,
@@ -105,6 +109,12 @@ export default function InboxHeader({
           <h1 className="hidden min-w-0 truncate text-sm font-semibold text-gray-900 sidebar:block">
             {channelName}
           </h1>
+          {channelSourceId != null && (
+            <ExternalLinkActions
+              url={`https://www.youtube.com/channel/${channelSourceId}`}
+              label="Open channel on YouTube"
+            />
+          )}
           {unreadCount > 0 && (
             <span className="shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-700">
               {unreadCount}
