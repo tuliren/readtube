@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { FormEvent, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useSWRConfig } from 'swr';
@@ -31,6 +32,7 @@ export default function AddVideoModal({ open, onOpenChange }: Props) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const { mutate } = useSWRConfig();
+  const router = useRouter();
 
   useEffect(() => {
     if (open) {
@@ -54,14 +56,14 @@ export default function AddVideoModal({ open, onOpenChange }: Props) {
         body: JSON.stringify({ url }),
       });
       if (res.ok) {
+        const data = (await res.json()) as { sourceId: string };
         toast.success('Video added');
-        // Invalidate anything under /videos or /api/videos so the
-        // library pages refetch.
-        await mutate(
+        void mutate(
           (key) =>
             typeof key === 'string' && (key.startsWith('/api/videos') || key === '/api/playlists')
         );
         onOpenChange(false);
+        router.push(`/videos/${encodeURIComponent(data.sourceId)}`);
       } else {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
         setError(data.error ?? 'Failed to add video.');

@@ -6,6 +6,9 @@ import { extractVideoId, fetchVideoSnapshot } from '@/lib/youtube/videoSnapshot'
 
 export interface AddVideoResult {
   videoId: string;
+  /** YouTube video ID (11-char source_id). Used by the client to
+   *  navigate to `/videos/<sourceId>` after adding. */
+  sourceId: string;
   channelId: string;
   standaloneVideoId: string;
   createdVideo: boolean;
@@ -139,6 +142,7 @@ export async function addVideoForUser(args: {
 
   return {
     videoId: video.id,
+    sourceId: snapshot.videoId,
     channelId: channel.id,
     standaloneVideoId: standalone.id,
     createdVideo,
