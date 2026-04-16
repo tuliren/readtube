@@ -2,6 +2,7 @@ import { Prisma, prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { requireUserId } from '@/lib/auth';
+import { deletePlaylistForUser } from '@/lib/workflows/delete-playlist';
 
 interface Params {
   params: Promise<{ id: string }>;
@@ -78,10 +79,10 @@ export async function DELETE(_request: NextRequest, { params }: Params) {
   const userId = authResult;
   const { id } = await params;
 
-  const result = await prisma.playlist.deleteMany({ where: { id, user_id: userId } });
-  if (result.count === 0) {
+  const result = await deletePlaylistForUser(prisma, userId, id);
+  if (!result.deleted) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  return NextResponse.json({ deleted: true });
+  return NextResponse.json({ deleted: true, standaloneRemoved: result.standaloneRemoved });
 }
