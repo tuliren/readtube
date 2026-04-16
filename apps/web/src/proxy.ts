@@ -29,8 +29,15 @@ export default clerkMiddleware(async (auth, req) => {
 
 export const config = {
   matcher: [
-    // Skip Next.js internals and all static files, unless found in search params
-    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    // Skip Next.js internals, the workflow runtime's internal queue
+    // endpoint (/.well-known/workflow/...), and all static files.
+    // Workflow uses streaming request bodies to post step results to
+    // its own handler — routing those through Clerk middleware would
+    // consume the body first and cause
+    // "Cannot perform ArrayBuffer.prototype.slice on a detached
+    //  ArrayBuffer" when the runtime tries to read it. See
+    // https://github.com/vercel/workflow/issues/344.
+    '/((?!_next|\\.well-known/workflow|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
     // Always run for API routes
     '/(api|trpc)(.*)',
   ],
