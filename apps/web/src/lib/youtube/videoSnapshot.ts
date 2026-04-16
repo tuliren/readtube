@@ -23,7 +23,12 @@ export interface VideoSnapshot {
   channel: {
     sourceId: string;
     name: string;
-    /** Channel handle without the leading `@`, or null. */
+    /**
+     * Channel handle with the leading `@` (e.g. "@mkbhd"), or null.
+     * Matches the storage convention in `channelScrape.ts` and the
+     * `channel_unique_handle` DB constraint — consumers can use the
+     * value verbatim without prefixing.
+     */
     handle: string | null;
     /** Logo URL from og:image on the channel page, best-effort. */
     logoUrl: string | null;
