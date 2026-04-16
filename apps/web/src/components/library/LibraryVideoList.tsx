@@ -5,48 +5,17 @@ import { useState } from 'react';
 
 import AddVideoModal from '@/components/inbox/AddVideoModal';
 import NewPlaylistDialog from '@/components/inbox/NewPlaylistDialog';
-import VideoList from '@/components/inbox/VideoList';
-import type { VideoData } from '@/lib/types';
 
 interface Props {
-  videos: VideoData[];
   emptyMessage: string;
-  /** Show "Add video" + "Add playlist" buttons in the empty state. */
-  showAddActions?: boolean;
 }
 
 /**
- * Thin wrapper around the inbox VideoList for the library pages
- * (All / Standalone / Playlist). Reuses the same row component so
- * S·A·T badges, descriptions, and triage icons are all present.
- * The only library-specific bit is the empty-state with add buttons.
+ * Empty-state component for the library pages (All / Standalone).
+ * Shows the message plus "Add video" and "Add playlist" buttons.
+ * Non-empty rendering is handled by LibraryListView.
  */
-export default function LibraryVideoList({ videos, emptyMessage, showAddActions }: Props) {
-  const [notesVideo, setNotesVideo] = useState<{ id: string; title: string } | null>(null);
-
-  if (videos.length === 0) {
-    if (showAddActions) {
-      return <LibraryEmptyState message={emptyMessage} />;
-    }
-    return (
-      <div className="flex flex-1 items-center justify-center px-4 py-24 text-sm text-gray-500">
-        {emptyMessage}
-      </div>
-    );
-  }
-
-  return (
-    <VideoList
-      videos={videos}
-      selectedVideoId={null}
-      emptyMessage={emptyMessage}
-      isLoading={false}
-      onOpenNotes={(id, title) => setNotesVideo({ id, title })}
-    />
-  );
-}
-
-function LibraryEmptyState({ message }: { message: string }) {
+export default function LibraryEmptyState({ emptyMessage }: Props) {
   const [addVideoOpen, setAddVideoOpen] = useState(false);
   const [addPlaylistOpen, setAddPlaylistOpen] = useState(false);
 
@@ -54,7 +23,7 @@ function LibraryEmptyState({ message }: { message: string }) {
     <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
       <div>
         <p className="text-lg font-semibold text-gray-700">No videos yet</p>
-        <p className="mt-1 text-sm text-gray-500">{message}</p>
+        <p className="mt-1 text-sm text-gray-500">{emptyMessage}</p>
       </div>
       <div className="flex gap-3">
         <button

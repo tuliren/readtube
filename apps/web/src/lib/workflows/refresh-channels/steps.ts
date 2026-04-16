@@ -72,10 +72,16 @@ export async function refreshChannel(channel: StaleChannel): Promise<RefreshResu
   const nameUpdated = snapshot.name !== channel.name;
 
   for (const video of snapshot.videos) {
+    // Use `video_unique_source` (source_type + source_id, globally
+    // unique) instead of `video_unique_channel_source`. This avoids a
+    // P2002 crash when a video was previously created under a
+    // different channel (e.g. the playlist-owner's channel from the
+    // add-playlist flow) — the cron now matches the existing row and
+    // corrects the channel_id to the actual owner.
     await prisma.video.upsert({
       where: {
-        video_unique_channel_source: {
-          channel_id: channel.id,
+        video_unique_source: {
+          source_type: 'YOUTUBE',
           source_id: video.videoId,
         },
       },
@@ -89,6 +95,9 @@ export async function refreshChannel(channel: StaleChannel): Promise<RefreshResu
         duration_seconds: video.durationSeconds,
       },
       update: {
+        // Correct channel_id if the video was previously assigned to
+        // a different channel (e.g. playlist-owner shadow channel).
+        channel_id: channel.id,
         title: video.title,
         ...(isEmptyString(video.description) ? {} : { description: video.description }),
         thumbnail_url: video.thumbnailUrl,

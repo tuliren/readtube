@@ -3,7 +3,7 @@ import { prisma } from '@readtube/database';
 import { redirect } from 'next/navigation';
 
 import LibraryListView from '@/components/library/LibraryListView';
-import LibraryVideoList from '@/components/library/LibraryVideoList';
+import LibraryEmptyState from '@/components/library/LibraryVideoList';
 import { loadLibraryVideos } from '@/lib/library/loadVideos';
 
 /**
@@ -21,11 +21,7 @@ export default async function VideosStandalonePage() {
   if (videos.length === 0) {
     return (
       <div className="flex flex-1 flex-col">
-        <LibraryVideoList
-          videos={[]}
-          emptyMessage="Add a YouTube video or playlist to get started."
-          showAddActions
-        />
+        <LibraryEmptyState emptyMessage="Add a YouTube video or playlist to get started." />
       </div>
     );
   }
