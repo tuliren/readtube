@@ -26,5 +26,5 @@ export default async function VideosStandalonePage() {
     );
   }
 
-  return <LibraryListView title="Standalone" videos={videos} />;
+  return <LibraryListView title="Standalone" videos={videos} standaloneOnly />;
 }

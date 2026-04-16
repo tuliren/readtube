@@ -11,18 +11,21 @@ export async function POST(request: NextRequest) {
   }
 
   // Optional body:
-  //   { channelId?: string }   — mark videos in one subscribed channel
-  //   { playlistId?: string }  — mark videos in one playlist (watermark)
-  //   { library?: true }       — mark all standalone + playlist videos
-  //   (empty)                  — mark all subscribed channels
+  //   { channelId?: string }    — mark videos in one subscribed channel
+  //   { playlistId?: string }   — mark videos in one playlist (watermark)
+  //   { library?: true }        — mark All library videos (standalone + every playlist)
+  //   { standaloneOnly?: true } — mark only videos not in any playlist
+  //   (empty)                   — mark all subscribed channels
   let channelId: string | undefined;
   let playlistId: string | undefined;
   let library = false;
+  let standaloneOnly = false;
   try {
     const body = (await request.json()) as {
       channelId?: unknown;
       playlistId?: unknown;
       library?: unknown;
+      standaloneOnly?: unknown;
     };
     if (typeof body.channelId === 'string') {
       channelId = body.channelId;
@@ -32,6 +35,9 @@ export async function POST(request: NextRequest) {
     }
     if (body.library === true) {
       library = true;
+    }
+    if (body.standaloneOnly === true) {
+      standaloneOnly = true;
     }
   } catch {
     // Empty body — fall through to "all subscribed channels"
@@ -50,6 +56,24 @@ export async function POST(request: NextRequest) {
     }
     await prisma.playlist.update({ where: { id: pl.id }, data: { read_at: now } });
     return NextResponse.json({ ok: true });
+  }
+
+  // Mark only standalone videos (not in any playlist) as read.
+  if (standaloneOnly) {
+    const standaloneRows = await prisma.standaloneVideo.findMany({
+      where: {
+        user_id: userId,
+        video: { playlist_items: { none: { playlist: { user_id: userId } } } },
+      },
+      select: { video_id: true },
+    });
+    if (standaloneRows.length > 0) {
+      await prisma.userVideoConsumption.createMany({
+        data: standaloneRows.map((r) => ({ user_id: userId, video_id: r.video_id })),
+        skipDuplicates: true,
+      });
+    }
+    return NextResponse.json({ ok: true, count: standaloneRows.length });
   }
 
   // Mark all library videos (standalone + all playlists) as read.

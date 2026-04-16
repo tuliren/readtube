@@ -16,8 +16,11 @@ interface Props {
    *  icon + copy button next to the title in the header. */
   youtubeUrl?: string;
   /** Playlist DB id. When set, mark-all-as-read sets the playlist's
-   *  read_at watermark. When absent, marks all library videos as read. */
+   *  read_at watermark. */
   playlistId?: string;
+  /** When true, mark-all-as-read only covers videos not in any
+   *  playlist (the Standalone view). */
+  standaloneOnly?: boolean;
 }
 
 /**
@@ -26,7 +29,13 @@ interface Props {
  * (with mark-all-as-read), VideoList with S·A·T badges and triage
  * icons, plus the notes side panel.
  */
-export default function LibraryListView({ title, videos, youtubeUrl, playlistId }: Props) {
+export default function LibraryListView({
+  title,
+  videos,
+  youtubeUrl,
+  playlistId,
+  standaloneOnly,
+}: Props) {
   const { isMobile } = useSidebar();
   const [notesVideo, setNotesVideo] = useState<{ id: string; title: string } | null>(null);
 
@@ -50,7 +59,13 @@ export default function LibraryListView({ title, videos, youtubeUrl, playlistId 
           channelLogoUrl={null}
           unreadCount={unreadCount}
           totalVideos={videos.length}
-          markAllReadBody={playlistId != null ? { playlistId } : { library: true }}
+          markAllReadBody={
+            playlistId != null
+              ? { playlistId }
+              : standaloneOnly
+                ? { standaloneOnly: true }
+                : { library: true }
+          }
           trailing={
             youtubeUrl != null ? (
               <ExternalLinkActions url={youtubeUrl} label="Open on YouTube" />
