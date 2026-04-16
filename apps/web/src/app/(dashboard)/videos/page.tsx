@@ -26,7 +26,8 @@ export default async function VideosAllPage() {
       <div className="flex flex-1 flex-col overflow-y-auto">
         <LibraryVideoList
           videos={videos}
-          emptyMessage="You haven't added any videos yet. Use the + Add video button in the sidebar."
+          emptyMessage="Add a YouTube video or playlist to get started."
+          showAddActions
         />
       </div>
     </div>

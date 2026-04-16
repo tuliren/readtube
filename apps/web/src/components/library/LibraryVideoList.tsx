@@ -1,10 +1,12 @@
 'use client';
 
-import { MoreHorizontal } from 'lucide-react';
+import { ListMusic, MoreHorizontal, Video } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
+import AddVideoModal from '@/components/inbox/AddVideoModal';
+import NewPlaylistDialog from '@/components/inbox/NewPlaylistDialog';
 import VideoLibraryMenuItems from '@/components/inbox/VideoLibraryMenuItems';
 import {
   DropdownMenu,
@@ -17,6 +19,8 @@ import type { VideoData } from '@/lib/types';
 interface Props {
   videos: VideoData[];
   emptyMessage: string;
+  /** Show "Add video" + "Add playlist" buttons in the empty state. */
+  showAddActions?: boolean;
 }
 
 /**
@@ -25,11 +29,14 @@ interface Props {
  * no bulk actions, no pagination, no filter chips. If the library
  * grows inbox-style affordances later, consider consolidating.
  */
-export default function LibraryVideoList({ videos, emptyMessage }: Props) {
+export default function LibraryVideoList({ videos, emptyMessage, showAddActions }: Props) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
   if (videos.length === 0) {
+    if (showAddActions) {
+      return <LibraryEmptyState message={emptyMessage} />;
+    }
     return (
       <div className="flex flex-1 items-center justify-center px-4 py-24 text-sm text-gray-500">
         {emptyMessage}
@@ -52,7 +59,7 @@ export default function LibraryVideoList({ videos, emptyMessage }: Props) {
 }
 
 function LibraryVideoRow({ video, returnTo }: { video: VideoData; returnTo: string }) {
-  const href = `/videos/${video.id}?returnTo=${encodeURIComponent(returnTo)}`;
+  const href = `/videos/${encodeURIComponent(video.sourceId)}?returnTo=${encodeURIComponent(returnTo)}`;
   return (
     <li className="group flex items-start gap-3 px-4 py-3 hover:bg-gray-50">
       <Link href={href} className="flex min-w-0 flex-1 items-start gap-3">
@@ -127,4 +134,40 @@ function LibraryPublishedAt({ publishedAt }: { publishedAt: string }) {
     return <span>{diffDays}d ago</span>;
   }
   return <span>{absolute}</span>;
+}
+
+function LibraryEmptyState({ message }: { message: string }) {
+  const [addVideoOpen, setAddVideoOpen] = useState(false);
+  const [addPlaylistOpen, setAddPlaylistOpen] = useState(false);
+
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
+      <div>
+        <p className="text-lg font-semibold text-gray-700">No videos yet</p>
+        <p className="mt-1 text-sm text-gray-500">{message}</p>
+      </div>
+      <div className="flex gap-3">
+        <button
+          onClick={() => setAddVideoOpen(true)}
+          className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+        >
+          <Video className="h-4 w-4" />
+          Add video
+        </button>
+        <button
+          onClick={() => setAddPlaylistOpen(true)}
+          className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+        >
+          <ListMusic className="h-4 w-4" />
+          Add playlist
+        </button>
+      </div>
+      <AddVideoModal open={addVideoOpen} onOpenChange={setAddVideoOpen} />
+      <NewPlaylistDialog
+        open={addPlaylistOpen}
+        onOpenChange={setAddPlaylistOpen}
+        onCreated={() => {}}
+      />
+    </div>
+  );
 }

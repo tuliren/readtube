@@ -25,7 +25,8 @@ export default async function VideosStandalonePage() {
       <div className="flex flex-1 flex-col overflow-y-auto">
         <LibraryVideoList
           videos={videos}
-          emptyMessage="No standalone videos. Videos you add land here until you file them into a playlist."
+          emptyMessage="Add a YouTube video or playlist to get started."
+          showAddActions
         />
       </div>
     </div>
