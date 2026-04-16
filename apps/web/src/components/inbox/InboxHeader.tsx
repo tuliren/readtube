@@ -115,7 +115,7 @@ export default function InboxHeader({
               label="Open channel on YouTube"
             />
           )}
-          {unreadCount > 0 && (
+          {channelId == null && unreadCount > 0 && (
             <span className="shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-700">
               {unreadCount}
             </span>
