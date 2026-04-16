@@ -44,22 +44,16 @@ export async function POST(request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'Video not found' }, { status: 404 });
   }
 
-  // Single transaction so playlist membership and the implicit
-  // StandaloneVideo row land atomically.
-  await prisma.$transaction([
-    prisma.playlistVideo.upsert({
-      where: {
-        playlist_video_unique_playlist_video: { playlist_id: playlistId, video_id: videoId },
-      },
-      create: { playlist_id: playlistId, video_id: videoId },
-      update: {},
-    }),
-    prisma.standaloneVideo.upsert({
-      where: { standalone_video_unique_user_video: { user_id: userId, video_id: videoId } },
-      create: { user_id: userId, video_id: videoId },
-      update: {},
-    }),
-  ]);
+  // Playlist membership alone grants library access — no implicit
+  // StandaloneVideo row. This way, deleting the playlist removes the
+  // video from library views unless the user also added it individually.
+  await prisma.playlistVideo.upsert({
+    where: {
+      playlist_video_unique_playlist_video: { playlist_id: playlistId, video_id: videoId },
+    },
+    create: { playlist_id: playlistId, video_id: videoId },
+    update: {},
+  });
 
   return NextResponse.json({ added: true }, { status: 201 });
 }

@@ -6,15 +6,17 @@ import { requireUserId } from '@/lib/auth';
 /**
  * Returns unread counts for the "All" and "Standalone" library views.
  *
- * Read state uses two mechanisms (same dual model as channels):
- *   - Standalone videos (not in any playlist): read if a
- *     UserVideoConsumption row exists for the user+video.
- *   - Playlist videos: read if the video's published_at <= the
- *     playlist's read_at watermark, OR a UserVideoConsumption row
- *     exists.
+ * Library membership is the union of:
+ *   - StandaloneVideo (user explicitly added the video)
+ *   - PlaylistVideo where playlist is owned by the user
  *
- * "All" = every StandaloneVideo the user has. "Standalone" = those
- * not in any of the user's playlists.
+ * Read state uses two mechanisms:
+ *   - UserVideoConsumption row (user opened the video)
+ *   - Playlist watermark: video's published_at <= playlist.read_at
+ *
+ * "All" counts every library video that's unread.
+ * "Standalone" counts StandaloneVideo rows whose video isn't in any
+ * of the user's playlists AND is unread.
  */
 export async function GET() {
   const authResult = await requireUserId();
@@ -23,26 +25,37 @@ export async function GET() {
   }
   const userId = authResult;
 
-  // All library video IDs.
-  const standaloneRows = await prisma.standaloneVideo.findMany({
-    where: { user_id: userId },
-    select: { video_id: true },
-  });
-  if (standaloneRows.length === 0) {
+  const [standaloneRows, playlistItemRows] = await Promise.all([
+    prisma.standaloneVideo.findMany({
+      where: { user_id: userId },
+      select: { video_id: true },
+    }),
+    prisma.playlistVideo.findMany({
+      where: { playlist: { user_id: userId } },
+      select: { video_id: true },
+    }),
+  ]);
+
+  const standaloneIds = new Set(standaloneRows.map((r) => r.video_id));
+  const inPlaylistIds = new Set(playlistItemRows.map((r) => r.video_id));
+
+  // All library video IDs = standalone ∪ playlist-items.
+  const allIdsSet = new Set<string>();
+  standaloneIds.forEach((id) => allIdsSet.add(id));
+  inPlaylistIds.forEach((id) => allIdsSet.add(id));
+  const allVideoIds: string[] = [];
+  allIdsSet.forEach((id) => allVideoIds.push(id));
+  if (allVideoIds.length === 0) {
     return NextResponse.json({ allUnread: 0, standaloneUnread: 0 });
   }
 
-  const allVideoIds = standaloneRows.map((r) => r.video_id);
-
-  // Per-video consumption rows (covers standalone + any playlist
-  // video the user explicitly opened).
   const consumedRows = await prisma.userVideoConsumption.findMany({
     where: { user_id: userId, video_id: { in: allVideoIds } },
     select: { video_id: true },
   });
   const consumedIds = new Set(consumedRows.map((r) => r.video_id));
 
-  // Playlist watermarks: video IDs covered by each playlist's read_at.
+  // Playlist watermark coverage.
   const playlists = await prisma.playlist.findMany({
     where: { user_id: userId, read_at: { not: null } },
     select: {
@@ -65,13 +78,13 @@ export async function GET() {
   const isRead = (id: string) => consumedIds.has(id) || watermarkReadIds.has(id);
   const allUnread = allVideoIds.filter((id) => !isRead(id)).length;
 
-  // Standalone = not in any of the user's playlists.
-  const inPlaylistRows = await prisma.playlistVideo.findMany({
-    where: { video_id: { in: allVideoIds }, playlist: { user_id: userId } },
-    select: { video_id: true },
+  // Standalone = StandaloneVideo rows not also in any of the user's playlists.
+  let standaloneUnread = 0;
+  standaloneIds.forEach((id) => {
+    if (!isRead(id) && !inPlaylistIds.has(id)) {
+      standaloneUnread++;
+    }
   });
-  const inPlaylistIds = new Set(inPlaylistRows.map((r) => r.video_id));
-  const standaloneUnread = allVideoIds.filter((id) => !isRead(id) && !inPlaylistIds.has(id)).length;
 
   return NextResponse.json({ allUnread, standaloneUnread });
 }

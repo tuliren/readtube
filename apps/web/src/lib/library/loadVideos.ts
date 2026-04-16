@@ -53,12 +53,34 @@ export async function loadLibraryVideos(
   let playlistReadAt: Date | null = null;
 
   if (scope.kind === 'all') {
-    const rows = await prisma.standaloneVideo.findMany({
-      where: { user_id: userId },
-      select: { video_id: true },
-      orderBy: { created_at: 'desc' },
-    });
-    videoIds = rows.map((r) => r.video_id);
+    // Union of StandaloneVideo (individually added) and every video
+    // in any of the user's playlists. Playlist-only videos don't have
+    // a StandaloneVideo row — deleting the playlist naturally removes
+    // them from this view.
+    const [standaloneRows, playlistRows] = await Promise.all([
+      prisma.standaloneVideo.findMany({
+        where: { user_id: userId },
+        select: { video_id: true, created_at: true },
+        orderBy: { created_at: 'desc' },
+      }),
+      prisma.playlistVideo.findMany({
+        where: { playlist: { user_id: userId } },
+        select: { video_id: true, created_at: true },
+        orderBy: { created_at: 'desc' },
+      }),
+    ]);
+    // Merge + de-dupe preserving newest-first order.
+    const seen = new Set<string>();
+    const combined = [...standaloneRows, ...playlistRows]
+      .sort((a, b) => b.created_at.getTime() - a.created_at.getTime())
+      .filter((r) => {
+        if (seen.has(r.video_id)) {
+          return false;
+        }
+        seen.add(r.video_id);
+        return true;
+      });
+    videoIds = combined.map((r) => r.video_id);
   } else if (scope.kind === 'standalone') {
     // PlaylistVideo is a global junction — scope the "none" check to
     // THIS user's playlists so another user filing the same video

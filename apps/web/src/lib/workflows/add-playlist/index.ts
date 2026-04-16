@@ -197,12 +197,12 @@ export async function addPlaylistForUser(args: {
       select: { id: true },
     });
 
-    await prisma.standaloneVideo.upsert({
-      where: { standalone_video_unique_user_video: { user_id: args.userId, video_id: video.id } },
-      create: { user_id: args.userId, video_id: video.id },
-      update: {},
-    });
-
+    // Intentionally NOT creating a StandaloneVideo row here — the
+    // video is in the playlist, that's all. Library membership is
+    // resolved via (StandaloneVideo OR user's PlaylistVideo). Deleting
+    // the playlist then removes the video from library views naturally,
+    // unless the user has ALSO added it individually (which creates a
+    // StandaloneVideo row via the add-video flow).
     await prisma.playlistVideo.upsert({
       where: {
         playlist_video_unique_playlist_video: { playlist_id: playlist.id, video_id: video.id },

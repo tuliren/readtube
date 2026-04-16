@@ -79,6 +79,7 @@ export default function LibraryListView({
             emptyMessage="No videos in this list."
             isLoading={false}
             onOpenNotes={handleOpenNotes}
+            showRemoveFromLibrary
           />
         </div>
       </div>

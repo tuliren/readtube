@@ -23,6 +23,10 @@ interface Props {
    *  ~100ms on every filter change. */
   isLoading: boolean;
   onOpenNotes: (videoId: string, videoTitle: string) => void;
+  /** When true, surface library-specific actions (Remove from library)
+   *  in the per-row icons and bulk action bar. Enabled from
+   *  LibraryListView; the channel/inbox views leave it false. */
+  showRemoveFromLibrary?: boolean;
 }
 
 /**
@@ -55,6 +59,7 @@ export default function VideoList({
   emptyMessage,
   isLoading,
   onOpenNotes,
+  showRemoveFromLibrary,
 }: Props) {
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -196,7 +201,11 @@ export default function VideoList({
 
   return (
     <div className="flex flex-col">
-      <BulkActionBar selectedIds={selectedArray} onClear={clearSelection} />
+      <BulkActionBar
+        selectedIds={selectedArray}
+        onClear={clearSelection}
+        showRemoveFromLibrary={showRemoveFromLibrary}
+      />
       <ul className="divide-y divide-gray-100">
         {videos.map((video) => {
           const isSelected = selectedVideoId === video.id;
@@ -213,6 +222,7 @@ export default function VideoList({
               inSelectionMode={inSelectionMode}
               onOpenNotes={onOpenNotes}
               now={now}
+              showRemoveFromLibrary={showRemoveFromLibrary}
             />
           );
         })}

@@ -20,6 +20,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       OR: [
         { channel: { subscriptions: { some: { user_id: userId } } } },
         { standalone: { some: { user_id: userId } } },
+        { playlist_items: { some: { playlist: { user_id: userId } } } },
       ],
     },
     select: {

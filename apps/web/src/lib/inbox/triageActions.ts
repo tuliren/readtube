@@ -35,6 +35,7 @@ export async function assertUserCanTouchVideo(
       OR: [
         { channel: { subscriptions: { some: { user_id: userId } } } },
         { standalone: { some: { user_id: userId } } },
+        { playlist_items: { some: { playlist: { user_id: userId } } } },
       ],
     },
     select: { id: true },
@@ -121,7 +122,8 @@ export type BulkAction =
   | { type: 'save' }
   | { type: 'unsave' }
   | { type: 'archive' }
-  | { type: 'unarchive' };
+  | { type: 'unarchive' }
+  | { type: 'remove_from_library' };
 
 export async function applyBulk(
   prisma: PrismaClient,
@@ -144,6 +146,7 @@ export async function applyBulk(
       OR: [
         { channel: { subscriptions: { some: { user_id: userId } } } },
         { standalone: { some: { user_id: userId } } },
+        { playlist_items: { some: { playlist: { user_id: userId } } } },
       ],
     },
     select: { id: true },
@@ -204,6 +207,21 @@ export async function applyBulk(
         where: { user_id: userId, video_id: { in: ownedIds } },
       });
       return { affected: result.count };
+    }
+    case 'remove_from_library': {
+      // Mirrors DELETE /api/videos/[id]/standalone but batched.
+      // Removes StandaloneVideo rows AND PlaylistVideo rows scoped to
+      // the user's own playlists, so the video disappears from the
+      // library entirely. Videos from subscribed channels are untouched.
+      await prisma.$transaction([
+        prisma.playlistVideo.deleteMany({
+          where: { video_id: { in: ownedIds }, playlist: { user_id: userId } },
+        }),
+        prisma.standaloneVideo.deleteMany({
+          where: { user_id: userId, video_id: { in: ownedIds } },
+        }),
+      ]);
+      return { affected: ownedIds.length };
     }
   }
 }

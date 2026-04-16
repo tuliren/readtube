@@ -1,6 +1,14 @@
 'use client';
 
-import { Archive, Bookmark, BookmarkCheck, MoreHorizontal, NotebookPen, Star } from 'lucide-react';
+import {
+  Archive,
+  Bookmark,
+  BookmarkCheck,
+  MoreHorizontal,
+  NotebookPen,
+  Star,
+  Trash2,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useRef } from 'react';
 
@@ -89,6 +97,9 @@ interface Props {
   href: string;
   inSelectionMode: boolean;
   onOpenNotes: (videoId: string, videoTitle: string) => void;
+  /** Show an inline "Remove from library" icon in ordinary mode.
+   *  Only enabled on the library list views. */
+  showRemoveFromLibrary?: boolean;
   /**
    * Client-side `Date.now()` snapshot captured once after mount by the
    * parent list. `null` during SSR and the first client render so we
@@ -161,6 +172,7 @@ export default function VideoRow({
   inSelectionMode,
   onOpenNotes,
   now,
+  showRemoveFromLibrary,
 }: Props) {
   const triage = useTriage();
   const { isMobile } = useSidebar();
@@ -460,6 +472,19 @@ export default function VideoRow({
               >
                 <Archive className="h-4 w-4" />
               </button>
+              {showRemoveFromLibrary && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    stop(e);
+                    void triage.removeFromLibrary(video.id);
+                  }}
+                  title="Remove from library"
+                  className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-red-600"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
