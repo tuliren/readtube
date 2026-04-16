@@ -1,13 +1,12 @@
 import { auth } from '@clerk/nextjs/server';
-import { ArticleStyle } from '@readtube/database';
-import { prisma } from '@readtube/database';
+import { ArticleStyle, prisma } from '@readtube/database';
 import { streamText } from 'ai';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
 
 const PROMPT_VERSION = 'v2';
-const MODEL = 'google/gemini-2.5-flash';
+const MODEL = 'google/gemini-3.1-flash-lite-preview';
 const DEFAULT_STYLE: ArticleStyle = ArticleStyle.NARRATIVE;
 
 function parseStyle(raw: string | null | undefined): ArticleStyle | null {

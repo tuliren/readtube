@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
 
 const SUMMARY_PROMPT_VERSION = 'v4';
-const MODEL = 'google/gemini-2.5-flash';
+const MODEL = 'google/gemini-3.1-flash-lite-preview';
 
 const LANGUAGE_RULE = `Write in the same language as the transcript below. Do not translate — if the transcript is in Chinese, write in Chinese; if Spanish, write in Spanish; and so on.`;
 
