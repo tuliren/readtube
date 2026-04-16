@@ -178,4 +178,38 @@ describe('addVideoForUser', () => {
     });
     expect(video?.channel_id).toBe(actualChannel?.id);
   });
+
+  it('does not crash with P2002 when another channel already owns the scraped handle', async () => {
+    // Another channel is holding @testchan (stale scrape or rename
+    // upstream). addVideoForUser must not write the handle onto the
+    // new shadow row.
+    await global.testPrisma.channel.create({
+      data: {
+        source_type: 'YOUTUBE',
+        source_id: 'UC_other',
+        name: 'Other',
+        rss_url: 'https://example.com/other.xml',
+        handle: '@testchan',
+      },
+    });
+
+    mockFetchVideoSnapshot.mockResolvedValueOnce(fakeSnapshot());
+    const res = await addVideoForUser({ userId: TEST_USER_ID, input: 'dQw4w9WgXcQ' });
+
+    // No throw; shadow channel created with handle = null.
+    expect(res.createdChannel).toBe(true);
+    const shadow = await global.testPrisma.channel.findUnique({
+      where: {
+        channel_unique_source: { source_type: 'YOUTUBE', source_id: 'UC_test' },
+      },
+    });
+    expect(shadow?.handle).toBeNull();
+    // Pre-existing channel's handle is untouched.
+    const other = await global.testPrisma.channel.findUnique({
+      where: {
+        channel_unique_source: { source_type: 'YOUTUBE', source_id: 'UC_other' },
+      },
+    });
+    expect(other?.handle).toBe('@testchan');
+  });
 });

@@ -1,5 +1,6 @@
 import { prisma } from '@readtube/database';
 
+import { hasChannelHandleConflict } from '@/lib/channels/handleConflict';
 import { isEmptyString } from '@/lib/string';
 import { fetchChannelSnapshot } from '@/lib/youtube/channelSnapshot';
 
@@ -109,12 +110,16 @@ export async function refreshChannel(channel: StaleChannel): Promise<RefreshResu
     });
   }
 
+  // Skip the handle update when another channel row already owns it
+  // (stale scrape or a rename upstream) — otherwise the update would
+  // trip `@@unique([source_type, handle])` and crash the cron.
+  const handleConflict = await hasChannelHandleConflict(prisma, snapshot.handle, channel.id);
   await prisma.channel.update({
     where: { id: channel.id },
     data: {
       ...(nameUpdated ? { name: snapshot.name } : {}),
       ...(!isEmptyString(snapshot.logoUrl) ? { logo_url: snapshot.logoUrl } : {}),
-      ...(!isEmptyString(snapshot.handle) ? { handle: snapshot.handle } : {}),
+      ...(!isEmptyString(snapshot.handle) && !handleConflict ? { handle: snapshot.handle } : {}),
       checked_at: new Date(),
     },
   });

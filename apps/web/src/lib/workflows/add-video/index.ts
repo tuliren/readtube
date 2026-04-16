@@ -1,5 +1,6 @@
 import { VideoPlatformType, prisma } from '@readtube/database';
 
+import { hasChannelHandleConflict } from '@/lib/channels/handleConflict';
 import { isEmptyString } from '@/lib/string';
 import { buildRssUrl } from '@/lib/youtube/urls';
 import { extractVideoId, fetchVideoSnapshot } from '@/lib/youtube/videoSnapshot';
@@ -57,11 +58,13 @@ export async function addVideoForUser(args: {
     );
   }
 
-  // Upsert the owning Channel. If the user already subscribes to this
-  // channel (e.g. the video is in their inbox already) the Channel row
-  // exists and we reuse it. Otherwise we create a shadow Channel with
-  // only the minimum fields — the refresh cron ignores it until a
-  // UserSubscription is attached.
+  // Upsert the owning Channel. Uses findUnique + explicit create/update
+  // (not prisma.upsert) so the handle field can be guarded against the
+  // `@@unique([source_type, handle])` constraint when another channel
+  // already owns the scraped handle. See upsertChannelWithVideos for
+  // the same pattern; we don't reuse that helper here because it also
+  // creates the initial video list from the snapshot — add-video only
+  // wants the Channel row.
   const existingChannel = await prisma.channel.findUnique({
     where: {
       channel_unique_source: {
@@ -71,30 +74,39 @@ export async function addVideoForUser(args: {
     },
     select: { id: true },
   });
+  const hasHandle = !isEmptyString(snapshot.channel.handle);
 
-  const channel = await prisma.channel.upsert({
-    where: {
-      channel_unique_source: {
+  let channelId: string;
+  if (existingChannel != null) {
+    const conflictOnHandle = await hasChannelHandleConflict(
+      prisma,
+      snapshot.channel.handle,
+      existingChannel.id
+    );
+    await prisma.channel.update({
+      where: { id: existingChannel.id },
+      data: {
+        ...(snapshot.channel.logoUrl != null ? { logo_url: snapshot.channel.logoUrl } : {}),
+        ...(hasHandle && !conflictOnHandle ? { handle: snapshot.channel.handle } : {}),
+      },
+    });
+    channelId = existingChannel.id;
+  } else {
+    const handleAlreadyUsed = await hasChannelHandleConflict(prisma, snapshot.channel.handle, null);
+    const created = await prisma.channel.create({
+      data: {
         source_type: VideoPlatformType.YOUTUBE,
         source_id: snapshot.channel.sourceId,
+        name: snapshot.channel.name,
+        rss_url: buildRssUrl(snapshot.channel.sourceId),
+        ...(hasHandle && !handleAlreadyUsed ? { handle: snapshot.channel.handle } : {}),
+        ...(snapshot.channel.logoUrl != null ? { logo_url: snapshot.channel.logoUrl } : {}),
       },
-    },
-    create: {
-      source_type: VideoPlatformType.YOUTUBE,
-      source_id: snapshot.channel.sourceId,
-      name: snapshot.channel.name,
-      rss_url: buildRssUrl(snapshot.channel.sourceId),
-      ...(!isEmptyString(snapshot.channel.handle) ? { handle: snapshot.channel.handle } : {}),
-      ...(snapshot.channel.logoUrl != null ? { logo_url: snapshot.channel.logoUrl } : {}),
-    },
-    // Refresh handle/logo opportunistically when we have better data,
-    // but don't clobber with nulls.
-    update: {
-      ...(!isEmptyString(snapshot.channel.handle) ? { handle: snapshot.channel.handle } : {}),
-      ...(snapshot.channel.logoUrl != null ? { logo_url: snapshot.channel.logoUrl } : {}),
-    },
-    select: { id: true },
-  });
+      select: { id: true },
+    });
+    channelId = created.id;
+  }
+  const channel = { id: channelId };
   const createdChannel = existingChannel == null;
 
   // Use video_unique_source (globally unique) so we match a video

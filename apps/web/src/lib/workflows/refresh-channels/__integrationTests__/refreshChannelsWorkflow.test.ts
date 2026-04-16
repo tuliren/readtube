@@ -639,6 +639,44 @@ describe('refreshChannel — Shorts filtering', () => {
     });
     expect(stored!.title).toBe('Old Short');
   });
+
+  it('does not crash when scraped handle is already held by another channel', async () => {
+    // Another channel is holding @collide (stale or rename upstream).
+    await createChannel({
+      sourceId: 'UC_collide_owner',
+      name: 'Collide Owner',
+      subscribe: false,
+    });
+    await global.testPrisma.channel.update({
+      where: {
+        channel_unique_source: { source_type: 'YOUTUBE', source_id: 'UC_collide_owner' },
+      },
+      data: { handle: '@collide' },
+    });
+
+    const ch = await createChannel({ sourceId: 'UC_target', name: 'Target' });
+    mockScrapeChannel.mockResolvedValueOnce({
+      channelId: 'UC_target',
+      name: 'Target',
+      logoUrl: 'https://logo/target',
+      handle: '@collide',
+      videos: [],
+    });
+    mockFetchRssFeed.mockResolvedValueOnce(makeRssFeed('Target', []));
+
+    const result = await refreshChannel({
+      id: ch.id,
+      source_id: ch.source_id,
+      name: ch.name,
+      rss_url: ch.rss_url,
+    });
+    expect(result.videosProcessed).toBe(0);
+
+    // Target channel's handle stayed null (UC_collide_owner owns @collide).
+    const updated = await global.testPrisma.channel.findUnique({ where: { id: ch.id } });
+    expect(updated!.handle).toBeNull();
+    expect(updated!.logo_url).toBe('https://logo/target');
+  });
 });
 
 // ─── refreshChannelsWorkflow (end-to-end) ────────────────────────

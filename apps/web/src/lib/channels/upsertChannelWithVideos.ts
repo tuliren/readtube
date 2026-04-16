@@ -1,5 +1,6 @@
 import { type PrismaClient, VideoPlatformType } from '@readtube/database';
 
+import { hasChannelHandleConflict } from '@/lib/channels/handleConflict';
 import { isEmptyString } from '@/lib/string';
 import type { ChannelSnapshot } from '@/lib/youtube/channelSnapshot';
 import { buildRssUrl } from '@/lib/youtube/urls';
@@ -55,16 +56,7 @@ export async function upsertChannelWithVideos(
     // no-op for that column; Prisma generates SET handle = '@x' which
     // is fine — Postgres doesn't re-check the unique constraint for
     // unchanged values.
-    const conflictOnHandle =
-      hasHandle &&
-      (await prisma.channel.findFirst({
-        where: {
-          source_type: VideoPlatformType.YOUTUBE,
-          handle: snapshot.handle,
-          NOT: { id: existing.id },
-        },
-        select: { id: true },
-      })) != null;
+    const conflictOnHandle = await hasChannelHandleConflict(prisma, snapshot.handle, existing.id);
 
     return prisma.channel.update({
       where: { id: existing.id },
@@ -76,12 +68,7 @@ export async function upsertChannelWithVideos(
   }
 
   // Create path: only include handle when no existing row has it.
-  const handleAlreadyUsed =
-    hasHandle &&
-    (await prisma.channel.findFirst({
-      where: { source_type: VideoPlatformType.YOUTUBE, handle: snapshot.handle },
-      select: { id: true },
-    })) != null;
+  const handleAlreadyUsed = await hasChannelHandleConflict(prisma, snapshot.handle, null);
 
   console.info(`Channel does not exist, creating...`);
   return prisma.channel.create({
