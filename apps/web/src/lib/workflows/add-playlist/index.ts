@@ -132,7 +132,15 @@ export async function addPlaylistForUser(args: {
   const nextOrder = (max._max.sort_order ?? -1) + 1;
 
   const playlist = await prisma.playlist.create({
-    data: { user_id: args.userId, source_id: ytPlaylistId, name, sort_order: nextOrder },
+    data: {
+      user_id: args.userId,
+      source_id: ytPlaylistId,
+      name,
+      sort_order: nextOrder,
+      // Mark all initial videos as read via watermark so they don't
+      // appear unread — same pattern as UserSubscription.read_at.
+      read_at: new Date(),
+    },
     select: { id: true },
   });
 
@@ -203,15 +211,6 @@ export async function addPlaylistForUser(args: {
         playlist_video_unique_playlist_video: { playlist_id: playlist.id, video_id: video.id },
       },
       create: { playlist_id: playlist.id, video_id: video.id, sort_order: i },
-      update: {},
-    });
-
-    // Mark newly added video as read so it doesn't appear unread.
-    await prisma.userVideoConsumption.upsert({
-      where: {
-        user_video_consumption_unique_user_video: { user_id: args.userId, video_id: video.id },
-      },
-      create: { user_id: args.userId, video_id: video.id },
       update: {},
     });
 

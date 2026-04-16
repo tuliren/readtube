@@ -29,36 +29,36 @@ export async function GET() {
       id: true,
       name: true,
       sort_order: true,
+      read_at: true,
       _count: { select: { items: true } },
       items: {
         orderBy: { sort_order: 'asc' },
-        select: { video_id: true, video: { select: { thumbnail_url: true } } },
+        take: 1,
+        select: { video: { select: { thumbnail_url: true } } },
       },
     },
   });
 
-  // Batch-fetch consumed video IDs across all playlists in one query.
-  const allVideoIds = rows.flatMap((r) => r.items.map((i) => i.video_id));
-  const consumedRows =
-    allVideoIds.length > 0
-      ? await prisma.userVideoConsumption.findMany({
-          where: { user_id: userId, video_id: { in: allVideoIds } },
-          select: { video_id: true },
-        })
-      : [];
-  const consumedIds = new Set(consumedRows.map((r) => r.video_id));
-
-  const playlists: PlaylistData[] = rows.map((row) => {
-    const unreadCount = row.items.filter((i) => !consumedIds.has(i.video_id)).length;
-    return {
-      id: row.id,
-      name: row.name,
-      sortOrder: row.sort_order,
-      videoCount: row._count.items,
-      unreadCount,
-      thumbnailUrl: row.items[0]?.video.thumbnail_url ?? null,
-    };
-  });
+  // Count unread videos per playlist using the watermark. A video is
+  // unread if its published_at > playlist.read_at (or read_at is null).
+  // One query per playlist but only counts — no full row fetches.
+  const playlists: PlaylistData[] = await Promise.all(
+    rows.map(async (row) => {
+      const unreadWhere =
+        row.read_at != null
+          ? { playlist_id: row.id, video: { published_at: { gt: row.read_at } } }
+          : { playlist_id: row.id };
+      const unreadCount = await prisma.playlistVideo.count({ where: unreadWhere });
+      return {
+        id: row.id,
+        name: row.name,
+        sortOrder: row.sort_order,
+        videoCount: row._count.items,
+        unreadCount,
+        thumbnailUrl: row.items[0]?.video.thumbnail_url ?? null,
+      };
+    })
+  );
 
   return NextResponse.json(playlists);
 }

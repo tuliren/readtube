@@ -50,6 +50,7 @@ export async function loadLibraryVideos(
   scope: LibraryScope
 ): Promise<VideoData[]> {
   let videoIds: string[] = [];
+  let playlistReadAt: Date | null = null;
 
   if (scope.kind === 'all') {
     const rows = await prisma.standaloneVideo.findMany({
@@ -74,11 +75,12 @@ export async function loadLibraryVideos(
   } else {
     const playlist = await prisma.playlist.findFirst({
       where: { id: scope.playlistId, user_id: userId },
-      select: { id: true },
+      select: { id: true, read_at: true },
     });
     if (playlist == null) {
       return [];
     }
+    playlistReadAt = playlist.read_at;
     const rows = await prisma.playlistVideo.findMany({
       where: { playlist_id: scope.playlistId },
       select: { video_id: true },
@@ -101,16 +103,26 @@ export async function loadLibraryVideos(
 
   const triage = await loadTriageContext(prisma, userId, videoIds);
 
+  // Per-video consumption rows for explicit reads (user opened video).
+  const consumptions = await prisma.userVideoConsumption.findMany({
+    where: { user_id: userId, video_id: { in: videoIds } },
+    select: { video_id: true, read_at: true },
+  });
+  const consumptionByVideoId = new Map(consumptions.map((c) => [c.video_id, c.read_at]));
+
   const decorated: VideoData[] = [];
   for (const id of videoIds) {
     const row = byId.get(id);
     if (row == null) {
       continue;
     }
-    // readAt = null — library videos don't participate in the
-    // subscription-watermark read model. Per-video consumption rows
-    // can drive this later if we want "read" state here.
-    decorated.push(decorateVideo(row, triage, null));
+    // Read state: explicit consumption wins, then playlist watermark.
+    const explicitRead = consumptionByVideoId.get(id) ?? null;
+    let readAt: Date | null = explicitRead;
+    if (readAt == null && playlistReadAt != null && row.published_at <= playlistReadAt) {
+      readAt = playlistReadAt;
+    }
+    decorated.push(decorateVideo(row, triage, readAt));
   }
   return decorated;
 }

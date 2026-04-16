@@ -212,6 +212,7 @@ CREATE TABLE "Playlist" (
   "sort_order" INTEGER NOT NULL DEFAULT 0,
   "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updated_at" TIMESTAMP(3) NOT NULL,
+  "read_at" TIMESTAMP(3),
   CONSTRAINT "Playlist_pkey" PRIMARY KEY ("id")
 );
 

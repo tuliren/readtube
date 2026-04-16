@@ -365,6 +365,11 @@ model Playlist {
   source_id   String
   name        String
   sort_order  Int               @default(0)
+  // Per-playlist read watermark, mirroring UserSubscription.read_at.
+  // Videos in this playlist whose published_at <= read_at are
+  // considered read. null means no watermark — read state comes
+  // purely from UserVideoConsumption rows.
+  read_at     DateTime?
   created_at  DateTime          @default(now())
   updated_at  DateTime          @updatedAt
 
