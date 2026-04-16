@@ -99,8 +99,14 @@ export async function fetchChannelLatest(
   }
 
   const url = `${BASE_URL}/youtube/channel/latest?channel=${encodeURIComponent(channelInput)}`;
+  // See channelRss.ts for why we opt out of Next.js's fetch cache —
+  // the refresh workflow calls this inside a step that runs outside a
+  // Next.js request context, and the monkey-patched fetch can throw
+  // "detached ArrayBuffer" when the cache machinery tries to slice
+  // the already-consumed response body.
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${apiKey}` },
+    cache: 'no-store',
   });
   if (!res.ok) {
     const body = await res.text().catch(() => '');
