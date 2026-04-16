@@ -7,7 +7,10 @@ async function assertUserCanTouchVideo(userId: string, videoId: string): Promise
   const row = await prisma.video.findFirst({
     where: {
       id: videoId,
-      channel: { subscriptions: { some: { user_id: userId } } },
+      OR: [
+        { channel: { subscriptions: { some: { user_id: userId } } } },
+        { standalone: { some: { user_id: userId } } },
+      ],
     },
     select: { id: true },
   });

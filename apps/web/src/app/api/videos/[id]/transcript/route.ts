@@ -15,7 +15,13 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   // IDOR check + fetch most recent cached transcript + the sticky
   // unavailable flag in one round-trip.
   const video = await prisma.video.findFirst({
-    where: { id, channel: { subscriptions: { some: { user_id: userId } } } },
+    where: {
+      id,
+      OR: [
+        { channel: { subscriptions: { some: { user_id: userId } } } },
+        { standalone: { some: { user_id: userId } } },
+      ],
+    },
     select: {
       id: true,
       transcript_unavailable: true,

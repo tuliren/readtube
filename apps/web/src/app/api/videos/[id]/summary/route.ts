@@ -63,7 +63,13 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   const { id } = await params;
 
   const video = await prisma.video.findFirst({
-    where: { id, channel: { subscriptions: { some: { user_id: userId } } } },
+    where: {
+      id,
+      OR: [
+        { channel: { subscriptions: { some: { user_id: userId } } } },
+        { standalone: { some: { user_id: userId } } },
+      ],
+    },
     select: {
       id: true,
       transcripts: {
@@ -129,7 +135,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // Look up title + channel name first; ensureTranscript will do
   // its own IDOR check + transcript resolution.
   const video = await prisma.video.findFirst({
-    where: { id, channel: { subscriptions: { some: { user_id: userId } } } },
+    where: {
+      id,
+      OR: [
+        { channel: { subscriptions: { some: { user_id: userId } } } },
+        { standalone: { some: { user_id: userId } } },
+      ],
+    },
     select: {
       id: true,
       title: true,
