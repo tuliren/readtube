@@ -1,5 +1,6 @@
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@readtube/database';
+import type { Metadata } from 'next';
 import { notFound, redirect } from 'next/navigation';
 
 import LibraryListView from '@/components/library/LibraryListView';
@@ -7,6 +8,19 @@ import { loadLibraryVideos } from '@/lib/library/loadVideos';
 
 interface Props {
   params: Promise<{ id: string }>;
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { userId } = await auth();
+  if (userId == null) {
+    return {};
+  }
+  const { id } = await params;
+  const playlist = await prisma.playlist.findFirst({
+    where: { id, user_id: userId },
+    select: { name: true },
+  });
+  return { title: playlist?.name ?? 'Playlist' };
 }
 
 /**

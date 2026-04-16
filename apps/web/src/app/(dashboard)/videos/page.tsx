@@ -1,10 +1,13 @@
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@readtube/database';
+import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 
 import LibraryListView from '@/components/library/LibraryListView';
 import LibraryEmptyState from '@/components/library/LibraryVideoList';
 import { loadLibraryVideos } from '@/lib/library/loadVideos';
+
+export const metadata: Metadata = { title: 'All videos' };
 
 /**
  * /videos — "All" entry under the Videos sidebar section. Shows every
