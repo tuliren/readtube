@@ -37,7 +37,7 @@ export default function BulkActionBar({ selectedIds, onClear, showRemoveFromLibr
   }
 
   return (
-    <div className="flex items-center gap-0.5 border-b border-gray-200 bg-blue-50 px-4 py-2 sidebar:gap-2">
+    <div className="sticky top-0 z-10 flex items-center gap-0.5 border-b border-gray-200 bg-blue-50 px-4 py-2 shadow-sm sidebar:gap-2">
       <button
         type="button"
         onClick={onClear}
