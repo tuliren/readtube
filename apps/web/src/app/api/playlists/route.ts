@@ -11,6 +11,7 @@ export interface PlaylistData {
   name: string;
   sortOrder: number;
   videoCount: number;
+  thumbnailUrl: string | null;
 }
 
 function toPlaylistData(row: {
@@ -18,12 +19,14 @@ function toPlaylistData(row: {
   name: string;
   sort_order: number;
   _count: { items: number };
+  items: Array<{ video: { thumbnail_url: string | null } }>;
 }): PlaylistData {
   return {
     id: row.id,
     name: row.name,
     sortOrder: row.sort_order,
     videoCount: row._count.items,
+    thumbnailUrl: row.items[0]?.video.thumbnail_url ?? null,
   };
 }
 
@@ -42,6 +45,11 @@ export async function GET() {
       name: true,
       sort_order: true,
       _count: { select: { items: true } },
+      items: {
+        orderBy: { sort_order: 'asc' },
+        take: 1,
+        select: { video: { select: { thumbnail_url: true } } },
+      },
     },
   });
 

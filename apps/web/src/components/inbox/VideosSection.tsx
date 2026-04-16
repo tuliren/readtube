@@ -25,6 +25,7 @@ interface PlaylistRow {
   name: string;
   sortOrder: number;
   videoCount: number;
+  thumbnailUrl: string | null;
 }
 
 const fetcher = (url: string) =>
@@ -131,6 +132,7 @@ export default function VideosSection() {
               icon={ListMusic}
               active={activePlaylistId === p.id}
               sidebarCollapsed={collapsed}
+              thumbnailUrl={p.thumbnailUrl}
             />
           ))}
         </ul>
@@ -152,9 +154,17 @@ interface EntryProps {
   icon: typeof Video;
   active: boolean;
   sidebarCollapsed: boolean;
+  thumbnailUrl?: string | null;
 }
 
-function VideoEntry({ href, label, icon: Icon, active, sidebarCollapsed }: EntryProps) {
+function VideoEntry({
+  href,
+  label,
+  icon: Icon,
+  active,
+  sidebarCollapsed,
+  thumbnailUrl,
+}: EntryProps) {
   if (sidebarCollapsed) {
     return (
       <li>
@@ -166,7 +176,11 @@ function VideoEntry({ href, label, icon: Icon, active, sidebarCollapsed }: Entry
                 active ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
               }`}
             >
-              <Icon className="h-4 w-4" />
+              {thumbnailUrl != null ? (
+                <img src={thumbnailUrl} alt="" className="h-4 w-4 rounded-sm object-cover" />
+              ) : (
+                <Icon className="h-4 w-4" />
+              )}
             </Link>
           </TooltipTrigger>
           <TooltipContent side="right">{label}</TooltipContent>
@@ -177,7 +191,14 @@ function VideoEntry({ href, label, icon: Icon, active, sidebarCollapsed }: Entry
   return (
     <li>
       <Link href={href} className={sidebarRowClass(active)}>
-        <SidebarRowContent icon={Icon} label={label} />
+        {thumbnailUrl != null ? (
+          <>
+            <img src={thumbnailUrl} alt="" className="h-4 w-4 shrink-0 rounded-sm object-cover" />
+            <span className="truncate">{label}</span>
+          </>
+        ) : (
+          <SidebarRowContent icon={Icon} label={label} />
+        )}
       </Link>
     </li>
   );
