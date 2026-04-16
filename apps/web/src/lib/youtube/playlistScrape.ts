@@ -42,8 +42,11 @@ export class PrivatePlaylistError extends Error {
   }
 }
 
-const PRIVATE_ERROR_MESSAGE =
-  'This playlist is private, so we cannot import it. Change the playlist visibility to Unlisted (not Public) on YouTube and try again — unlisted playlists stay out of YouTube search but are importable here.';
+const PRIVATE_ERROR_MESSAGE = [
+  'This playlist is private, and cannot be imported.',
+  'You can change the playlist visibility to Unlisted (not Public) on YouTube and try again.',
+  'Unlisted playlists stay out of YouTube search but are importable here.',
+].join(' ');
 
 /**
  * Fetches and parses a YouTube playlist page. Extracts metadata from
@@ -83,13 +86,8 @@ export async function scrapePlaylist(playlistId: string): Promise<ScrapedPlaylis
       firstAlert?.text?.simpleText ??
       (firstAlert?.text?.runs as any[] | undefined)?.map((r) => r.text).join('') ??
       '';
-    // Any alert here (private, deleted, restricted) — surface as a
-    // private-playlist hint since that's the fixable case.
-    throw new PrivatePlaylistError(
-      alertText.length > 0
-        ? `${PRIVATE_ERROR_MESSAGE} (YouTube says: "${alertText}")`
-        : PRIVATE_ERROR_MESSAGE
-    );
+    console.error(alertText);
+    throw new PrivatePlaylistError(PRIVATE_ERROR_MESSAGE);
   }
 
   // Navigate the deeply nested YouTube data structure.
