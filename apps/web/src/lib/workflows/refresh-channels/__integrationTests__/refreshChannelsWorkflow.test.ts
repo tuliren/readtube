@@ -56,8 +56,23 @@ function daysAgo(n: number): Date {
   return new Date(Date.now() - n * 24 * 60 * 60 * 1000);
 }
 
-async function createChannel(opts: { sourceId: string; name: string; checkedAt?: Date | null }) {
-  return global.testPrisma.channel.create({
+const TEST_USER_SOURCE_ID = 'clerk_test_user_refresh';
+
+/**
+ * Creates a channel. By default also creates a UserSubscription for
+ * the test user — the refresh workflow only considers subscribed
+ * channels (see `fetchStaleChannels`), so tests that don't subscribe
+ * would otherwise see empty results across the board. Pass
+ * `subscribe: false` to test the "shadow channel" (added via the
+ * individual-video flow) exclusion path.
+ */
+async function createChannel(opts: {
+  sourceId: string;
+  name: string;
+  checkedAt?: Date | null;
+  subscribe?: boolean;
+}) {
+  const channel = await global.testPrisma.channel.create({
     data: {
       source_id: opts.sourceId,
       name: opts.name,
@@ -65,6 +80,12 @@ async function createChannel(opts: { sourceId: string; name: string; checkedAt?:
       checked_at: opts.checkedAt ?? null,
     },
   });
+  if (opts.subscribe !== false) {
+    await global.testPrisma.userSubscription.create({
+      data: { user_id: TEST_USER_SOURCE_ID, channel_id: channel.id },
+    });
+  }
+  return channel;
 }
 
 function makeRssFeed(
@@ -80,6 +101,7 @@ function makeRssFeed(
   return {
     channelId: 'UC_test',
     name: channelName,
+    authorName: channelName,
     videos: videos.map((v) => ({
       videoId: v.videoId,
       title: v.title,
@@ -90,6 +112,8 @@ function makeRssFeed(
         v.isShort === true
           ? `https://www.youtube.com/shorts/${v.videoId}`
           : `https://www.youtube.com/watch?v=${v.videoId}`,
+      channelId: 'UC_test',
+      channelName: channelName,
     })),
   };
 }
@@ -110,8 +134,18 @@ beforeEach(async () => {
     handle: null,
     videos: [],
   });
+  await global.testPrisma.userSubscription.deleteMany();
   await global.testPrisma.video.deleteMany();
   await global.testPrisma.channel.deleteMany();
+  await global.testPrisma.user.upsert({
+    where: { source_id: TEST_USER_SOURCE_ID },
+    update: {},
+    create: {
+      source_id: TEST_USER_SOURCE_ID,
+      name: 'Test Refresh User',
+      email: `${TEST_USER_SOURCE_ID}@example.com`,
+    },
+  });
 });
 
 // ─── fetchStaleChannels ──────────────────────────────────────────
@@ -178,6 +212,25 @@ describe('fetchStaleChannels', () => {
     const result = await fetchStaleChannels();
 
     expect(result).toHaveLength(BATCH_SIZE);
+  });
+
+  it('excludes unsubscribed shadow channels', async () => {
+    // Shadow channel: created by the individual-video add flow, no
+    // UserSubscription attached. Should NOT be returned even though
+    // its checked_at is null (stale).
+    await createChannel({
+      sourceId: 'UC_shadow',
+      name: 'Shadow Channel',
+      subscribe: false,
+    });
+    const subscribed = await createChannel({
+      sourceId: 'UC_subscribed',
+      name: 'Subscribed Channel',
+    });
+
+    const result = await fetchStaleChannels();
+
+    expect(result.map((c) => c.id)).toEqual([subscribed.id]);
   });
 });
 
@@ -585,6 +638,44 @@ describe('refreshChannel — Shorts filtering', () => {
       where: { channel_id: ch.id, source_id: 'vid_existing_short' },
     });
     expect(stored!.title).toBe('Old Short');
+  });
+
+  it('does not crash when scraped handle is already held by another channel', async () => {
+    // Another channel is holding @collide (stale or rename upstream).
+    await createChannel({
+      sourceId: 'UC_collide_owner',
+      name: 'Collide Owner',
+      subscribe: false,
+    });
+    await global.testPrisma.channel.update({
+      where: {
+        channel_unique_source: { source_type: 'YOUTUBE', source_id: 'UC_collide_owner' },
+      },
+      data: { handle: '@collide' },
+    });
+
+    const ch = await createChannel({ sourceId: 'UC_target', name: 'Target' });
+    mockScrapeChannel.mockResolvedValueOnce({
+      channelId: 'UC_target',
+      name: 'Target',
+      logoUrl: 'https://logo/target',
+      handle: '@collide',
+      videos: [],
+    });
+    mockFetchRssFeed.mockResolvedValueOnce(makeRssFeed('Target', []));
+
+    const result = await refreshChannel({
+      id: ch.id,
+      source_id: ch.source_id,
+      name: ch.name,
+      rss_url: ch.rss_url,
+    });
+    expect(result.videosProcessed).toBe(0);
+
+    // Target channel's handle stayed null (UC_collide_owner owns @collide).
+    const updated = await global.testPrisma.channel.findUnique({ where: { id: ch.id } });
+    expect(updated!.handle).toBeNull();
+    expect(updated!.logo_url).toBe('https://logo/target');
   });
 });
 

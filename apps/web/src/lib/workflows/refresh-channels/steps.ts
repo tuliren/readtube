@@ -1,5 +1,6 @@
 import { prisma } from '@readtube/database';
 
+import { hasChannelHandleConflict } from '@/lib/channels/handleConflict';
 import { isEmptyString } from '@/lib/string';
 import { fetchChannelSnapshot } from '@/lib/youtube/channelSnapshot';
 
@@ -28,9 +29,15 @@ export async function fetchStaleChannels(): Promise<StaleChannel[]> {
 
   const cutoff = new Date(Date.now() - STALE_DAYS * 24 * 60 * 60 * 1000);
 
+  // Only refresh channels with at least one active UserSubscription.
+  // "Shadow" channel rows created by the individual-video add flow exist
+  // so that a standalone video always has a valid Channel FK, but until
+  // a user actually subscribes to them we don't need to hit the RSS
+  // endpoint. They get picked up lazily on first subscribe.
   return prisma.channel.findMany({
     where: {
       OR: [{ checked_at: null }, { checked_at: { lt: cutoff } }],
+      subscriptions: { some: {} },
     },
     orderBy: { checked_at: { sort: 'asc', nulls: 'first' } },
     take: BATCH_SIZE,
@@ -66,15 +73,24 @@ export async function refreshChannel(channel: StaleChannel): Promise<RefreshResu
   const nameUpdated = snapshot.name !== channel.name;
 
   for (const video of snapshot.videos) {
+    // Use `video_unique_source` (source_type + source_id, globally
+    // unique) instead of `video_unique_channel_source`. This avoids a
+    // P2002 crash when a video was previously created under a
+    // different channel (e.g. the playlist-owner's channel from the
+    // add-playlist flow) — the cron now matches the existing row and
+    // corrects the channel_id to the actual owner.
     await prisma.video.upsert({
       where: {
-        video_unique_channel_source: {
-          channel_id: channel.id,
+        video_unique_source: {
+          source_type: 'YOUTUBE',
           source_id: video.videoId,
         },
       },
       create: {
         channel_id: channel.id,
+        // source_type must match the `where` clause so Prisma uses a
+        // native Postgres upsert (CLAUDE.md).
+        source_type: 'YOUTUBE',
         source_id: video.videoId,
         title: video.title,
         description: video.description,
@@ -83,6 +99,9 @@ export async function refreshChannel(channel: StaleChannel): Promise<RefreshResu
         duration_seconds: video.durationSeconds,
       },
       update: {
+        // Correct channel_id if the video was previously assigned to
+        // a different channel (e.g. playlist-owner shadow channel).
+        channel_id: channel.id,
         title: video.title,
         ...(isEmptyString(video.description) ? {} : { description: video.description }),
         thumbnail_url: video.thumbnailUrl,
@@ -91,12 +110,16 @@ export async function refreshChannel(channel: StaleChannel): Promise<RefreshResu
     });
   }
 
+  // Skip the handle update when another channel row already owns it
+  // (stale scrape or a rename upstream) — otherwise the update would
+  // trip `@@unique([source_type, handle])` and crash the cron.
+  const handleConflict = await hasChannelHandleConflict(prisma, snapshot.handle, channel.id);
   await prisma.channel.update({
     where: { id: channel.id },
     data: {
       ...(nameUpdated ? { name: snapshot.name } : {}),
       ...(!isEmptyString(snapshot.logoUrl) ? { logo_url: snapshot.logoUrl } : {}),
-      ...(!isEmptyString(snapshot.handle) ? { handle: snapshot.handle } : {}),
+      ...(!isEmptyString(snapshot.handle) && !handleConflict ? { handle: snapshot.handle } : {}),
       checked_at: new Date(),
     },
   });

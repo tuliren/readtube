@@ -1,7 +1,8 @@
 import { auth } from '@clerk/nextjs/server';
-import { VideoPlatformType, prisma } from '@readtube/database';
+import { prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 
+import { upsertChannelWithVideos } from '@/lib/channels/upsertChannelWithVideos';
 import { ensureUserExists } from '@/lib/db/user';
 import { isEmptyString } from '@/lib/string';
 import {
@@ -105,41 +106,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'You already follow this channel.' }, { status: 409 });
   }
 
-  const rssUrl = buildRssUrl(sourceId);
-
-  // Upsert the channel atomically — avoids a race condition where two users
-  // concurrently subscribe to the same brand-new channel. New videos are created
-  // with no UserVideoConsumption rows, so they appear unread for everyone until
-  // the user actually opens them.
-  const channel = await prisma.channel.upsert({
-    where: {
-      channel_unique_source: { source_type: VideoPlatformType.YOUTUBE, source_id: sourceId },
-    },
-    create: {
-      source_type: VideoPlatformType.YOUTUBE,
-      source_id: sourceId,
-      name: snapshot.name,
-      rss_url: rssUrl,
-      logo_url: snapshot.logoUrl,
-      handle: snapshot.handle,
-      videos: {
-        create: snapshot.videos.map((v) => ({
-          source_id: v.videoId,
-          title: v.title,
-          description: v.description,
-          published_at: v.publishedAt,
-          thumbnail_url: v.thumbnailUrl,
-          duration_seconds: v.durationSeconds,
-        })),
-      },
-    },
-    // On re-create (channel already exists), refresh the logo and
-    // handle when the snapshot has fresh values.
-    update: {
-      ...(snapshot.logoUrl != null ? { logo_url: snapshot.logoUrl } : {}),
-      ...(!isEmptyString(snapshot.handle) ? { handle: snapshot.handle } : {}),
-    },
-  });
+  // Upsert the channel atomically. upsertChannelWithVideos guards
+  // against the `(source_type, handle)` unique constraint when another
+  // row already owns the scraped handle.
+  const channel = await upsertChannelWithVideos(prisma, sourceId, snapshot);
 
   // Compute the initial read watermark per the configured subscription mode
   // (all_new / none_new / recent_n_new). Done after the channel + its videos

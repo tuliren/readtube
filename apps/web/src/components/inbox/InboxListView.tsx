@@ -177,6 +177,7 @@ export default function InboxListView({
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <InboxHeader
           channelId={selectedChannelId}
+          channelSourceId={selectedChannel?.sourceId ?? null}
           channelName={headerName}
           channelLogoUrl={headerLogoUrl}
           unreadCount={headerUnread}

@@ -84,6 +84,7 @@ function DashboardShellInner({ initialChannels, children }: Props) {
   const selectedChannelId = useSelectedChannelId(channels);
   const selectedChannel =
     selectedChannelId != null ? (channels.find((c) => c.id === selectedChannelId) ?? null) : null;
+  const libraryTitle = useLibraryTitle();
 
   // Auto-uncollapse: when the current URL points at a descendant of a
   // collapsed entry, clear that collapse flag so the active item
@@ -180,6 +181,7 @@ function DashboardShellInner({ initialChannels, children }: Props) {
             <MobileTopBar
               onOpenSidebar={() => setMobileOpen(true)}
               selectedChannel={selectedChannel}
+              libraryTitle={libraryTitle}
               totalUnread={totalUnread}
             />
           )}
@@ -200,10 +202,14 @@ function DashboardShellInner({ initialChannels, children }: Props) {
 function MobileTopBar({
   onOpenSidebar,
   selectedChannel,
+  libraryTitle,
   totalUnread,
 }: {
   onOpenSidebar: () => void;
   selectedChannel: ChannelData | null;
+  /** Title for library routes (All / Standalone / a specific playlist)
+   *  when no channel is selected. */
+  libraryTitle: string | null;
   totalUnread: number;
 }) {
   const { mutate } = useSWRConfig();
@@ -271,6 +277,11 @@ function MobileTopBar({
       >
         <Menu className="h-5 w-5" />
       </button>
+      {selectedChannel == null && libraryTitle != null && (
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <span className="truncate text-base font-semibold text-gray-900">{libraryTitle}</span>
+        </div>
+      )}
       {selectedChannel != null && (
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {selectedChannel.logoUrl != null && (
@@ -396,11 +407,89 @@ function useAutoUncollapse(channels: ChannelData[], selectedChannelId: string | 
     return folders.some((f) => f.id === channel.folderId) ? channel.folderId : null;
   }, [selectedChannelId, channels, folders]);
 
+  // Match only the library sub-routes — not the reader at
+  // /videos/[videoId], which is reachable from the inbox for
+  // non-library videos and shouldn't auto-expand the Videos section.
+  const videosSelected =
+    pathname != null &&
+    (pathname === '/videos' ||
+      pathname === '/videos/standalone' ||
+      pathname.startsWith('/videos/playlists/'));
+
   useEffect(() => {
     ensureExpandedFor({
       channelSelected: selectedChannelId != null,
       nonDefaultView,
       folderId: folderIdForSelection,
+      videosSelected,
     });
-  }, [ensureExpandedFor, selectedChannelId, nonDefaultView, folderIdForSelection, pathname]);
+  }, [
+    ensureExpandedFor,
+    selectedChannelId,
+    nonDefaultView,
+    folderIdForSelection,
+    videosSelected,
+    pathname,
+  ]);
+}
+
+interface PlaylistSummary {
+  id: string;
+  name: string;
+}
+
+/**
+ * Derives a display title for the mobile top bar on library and
+ * video-reader routes. Returns null for non-library routes so the
+ * channel/inbox title logic stays untouched.
+ *
+ * - /videos                         → "All videos"
+ * - /videos/standalone              → "Standalone"
+ * - /videos/playlists/[id]          → playlist name (from SWR cache)
+ * - /videos/[sourceId] (the reader) → video title (via /api/videos/meta)
+ */
+function useLibraryTitle(): string | null {
+  const pathname = usePathname();
+  const { data: playlists = [] } = useSWR<PlaylistSummary[]>('/api/playlists', fetcher);
+
+  // Video reader paths are /videos/<sourceId> where sourceId is the
+  // 11-char YouTube id. Distinguish from the library routes which
+  // have known literal segments (/videos, /videos/standalone,
+  // /videos/playlists/*).
+  const videoSourceId = useMemo(() => {
+    if (pathname == null || !pathname.startsWith('/videos/')) {
+      return null;
+    }
+    const rest = pathname.slice('/videos/'.length).split('/')[0];
+    if (rest === 'standalone' || rest === 'playlists' || rest.length === 0) {
+      return null;
+    }
+    return rest;
+  }, [pathname]);
+
+  const { data: videoMeta } = useSWR<{ title: string }>(
+    videoSourceId != null ? `/api/videos/meta?sourceId=${encodeURIComponent(videoSourceId)}` : null,
+    fetcher
+  );
+
+  return useMemo(() => {
+    if (pathname == null) {
+      return null;
+    }
+    if (pathname === '/videos') {
+      return 'All videos';
+    }
+    if (pathname === '/videos/standalone') {
+      return 'Standalone';
+    }
+    if (pathname.startsWith('/videos/playlists/')) {
+      const id = pathname.slice('/videos/playlists/'.length).split('/')[0];
+      const pl = playlists.find((p) => p.id === id);
+      return pl?.name ?? 'Playlist';
+    }
+    if (videoSourceId != null) {
+      return videoMeta?.title ?? null;
+    }
+    return null;
+  }, [pathname, playlists, videoSourceId, videoMeta]);
 }

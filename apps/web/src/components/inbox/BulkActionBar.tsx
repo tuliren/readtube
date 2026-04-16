@@ -1,6 +1,6 @@
 'use client';
 
-import { Archive, Bookmark, Check, Star, X } from 'lucide-react';
+import { Archive, Bookmark, Check, Star, Trash2, X } from 'lucide-react';
 
 import type { BulkAction } from '@/lib/inbox/triageActions';
 
@@ -9,6 +9,10 @@ import { useTriage } from './useTriage';
 interface Props {
   selectedIds: string[];
   onClear: () => void;
+  /** When true, show the "Remove" action that deletes the selected
+   *  videos from the user's library (StandaloneVideo + playlist
+   *  memberships). Only set in library list views. */
+  showRemoveFromLibrary?: boolean;
 }
 
 /**
@@ -17,7 +21,7 @@ interface Props {
  * bulk actions; the full set (snooze, unstar, unsave, unarchive) is
  * available through the command palette.
  */
-export default function BulkActionBar({ selectedIds, onClear }: Props) {
+export default function BulkActionBar({ selectedIds, onClear, showRemoveFromLibrary }: Props) {
   const triage = useTriage();
 
   if (selectedIds.length === 0) {
@@ -33,7 +37,7 @@ export default function BulkActionBar({ selectedIds, onClear }: Props) {
   }
 
   return (
-    <div className="flex items-center gap-0.5 border-b border-gray-200 bg-blue-50 px-4 py-2 sidebar:gap-2">
+    <div className="sticky top-0 z-10 flex items-center gap-0.5 border-b border-gray-200 bg-blue-50 px-4 py-2 shadow-sm sidebar:gap-2">
       <button
         type="button"
         onClick={onClear}
@@ -80,6 +84,17 @@ export default function BulkActionBar({ selectedIds, onClear }: Props) {
         <Archive className="h-4 w-4" />
         <span className="hidden sidebar:inline">Archive</span>
       </button>
+      {showRemoveFromLibrary && (
+        <button
+          type="button"
+          onClick={() => void run({ type: 'remove_from_library' }, 'removed')}
+          title="Remove from library"
+          className="flex items-center gap-1 rounded px-2 py-1 text-sm text-red-600 hover:bg-white"
+        >
+          <Trash2 className="h-4 w-4" />
+          <span className="hidden sidebar:inline">Remove</span>
+        </button>
+      )}
     </div>
   );
 }

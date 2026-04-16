@@ -14,6 +14,12 @@ export interface RssVideo {
   link: string;
   /** From `<media:thumbnail url="…" />`; may be absent on some entries. */
   thumbnailUrl: string | null;
+  /** Per-entry author/channel info. For channel RSS feeds this equals
+   *  the feed-level channel. For playlist RSS feeds each entry may
+   *  carry a different channel (the actual uploader), so we extract
+   *  it per-entry from `<author>` and `<yt:channelId>`. */
+  channelId: string | null;
+  channelName: string | null;
 }
 
 /**
@@ -28,7 +34,14 @@ export function isYouTubeShort(video: { link: string }): boolean {
 
 export interface RssChannel {
   channelId: string;
+  /** Feed-level `<title>`. For channel feeds this is the channel
+   *  name; for playlist feeds it's the playlist title. Callers that
+   *  want the owning channel's display name should prefer `authorName`. */
   name: string;
+  /** Feed-level `<author><name>` — the owning channel's display name
+   *  regardless of whether the feed is a channel or playlist feed.
+   *  Null if the feed omitted author info. */
+  authorName: string | null;
   videos: RssVideo[];
 }
 
@@ -66,13 +79,21 @@ export async function fetchRssFeed(rssUrl: string): Promise<RssChannel> {
     throw new Error('Invalid RSS feed: missing feed element');
   }
 
-  // Channel ID from yt:channelId element
-  const channelId = (feed['yt:channelId'] as string | undefined)?.trim();
-  if (!channelId) {
+  // Channel ID from yt:channelId element. YouTube's RSS is inconsistent:
+  // the feed-level <yt:channelId> drops the "UC" prefix (e.g. emits
+  // "2cRwTuSWxxEtrRnT4lrlQA" for channel UC2cRwTuSWxxEtrRnT4lrlQA),
+  // while every entry-level <yt:channelId> keeps the full "UC..."
+  // form. Normalize so downstream code always sees the canonical ID
+  // that matches the rest of YouTube.
+  const rawChannelId = (feed['yt:channelId'] as string | undefined)?.trim();
+  if (!rawChannelId) {
     throw new Error('Invalid RSS feed: missing channel ID');
   }
+  const channelId = rawChannelId.startsWith('UC') ? rawChannelId : `UC${rawChannelId}`;
 
   const channelName = (feed.title as string | undefined)?.trim() ?? 'Unknown Channel';
+  const feedAuthor = feed.author as Record<string, unknown> | undefined;
+  const authorName = (feedAuthor?.name as string | undefined)?.trim() ?? null;
 
   const entries = (feed.entry as Record<string, unknown>[] | undefined) ?? [];
 
@@ -95,11 +116,26 @@ export async function fetchRssFeed(rssUrl: string): Promise<RssChannel> {
         return null;
       }
 
-      return { videoId, title, description, publishedAt, link, thumbnailUrl };
+      // Per-entry channel — for playlist RSS feeds, each entry's
+      // author is the actual uploader rather than the playlist owner.
+      const entryChannelId = (entry['yt:channelId'] as string | undefined)?.trim() ?? null;
+      const author = entry.author as Record<string, unknown> | undefined;
+      const entryChannelName = (author?.name as string | undefined)?.trim() ?? null;
+
+      return {
+        videoId,
+        title,
+        description,
+        publishedAt,
+        link,
+        thumbnailUrl,
+        channelId: entryChannelId,
+        channelName: entryChannelName,
+      };
     })
     .filter((v): v is RssVideo => v !== null);
 
-  return { channelId, name: channelName, videos };
+  return { channelId, name: channelName, authorName, videos };
 }
 
 /**

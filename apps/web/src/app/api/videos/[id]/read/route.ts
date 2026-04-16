@@ -13,7 +13,14 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
 
   // IDOR check: ensure video belongs to a channel the user is subscribed to
   const video = await prisma.video.findFirst({
-    where: { id: videoId, channel: { subscriptions: { some: { user_id: userId } } } },
+    where: {
+      id: videoId,
+      OR: [
+        { channel: { subscriptions: { some: { user_id: userId } } } },
+        { standalone: { some: { user_id: userId } } },
+        { playlist_items: { some: { playlist: { user_id: userId } } } },
+      ],
+    },
     select: { id: true },
   });
   if (video == null) {

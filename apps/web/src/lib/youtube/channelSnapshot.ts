@@ -145,6 +145,7 @@ async function fetchChannelLatestAsRss(channelInput: string): Promise<RssChannel
   return {
     channelId: result.channel.channelId,
     name: result.channel.title,
+    authorName: result.channel.title,
     videos: result.videos.map((v) => ({
       videoId: v.videoId,
       title: v.title,
@@ -152,6 +153,8 @@ async function fetchChannelLatestAsRss(channelInput: string): Promise<RssChannel
       publishedAt: v.publishedAt,
       link: v.link,
       thumbnailUrl: v.thumbnailUrl,
+      channelId: result.channel.channelId,
+      channelName: result.channel.title,
     })),
   };
 }

@@ -9,12 +9,14 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { formatDurationSeconds } from '@/lib/format/duration';
 import type { VideoData } from '@/lib/types';
 
 import { useSidebar } from './SidebarContext';
+import VideoLibraryMenuItems from './VideoLibraryMenuItems';
 import { useTriage } from './useTriage';
 
 /**
@@ -87,6 +89,9 @@ interface Props {
   href: string;
   inSelectionMode: boolean;
   onOpenNotes: (videoId: string, videoTitle: string) => void;
+  /** Show an inline "Remove from library" icon in ordinary mode.
+   *  Only enabled on the library list views. */
+  showRemoveFromLibrary?: boolean;
   /**
    * Client-side `Date.now()` snapshot captured once after mount by the
    * parent list. `null` during SSR and the first client render so we
@@ -159,6 +164,7 @@ export default function VideoRow({
   inSelectionMode,
   onOpenNotes,
   now,
+  showRemoveFromLibrary,
 }: Props) {
   const triage = useTriage();
   const { isMobile } = useSidebar();
@@ -383,6 +389,8 @@ export default function VideoRow({
                     <Archive className="mr-2 h-4 w-4 text-gray-400" />
                     Archive
                   </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <VideoLibraryMenuItems video={video} showRemove={showRemoveFromLibrary} />
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -456,6 +464,22 @@ export default function VideoRow({
               >
                 <Archive className="h-4 w-4" />
               </button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={stop}
+                    title="More actions"
+                    aria-label="More actions"
+                    className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <VideoLibraryMenuItems video={video} showRemove={showRemoveFromLibrary} />
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           ))}
       </div>

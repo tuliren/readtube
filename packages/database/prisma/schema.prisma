@@ -56,6 +56,8 @@ model User {
   stars              VideoStar[]
   saves              VideoSave[]
   archives           VideoArchive[]
+  standalone_videos  StandaloneVideo[]
+  playlists          Playlist[]
   notes              Note[]
   highlights         Highlight[]
   rules              Rule[]
@@ -151,16 +153,18 @@ model Video {
   // (generated) and for raw-SQL reads.
   search_tsv             Unsupported("tsvector")?
 
-  channel      Channel                @relation(fields: [channel_id], references: [id], onDelete: Cascade)
-  transcripts  Transcript[]
-  consumptions UserVideoConsumption[]
-  tags         VideoTag[]
-  stars        VideoStar[]
-  saves        VideoSave[]
-  archives     VideoArchive[]
-  notes        Note[]
-  highlights   Highlight[]
-  embedding    VideoEmbedding?
+  channel        Channel                @relation(fields: [channel_id], references: [id], onDelete: Cascade)
+  transcripts    Transcript[]
+  consumptions   UserVideoConsumption[]
+  tags           VideoTag[]
+  stars          VideoStar[]
+  saves          VideoSave[]
+  archives       VideoArchive[]
+  standalone     StandaloneVideo[]
+  playlist_items PlaylistVideo[]
+  notes          Note[]
+  highlights     Highlight[]
+  embedding      VideoEmbedding?
 
   @@unique([channel_id, source_id], name: "video_unique_channel_source")
   @@unique([source_type, source_id], name: "video_unique_source")
@@ -328,6 +332,70 @@ model VideoArchive {
 
   @@unique([user_id, video_id], name: "video_archive_unique_user_video")
   @@index([video_id], name: "video_archive_index_on_video_id")
+}
+
+// Tracks videos the user individually added to their personal library
+// (via the "+ Add video" flow). The Video row still lives under a
+// Channel — we auto-upsert a "shadow" Channel when the video's actual
+// channel isn't in the user's subscriptions.
+model StandaloneVideo {
+  id         String   @id @default(cuid())
+  user_id    String
+  video_id   String
+  created_at DateTime @default(now())
+
+  user  User  @relation(fields: [user_id], references: [source_id], onDelete: Cascade)
+  video Video @relation(fields: [video_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, video_id], name: "standalone_video_unique_user_video")
+  @@index([video_id], name: "standalone_video_index_on_video_id")
+}
+
+// User-owned playlists: a named grouping of videos that may span multiple
+// channels. Sort order is manual, mirrors Folder.
+model Playlist {
+  id          String            @id @default(cuid())
+  user_id     String
+  source_type VideoPlatformType @default(YOUTUBE)
+  // Platform playlist ID (e.g. PLxxxxxxx for YouTube). Used to link
+  // back to the original playlist on the platform.
+  source_id   String
+  // Original playlist title from the source (e.g. YouTube). Kept
+  // as-is so the user can always see the original even after renaming.
+  name        String
+  // Optional user-supplied override. When set, the UI shows this
+  // as the primary label with `name` rendered in parentheses.
+  custom_name String?
+  sort_order  Int               @default(0)
+  // Per-playlist read watermark, mirroring UserSubscription.read_at.
+  // Videos in this playlist whose published_at <= read_at are
+  // considered read. null means no watermark — read state comes
+  // purely from UserVideoConsumption rows.
+  read_at     DateTime?
+  created_at  DateTime          @default(now())
+  updated_at  DateTime          @updatedAt
+
+  user  User            @relation(fields: [user_id], references: [source_id], onDelete: Cascade)
+  items PlaylistVideo[]
+
+  @@unique([user_id, name], name: "playlist_unique_user_name")
+  @@unique([user_id, source_type, source_id], name: "playlist_unique_user_source")
+}
+
+// Junction: many-to-many between Playlist and Video. A video may live in
+// multiple playlists.
+model PlaylistVideo {
+  id          String   @id @default(cuid())
+  playlist_id String
+  video_id    String
+  sort_order  Int      @default(0)
+  created_at  DateTime @default(now())
+
+  playlist Playlist @relation(fields: [playlist_id], references: [id], onDelete: Cascade)
+  video    Video    @relation(fields: [video_id], references: [id], onDelete: Cascade)
+
+  @@unique([playlist_id, video_id], name: "playlist_video_unique_playlist_video")
+  @@index([video_id], name: "playlist_video_index_on_video_id")
 }
 
 // Per-video notes. timestamp_ms is optional: null = general note, set = pinned

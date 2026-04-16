@@ -10,12 +10,14 @@ function rssVideo(overrides: Partial<RssVideo> & Pick<RssVideo, 'videoId'>): Rss
     publishedAt: new Date('2026-04-01T00:00:00Z'),
     link: `https://www.youtube.com/watch?v=${videoId}`,
     thumbnailUrl: null,
+    channelId: null,
+    channelName: null,
     ...overrides,
   };
 }
 
 function rssFeed(videos: RssVideo[]): RssChannel {
-  return { channelId: 'UC_abc', name: 'Test Channel', videos };
+  return { channelId: 'UC_abc', name: 'Test Channel', authorName: 'Test Channel', videos };
 }
 
 function scrapedChannel(overrides: Partial<ScrapedChannel> = {}): ScrapedChannel {

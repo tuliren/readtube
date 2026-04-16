@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { FormEvent, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -13,6 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import type { ChannelData } from '@/lib/types';
+import { channelHref } from '@/lib/urls/channelHref';
 
 interface Props {
   isOpen: boolean;
@@ -32,6 +34,7 @@ export default function AddChannelModal({ isOpen, onClose, onChannelAdded }: Pro
   const [url, setUrl] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const router = useRouter();
 
   function reset() {
     setUrl('');
@@ -57,6 +60,7 @@ export default function AddChannelModal({ isOpen, onClose, onChannelAdded }: Pro
         onChannelAdded(channel);
         reset();
         onClose();
+        router.push(channelHref(channel));
       } else {
         const data = (await res.json()) as { error?: string };
         setError(data.error ?? 'Something went wrong. Please try again.');
