@@ -8,7 +8,10 @@ import { AddPlaylistError, addPlaylistForUser } from '@/lib/workflows/add-playli
 
 export interface PlaylistData {
   id: string;
+  /** Original source-provided name (never changed after creation). */
   name: string;
+  /** User-supplied override; null until the user renames. */
+  customName: string | null;
   sortOrder: number;
   videoCount: number;
   unreadCount: number;
@@ -28,6 +31,7 @@ export async function GET() {
     select: {
       id: true,
       name: true,
+      custom_name: true,
       sort_order: true,
       read_at: true,
       _count: { select: { items: true } },
@@ -58,6 +62,7 @@ export async function GET() {
       return {
         id: row.id,
         name: row.name,
+        customName: row.custom_name,
         sortOrder: row.sort_order,
         videoCount: row._count.items,
         unreadCount,

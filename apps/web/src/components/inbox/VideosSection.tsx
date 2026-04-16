@@ -6,6 +6,7 @@ import {
   List,
   ListMusic,
   MoreHorizontal,
+  Pencil,
   Plus,
   Trash2,
   Video,
@@ -27,16 +28,30 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import AddVideoModal from './AddVideoModal';
 import DeletePlaylistDialog from './DeletePlaylistDialog';
 import NewPlaylistDialog from './NewPlaylistDialog';
+import RenamePlaylistDialog from './RenamePlaylistDialog';
 import { useSidebar } from './SidebarContext';
 import { SidebarBadge, SidebarRowContent, sidebarRowClass } from './SidebarRow';
 
 interface PlaylistRow {
   id: string;
   name: string;
+  customName: string | null;
   sortOrder: number;
   videoCount: number;
   unreadCount: number;
   thumbnailUrl: string | null;
+}
+
+/**
+ * User-facing display label for a playlist. When the user has set a
+ * custom name, show it as the primary label and append the original
+ * in parentheses.
+ */
+function playlistDisplayName(p: { name: string; customName: string | null }): string {
+  if (p.customName != null && p.customName.length > 0) {
+    return `${p.customName} (${p.name})`;
+  }
+  return p.name;
 }
 
 const fetcher = (url: string) =>
@@ -67,6 +82,11 @@ export default function VideosSection() {
   const [addVideoOpen, setAddVideoOpen] = useState(false);
   const [addPlaylistOpen, setAddPlaylistOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [renameTarget, setRenameTarget] = useState<{
+    id: string;
+    name: string;
+    customName: string | null;
+  } | null>(null);
 
   const { data: playlists = [], mutate } = useSWR<PlaylistRow[]>('/api/playlists', fetcher);
   const { data: libCounts } = useSWR<{ allUnread: number; standaloneUnread: number }>(
@@ -148,7 +168,10 @@ export default function VideosSection() {
               playlist={p}
               active={activePlaylistId === p.id}
               sidebarCollapsed={collapsed}
-              onRequestDelete={() => setDeleteTarget({ id: p.id, name: p.name })}
+              onRequestRename={() =>
+                setRenameTarget({ id: p.id, name: p.name, customName: p.customName })
+              }
+              onRequestDelete={() => setDeleteTarget({ id: p.id, name: playlistDisplayName(p) })}
             />
           ))}
         </ul>
@@ -160,6 +183,7 @@ export default function VideosSection() {
         onOpenChange={setAddPlaylistOpen}
         onCreated={() => void mutate()}
       />
+      <RenamePlaylistDialog target={renameTarget} onClose={() => setRenameTarget(null)} />
       <DeletePlaylistDialog target={deleteTarget} onClose={() => setDeleteTarget(null)} />
     </div>
   );
@@ -169,12 +193,13 @@ interface PlaylistEntryProps {
   playlist: PlaylistRow;
   active: boolean;
   sidebarCollapsed: boolean;
+  onRequestRename: () => void;
   onRequestDelete: () => void;
 }
 
 /**
  * A playlist row with a hover-visible ⋯ dropdown for per-playlist
- * actions (currently just Delete). Modeled on DraggableChannelLink's
+ * actions (Rename, Delete). Modeled on DraggableChannelLink's
  * pattern so the sidebar looks consistent between channels and
  * playlists.
  */
@@ -182,9 +207,11 @@ function PlaylistEntry({
   playlist,
   active,
   sidebarCollapsed,
+  onRequestRename,
   onRequestDelete,
 }: PlaylistEntryProps) {
   const href = `/videos/playlists/${playlist.id}`;
+  const label = playlistDisplayName(playlist);
   if (sidebarCollapsed) {
     return (
       <li>
@@ -207,7 +234,7 @@ function PlaylistEntry({
               )}
             </Link>
           </TooltipTrigger>
-          <TooltipContent side="right">{playlist.name}</TooltipContent>
+          <TooltipContent side="right">{label}</TooltipContent>
         </Tooltip>
       </li>
     );
@@ -222,13 +249,13 @@ function PlaylistEntry({
               alt=""
               className="h-4 w-4 shrink-0 rounded-sm object-cover"
             />
-            <span className="truncate">{playlist.name}</span>
+            <span className="truncate">{label}</span>
             <SidebarBadge count={playlist.unreadCount} />
           </>
         ) : (
           <SidebarRowContent
             icon={ListMusic}
-            label={playlist.name}
+            label={label}
             trailing={<SidebarBadge count={playlist.unreadCount} />}
           />
         )}
@@ -245,6 +272,10 @@ function PlaylistEntry({
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuItem onSelect={onRequestRename}>
+            <Pencil className="mr-2 h-3.5 w-3.5 text-gray-500" />
+            Rename
+          </DropdownMenuItem>
           <DropdownMenuItem onSelect={onRequestDelete} className="text-red-600 focus:text-red-600">
             <Trash2 className="mr-2 h-3.5 w-3.5" />
             Delete playlist

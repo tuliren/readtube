@@ -33,6 +33,10 @@ interface Props {
    *  Defaults to `{ channelId }` or `{}` for the inbox. Library views
    *  pass `{ library: true }` or `{ playlistId }`. */
   markAllReadBody?: Record<string, unknown>;
+  /** Hide the bottom row (pagination + search). Library views don't
+   *  have server-side pagination or a free-text search endpoint, so
+   *  the controls don't do anything useful there. */
+  hideBottomRow?: boolean;
 }
 
 export default function InboxHeader({
@@ -44,6 +48,7 @@ export default function InboxHeader({
   totalVideos,
   trailing,
   markAllReadBody,
+  hideBottomRow,
 }: Props) {
   const { mutate } = useSWRConfig();
   const router = useRouter();
@@ -172,11 +177,14 @@ export default function InboxHeader({
       {/* Video count + pagination on the left, search on the right.
           The header itself sits above the scrolling video list and
           never scrolls away, so the pagination control is always
-          reachable while the user is reading rows. */}
-      <div className="flex items-center justify-between gap-2 px-4 py-2 sidebar:pt-0">
-        <Pagination total={totalVideos} />
-        <SearchInput />
-      </div>
+          reachable while the user is reading rows. Hidden on library
+          views which don't support pagination or free-text search. */}
+      {!hideBottomRow && (
+        <div className="flex items-center justify-between gap-2 px-4 py-2 sidebar:pt-0">
+          <Pagination total={totalVideos} />
+          <SearchInput />
+        </div>
+      )}
     </div>
   );
 }

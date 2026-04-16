@@ -16,7 +16,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   const userId = authResult;
   const { id } = await params;
 
-  let body: { name?: string; sortOrder?: number };
+  let body: { customName?: string | null; sortOrder?: number };
   try {
     body = await request.json();
   } catch {
@@ -31,13 +31,23 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  const updates: { name?: string; sort_order?: number } = {};
-  if (body.name != null) {
-    const trimmed = body.name.trim();
-    if (trimmed.length === 0 || trimmed.length > 80) {
-      return NextResponse.json({ error: 'Invalid playlist name' }, { status: 400 });
+  // Only `customName` and `sortOrder` are editable. `name` is the
+  // immutable source-provided title; callers that want to change what
+  // the UI displays set `customName`. Passing null clears the override.
+  const updates: { custom_name?: string | null; sort_order?: number } = {};
+  if ('customName' in body) {
+    if (body.customName === null) {
+      updates.custom_name = null;
+    } else if (typeof body.customName === 'string') {
+      const trimmed = body.customName.trim();
+      if (trimmed.length === 0) {
+        updates.custom_name = null;
+      } else if (trimmed.length > 80) {
+        return NextResponse.json({ error: 'Custom name too long' }, { status: 400 });
+      } else {
+        updates.custom_name = trimmed;
+      }
     }
-    updates.name = trimmed;
   }
   if (body.sortOrder != null) {
     if (!Number.isInteger(body.sortOrder)) {
@@ -53,19 +63,17 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     const row = await prisma.playlist.update({
       where: { id },
       data: updates,
-      select: { id: true, name: true, sort_order: true },
+      select: { id: true, name: true, custom_name: true, sort_order: true },
     });
-    return NextResponse.json({ id: row.id, name: row.name, sortOrder: row.sort_order });
+    return NextResponse.json({
+      id: row.id,
+      name: row.name,
+      customName: row.custom_name,
+      sortOrder: row.sort_order,
+    });
   } catch (err) {
-    if (
-      err instanceof Prisma.PrismaClientKnownRequestError &&
-      err.code === 'P2002' &&
-      updates.name != null
-    ) {
-      return NextResponse.json(
-        { error: `A playlist named "${updates.name}" already exists.` },
-        { status: 409 }
-      );
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      return NextResponse.json({ error: 'A conflicting value already exists.' }, { status: 409 });
     }
     throw err;
   }

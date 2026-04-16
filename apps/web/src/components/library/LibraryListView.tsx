@@ -59,6 +59,7 @@ export default function LibraryListView({
           channelLogoUrl={null}
           unreadCount={unreadCount}
           totalVideos={videos.length}
+          hideBottomRow
           markAllReadBody={
             playlistId != null
               ? { playlistId }

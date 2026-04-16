@@ -18,9 +18,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
   const playlist = await prisma.playlist.findFirst({
     where: { id, user_id: userId },
-    select: { name: true },
+    select: { name: true, custom_name: true },
   });
-  return { title: playlist?.name ?? 'Playlist' };
+  if (playlist == null) {
+    return { title: 'Playlist' };
+  }
+  const display =
+    playlist.custom_name != null && playlist.custom_name.length > 0
+      ? `${playlist.custom_name} (${playlist.name})`
+      : playlist.name;
+  return { title: display };
 }
 
 /**
@@ -36,7 +43,7 @@ export default async function PlaylistPage({ params }: Props) {
 
   const playlist = await prisma.playlist.findFirst({
     where: { id, user_id: userId },
-    select: { id: true, name: true, source_id: true },
+    select: { id: true, name: true, custom_name: true, source_id: true },
   });
   if (playlist == null) {
     notFound();
@@ -44,9 +51,12 @@ export default async function PlaylistPage({ params }: Props) {
 
   const videos = await loadLibraryVideos(prisma, userId, { kind: 'playlist', playlistId: id });
 
+  const hasCustom = playlist.custom_name != null && playlist.custom_name.length > 0;
+  const title = hasCustom ? `${playlist.custom_name} (${playlist.name})` : playlist.name;
+
   return (
     <LibraryListView
-      title={playlist.name}
+      title={title}
       videos={videos}
       youtubeUrl={`https://www.youtube.com/playlist?list=${playlist.source_id}`}
       playlistId={playlist.id}

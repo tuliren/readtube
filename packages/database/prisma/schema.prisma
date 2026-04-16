@@ -360,7 +360,12 @@ model Playlist {
   // Platform playlist ID (e.g. PLxxxxxxx for YouTube). Used to link
   // back to the original playlist on the platform.
   source_id   String
+  // Original playlist title from the source (e.g. YouTube). Kept
+  // as-is so the user can always see the original even after renaming.
   name        String
+  // Optional user-supplied override. When set, the UI shows this
+  // as the primary label with `name` rendered in parentheses.
+  custom_name String?
   sort_order  Int               @default(0)
   // Per-playlist read watermark, mirroring UserSubscription.read_at.
   // Videos in this playlist whose published_at <= read_at are
@@ -374,6 +379,7 @@ model Playlist {
   items PlaylistVideo[]
 
   @@unique([user_id, name], name: "playlist_unique_user_name")
+  @@unique([user_id, source_type, source_id], name: "playlist_unique_user_source")
 }
 
 // Junction: many-to-many between Playlist and Video. A video may live in

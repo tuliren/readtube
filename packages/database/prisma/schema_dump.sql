@@ -213,6 +213,7 @@ CREATE TABLE "Playlist" (
   "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updated_at" TIMESTAMP(3) NOT NULL,
   "read_at" TIMESTAMP(3),
+  "custom_name" TEXT,
   CONSTRAINT "Playlist_pkey" PRIMARY KEY ("id")
 );
 
@@ -391,6 +392,9 @@ CREATE UNIQUE INDEX "StandaloneVideo_user_id_video_id_key" ON "StandaloneVideo" 
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Playlist_user_id_name_key" ON "Playlist" ("user_id", "name");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Playlist_user_id_source_type_source_id_key" ON "Playlist" ("user_id", "source_type", "source_id");
 
 -- CreateIndex
 CREATE INDEX "playlist_video_index_on_video_id" ON "PlaylistVideo" ("video_id");
