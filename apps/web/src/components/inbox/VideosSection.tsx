@@ -18,13 +18,14 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import AddVideoModal from './AddVideoModal';
 import NewPlaylistDialog from './NewPlaylistDialog';
 import { useSidebar } from './SidebarContext';
-import { SidebarRowContent, sidebarRowClass } from './SidebarRow';
+import { SidebarBadge, SidebarRowContent, sidebarRowClass } from './SidebarRow';
 
 interface PlaylistRow {
   id: string;
   name: string;
   sortOrder: number;
   videoCount: number;
+  unreadCount: number;
   thumbnailUrl: string | null;
 }
 
@@ -133,6 +134,7 @@ export default function VideosSection() {
               active={activePlaylistId === p.id}
               sidebarCollapsed={collapsed}
               thumbnailUrl={p.thumbnailUrl}
+              unreadCount={p.unreadCount}
             />
           ))}
         </ul>
@@ -155,6 +157,7 @@ interface EntryProps {
   active: boolean;
   sidebarCollapsed: boolean;
   thumbnailUrl?: string | null;
+  unreadCount?: number;
 }
 
 function VideoEntry({
@@ -164,6 +167,7 @@ function VideoEntry({
   active,
   sidebarCollapsed,
   thumbnailUrl,
+  unreadCount,
 }: EntryProps) {
   if (sidebarCollapsed) {
     return (
@@ -195,9 +199,14 @@ function VideoEntry({
           <>
             <img src={thumbnailUrl} alt="" className="h-4 w-4 shrink-0 rounded-sm object-cover" />
             <span className="truncate">{label}</span>
+            <SidebarBadge count={unreadCount ?? 0} />
           </>
         ) : (
-          <SidebarRowContent icon={Icon} label={label} />
+          <SidebarRowContent
+            icon={Icon}
+            label={label}
+            trailing={<SidebarBadge count={unreadCount ?? 0} />}
+          />
         )}
       </Link>
     </li>

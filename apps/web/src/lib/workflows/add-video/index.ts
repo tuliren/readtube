@@ -140,6 +140,16 @@ export async function addVideoForUser(args: {
   });
   const createdStandalone = existingStandalone == null;
 
+  // Mark the newly added video as read so it doesn't appear as unread
+  // in the library. Idempotent — upsert is a no-op if already read.
+  await prisma.userVideoConsumption.upsert({
+    where: {
+      user_video_consumption_unique_user_video: { user_id: args.userId, video_id: video.id },
+    },
+    create: { user_id: args.userId, video_id: video.id },
+    update: {},
+  });
+
   return {
     videoId: video.id,
     sourceId: snapshot.videoId,

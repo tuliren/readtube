@@ -206,6 +206,15 @@ export async function addPlaylistForUser(args: {
       update: {},
     });
 
+    // Mark newly added video as read so it doesn't appear unread.
+    await prisma.userVideoConsumption.upsert({
+      where: {
+        user_video_consumption_unique_user_video: { user_id: args.userId, video_id: video.id },
+      },
+      create: { user_id: args.userId, video_id: video.id },
+      update: {},
+    });
+
     videosProcessed++;
   }
 

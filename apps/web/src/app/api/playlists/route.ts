@@ -11,23 +11,8 @@ export interface PlaylistData {
   name: string;
   sortOrder: number;
   videoCount: number;
+  unreadCount: number;
   thumbnailUrl: string | null;
-}
-
-function toPlaylistData(row: {
-  id: string;
-  name: string;
-  sort_order: number;
-  _count: { items: number };
-  items: Array<{ video: { thumbnail_url: string | null } }>;
-}): PlaylistData {
-  return {
-    id: row.id,
-    name: row.name,
-    sortOrder: row.sort_order,
-    videoCount: row._count.items,
-    thumbnailUrl: row.items[0]?.video.thumbnail_url ?? null,
-  };
 }
 
 export async function GET() {
@@ -47,13 +32,35 @@ export async function GET() {
       _count: { select: { items: true } },
       items: {
         orderBy: { sort_order: 'asc' },
-        take: 1,
-        select: { video: { select: { thumbnail_url: true } } },
+        select: { video_id: true, video: { select: { thumbnail_url: true } } },
       },
     },
   });
 
-  return NextResponse.json(rows.map(toPlaylistData));
+  // Batch-fetch consumed video IDs across all playlists in one query.
+  const allVideoIds = rows.flatMap((r) => r.items.map((i) => i.video_id));
+  const consumedRows =
+    allVideoIds.length > 0
+      ? await prisma.userVideoConsumption.findMany({
+          where: { user_id: userId, video_id: { in: allVideoIds } },
+          select: { video_id: true },
+        })
+      : [];
+  const consumedIds = new Set(consumedRows.map((r) => r.video_id));
+
+  const playlists: PlaylistData[] = rows.map((row) => {
+    const unreadCount = row.items.filter((i) => !consumedIds.has(i.video_id)).length;
+    return {
+      id: row.id,
+      name: row.name,
+      sortOrder: row.sort_order,
+      videoCount: row._count.items,
+      unreadCount,
+      thumbnailUrl: row.items[0]?.video.thumbnail_url ?? null,
+    };
+  });
+
+  return NextResponse.json(playlists);
 }
 
 /**
