@@ -177,6 +177,9 @@ export async function addPlaylistForUser(args: {
       },
       create: {
         channel_id: channel.id,
+        // source_type must match the `where` clause so Prisma uses a
+        // native Postgres upsert (CLAUDE.md).
+        source_type: VideoPlatformType.YOUTUBE,
         source_id: v.videoId,
         title: v.title,
         description: v.description,

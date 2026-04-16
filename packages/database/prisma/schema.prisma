@@ -334,13 +334,16 @@ model VideoArchive {
   @@index([video_id], name: "video_archive_index_on_video_id")
 }
 
-// Tracks videos the user has added to their personal library outside of
-// a channel subscription. The Video row still lives under a Channel (we
-// auto-upsert a "shadow" Channel when a video is added whose channel the
-// user hasn't subscribed to), but StandaloneVideo is what makes it appear
-// in the Videos sidebar section. Adding a video to any Playlist also
-// creates a StandaloneVideo row, so playlist items always show up under
-// the "All" entry.
+// Tracks videos the user individually added to their personal library
+// (via the "+ Add video" flow). The Video row still lives under a
+// Channel — we auto-upsert a "shadow" Channel when the video's actual
+// channel isn't in the user's subscriptions.
+//
+// Library membership is the UNION of StandaloneVideo (this table) and
+// PlaylistVideo rows whose playlist belongs to the user. Videos added
+// via a playlist do NOT get a StandaloneVideo row, so deleting the
+// playlist removes them from the library unless they were also added
+// individually or exist in another of the user's playlists.
 model StandaloneVideo {
   id         String   @id @default(cuid())
   user_id    String

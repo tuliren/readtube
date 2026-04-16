@@ -114,6 +114,9 @@ export async function addVideoForUser(args: {
     },
     create: {
       channel_id: channel.id,
+      // source_type must match the `where` clause so Prisma uses a
+      // native Postgres upsert (CLAUDE.md).
+      source_type: VideoPlatformType.YOUTUBE,
       source_id: snapshot.videoId,
       title: snapshot.title,
       description: snapshot.description,

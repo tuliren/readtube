@@ -87,6 +87,9 @@ export async function refreshChannel(channel: StaleChannel): Promise<RefreshResu
       },
       create: {
         channel_id: channel.id,
+        // source_type must match the `where` clause so Prisma uses a
+        // native Postgres upsert (CLAUDE.md).
+        source_type: 'YOUTUBE',
         source_id: video.videoId,
         title: video.title,
         description: video.description,
