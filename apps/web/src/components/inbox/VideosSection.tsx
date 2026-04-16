@@ -1,6 +1,15 @@
 'use client';
 
-import { ChevronDown, ChevronRight, List, ListMusic, Plus, Video } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronRight,
+  List,
+  ListMusic,
+  MoreHorizontal,
+  Plus,
+  Trash2,
+  Video,
+} from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
@@ -16,6 +25,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 import AddVideoModal from './AddVideoModal';
+import DeletePlaylistDialog from './DeletePlaylistDialog';
 import NewPlaylistDialog from './NewPlaylistDialog';
 import { useSidebar } from './SidebarContext';
 import { SidebarBadge, SidebarRowContent, sidebarRowClass } from './SidebarRow';
@@ -56,6 +66,7 @@ export default function VideosSection() {
   const { videosCollapsed, toggleVideos } = useCollapseState();
   const [addVideoOpen, setAddVideoOpen] = useState(false);
   const [addPlaylistOpen, setAddPlaylistOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
   const { data: playlists = [], mutate } = useSWR<PlaylistRow[]>('/api/playlists', fetcher);
   const { data: libCounts } = useSWR<{ allUnread: number; standaloneUnread: number }>(
@@ -132,15 +143,12 @@ export default function VideosSection() {
             unreadCount={libCounts?.standaloneUnread}
           />
           {playlists.map((p) => (
-            <VideoEntry
+            <PlaylistEntry
               key={p.id}
-              href={`/videos/playlists/${p.id}`}
-              label={p.name}
-              icon={ListMusic}
+              playlist={p}
               active={activePlaylistId === p.id}
               sidebarCollapsed={collapsed}
-              thumbnailUrl={p.thumbnailUrl}
-              unreadCount={p.unreadCount}
+              onRequestDelete={() => setDeleteTarget({ id: p.id, name: p.name })}
             />
           ))}
         </ul>
@@ -152,7 +160,98 @@ export default function VideosSection() {
         onOpenChange={setAddPlaylistOpen}
         onCreated={() => void mutate()}
       />
+      <DeletePlaylistDialog target={deleteTarget} onClose={() => setDeleteTarget(null)} />
     </div>
+  );
+}
+
+interface PlaylistEntryProps {
+  playlist: PlaylistRow;
+  active: boolean;
+  sidebarCollapsed: boolean;
+  onRequestDelete: () => void;
+}
+
+/**
+ * A playlist row with a hover-visible ⋯ dropdown for per-playlist
+ * actions (currently just Delete). Modeled on DraggableChannelLink's
+ * pattern so the sidebar looks consistent between channels and
+ * playlists.
+ */
+function PlaylistEntry({
+  playlist,
+  active,
+  sidebarCollapsed,
+  onRequestDelete,
+}: PlaylistEntryProps) {
+  const href = `/videos/playlists/${playlist.id}`;
+  if (sidebarCollapsed) {
+    return (
+      <li>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Link
+              href={href}
+              className={`flex items-center justify-center rounded-md p-2 ${
+                active ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              {playlist.thumbnailUrl != null ? (
+                <img
+                  src={playlist.thumbnailUrl}
+                  alt=""
+                  className="h-4 w-4 rounded-sm object-cover"
+                />
+              ) : (
+                <ListMusic className="h-4 w-4" />
+              )}
+            </Link>
+          </TooltipTrigger>
+          <TooltipContent side="right">{playlist.name}</TooltipContent>
+        </Tooltip>
+      </li>
+    );
+  }
+  return (
+    <li className="group flex items-center">
+      <Link href={href} className={`${sidebarRowClass(active)} min-w-0 flex-1`}>
+        {playlist.thumbnailUrl != null ? (
+          <>
+            <img
+              src={playlist.thumbnailUrl}
+              alt=""
+              className="h-4 w-4 shrink-0 rounded-sm object-cover"
+            />
+            <span className="truncate">{playlist.name}</span>
+            <SidebarBadge count={playlist.unreadCount} />
+          </>
+        ) : (
+          <SidebarRowContent
+            icon={ListMusic}
+            label={playlist.name}
+            trailing={<SidebarBadge count={playlist.unreadCount} />}
+          />
+        )}
+      </Link>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className="ml-0.5 rounded p-1 text-gray-400 opacity-0 hover:bg-gray-100 hover:text-gray-600 group-hover:opacity-100 data-[state=open]:opacity-100"
+            aria-label="Playlist actions"
+            title="Playlist actions"
+          >
+            <MoreHorizontal className="h-3.5 w-3.5" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuItem onSelect={onRequestDelete} className="text-red-600 focus:text-red-600">
+            <Trash2 className="mr-2 h-3.5 w-3.5" />
+            Delete playlist
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </li>
   );
 }
 
