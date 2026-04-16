@@ -84,6 +84,7 @@ function DashboardShellInner({ initialChannels, children }: Props) {
   const selectedChannelId = useSelectedChannelId(channels);
   const selectedChannel =
     selectedChannelId != null ? (channels.find((c) => c.id === selectedChannelId) ?? null) : null;
+  const libraryTitle = useLibraryTitle();
 
   // Auto-uncollapse: when the current URL points at a descendant of a
   // collapsed entry, clear that collapse flag so the active item
@@ -180,6 +181,7 @@ function DashboardShellInner({ initialChannels, children }: Props) {
             <MobileTopBar
               onOpenSidebar={() => setMobileOpen(true)}
               selectedChannel={selectedChannel}
+              libraryTitle={libraryTitle}
               totalUnread={totalUnread}
             />
           )}
@@ -200,10 +202,14 @@ function DashboardShellInner({ initialChannels, children }: Props) {
 function MobileTopBar({
   onOpenSidebar,
   selectedChannel,
+  libraryTitle,
   totalUnread,
 }: {
   onOpenSidebar: () => void;
   selectedChannel: ChannelData | null;
+  /** Title for library routes (All / Standalone / a specific playlist)
+   *  when no channel is selected. */
+  libraryTitle: string | null;
   totalUnread: number;
 }) {
   const { mutate } = useSWRConfig();
@@ -271,6 +277,11 @@ function MobileTopBar({
       >
         <Menu className="h-5 w-5" />
       </button>
+      {selectedChannel == null && libraryTitle != null && (
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <span className="truncate text-base font-semibold text-gray-900">{libraryTitle}</span>
+        </div>
+      )}
       {selectedChannel != null && (
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {selectedChannel.logoUrl != null && (
@@ -420,4 +431,38 @@ function useAutoUncollapse(channels: ChannelData[], selectedChannelId: string | 
     videosSelected,
     pathname,
   ]);
+}
+
+interface PlaylistSummary {
+  id: string;
+  name: string;
+}
+
+/**
+ * Derives a display title for the mobile top bar when the user is on
+ * a library route (/videos, /videos/standalone, /videos/playlists/*).
+ * Returns null for the video reader and any non-library route so the
+ * channel/inbox title logic stays untouched.
+ */
+function useLibraryTitle(): string | null {
+  const pathname = usePathname();
+  const { data: playlists = [] } = useSWR<PlaylistSummary[]>('/api/playlists', fetcher);
+
+  return useMemo(() => {
+    if (pathname == null) {
+      return null;
+    }
+    if (pathname === '/videos') {
+      return 'All videos';
+    }
+    if (pathname === '/videos/standalone') {
+      return 'Standalone';
+    }
+    if (pathname.startsWith('/videos/playlists/')) {
+      const id = pathname.slice('/videos/playlists/'.length).split('/')[0];
+      const pl = playlists.find((p) => p.id === id);
+      return pl?.name ?? 'Playlist';
+    }
+    return null;
+  }, [pathname, playlists]);
 }
