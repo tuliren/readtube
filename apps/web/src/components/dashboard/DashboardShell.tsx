@@ -439,14 +439,38 @@ interface PlaylistSummary {
 }
 
 /**
- * Derives a display title for the mobile top bar when the user is on
- * a library route (/videos, /videos/standalone, /videos/playlists/*).
- * Returns null for the video reader and any non-library route so the
+ * Derives a display title for the mobile top bar on library and
+ * video-reader routes. Returns null for non-library routes so the
  * channel/inbox title logic stays untouched.
+ *
+ * - /videos                         → "All videos"
+ * - /videos/standalone              → "Standalone"
+ * - /videos/playlists/[id]          → playlist name (from SWR cache)
+ * - /videos/[sourceId] (the reader) → video title (via /api/videos/meta)
  */
 function useLibraryTitle(): string | null {
   const pathname = usePathname();
   const { data: playlists = [] } = useSWR<PlaylistSummary[]>('/api/playlists', fetcher);
+
+  // Video reader paths are /videos/<sourceId> where sourceId is the
+  // 11-char YouTube id. Distinguish from the library routes which
+  // have known literal segments (/videos, /videos/standalone,
+  // /videos/playlists/*).
+  const videoSourceId = useMemo(() => {
+    if (pathname == null || !pathname.startsWith('/videos/')) {
+      return null;
+    }
+    const rest = pathname.slice('/videos/'.length).split('/')[0];
+    if (rest === 'standalone' || rest === 'playlists' || rest.length === 0) {
+      return null;
+    }
+    return rest;
+  }, [pathname]);
+
+  const { data: videoMeta } = useSWR<{ title: string }>(
+    videoSourceId != null ? `/api/videos/meta?sourceId=${encodeURIComponent(videoSourceId)}` : null,
+    fetcher
+  );
 
   return useMemo(() => {
     if (pathname == null) {
@@ -463,6 +487,9 @@ function useLibraryTitle(): string | null {
       const pl = playlists.find((p) => p.id === id);
       return pl?.name ?? 'Playlist';
     }
+    if (videoSourceId != null) {
+      return videoMeta?.title ?? null;
+    }
     return null;
-  }, [pathname, playlists]);
+  }, [pathname, playlists, videoSourceId, videoMeta]);
 }
