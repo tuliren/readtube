@@ -58,6 +58,10 @@ export default function VideosSection() {
   const [addPlaylistOpen, setAddPlaylistOpen] = useState(false);
 
   const { data: playlists = [], mutate } = useSWR<PlaylistRow[]>('/api/playlists', fetcher);
+  const { data: libCounts } = useSWR<{ allUnread: number; standaloneUnread: number }>(
+    '/api/videos/library-counts',
+    fetcher
+  );
 
   const sectionCollapsed = !collapsed && videosCollapsed;
 
@@ -117,6 +121,7 @@ export default function VideosSection() {
             icon={Video}
             active={isAllActive}
             sidebarCollapsed={collapsed}
+            unreadCount={libCounts?.allUnread}
           />
           <VideoEntry
             href="/videos/standalone"
@@ -124,6 +129,7 @@ export default function VideosSection() {
             icon={List}
             active={isStandaloneActive}
             sidebarCollapsed={collapsed}
+            unreadCount={libCounts?.standaloneUnread}
           />
           {playlists.map((p) => (
             <VideoEntry
