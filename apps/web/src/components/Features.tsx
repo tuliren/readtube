@@ -6,6 +6,7 @@ import ArticlePreview from '@/components/features/previews/ArticlePreview';
 import NotesPreview from '@/components/features/previews/NotesPreview';
 import ReadPreview from '@/components/features/previews/ReadPreview';
 import SearchPreview from '@/components/features/previews/SearchPreview';
+import { MAIN_COLOR } from '@/constants';
 
 const FEATURES = [
   {
@@ -40,13 +41,18 @@ const FEATURES = [
 
 export default function Features() {
   return (
-    <section id="features" aria-label="Features" className="bg-white py-24 sm:py-32">
+    <section
+      id="features"
+      aria-label="Features"
+      className="py-24 sm:py-32"
+      style={{ backgroundColor: MAIN_COLOR }}
+    >
       <Container>
         <div className="mx-auto max-w-2xl text-center">
-          <h2 className="font-display text-4xl font-medium tracking-tight text-slate-700 sm:text-5xl">
+          <h2 className="font-display text-4xl font-medium tracking-tight text-white sm:text-5xl">
             Built for depth, not distraction
           </h2>
-          <p className="mt-6 text-lg leading-relaxed text-slate-500">
+          <p className="mt-6 text-lg leading-relaxed text-indigo-100">
             A quiet reading space for the videos worth your attention, and the thinking they
             deserve.
           </p>
