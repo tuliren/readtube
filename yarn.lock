@@ -5657,8 +5657,10 @@ __metadata:
     eslint-plugin-jest: "npm:^28.11.0"
     eslint-plugin-storybook: "npm:^10.1.2"
     fast-xml-parser: "npm:^5.5.10"
+    hast-util-sanitize: "npm:^5.0.2"
     jest: "npm:^29.7.0"
     jest-environment-jsdom: "npm:^29.7.0"
+    katex: "npm:^0.16"
     lucide-react: "npm:^1.8.0"
     minimatch: "npm:^10.1.1"
     next: "npm:^16.2.4"
@@ -5669,9 +5671,11 @@ __metadata:
     react-hotkeys-hook: "npm:^5.2.4"
     react-markdown: "npm:^9.0.1"
     rehype-external-links: "npm:^3.0.0"
+    rehype-katex: "npm:^7"
     rehype-raw: "npm:^7.0.0"
     rehype-sanitize: "npm:^6.0.0"
     remark-gfm: "npm:^4.0.0"
+    remark-math: "npm:^6"
     sonner: "npm:^2.0.7"
     storybook: "npm:^10.1.2"
     svix: "npm:^1.90.0"
@@ -15975,7 +15979,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"hast-util-sanitize@npm:^5.0.0":
+"hast-util-sanitize@npm:^5.0.0, hast-util-sanitize@npm:^5.0.2":
   version: 5.0.2
   resolution: "hast-util-sanitize@npm:5.0.2"
   dependencies:
@@ -18542,6 +18546,17 @@ __metadata:
     object.assign: "npm:^4.1.4"
     object.values: "npm:^1.1.6"
   checksum: 10c0/a32679e9cb55469cb6d8bbc863f7d631b2c98b7fc7bf172629261751a6e7bc8da6ae374ddb74d5fbd8b06cf0eb4572287b259813d92b36e384024ed35e4c13e1
+  languageName: node
+  linkType: hard
+
+"katex@npm:^0.16":
+  version: 0.16.45
+  resolution: "katex@npm:0.16.45"
+  dependencies:
+    commander: "npm:^8.3.0"
+  bin:
+    katex: cli.js
+  checksum: 10c0/f715eb9a73daff68ac14dcc8c2f47f02f5fc756a74077d22479e64e06872b2b44f0d81f1c91a98a9873722a08841388a869a0b9ddb96b224362eb8054ddf533a
   languageName: node
   linkType: hard
 
@@ -22900,7 +22915,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"rehype-katex@npm:^7.0.0":
+"rehype-katex@npm:^7, rehype-katex@npm:^7.0.0":
   version: 7.0.1
   resolution: "rehype-katex@npm:7.0.1"
   dependencies:
@@ -23016,7 +23031,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"remark-math@npm:^6.0.0":
+"remark-math@npm:^6, remark-math@npm:^6.0.0":
   version: 6.0.0
   resolution: "remark-math@npm:6.0.0"
   dependencies:
