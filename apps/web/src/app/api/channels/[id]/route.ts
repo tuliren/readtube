@@ -8,17 +8,21 @@ export async function DELETE(
 ) {
   const { userId } = await auth();
   if (userId == null) {
+    console.error('[channels/DELETE] Unauthorized');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const { id } = await params;
   const channelId = id;
 
+  console.info(`[channels/DELETE] Unsubscribing channel ${channelId} for user ${userId}`);
+
   // IDOR check: ensure user is subscribed to this channel
   const sub = await prisma.userSubscription.findFirst({
     where: { channel_id: channelId, user_id: userId },
   });
   if (sub == null) {
+    console.error(`[channels/DELETE] Channel ${channelId} not subscribed by user ${userId}`);
     return NextResponse.json({ error: 'Channel not found' }, { status: 404 });
   }
 

@@ -16,8 +16,11 @@ import { buildRssUrl, extractChannelId, extractHandle } from '@/lib/youtube/urls
 export async function GET() {
   const { userId } = await auth();
   if (userId == null) {
+    console.error('[channels/GET] Unauthorized');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  console.info(`[channels/GET] Listing subscribed channels for user ${userId}`);
 
   // Single SQL query: subscriptions + channel metadata + per-channel unread
   // counts (with watermark + consumption filter), all in one round-trip.
@@ -43,20 +46,25 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const { userId } = await auth();
   if (userId == null) {
+    console.error('[channels/POST] Unauthorized');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   let body: { url?: string };
   try {
     body = await request.json();
-  } catch {
+  } catch (err) {
+    console.error('[channels/POST] Invalid request body:', err);
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
   }
 
   const input = body.url?.trim() ?? '';
   if (isEmptyString(input)) {
+    console.error('[channels/POST] Missing URL in request body');
     return NextResponse.json({ error: 'Missing URL' }, { status: 400 });
   }
+
+  console.info(`[channels/POST] Adding channel: ${input} for user ${userId}`);
 
   let channelPageUrl: string | null = null;
   let preresolvedRssUrl: string | undefined;
@@ -73,6 +81,7 @@ export async function POST(request: NextRequest) {
   }
 
   if (channelPageUrl == null) {
+    console.error(`[channels/POST] Invalid channel URL: ${input}`);
     return NextResponse.json(
       {
         error:
@@ -86,7 +95,7 @@ export async function POST(request: NextRequest) {
   try {
     snapshot = await fetchChannelSnapshot({ channelPageUrl, rssUrl: preresolvedRssUrl });
   } catch (err) {
-    console.error('[channels/POST] fetchChannelSnapshot failed:', err);
+    console.error(`[channels/POST] fetchChannelSnapshot failed for ${channelPageUrl}:`, err);
     return NextResponse.json(
       { error: 'Channel not found or not accessible. Check the URL and try again.' },
       { status: 400 }
@@ -103,6 +112,7 @@ export async function POST(request: NextRequest) {
     where: { user_id: userId, channel: { source_id: sourceId } },
   });
   if (existingSub) {
+    console.error(`[channels/POST] User ${userId} already subscribed to channel ${sourceId}`);
     return NextResponse.json({ error: 'You already follow this channel.' }, { status: 409 });
   }
 

@@ -38,6 +38,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json([]);
   }
 
+  console.info(`[search/GET] Searching "${q}" for user ${userId}`);
+
   // plainto_tsquery sanitizes user input (no injection risk from q), but we
   // still parameterize to be strict. The scope to the user's channels is
   // enforced by the subquery on UserSubscription.

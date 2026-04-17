@@ -25,8 +25,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const styleParam = request.nextUrl.searchParams.get('style');
   const style = parseStyle(styleParam);
   if (!style) {
+    console.error(`[public/article/GET] Invalid style: ${styleParam}`);
     return NextResponse.json({ error: 'Invalid style' }, { status: 400 });
   }
+
+  console.info(`[public/article/GET] Fetching public article for video ${id} (style=${style})`);
 
   const video = await prisma.video.findFirst({
     where: { id },
@@ -44,6 +47,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     },
   });
   if (!video) {
+    console.error(`[public/article/GET] Video ${id} not found`);
     return NextResponse.json({ error: 'Video not found' }, { status: 404 });
   }
 
@@ -51,6 +55,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const hasAnyPublicArtifact =
     transcript != null && (transcript.summary != null || transcript.articles.length > 0);
   if (!hasAnyPublicArtifact) {
+    console.error(`[public/article/GET] Video ${id} has no public artifact`);
     return NextResponse.json({ error: 'Not public' }, { status: 404 });
   }
 
@@ -65,6 +70,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     select: { content: true, style: true, generated_at: true },
   });
   if (!article) {
+    console.error(`[public/article/GET] No cached article for video ${id} (style=${style})`);
     return NextResponse.json({ error: 'Not cached' }, { status: 404 });
   }
 

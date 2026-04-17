@@ -16,8 +16,11 @@ const BATCH_SIZE = 25;
 
 export async function POST(request: NextRequest) {
   if (!verifyCronRequest(request)) {
+    console.error('[cron/embed/POST] Unauthorized cron request');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  console.info(`[cron/embed/POST] Embedding up to ${BATCH_SIZE} videos`);
 
   // Candidates: videos with no embedding row, plus videos whose stored
   // prompt_version has drifted from the current one.
@@ -45,12 +48,17 @@ export async function POST(request: NextRequest) {
         embedded += 1;
       }
     } catch (err) {
+      console.error(`[cron/embed/POST] Embedding failed for video ${videoId}:`, err);
       errors.push({
         videoId,
         error: err instanceof Error ? err.message : String(err),
       });
     }
   }
+
+  console.info(
+    `[cron/embed/POST] Done: ${embedded} embedded, ${errors.length} errors, ${candidates.length} candidates`
+  );
 
   return NextResponse.json({
     candidates: candidates.length,
