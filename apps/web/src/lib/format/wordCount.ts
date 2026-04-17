@@ -35,3 +35,24 @@ export function countWords(text: string | null | undefined): number {
   }
   return trimmed.split(/\s+/).filter((token) => token.length > 0).length;
 }
+
+// A middle-of-the-road adult silent-reading rate. Faster than the
+// traditional 200 wpm (which assumes careful reading) and slower than
+// 250 wpm (which assumes heavy skimming) — appropriate for the mix of
+// summary, article, and transcript content this app renders.
+export const READING_WPM = 230;
+
+export function readingTimeMinutes(wordCount: number): number {
+  if (wordCount <= 0) {
+    return 0;
+  }
+  return Math.max(1, Math.ceil(wordCount / READING_WPM));
+}
+
+export function formatReadingTime(wordCount: number): string | null {
+  const minutes = readingTimeMinutes(wordCount);
+  if (minutes <= 0) {
+    return null;
+  }
+  return `${minutes} min`;
+}

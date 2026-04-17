@@ -6,6 +6,9 @@ import rehypeExternalLinks from 'rehype-external-links';
 import rehypeSanitize from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
 
+import { countWords } from '@/lib/format/wordCount';
+
+import ReadingTimeBadge from './ReadingTimeBadge';
 import type { TranscriptStatus } from './VideoReader';
 
 interface Props {
@@ -220,6 +223,9 @@ export default function ArticleReader({
   return (
     <div>
       <article className="prose prose-gray max-w-none font-sans text-[17px] leading-[1.8]">
+        <span className="not-prose float-right ml-4">
+          <ReadingTimeBadge wordCount={countWords(markdown)} />
+        </span>
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           rehypePlugins={[

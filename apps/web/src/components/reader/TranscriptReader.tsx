@@ -2,9 +2,11 @@
 
 import { useEffect, useRef, useState } from 'react';
 
+import { countWords } from '@/lib/format/wordCount';
 import type { TranscriptSegment } from '@/lib/subtitles/types';
 import { formatTimestamp, groupTranscriptSegments } from '@/lib/youtube/transcript';
 
+import ReadingTimeBadge from './ReadingTimeBadge';
 import type { TranscriptStatus } from './VideoReader';
 
 interface Props {
@@ -233,6 +235,8 @@ export default function TranscriptReader({
     return <UnavailableMessage sourceId={sourceId} />;
   }
 
+  const totalWordCount = countWords(paragraphs.map((p) => p.text).join(' '));
+
   return (
     <div className="space-y-5">
       {paragraphs.map((para, i) => {
@@ -251,6 +255,12 @@ export default function TranscriptReader({
               {formatTimestamp(para.startMs)}
             </a>
             <p className="font-sans text-[17px] leading-[1.8] text-gray-800">{para.text}</p>
+            {i === 0 && (
+              <ReadingTimeBadge
+                wordCount={totalWordCount}
+                className="mt-1 ml-auto shrink-0 self-start"
+              />
+            )}
           </div>
         );
       })}
