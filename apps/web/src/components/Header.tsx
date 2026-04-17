@@ -14,7 +14,8 @@ export default function Header() {
   const { isSignedIn } = useAuth();
 
   const navigation = [
-    { name: 'Home', href: '/' },
+    { name: 'Features', href: '#features' },
+    { name: 'Pricing', href: '#pricing' },
     ...(isSignedIn ? [{ name: 'Inbox', href: '/inbox' }] : []),
   ];
 
