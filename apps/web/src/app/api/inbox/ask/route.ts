@@ -2,6 +2,7 @@ import { prisma } from '@readtube/database';
 import { embed, streamText } from 'ai';
 import { NextRequest, NextResponse } from 'next/server';
 
+import { DEFAULT_AI_MODEL } from '@/constants';
 import { EMBEDDING_MODEL } from '@/lib/ai/embed';
 import { requireUserId } from '@/lib/auth';
 import { headerSafeJson } from '@/lib/http/headerSafeJson';
@@ -25,7 +26,6 @@ interface RetrievedChunk {
  * render a sidebar of source videos without parsing the stream body.
  */
 const K = 6;
-const GENERATION_MODEL = 'google/gemini-2.5-flash';
 
 export async function POST(request: NextRequest) {
   const authResult = await requireUserId();
@@ -148,7 +148,7 @@ Question: ${question}
 Answer with citations in the form [1], [2], etc. pointing to the numbered videos above. Keep it tight — no filler, no restating the question.`;
 
   const result = streamText({
-    model: GENERATION_MODEL,
+    model: DEFAULT_AI_MODEL,
     prompt,
   });
 

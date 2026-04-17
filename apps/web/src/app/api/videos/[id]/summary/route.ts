@@ -3,10 +3,10 @@ import { prisma } from '@readtube/database';
 import { streamText } from 'ai';
 import { NextRequest, NextResponse } from 'next/server';
 
+import { DEFAULT_AI_MODEL } from '@/constants';
 import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
 
 const SUMMARY_PROMPT_VERSION = 'v4';
-const MODEL = 'google/gemini-3.1-flash-lite-preview';
 
 const LANGUAGE_RULE = `Write in the same language as the transcript below. Do not translate — if the transcript is in Chinese, write in Chinese; if Spanish, write in Spanish; and so on.`;
 
@@ -199,7 +199,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // Kick off streams for the requested fields in parallel.
   const generations = fieldsToGenerate.map((field) => {
     const result = streamText({
-      model: MODEL,
+      model: DEFAULT_AI_MODEL,
       prompt: buildPrompt(field, video.title, video.channel.name, transcriptText),
     });
     return { field, result, iterator: result.textStream[Symbol.asyncIterator]() };
@@ -293,7 +293,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
               ? accumulated.full.trim()
               : (existing?.full ?? null),
             prompt_version: SUMMARY_PROMPT_VERSION,
-            model: MODEL,
+            model: DEFAULT_AI_MODEL,
             usage: mergedUsage,
           };
 

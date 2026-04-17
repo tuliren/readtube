@@ -3,10 +3,10 @@ import { ArticleStyle, prisma } from '@readtube/database';
 import { streamText } from 'ai';
 import { NextRequest, NextResponse } from 'next/server';
 
+import { DEFAULT_AI_MODEL } from '@/constants';
 import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
 
 const PROMPT_VERSION = 'v2';
-const MODEL = 'google/gemini-3.1-flash-lite-preview';
 const DEFAULT_STYLE: ArticleStyle = ArticleStyle.NARRATIVE;
 
 function parseStyle(raw: string | null | undefined): ArticleStyle | null {
@@ -225,7 +225,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const transcriptText = transcript.segments.map((s) => s.text).join(' ');
 
   const result = streamText({
-    model: MODEL,
+    model: DEFAULT_AI_MODEL,
     prompt: buildPrompt(style, video.title, video.channel.name, transcriptText),
   });
 
@@ -278,7 +278,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
               transcript_id: transcriptId,
               style,
               prompt_version: PROMPT_VERSION,
-              model: MODEL,
+              model: DEFAULT_AI_MODEL,
               content: fullText,
               usage: usage ? JSON.parse(JSON.stringify(usage)) : null,
             },
