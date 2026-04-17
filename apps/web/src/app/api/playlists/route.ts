@@ -25,6 +25,8 @@ export async function GET() {
   }
   const userId = authResult;
 
+  console.info(`[playlists/GET] Listing playlists for user ${userId}`);
+
   const rows = await prisma.playlist.findMany({
     where: { user_id: userId },
     orderBy: [{ sort_order: 'asc' }, { name: 'asc' }],
@@ -90,27 +92,33 @@ export async function POST(request: NextRequest) {
   let body: { url?: string };
   try {
     body = await request.json();
-  } catch {
+  } catch (err) {
+    console.error('[playlists/POST] Invalid body:', err);
     return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
   }
   const input = body.url?.trim() ?? '';
   if (isEmptyString(input)) {
+    console.error('[playlists/POST] Missing URL in request body');
     return NextResponse.json({ error: 'Missing URL' }, { status: 400 });
   }
+
+  console.info(`[playlists/POST] Adding playlist: ${input} for user ${userId}`);
 
   await ensureUserExists(userId);
 
   try {
     const result = await addPlaylistForUser({ userId, input });
+    console.info(`[playlists/POST] Added playlist: ${input}`, { playlistId: result.playlistId });
     return NextResponse.json(result, { status: 201 });
   } catch (err) {
     if (err instanceof AddPlaylistError) {
       // 400 for user-fixable inputs (invalid URL, private playlist),
       // 502 for upstream fetch failures.
       const status = err.code === 'INVALID_URL' || err.code === 'PRIVATE_PLAYLIST' ? 400 : 502;
+      console.error(`[playlists/POST] AddPlaylistError (${err.code}) for ${input}:`, err);
       return NextResponse.json({ error: err.message, code: err.code }, { status });
     }
-    console.error('[playlists/POST] addPlaylistForUser failed:', err);
+    console.error(`[playlists/POST] addPlaylistForUser failed for ${input}:`, err);
     return NextResponse.json({ error: 'Failed to add playlist' }, { status: 500 });
   }
 }

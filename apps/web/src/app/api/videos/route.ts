@@ -16,6 +16,7 @@ export async function GET(request: NextRequest) {
   const userId = authResult;
 
   const query = parseInboxQuery(request.nextUrl.searchParams);
+  console.info(`[videos/GET] Listing videos for user ${userId}`, { query });
 
   // 404 on a channelId that doesn't belong to this user — kept here as
   // a route-level concern (the helper silently widens to the user's
@@ -27,6 +28,7 @@ export async function GET(request: NextRequest) {
       select: { channel_id: true },
     });
     if (owns == null) {
+      console.error(`[videos/GET] Channel not owned by user: ${query.channelId}`);
       return NextResponse.json({ error: 'Channel not found' }, { status: 404 });
     }
   }
@@ -51,26 +53,38 @@ export async function POST(request: NextRequest) {
   let body: { url?: string };
   try {
     body = await request.json();
-  } catch {
+  } catch (err) {
+    console.error('[videos/POST] Invalid request body:', err);
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
   }
 
   const input = body.url?.trim() ?? '';
   if (isEmptyString(input)) {
+    console.error('[videos/POST] Missing URL in request body');
     return NextResponse.json({ error: 'Missing URL' }, { status: 400 });
   }
+
+  console.info(`[videos/POST] Adding video: ${input} for user ${userId}`);
 
   await ensureUserExists(userId);
 
   try {
     const result = await addVideoForUser({ userId, input });
+    console.info(`[videos/POST] Added video: ${input}`, {
+      videoId: result.videoId,
+      sourceId: result.sourceId,
+      createdVideo: result.createdVideo,
+      createdChannel: result.createdChannel,
+      createdStandalone: result.createdStandalone,
+    });
     return NextResponse.json(result, { status: result.createdStandalone ? 201 : 200 });
   } catch (err) {
     if (err instanceof AddVideoError) {
       const status = err.code === 'INVALID_URL' ? 400 : 502;
+      console.error(`[videos/POST] AddVideoError (${err.code}) for ${input}:`, err);
       return NextResponse.json({ error: err.message }, { status });
     }
-    console.error('[videos/POST] addVideoForUser failed:', err);
+    console.error(`[videos/POST] addVideoForUser failed for ${input}:`, err);
     return NextResponse.json({ error: 'Failed to add video' }, { status: 500 });
   }
 }

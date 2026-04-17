@@ -25,6 +25,8 @@ export async function GET() {
   }
   const userId = authResult;
 
+  console.info(`[videos/library-counts/GET] Counting library unread for user ${userId}`);
+
   const [standaloneRows, playlistItemRows] = await Promise.all([
     prisma.standaloneVideo.findMany({
       where: { user_id: userId },

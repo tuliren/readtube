@@ -10,6 +10,8 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
+  console.info(`[public/summary/GET] Fetching public summary for video ${id}`);
+
   const video = await prisma.video.findFirst({
     where: { id },
     select: {
@@ -33,6 +35,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     },
   });
   if (!video) {
+    console.error(`[public/summary/GET] Video ${id} not found`);
     return NextResponse.json({ error: 'Video not found' }, { status: 404 });
   }
 
@@ -40,9 +43,11 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   const hasAnyPublicArtifact =
     transcript != null && (transcript.summary != null || transcript.articles.length > 0);
   if (!hasAnyPublicArtifact) {
+    console.error(`[public/summary/GET] Video ${id} has no public artifact`);
     return NextResponse.json({ error: 'Not public' }, { status: 404 });
   }
   if (!transcript.summary) {
+    console.error(`[public/summary/GET] No cached summary for video ${id}`);
     return NextResponse.json({ error: 'Not cached' }, { status: 404 });
   }
 

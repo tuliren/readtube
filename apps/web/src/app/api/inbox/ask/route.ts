@@ -37,13 +37,17 @@ export async function POST(request: NextRequest) {
   let body: { question?: string };
   try {
     body = await request.json();
-  } catch {
+  } catch (err) {
+    console.error('[inbox/ask/POST] Invalid body:', err);
     return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
   }
   const question = body.question?.trim() ?? '';
   if (question.length === 0) {
+    console.error('[inbox/ask/POST] Missing question in body');
     return NextResponse.json({ error: 'Missing question' }, { status: 400 });
   }
+
+  console.info(`[inbox/ask/POST] Asking inbox for user ${userId}: ${question.slice(0, 120)}`);
 
   // Embed the question through the same model used for video embeddings
   // so the vector space lines up.

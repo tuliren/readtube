@@ -54,8 +54,11 @@ export async function GET(_request: NextRequest, { params }: Params) {
   const userId = authResult;
   const { id } = await params;
 
+  console.info(`[videos/notes/GET] Listing notes for video ${id}, user ${userId}`);
+
   const ok = await assertUserCanTouchVideo(userId, id);
   if (!ok) {
+    console.error(`[videos/notes/GET] Video ${id} not accessible by user ${userId}`);
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
@@ -82,23 +85,29 @@ export async function POST(request: NextRequest, { params }: Params) {
   const userId = authResult;
   const { id } = await params;
 
+  console.info(`[videos/notes/POST] Creating note for video ${id}, user ${userId}`);
+
   let body: { body?: string; timestampMs?: number | null };
   try {
     body = await request.json();
-  } catch {
+  } catch (err) {
+    console.error('[videos/notes/POST] Invalid body:', err);
     return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
   }
 
   const text = body.body?.trim() ?? '';
   if (text.length === 0) {
+    console.error('[videos/notes/POST] Empty note body');
     return NextResponse.json({ error: 'Empty note body' }, { status: 400 });
   }
   if (text.length > 10000) {
+    console.error(`[videos/notes/POST] Note too long (${text.length} chars)`);
     return NextResponse.json({ error: 'Note too long' }, { status: 400 });
   }
 
   const ok = await assertUserCanTouchVideo(userId, id);
   if (!ok) {
+    console.error(`[videos/notes/POST] Video ${id} not accessible by user ${userId}`);
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 

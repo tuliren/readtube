@@ -57,10 +57,13 @@ function serializeUsage(usage: unknown) {
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { userId } = await auth();
   if (userId == null) {
+    console.error('[summary/GET] Unauthorized');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const { id } = await params;
+
+  console.info(`[summary/GET] Fetching cached summary for video ${id}, user ${userId}`);
 
   const video = await prisma.video.findFirst({
     where: {
@@ -91,11 +94,13 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     },
   });
   if (!video) {
+    console.error(`[summary/GET] Video ${id} not accessible by user ${userId}`);
     return NextResponse.json({ error: 'Video not found' }, { status: 404 });
   }
 
   const transcript = video.transcripts[0];
   if (!transcript?.summary) {
+    console.error(`[summary/GET] No cached summary for video ${id}`);
     return NextResponse.json({ error: 'Not cached' }, { status: 404 });
   }
 
@@ -110,10 +115,13 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { userId } = await auth();
   if (userId == null) {
+    console.error('[summary/POST] Unauthorized');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const { id } = await params;
+
+  console.info(`[summary/POST] Generating summary for video ${id}, user ${userId}`);
 
   // Optional body: { fields?: SummaryField[] } — defaults to all three.
   let requestedFields: SummaryField[] | null = null;
@@ -124,6 +132,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         SUMMARY_FIELDS.includes(f as SummaryField)
       );
       if (valid.length === 0) {
+        console.error('[summary/POST] No valid fields to generate');
         return NextResponse.json({ error: 'No valid fields to generate' }, { status: 400 });
       }
       requestedFields = valid;
@@ -151,6 +160,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     },
   });
   if (!video) {
+    console.error(`[summary/POST] Video ${id} not accessible by user ${userId}`);
     return NextResponse.json({ error: 'Video not found' }, { status: 404 });
   }
 
@@ -164,9 +174,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const ensured = await ensureTranscript(prisma, userId, id);
   if (!ensured.ok) {
     if (ensured.reason === 'not-found') {
+      console.error(`[summary/POST] Video ${id} not found during ensureTranscript`);
       return NextResponse.json({ error: 'Video not found' }, { status: 404 });
     }
     if (ensured.reason === 'transient-error') {
+      console.error(`[summary/POST] Transient transcript fetch error for video ${id}`);
       return NextResponse.json(
         {
           error: 'Could not fetch the transcript right now — please try again.',
@@ -175,6 +187,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         { status: 503 }
       );
     }
+    console.error(`[summary/POST] Transcript unavailable for video ${id}`);
     return NextResponse.json(
       { error: 'Transcript unavailable for this video.', code: 'unavailable' },
       { status: 410 }

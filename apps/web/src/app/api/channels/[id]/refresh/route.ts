@@ -19,15 +19,19 @@ import { refreshSingleChannelWorkflow } from '@/lib/workflows/refresh-channels';
  */
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (getVercelEnv(process.env.VERCEL_ENV) === VercelEnv.PRODUCTION) {
+    console.error('[channels/refresh] Attempted refresh in production');
     return NextResponse.json({ error: 'Not available in production' }, { status: 403 });
   }
 
   const { userId } = await auth();
   if (userId == null) {
+    console.error('[channels/refresh] Unauthorized');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const { id: channelId } = await params;
+
+  console.info(`[channels/refresh] Refreshing channel ${channelId} for user ${userId}`);
 
   // IDOR check: the user must be subscribed to this channel.
   const sub = await prisma.userSubscription.findFirst({
@@ -35,6 +39,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     select: { channel_id: true },
   });
   if (sub == null) {
+    console.error(`[channels/refresh] Channel ${channelId} not subscribed by user ${userId}`);
     return NextResponse.json({ error: 'Channel not found' }, { status: 404 });
   }
 
@@ -42,6 +47,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     const run = await start(refreshSingleChannelWorkflow, [channelId]);
     const result = await run.returnValue;
     if (result == null) {
+      console.error(`[channels/refresh] Workflow returned null for ${channelId}`);
       return NextResponse.json({ error: 'Channel not found' }, { status: 404 });
     }
     return NextResponse.json(result);

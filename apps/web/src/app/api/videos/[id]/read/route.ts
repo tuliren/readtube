@@ -5,11 +5,14 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { userId } = await auth();
   if (userId == null) {
+    console.error('[videos/read/POST] Unauthorized');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const { id } = await params;
   const videoId = id;
+
+  console.info(`[videos/read/POST] Marking video ${videoId} as read for user ${userId}`);
 
   // IDOR check: ensure video belongs to a channel the user is subscribed to
   const video = await prisma.video.findFirst({
@@ -24,6 +27,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     select: { id: true },
   });
   if (video == null) {
+    console.error(`[videos/read/POST] Video ${videoId} not accessible by user ${userId}`);
     return NextResponse.json({ error: 'Video not found' }, { status: 404 });
   }
 

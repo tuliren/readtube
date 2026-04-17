@@ -7,6 +7,7 @@ import { markAllReadForUser } from '@/lib/subscriptions';
 export async function POST(request: NextRequest) {
   const { userId } = await auth();
   if (userId == null) {
+    console.error('[videos/mark-all-read/POST] Unauthorized');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -45,6 +46,13 @@ export async function POST(request: NextRequest) {
 
   const now = new Date();
 
+  console.info(`[videos/mark-all-read/POST] Marking read for user ${userId}`, {
+    channelId,
+    playlistId,
+    library,
+    standaloneOnly,
+  });
+
   // Mark a single playlist as read via watermark.
   if (playlistId != null) {
     const pl = await prisma.playlist.findFirst({
@@ -52,6 +60,9 @@ export async function POST(request: NextRequest) {
       select: { id: true },
     });
     if (pl == null) {
+      console.error(
+        `[videos/mark-all-read/POST] Playlist ${playlistId} not found for user ${userId}`
+      );
       return NextResponse.json({ error: 'Playlist not found' }, { status: 404 });
     }
     await prisma.playlist.update({ where: { id: pl.id }, data: { read_at: now } });
@@ -100,6 +111,7 @@ export async function POST(request: NextRequest) {
   // Default: mark subscribed channels as read (existing behavior).
   const result = await markAllReadForUser(prisma, userId, channelId);
   if (result == null) {
+    console.error(`[videos/mark-all-read/POST] Channel ${channelId} not found for user ${userId}`);
     return NextResponse.json({ error: 'Channel not found' }, { status: 404 });
   }
   return NextResponse.json({ ok: true, channels: result.channels });

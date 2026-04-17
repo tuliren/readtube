@@ -22,24 +22,32 @@ export async function POST(request: NextRequest, { params }: Params) {
   let body: { videoId?: string };
   try {
     body = await request.json();
-  } catch {
+  } catch (err) {
+    console.error('[playlists/videos/POST] Invalid body:', err);
     return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
   }
   const videoId = body.videoId?.trim() ?? '';
   if (videoId.length === 0) {
+    console.error('[playlists/videos/POST] videoId required');
     return NextResponse.json({ error: 'videoId required' }, { status: 400 });
   }
+
+  console.info(
+    `[playlists/videos/POST] Adding video ${videoId} to playlist ${playlistId} for user ${userId}`
+  );
 
   const playlist = await prisma.playlist.findFirst({
     where: { id: playlistId, user_id: userId },
     select: { id: true },
   });
   if (playlist == null) {
+    console.error(`[playlists/videos/POST] Playlist ${playlistId} not found for user ${userId}`);
     return NextResponse.json({ error: 'Playlist not found' }, { status: 404 });
   }
 
   const video = await prisma.video.findUnique({ where: { id: videoId }, select: { id: true } });
   if (video == null) {
+    console.error(`[playlists/videos/POST] Video ${videoId} not found`);
     return NextResponse.json({ error: 'Video not found' }, { status: 404 });
   }
 
@@ -69,14 +77,20 @@ export async function DELETE(request: NextRequest, { params }: Params) {
 
   const videoId = request.nextUrl.searchParams.get('videoId')?.trim() ?? '';
   if (videoId.length === 0) {
+    console.error('[playlists/videos/DELETE] videoId query param required');
     return NextResponse.json({ error: 'videoId query param required' }, { status: 400 });
   }
+
+  console.info(
+    `[playlists/videos/DELETE] Removing video ${videoId} from playlist ${playlistId} for user ${userId}`
+  );
 
   const playlist = await prisma.playlist.findFirst({
     where: { id: playlistId, user_id: userId },
     select: { id: true },
   });
   if (playlist == null) {
+    console.error(`[playlists/videos/DELETE] Playlist ${playlistId} not found for user ${userId}`);
     return NextResponse.json({ error: 'Playlist not found' }, { status: 404 });
   }
 
@@ -88,6 +102,7 @@ export async function DELETE(request: NextRequest, { params }: Params) {
     });
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+      console.error(`[playlists/videos/DELETE] Video ${videoId} not in playlist ${playlistId}`);
       return NextResponse.json({ error: 'Not in playlist' }, { status: 404 });
     }
     throw err;
