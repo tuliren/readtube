@@ -126,12 +126,18 @@ export default function VideoReader({ video, publicMode = false }: Props) {
     setSummaryWords(0);
     setArticleWords(0);
     setTranscriptWords(0);
+    // Re-pick the default tab for the new video. In public mode tabs
+    // are conditionally rendered, so a stale activeTab from the
+    // previous video can leave the viewer staring at an empty pane
+    // when the new video lacks that tab's content.
+    setActiveTab(publicMode && !video.hasSummary && video.hasArticle ? 'article' : 'summary');
   }, [
     video.id,
     video.transcriptUnavailable,
     video.hasTranscript,
     video.hasSummary,
     video.hasArticle,
+    publicMode,
   ]);
 
   // Stable callbacks the children pass into their effect dep arrays.
