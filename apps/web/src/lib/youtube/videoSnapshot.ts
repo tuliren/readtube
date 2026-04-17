@@ -17,7 +17,13 @@ export interface VideoSnapshot {
   title: string;
   description: string;
   thumbnailUrl: string;
-  publishedAt: Date;
+  /**
+   * Null if the page didn't expose a parseable publish date. The
+   * caller decides how to handle this — typically falling back to
+   * the current time on create and skipping the field on update so
+   * a real date from a later scrape can still backfill.
+   */
+  publishedAt: Date | null;
   /** Null if the page didn't expose a parseable ISO-8601 duration. */
   durationSeconds: number | null;
   channel: {
@@ -187,11 +193,20 @@ export async function fetchVideoSnapshot(videoId: string): Promise<VideoSnapshot
     firstMatch(html, /<meta property="og:image" content="([^"]+)"/) ??
     buildThumbnailUrl(videoId);
 
-  // ── Published date — scrape-only ──
-  const publishedRaw = firstMatch(html, /<meta itemprop="datePublished" content="([^"]+)"/);
-  const publishedAt = publishedRaw != null ? new Date(publishedRaw) : null;
-  if (publishedAt == null || Number.isNaN(publishedAt.getTime())) {
-    throw new Error('Could not extract publish date');
+  // ── Published date — best-effort; watch pages served to some
+  // serverless IPs omit the itemprop microdata entirely. Tries a few
+  // alternate sources and returns null if none hit. A missing date
+  // shouldn't block the add — the caller picks a fallback (e.g.
+  // current time on create) and can backfill from a later scrape.
+  const publishedRaw =
+    firstMatch(html, /<meta itemprop="datePublished" content="([^"]+)"/) ??
+    firstMatch(html, /<meta itemprop="uploadDate" content="([^"]+)"/) ??
+    firstMatch(html, /"datePublished"\s*:\s*"([^"]+)"/) ??
+    firstMatch(html, /"uploadDate"\s*:\s*"([^"]+)"/);
+  const parsed = publishedRaw != null ? new Date(publishedRaw) : null;
+  const publishedAt = parsed != null && !Number.isNaN(parsed.getTime()) ? parsed : null;
+  if (publishedAt == null) {
+    console.warn(`[videoSnapshot] Could not extract publish date for ${videoId}`);
   }
 
   const durationIso = firstMatch(html, /<meta itemprop="duration" content="([^"]+)"/);

@@ -132,7 +132,10 @@ export async function addVideoForUser(args: {
       source_id: snapshot.videoId,
       title: snapshot.title,
       description: snapshot.description,
-      published_at: snapshot.publishedAt,
+      // Scrape may not expose publishedAt; fall back to now for the
+      // NOT NULL column. A later re-add with a real date will backfill
+      // via the update branch below.
+      published_at: snapshot.publishedAt ?? new Date(),
       thumbnail_url: snapshot.thumbnailUrl,
       duration_seconds: snapshot.durationSeconds,
     },
@@ -140,6 +143,10 @@ export async function addVideoForUser(args: {
       channel_id: channel.id,
       title: snapshot.title,
       ...(isEmptyString(snapshot.description) ? {} : { description: snapshot.description }),
+      // Only overwrite a previously stored date when this scrape gave
+      // us a real one — otherwise a fallback `new Date()` from a prior
+      // add would get locked in permanently.
+      ...(snapshot.publishedAt != null ? { published_at: snapshot.publishedAt } : {}),
       thumbnail_url: snapshot.thumbnailUrl,
       ...(snapshot.durationSeconds != null ? { duration_seconds: snapshot.durationSeconds } : {}),
     },
