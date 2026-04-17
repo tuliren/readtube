@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@readtube/database';
 
+import { effectivePublishDate } from '@/lib/subscriptions';
 import type { InboxQuery, VideoData } from '@/lib/types';
 
 import { buildUnreadClause, buildVideoWhere } from './buildWhere';
@@ -110,13 +111,16 @@ export async function loadInboxVideos(
 
   const videos = await prisma.video.findMany({
     where,
-    orderBy: { published_at: sortDirection },
+    // Sort nulls to the end regardless of direction so a video with
+    // an unknown publish date never masquerades as the newest entry.
+    orderBy: { published_at: { sort: sortDirection, nulls: 'last' } },
     select: {
       id: true,
       source_id: true,
       title: true,
       description: true,
       published_at: true,
+      created_at: true,
       duration_seconds: true,
       thumbnail_url: true,
       transcript_unavailable: true,
@@ -153,7 +157,15 @@ export async function loadInboxVideos(
       return explicit;
     }
     const watermark = watermarkByChannelId.get(v.channel_id);
-    if (watermark != null && v.published_at.getTime() <= watermark.getTime()) {
+    if (watermark == null) {
+      return null;
+    }
+    // Watermark comparison uses the video's effective publish date —
+    // published_at when available, otherwise created_at (when we
+    // learned about the video). Keeps null-date videos on the same
+    // timeline as everything else instead of permanently unread.
+    const effective = effectivePublishDate(v);
+    if (effective.getTime() <= watermark.getTime()) {
       return watermark;
     }
     return null;

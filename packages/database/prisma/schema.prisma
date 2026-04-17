@@ -131,7 +131,17 @@ model Video {
   source_id              String
   title                  String
   description            String?
-  published_at           DateTime
+  // Nullable because YouTube watch-page scrapes sometimes omit the
+  // date microdata (consent-wall variants, serverless-IP responses).
+  // We prefer a null over a synthetic `new Date()` placeholder so
+  // callers can distinguish "unknown" from "actually published now,"
+  // and a later scrape can backfill without colliding with a fake
+  // stored date. For watermark / unread-count comparisons, callers
+  // use the video's effective publish date — COALESCE(published_at,
+  // created_at) — so a null-date video is still classified relative
+  // to when we learned about it. See `videoNewerThanWatermark` and
+  // `effectivePublishDate` in `lib/subscriptions.ts`.
+  published_at           DateTime?
   created_at             DateTime                 @default(now())
   // Length of the video in seconds. Nullable because the channel scraper
   // may not always capture the duration string (Shorts, ad slots, etc.)

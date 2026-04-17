@@ -24,7 +24,13 @@ export interface SnapshotVideo {
   videoId: string;
   title: string;
   description: string;
-  publishedAt: Date;
+  /**
+   * Null when the upstream source (RSS, TranscriptAPI, channel-page
+   * scrape) fails to expose a parseable publish date. Callers upsert
+   * null as-is; a later fetch that does return a date will backfill
+   * the column via the upsert update branch.
+   */
+  publishedAt: Date | null;
   link: string;
   thumbnailUrl: string;
   durationSeconds: number | null;

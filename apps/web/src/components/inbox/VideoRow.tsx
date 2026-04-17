@@ -282,7 +282,8 @@ export default function VideoRow({
         </p>
         <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-gray-400">
           <span>
-            {video.channelName} · {relativeTime(video.publishedAt, now)}
+            {video.channelName}
+            {video.publishedAt != null ? ` · ${relativeTime(video.publishedAt, now)}` : null}
             {(() => {
               const duration = formatDurationSeconds(video.durationSeconds);
               return duration != null ? ` · ${duration}` : null;

@@ -1,3 +1,5 @@
+import { UNKNOWN_CHANNEL_NAME, UNKNOWN_VIDEO_TITLE } from './constants';
+
 const YT_USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
@@ -5,7 +7,12 @@ export interface ScrapedVideo {
   videoId: string;
   title: string;
   description: string;
-  publishedAt: Date;
+  /** Null when the channel page's relative-time text ("2w ago") is
+   *  missing or unparseable. The scrape used to synthesize `new Date()`
+   *  here, which is indistinguishable from a real timestamp — we now
+   *  prefer null so the database layer can decide whether to record
+   *  it or backfill from a later source. */
+  publishedAt: Date | null;
   /** Length of the video in seconds, or null if the scraped data
    *  didn't include a parseable lengthText (Shorts, ad slots, etc.). */
   durationSeconds: number | null;
@@ -26,19 +33,21 @@ export interface ScrapedChannel {
 }
 
 /**
- * Parses relative time text ("2w ago", "3mo ago", "1y ago") into an approximate Date.
- * Falls back to now if the format is unrecognized.
+ * Parses relative time text ("2w ago", "3mo ago", "1y ago") into an
+ * approximate Date. Returns null when the input is missing or the
+ * format is unrecognized — callers decide how to handle an unknown
+ * timestamp (typically: store null in the DB).
  */
-function parseRelativeTime(text: string | undefined): Date {
+function parseRelativeTime(text: string | undefined): Date | null {
   if (!text) {
-    return new Date();
+    return null;
   }
 
   const match = text.match(
     /(\d+)\s*(second|minute|hour|day|week|month|year|mo|yr|wk|hr|min|sec)s?\s*ago/i
   );
   if (!match) {
-    return new Date();
+    return null;
   }
 
   const amount = parseInt(match[1], 10);
@@ -147,7 +156,7 @@ export async function scrapeChannel(channelUrl: string): Promise<ScrapedChannel>
 
   // Extract channel name from og:title
   const nameMatch = html.match(/<meta property="og:title" content="([^"]+)"/);
-  const name = nameMatch ? nameMatch[1] : 'Unknown Channel';
+  const name = nameMatch ? nameMatch[1] : UNKNOWN_CHANNEL_NAME;
 
   // Extract channel avatar from og:image — YouTube sets this to the
   // channel's profile picture on the /videos tab page.
@@ -238,7 +247,7 @@ function extractVideosFromInitialData(data: YtData): ScrapedVideo[] {
 
     const titleRuns = (v.title as YtData)?.runs as YtData[] | undefined;
     const titleSimple = (v.title as YtData)?.simpleText as string | undefined;
-    const title = (titleRuns?.[0]?.text as string) ?? titleSimple ?? '';
+    const title = (titleRuns?.[0]?.text as string) ?? titleSimple ?? UNKNOWN_VIDEO_TITLE;
 
     const descSnippetRuns = (v.descriptionSnippet as YtData)?.runs as YtData[] | undefined;
     const description = descSnippetRuns?.map((r) => r.text as string).join('') ?? '';

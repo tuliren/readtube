@@ -66,7 +66,7 @@ CREATE TABLE "Video" (
   "source_id" TEXT NOT NULL,
   "title" TEXT NOT NULL,
   "description" TEXT,
-  "published_at" TIMESTAMP(3) NOT NULL,
+  "published_at" TIMESTAMP(3),
   "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "search_tsv" tsvector DEFAULT (
     setweight(

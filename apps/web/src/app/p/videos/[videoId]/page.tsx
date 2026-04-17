@@ -1,15 +1,34 @@
 import { prisma } from '@readtube/database';
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
 import Footer from '@/components/Footer';
 import Header from '@/components/Header';
 import VideoReader from '@/components/reader/VideoReader';
+import { capTitle } from '@/lib/format/title';
 import { decorateVideo } from '@/lib/inbox/triage';
 import type { VideoData } from '@/lib/types';
 import { resolveVideoSourceId } from '@/lib/videos/resolveVideoSourceId';
 
 interface Props {
   params: Promise<{ videoId: string }>;
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { videoId } = await params;
+  const stub = await resolveVideoSourceId(prisma, videoId);
+  if (stub == null) {
+    return {};
+  }
+  const video = await prisma.video.findUnique({
+    where: { id: stub.id },
+    select: { title: true },
+  });
+  if (video == null) {
+    return {};
+  }
+  // Root layout's title template appends " | ReadTube" automatically.
+  return { title: capTitle(video.title) };
 }
 
 /**

@@ -212,4 +212,47 @@ describe('addVideoForUser', () => {
     });
     expect(other?.handle).toBe('@testchan');
   });
+
+  describe('nullable published_at', () => {
+    it('stores null when the snapshot did not produce a publish date', async () => {
+      mockFetchVideoSnapshot.mockResolvedValueOnce(fakeSnapshot({ publishedAt: null }));
+      await addVideoForUser({ userId: TEST_USER_ID, input: 'dQw4w9WgXcQ' });
+
+      const video = await global.testPrisma.video.findUnique({
+        where: { video_unique_source: { source_type: 'YOUTUBE', source_id: 'dQw4w9WgXcQ' } },
+        select: { published_at: true },
+      });
+      expect(video?.published_at).toBeNull();
+    });
+
+    it('backfills published_at on a later re-add when the first scrape returned null', async () => {
+      mockFetchVideoSnapshot.mockResolvedValueOnce(fakeSnapshot({ publishedAt: null }));
+      await addVideoForUser({ userId: TEST_USER_ID, input: 'dQw4w9WgXcQ' });
+
+      const realDate = new Date('2026-02-15T00:00:00Z');
+      mockFetchVideoSnapshot.mockResolvedValueOnce(fakeSnapshot({ publishedAt: realDate }));
+      await addVideoForUser({ userId: TEST_USER_ID, input: 'dQw4w9WgXcQ' });
+
+      const video = await global.testPrisma.video.findUnique({
+        where: { video_unique_source: { source_type: 'YOUTUBE', source_id: 'dQw4w9WgXcQ' } },
+        select: { published_at: true },
+      });
+      expect(video?.published_at).toEqual(realDate);
+    });
+
+    it('preserves the stored published_at when a later scrape returns null', async () => {
+      const realDate = new Date('2026-02-15T00:00:00Z');
+      mockFetchVideoSnapshot.mockResolvedValueOnce(fakeSnapshot({ publishedAt: realDate }));
+      await addVideoForUser({ userId: TEST_USER_ID, input: 'dQw4w9WgXcQ' });
+
+      mockFetchVideoSnapshot.mockResolvedValueOnce(fakeSnapshot({ publishedAt: null }));
+      await addVideoForUser({ userId: TEST_USER_ID, input: 'dQw4w9WgXcQ' });
+
+      const video = await global.testPrisma.video.findUnique({
+        where: { video_unique_source: { source_type: 'YOUTUBE', source_id: 'dQw4w9WgXcQ' } },
+        select: { published_at: true },
+      });
+      expect(video?.published_at).toEqual(realDate);
+    });
+  });
 });

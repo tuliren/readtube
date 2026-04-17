@@ -1,3 +1,5 @@
+import { UNKNOWN_CHANNEL_NAME, UNKNOWN_VIDEO_TITLE } from '@/lib/youtube/constants';
+
 import {
   BROWSER_HEADERS,
   extractJsonFromHtml,
@@ -27,8 +29,8 @@ export async function fetchSubtitleViaHtmlScraping(videoId: string): Promise<Sub
   }
 
   const videoDetails = playerResponse.videoDetails as Record<string, unknown> | undefined;
-  const title = (videoDetails?.title as string) ?? 'Unknown Title';
-  const channel = (videoDetails?.author as string) ?? 'Unknown Channel';
+  const title = (videoDetails?.title as string) ?? UNKNOWN_VIDEO_TITLE;
+  const channel = (videoDetails?.author as string) ?? UNKNOWN_CHANNEL_NAME;
 
   // 3. Find caption tracks
   const tracks = parseCaptionTracks(playerResponse);

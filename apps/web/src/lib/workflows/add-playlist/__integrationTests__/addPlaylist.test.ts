@@ -145,7 +145,7 @@ describe('addPlaylistForUser', () => {
     expect(videoB?.channel.source_id).toBe('UC_creator_b');
   });
 
-  it('sets read_at to max(published_at) + 1s so all initial videos are read', async () => {
+  it('leaves read_at null when the scrape path produces no publish dates', async () => {
     mockScrapePlaylist.mockResolvedValueOnce({
       title: 'P',
       channelId: 'UC_o',
@@ -162,7 +162,39 @@ describe('addPlaylistForUser', () => {
         },
       ],
     });
-    const before = Date.now();
+    await addPlaylistForUser({ userId: TEST_USER_ID, input: PL_ID });
+
+    const playlist = await global.testPrisma.playlist.findFirst({
+      where: { user_id: TEST_USER_ID },
+      include: { items: { include: { video: true } } },
+    });
+    // Scrape-only videos now persist with published_at = null — no
+    // real date exists to anchor the read_at watermark, so read_at
+    // stays null. A later RSS refresh will backfill published_at and
+    // the next mark-all-read action can set read_at from there.
+    expect(playlist?.read_at).toBeNull();
+    expect(playlist!.items[0].video.published_at).toBeNull();
+  });
+
+  it('sets read_at to max(published_at) + 1s when RSS supplies real dates', async () => {
+    mockFetchRssFeed.mockResolvedValueOnce({
+      channelId: 'UC_o',
+      name: 'O',
+      authorName: 'O',
+      videos: [
+        {
+          videoId: 'rss_v1',
+          title: 'V1',
+          description: '',
+          publishedAt: new Date('2026-03-01T00:00:00Z'),
+          link: 'https://www.youtube.com/watch?v=rss_v1',
+          thumbnailUrl: null,
+          channelId: 'UC_o',
+          channelName: 'O',
+        },
+      ],
+    });
+
     await addPlaylistForUser({ userId: TEST_USER_ID, input: PL_ID });
 
     const playlist = await global.testPrisma.playlist.findFirst({
@@ -170,11 +202,8 @@ describe('addPlaylistForUser', () => {
       include: { items: { include: { video: true } } },
     });
     expect(playlist?.read_at).not.toBeNull();
-    // The scrape path uses new Date() as published_at; read_at is
-    // set to max(published_at) + 1000ms. Confirm the delta.
-    const publishedAt = playlist!.items[0].video.published_at.getTime();
+    const publishedAt = playlist!.items[0].video.published_at!.getTime();
     expect(playlist!.read_at!.getTime()).toBe(publishedAt + 1000);
-    expect(playlist!.read_at!.getTime()).toBeGreaterThanOrEqual(before);
   });
 
   it('is idempotent: re-adding the same playlist returns the existing row', async () => {

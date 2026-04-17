@@ -9,7 +9,7 @@ interface SearchHit {
   title: string;
   titleHighlight: string;
   descriptionHighlight: string | null;
-  publishedAt: string;
+  publishedAt: string | null;
   channelId: string;
   channelName: string;
   channelSourceId: string;
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
       title: string;
       title_highlight: string;
       description_highlight: string | null;
-      published_at: Date;
+      published_at: Date | null;
       channel_id: string;
       channel_name: string;
       channel_source_id: string;
@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
       AND v."channel_id" IN (
         SELECT "channel_id" FROM "UserSubscription" WHERE "user_id" = ${userId}
       )
-    ORDER BY rank DESC, v."published_at" DESC
+    ORDER BY rank DESC, v."published_at" DESC NULLS LAST
     LIMIT 50
   `;
 
@@ -96,7 +96,7 @@ export async function GET(request: NextRequest) {
     title: row.title,
     titleHighlight: row.title_highlight,
     descriptionHighlight: row.description_highlight,
-    publishedAt: row.published_at.toISOString(),
+    publishedAt: row.published_at?.toISOString() ?? null,
     channelId: row.channel_id,
     channelName: row.channel_name,
     channelSourceId: row.channel_source_id,

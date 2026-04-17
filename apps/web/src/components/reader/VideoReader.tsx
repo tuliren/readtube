@@ -215,8 +215,12 @@ export default function VideoReader({ video, publicMode = false }: Props) {
                 label="Open channel on YouTube"
               />
             </span>
-            <span>·</span>
-            <span>{relativeDate(video.publishedAt)}</span>
+            {video.publishedAt != null && (
+              <>
+                <span>·</span>
+                <span>{relativeDate(video.publishedAt)}</span>
+              </>
+            )}
             {durationLabel != null && (
               <>
                 <span>·</span>

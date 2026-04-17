@@ -7,6 +7,7 @@
  * includes the channel id, author handle, publish date, duration
  * (ISO-8601), title, description and thumbnail. No API key required.
  */
+import { UNKNOWN_CHANNEL_NAME } from './constants';
 import { buildThumbnailUrl } from './urls';
 
 const YT_USER_AGENT =
@@ -214,7 +215,7 @@ export async function fetchVideoSnapshot(videoId: string): Promise<VideoSnapshot
 
   // ── Channel metadata — prefer oEmbed for name; scrape for handle ──
   const channelName =
-    oembed?.author_name ?? firstMatch(html, /"author":"([^"]+)"/) ?? 'Unknown Channel';
+    oembed?.author_name ?? firstMatch(html, /"author":"([^"]+)"/) ?? UNKNOWN_CHANNEL_NAME;
 
   const channelPageUrl = oembed?.author_url ?? firstMatch(html, /"ownerProfileUrl":"([^"]+)"/);
   let handle: string | null = null;

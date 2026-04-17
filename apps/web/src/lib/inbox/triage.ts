@@ -13,7 +13,7 @@ export interface TriageRawRow {
   source_id: string;
   title: string;
   description: string | null;
-  published_at: Date;
+  published_at: Date | null;
   duration_seconds: number | null;
   thumbnail_url: string | null;
   transcript_unavailable: boolean;
@@ -147,7 +147,7 @@ export function decorateVideo(
     sourceId: row.source_id,
     title: row.title,
     description: row.description,
-    publishedAt: row.published_at.toISOString(),
+    publishedAt: row.published_at?.toISOString() ?? null,
     readAt: readAt != null ? readAt.toISOString() : null,
     durationSeconds: row.duration_seconds,
     // Some older rows predate the always-populate-thumbnail rule and

@@ -3,6 +3,7 @@ import { VideoPlatformType, prisma } from '@readtube/database';
 import { isEmptyString } from '@/lib/string';
 import type { RssChannel } from '@/lib/youtube/channelRss';
 import { fetchRssFeed, isYouTubeShort } from '@/lib/youtube/channelRss';
+import { UNKNOWN_CHANNEL_NAME } from '@/lib/youtube/constants';
 import { PrivatePlaylistError, scrapePlaylist } from '@/lib/youtube/playlistScrape';
 import { buildPlaylistRssUrl, buildRssUrl, extractPlaylistId } from '@/lib/youtube/urls';
 
@@ -175,7 +176,7 @@ export async function addPlaylistForUser(args: {
     // rather than the playlist owner. Falls back to the feed-level
     // channel when the source didn't expose per-video info.
     const channelId = v.channelId || feed.channelId || 'UC_unknown';
-    const channelName = v.channelName || feed.channelName || 'Unknown Channel';
+    const channelName = v.channelName || feed.channelName || UNKNOWN_CHANNEL_NAME;
     const channel = await prisma.channel.upsert({
       where: {
         channel_unique_source: {
@@ -208,17 +209,20 @@ export async function addPlaylistForUser(args: {
         source_id: v.videoId,
         title: v.title,
         description: v.description,
-        // Scrape path doesn't provide publishedAt — use current time
-        // as a placeholder. The real date gets backfilled if the user
-        // opens the video (fetchVideoSnapshot) or subscribes to the
-        // channel (refresh cron).
-        published_at: v.publishedAt ?? new Date(),
+        // published_at is nullable — scrape paths can legitimately
+        // return null. A later source (fetchVideoSnapshot on open,
+        // refresh cron) will backfill via the update branch.
+        published_at: v.publishedAt,
         thumbnail_url: v.thumbnailUrl,
         duration_seconds: v.durationSeconds,
       },
       update: {
         title: v.title,
         ...(isEmptyString(v.description) ? {} : { description: v.description }),
+        // Backfill published_at whenever this source produced a real
+        // date — skips the field otherwise so existing values (null
+        // or real) are preserved.
+        ...(v.publishedAt != null ? { published_at: v.publishedAt } : {}),
         ...(v.thumbnailUrl != null ? { thumbnail_url: v.thumbnailUrl } : {}),
         ...(v.durationSeconds != null ? { duration_seconds: v.durationSeconds } : {}),
       },
@@ -239,13 +243,15 @@ export async function addPlaylistForUser(args: {
   // Set read_at to just after the latest video's published_at so all
   // initial videos are marked as read. Query the actual max published_at
   // from the ingested videos rather than guessing with new Date().
+  // Skip null dates explicitly — Postgres sorts NULLS FIRST in DESC and
+  // we don't want a null-dated video to masquerade as "newest."
   if (videosProcessed > 0) {
     const latest = await prisma.playlistVideo.findFirst({
-      where: { playlist_id: playlist.id },
+      where: { playlist_id: playlist.id, video: { published_at: { not: null } } },
       select: { video: { select: { published_at: true } } },
       orderBy: { video: { published_at: 'desc' } },
     });
-    if (latest != null) {
+    if (latest?.video.published_at != null) {
       const readAt = new Date(latest.video.published_at.getTime() + 1000);
       await prisma.playlist.update({
         where: { id: playlist.id },
