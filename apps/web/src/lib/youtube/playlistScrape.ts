@@ -7,6 +7,7 @@
  * playlists (PL/UU-prefixed) usually have a working RSS feed and
  * should prefer `fetchRssFeed` since it's cheaper and more stable.
  */
+import { UNKNOWN_CHANNEL_NAME } from './constants';
 import { buildThumbnailUrl } from './urls';
 
 const YT_USER_AGENT =
@@ -129,7 +130,7 @@ export async function scrapePlaylist(playlistId: string): Promise<ScrapedPlaylis
   const channelName: string =
     secondaryInfo?.title?.runs?.[0]?.text ??
     headerRenderer?.ownerText?.runs?.[0]?.text ??
-    'Unknown Channel';
+    UNKNOWN_CHANNEL_NAME;
 
   if (videoItems == null || videoItems.length === 0) {
     return { title, channelId, channelName, videos: [] };

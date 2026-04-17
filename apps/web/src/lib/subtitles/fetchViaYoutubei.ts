@@ -1,3 +1,5 @@
+import { UNKNOWN_CHANNEL_NAME, UNKNOWN_VIDEO_TITLE } from '@/lib/youtube/constants';
+
 import type { SubtitleResult, TranscriptSegment } from './types';
 
 export async function fetchSubtitleViaYoutubei(videoId: string): Promise<SubtitleResult> {
@@ -6,8 +8,8 @@ export async function fetchSubtitleViaYoutubei(videoId: string): Promise<Subtitl
   const yt = await Innertube.create({ retrieve_player: false });
   const info = await yt.getInfo(videoId);
 
-  const title = info.basic_info.title ?? 'Unknown Title';
-  const channel = info.basic_info.author ?? 'Unknown Channel';
+  const title = info.basic_info.title ?? UNKNOWN_VIDEO_TITLE;
+  const channel = info.basic_info.author ?? UNKNOWN_CHANNEL_NAME;
 
   const transcriptData = await info.getTranscript();
   const rawSegments = transcriptData?.transcript?.content?.body?.initial_segments ?? [];

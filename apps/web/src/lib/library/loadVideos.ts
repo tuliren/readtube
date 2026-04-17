@@ -149,7 +149,9 @@ export async function loadLibraryVideos(
         continue;
       }
       for (const item of pl.items) {
-        if (item.video.published_at <= pl.read_at) {
+        // A null published_at cannot be compared to a watermark; leave
+        // it unread by default until a consumption row is written.
+        if (item.video.published_at != null && item.video.published_at <= pl.read_at) {
           watermarkReadIds.add(item.video_id);
         }
       }
@@ -163,12 +165,19 @@ export async function loadLibraryVideos(
       continue;
     }
     // Read state: explicit consumption wins, then playlist watermark.
+    // Null published_at can't satisfy a watermark comparison, so those
+    // videos fall through to "unread" unless consumption says otherwise.
     const explicitRead = consumptionByVideoId.get(id) ?? null;
     let readAt: Date | null = explicitRead;
-    if (readAt == null && playlistReadAt != null && row.published_at <= playlistReadAt) {
+    if (
+      readAt == null &&
+      playlistReadAt != null &&
+      row.published_at != null &&
+      row.published_at <= playlistReadAt
+    ) {
       readAt = playlistReadAt;
     }
-    if (readAt == null && watermarkReadIds.has(id)) {
+    if (readAt == null && watermarkReadIds.has(id) && row.published_at != null) {
       readAt = row.published_at; // use published_at as the effective read time
     }
     decorated.push(decorateVideo(row, triage, readAt));

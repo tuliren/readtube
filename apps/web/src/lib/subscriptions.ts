@@ -30,11 +30,12 @@ export async function computeInitialReadAt(
   if (mode === 'none_new') {
     return new Date();
   }
-  // recent_n_new
+  // recent_n_new. Ignore rows with null published_at — an unknown
+  // timestamp can't anchor a "most recent N" cutoff.
   const cutoff = await prisma.video.findMany({
-    where: { channel_id: channelId },
+    where: { channel_id: channelId, published_at: { not: null } },
     select: { published_at: true },
-    orderBy: { published_at: 'desc' },
+    orderBy: { published_at: { sort: 'desc', nulls: 'last' } },
     skip: recentCount,
     take: 1,
   });

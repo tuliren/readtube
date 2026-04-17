@@ -104,6 +104,10 @@ export async function refreshChannel(channel: StaleChannel): Promise<RefreshResu
         channel_id: channel.id,
         title: video.title,
         ...(isEmptyString(video.description) ? {} : { description: video.description }),
+        // Backfill published_at whenever this refresh produced a real
+        // date — rows that were created with a null placeholder from
+        // a thin scrape path get the real RSS timestamp here.
+        ...(video.publishedAt != null ? { published_at: video.publishedAt } : {}),
         thumbnail_url: video.thumbnailUrl,
         ...(video.durationSeconds != null ? { duration_seconds: video.durationSeconds } : {}),
       },

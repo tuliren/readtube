@@ -110,7 +110,9 @@ export async function loadInboxVideos(
 
   const videos = await prisma.video.findMany({
     where,
-    orderBy: { published_at: sortDirection },
+    // Sort nulls to the end regardless of direction so a video with
+    // an unknown publish date never masquerades as the newest entry.
+    orderBy: { published_at: { sort: sortDirection, nulls: 'last' } },
     select: {
       id: true,
       source_id: true,
@@ -153,7 +155,13 @@ export async function loadInboxVideos(
       return explicit;
     }
     const watermark = watermarkByChannelId.get(v.channel_id);
-    if (watermark != null && v.published_at.getTime() <= watermark.getTime()) {
+    // Videos with an unknown publish date never match a watermark —
+    // they stay unread until an explicit consumption row is written.
+    if (
+      watermark != null &&
+      v.published_at != null &&
+      v.published_at.getTime() <= watermark.getTime()
+    ) {
       return watermark;
     }
     return null;

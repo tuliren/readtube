@@ -35,7 +35,10 @@ export interface VideoData {
   sourceId: string;
   title: string;
   description: string | null;
-  publishedAt: string;
+  /** ISO string, or null when the upstream scrape didn't expose a
+   *  parseable publish date. UI should fall back to hiding the
+   *  "X ago" indicator rather than inventing a timestamp. */
+  publishedAt: string | null;
   readAt: string | null;
   // Length of the video in seconds, or null when the channel scraper
   // hasn't captured it yet (Shorts, ad slots, pre-backfill rows).

@@ -1,5 +1,7 @@
 import { XMLParser } from 'fast-xml-parser';
 
+import { UNKNOWN_CHANNEL_NAME } from './constants';
+
 export interface RssVideo {
   videoId: string;
   title: string;
@@ -91,7 +93,7 @@ export async function fetchRssFeed(rssUrl: string): Promise<RssChannel> {
   }
   const channelId = rawChannelId.startsWith('UC') ? rawChannelId : `UC${rawChannelId}`;
 
-  const channelName = (feed.title as string | undefined)?.trim() ?? 'Unknown Channel';
+  const channelName = (feed.title as string | undefined)?.trim() ?? UNKNOWN_CHANNEL_NAME;
   const feedAuthor = feed.author as Record<string, unknown> | undefined;
   const authorName = (feedAuthor?.name as string | undefined)?.trim() ?? null;
 
