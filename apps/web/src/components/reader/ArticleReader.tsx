@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { countWords } from '@/lib/format/wordCount';
 import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
@@ -41,13 +41,15 @@ export default function ArticleReader({
 }: Props) {
   const apiBase = publicMode ? '/api/public/videos' : '/api/videos';
   const [status, setStatus] = useState<Status>('checking');
-  const [markdown, setMarkdown] = useState('');
+  const [content, setContent] = useState('');
+  const [hasLatex, setHasLatex] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setStatus('checking');
-    setMarkdown('');
+    setContent('');
+    setHasLatex(false);
     setErrorMessage(null);
 
     fetch(`${apiBase}/${videoDbId}/article?style=${STYLE}`)
@@ -55,16 +57,15 @@ export default function ArticleReader({
         if (cancelled) {
           return;
         }
-        if (res.status === 404) {
-          setStatus('idle');
-          return;
-        }
-        if (!res.ok) {
+        if (res.status === 404 || !res.ok) {
           setStatus('idle');
           return;
         }
         const data = (await res.json()) as { content: string };
-        setMarkdown(data.content);
+        // Stored content carries a YAML frontmatter with hasLatex.
+        const parsed = parseMarkdownDocument(data.content);
+        setContent(parsed.frontmatterPending ? '' : parsed.content);
+        setHasLatex(parsed.properties.hasLatex === true);
         setStatus('done');
         // Cache hit — flip the parent's Article tab dot to blue
         // immediately, regardless of which tab the user is on.
@@ -81,24 +82,17 @@ export default function ArticleReader({
     };
   }, [videoDbId, onArticleAvailable, apiBase]);
 
-  // Parse any frontmatter out of the accumulated markdown before it
-  // reaches the renderer. During a stream, the frontmatter arrives
-  // first — hold off rendering until the closing fence lands so the
-  // user never sees raw `---\nversion:` flash on screen.
-  const parsed = useMemo(() => parseMarkdownDocument(markdown), [markdown]);
-  const renderContent = parsed.frontmatterPending ? '' : parsed.content;
-  const hasLatex = parsed.properties.hasLatex === true;
-
   // Stream the article word count up to VideoReader so the Article
   // tab header can render the reading-time badge. Fires on every
-  // markdown change, including incremental streaming updates.
+  // content change, including incremental streaming updates.
   useEffect(() => {
-    onArticleWordsChange(countWords(renderContent));
-  }, [renderContent, onArticleWordsChange]);
+    onArticleWordsChange(countWords(content));
+  }, [content, onArticleWordsChange]);
 
   async function handleGenerate() {
     setStatus('streaming');
-    setMarkdown('');
+    setContent('');
+    setHasLatex(false);
     setErrorMessage(null);
 
     try {
@@ -150,9 +144,16 @@ export default function ArticleReader({
       // still showing the Fetch button.
       onTranscriptStatusChange('present');
 
+      // Parse NDJSON. Events:
+      //   { delta: string }   — appended to content
+      //   { hasLatex: bool }  — the LLM-declared flag
+      //   { type: 'done' }    — graceful stream end
+      //   { error: string }   — mid-stream failure
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
+      let accumulated = '';
+      let sawError: string | null = null;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -160,10 +161,43 @@ export default function ArticleReader({
           break;
         }
         buffer += decoder.decode(value, { stream: true });
-        setMarkdown(buffer);
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed.length === 0) {
+            continue;
+          }
+          let event: {
+            delta?: unknown;
+            hasLatex?: unknown;
+            type?: unknown;
+            error?: unknown;
+          };
+          try {
+            event = JSON.parse(trimmed);
+          } catch {
+            continue;
+          }
+          if (typeof event.delta === 'string') {
+            accumulated += event.delta;
+            setContent(accumulated);
+          }
+          if (typeof event.hasLatex === 'boolean') {
+            setHasLatex(event.hasLatex);
+          }
+          if (typeof event.error === 'string') {
+            sawError = event.error;
+          }
+        }
       }
 
-      if (!buffer.trim()) {
+      if (sawError != null) {
+        setErrorMessage(sawError);
+        setStatus('error');
+        return;
+      }
+      if (!accumulated.trim()) {
         setErrorMessage('No content was generated. Please try again.');
         setStatus('error');
         return;
@@ -239,7 +273,7 @@ export default function ArticleReader({
 
   return (
     <div>
-      <ArticleMarkdown hasLatex={hasLatex}>{renderContent}</ArticleMarkdown>
+      <ArticleMarkdown hasLatex={hasLatex}>{content}</ArticleMarkdown>
       {status === 'streaming' && (
         <div className="mt-4 flex items-center gap-2 text-xs text-gray-400">
           <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-blue-500" />

@@ -1,7 +1,8 @@
 import { auth } from '@clerk/nextjs/server';
 import { ArticleStyle, prisma } from '@readtube/database';
-import { streamText } from 'ai';
+import { streamObject } from 'ai';
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 
 import { DEFAULT_AI_MODEL } from '@/constants';
 import {
@@ -11,16 +12,22 @@ import {
 } from '@/lib/markdownFrontmatter';
 import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
 
-const PROMPT_VERSION = 'v3';
+const PROMPT_VERSION = 'v4';
 const DEFAULT_STYLE: ArticleStyle = ArticleStyle.NARRATIVE;
 
-function canonicalizeForStorage(raw: string): string {
-  const parsed = parseMarkdownDocument(raw.trim());
-  return serializeMarkdownDocument(parsed.content, {
-    version: CURRENT_FRONTMATTER_VERSION,
-    hasLatex: parsed.properties.hasLatex === true,
-  });
-}
+// Structured-output schema: content first (so the model writes the
+// body before deciding hasLatex), hasLatex second (so the flag
+// reflects what the model actually produced).
+const ARTICLE_SCHEMA = z.object({
+  content: z
+    .string()
+    .describe('The markdown body of the article. Do not include any YAML frontmatter.'),
+  hasLatex: z
+    .boolean()
+    .describe(
+      'True if the content field above contains at least one LaTeX math formula wrapped in single or double dollar signs (e.g. $E = mc^2$ or $$\\int_0^1 x\\,dx$$). False otherwise. Dollar amounts like "$5 million" are not math and must not set this flag to true.'
+    ),
+});
 
 function parseStyle(raw: string | null | undefined): ArticleStyle | null {
   if (raw == null) {
@@ -48,14 +55,8 @@ ${styleGuidance}
 - Preserve the speaker's voice, key ideas, concrete details, and any numbers or examples.
 - Do not invent facts that aren't in the transcript.
 - Do not include the video title as a top-level heading — it will be shown separately.
+- Start directly with the article content. No preamble like "Here is the article".
 - Write in the same language as the transcript. Do not translate — if the transcript is in Chinese, write in Chinese; if Spanish, write in Spanish; and so on.
-- Begin your output with a YAML frontmatter block before the article body:
----
-version: v1
-hasLatex: <true|false>
----
-
-  Set hasLatex to true only if the body contains at least one LaTeX math formula wrapped in single or double dollar signs (e.g. $E = mc^2$ or $$\\int_0^1 x\\,dx$$). Set hasLatex to false otherwise — dollar amounts like "$5 million" are not math and must not set hasLatex=true. After the closing "---" line, add one blank line, then the article. Output nothing before the opening "---" and no preamble like "Here is the article".
 
 Video title: ${title}
 Channel: ${channelName}
@@ -211,8 +212,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
   const transcript = ensured.transcript;
 
-  // Cache hit: return the saved article as a single stream chunk so the client's
-  // existing stream-reader code path works unchanged.
+  const encoder = new TextEncoder();
+  const emitLine = (controller: ReadableStreamDefaultController<Uint8Array>, event: object) => {
+    controller.enqueue(encoder.encode(JSON.stringify(event) + '\n'));
+  };
+  const ndjsonHeaders = {
+    'Content-Type': 'application/x-ndjson; charset=utf-8',
+    'Cache-Control': 'no-cache, no-transform',
+  } as const;
+
+  // Cache hit: replay the stored article as a single-event NDJSON
+  // stream so the client's POST handler only has to know one wire
+  // format.
   const cached = await prisma.article.findUnique({
     where: {
       article_unique_transcript_style_version: {
@@ -224,81 +235,112 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     select: { content: true },
   });
 
-  const encoder = new TextEncoder();
-
   if (cached) {
+    const parsed = parseMarkdownDocument(cached.content);
+    const hasLatex = parsed.properties.hasLatex === true;
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
-        controller.enqueue(encoder.encode(cached.content));
+        emitLine(controller, { delta: parsed.content });
+        emitLine(controller, { hasLatex });
+        emitLine(controller, { type: 'done' });
         controller.close();
       },
     });
-    return new Response(stream, {
-      headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
-        'Cache-Control': 'no-cache, no-transform',
-      },
-    });
+    return new Response(stream, { headers: ndjsonHeaders });
   }
 
   const transcriptText = transcript.segments.map((s) => s.text).join(' ');
 
-  const result = streamText({
+  const result = streamObject({
     model: DEFAULT_AI_MODEL,
+    schema: ARTICLE_SCHEMA,
     prompt: buildPrompt(style, video.title, video.channel.name, transcriptText),
   });
 
-  // Eagerly consume the first chunk so pre-flight errors (gateway auth,
-  // invalid model, etc.) surface as a proper HTTP error before streaming starts.
-  const iterator = result.textStream[Symbol.asyncIterator]();
-  let firstChunk: IteratorResult<string>;
+  // Eagerly consume the first partial so pre-flight errors (gateway
+  // auth, invalid model, etc.) surface as a proper HTTP error before
+  // the stream opens.
+  const iterator = result.partialObjectStream[Symbol.asyncIterator]();
+  let firstChunk: IteratorResult<Partial<z.infer<typeof ARTICLE_SCHEMA>>>;
   try {
     firstChunk = await iterator.next();
   } catch (err) {
-    console.error('[article/POST] streamText pre-flight error:', err);
+    console.error('[article/POST] streamObject pre-flight error:', err);
     const message = err instanceof Error ? err.message : 'Failed to generate article.';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 
   const transcriptId = transcript.id;
-  let fullText = '';
-  let streamCompleted = false;
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
+      let accumulated = '';
+      let hasLatex: boolean | null = null;
+      let emittedHasLatex = false;
+      let streamCompleted = false;
+
+      const applyPartial = (partial: Partial<z.infer<typeof ARTICLE_SCHEMA>> | undefined) => {
+        if (partial == null) {
+          return;
+        }
+        if (typeof partial.content === 'string' && partial.content.length > accumulated.length) {
+          const delta = partial.content.slice(accumulated.length);
+          accumulated = partial.content;
+          emitLine(controller, { delta });
+        }
+        if (!emittedHasLatex && typeof partial.hasLatex === 'boolean') {
+          emittedHasLatex = true;
+          hasLatex = partial.hasLatex;
+          emitLine(controller, { hasLatex });
+        }
+      };
+
       try {
-        if (!firstChunk.done && firstChunk.value) {
-          fullText += firstChunk.value;
-          controller.enqueue(encoder.encode(firstChunk.value));
+        if (!firstChunk.done) {
+          applyPartial(firstChunk.value);
         }
         while (true) {
           const next = await iterator.next();
           if (next.done) {
             break;
           }
-          fullText += next.value;
-          controller.enqueue(encoder.encode(next.value));
+          applyPartial(next.value);
+        }
+        if (!emittedHasLatex) {
+          try {
+            const settled = await result.object;
+            hasLatex = settled.hasLatex;
+            emittedHasLatex = true;
+            emitLine(controller, { hasLatex });
+          } catch {
+            // Swallow — we already streamed the body.
+          }
         }
         streamCompleted = true;
+        emitLine(controller, { type: 'done' });
         controller.close();
       } catch (err) {
-        console.error('[article/POST] streamText mid-stream error:', err);
+        console.error('[article/POST] streamObject mid-stream error:', err);
         const message = err instanceof Error ? err.message : 'Unknown error';
-        controller.enqueue(encoder.encode(`\n\n> **Error:** ${message}`));
+        emitLine(controller, { error: message });
         controller.close();
       }
 
       // Persist after the stream closes. Do not save partial articles.
-      if (streamCompleted && fullText.trim().length > 0) {
+      if (streamCompleted && accumulated.trim().length > 0) {
         try {
           const usage = await result.usage;
+          const contentForStorage = serializeMarkdownDocument(accumulated.trim(), {
+            version: CURRENT_FRONTMATTER_VERSION,
+            hasLatex: hasLatex === true,
+          });
           await prisma.article.create({
             data: {
               transcript_id: transcriptId,
               style,
               prompt_version: PROMPT_VERSION,
               model: DEFAULT_AI_MODEL,
-              content: canonicalizeForStorage(fullText),
+              content: contentForStorage,
               usage: usage ? JSON.parse(JSON.stringify(usage)) : null,
             },
           });
@@ -309,10 +351,5 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     },
   });
 
-  return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/plain; charset=utf-8',
-      'Cache-Control': 'no-cache, no-transform',
-    },
-  });
+  return new Response(stream, { headers: ndjsonHeaders });
 }

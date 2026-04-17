@@ -1,7 +1,7 @@
 'use client';
 
 import { ArrowPathIcon } from '@heroicons/react/24/outline';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { countWords } from '@/lib/format/wordCount';
 import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
@@ -9,6 +9,8 @@ import { isProduction } from '@/lib/vercelEnv';
 
 import ArticleMarkdown from './ArticleMarkdown';
 import type { TranscriptStatus } from './VideoReader';
+
+type HasLatexByField = Partial<Record<'short' | 'full', boolean>>;
 
 interface Props {
   videoDbId: string;
@@ -91,6 +93,7 @@ export default function SummaryReader({
   const apiBase = publicMode ? '/api/public/videos' : '/api/videos';
   const [status, setStatus] = useState<Status>('checking');
   const [summary, setSummary] = useState<SummaryData | null>(null);
+  const [hasLatexByField, setHasLatexByField] = useState<HasLatexByField>({});
   const [regeneratingFields, setRegeneratingFields] = useState<SummaryField[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -98,6 +101,7 @@ export default function SummaryReader({
     let cancelled = false;
     setStatus('checking');
     setSummary(null);
+    setHasLatexByField({});
     setErrorMessage(null);
     setRegeneratingFields([]);
 
@@ -111,7 +115,19 @@ export default function SummaryReader({
           return;
         }
         const data = (await res.json()) as SummaryData;
-        setSummary(data);
+        // Stored short/full rows carry a YAML frontmatter with
+        // hasLatex. Peel it off so the renderer sees plain markdown.
+        const shortDoc = parseMarkdownDocument(data.short ?? '');
+        const fullDoc = parseMarkdownDocument(data.full ?? '');
+        setSummary({
+          headline: data.headline,
+          short: shortDoc.frontmatterPending ? (data.short ?? null) : shortDoc.content,
+          full: fullDoc.frontmatterPending ? (data.full ?? null) : fullDoc.content,
+        });
+        setHasLatexByField({
+          short: shortDoc.properties.hasLatex === true,
+          full: fullDoc.properties.hasLatex === true,
+        });
         setStatus('done');
         // Cache hit — flip the parent's Summary tab dot to blue
         // immediately, regardless of whether the user is currently
@@ -130,30 +146,19 @@ export default function SummaryReader({
   }, [videoDbId, onSummaryAvailable, apiBase]);
 
   // Stream the total word count up to VideoReader so the Summary tab
-  // header can render the "X min" reading-time badge. Fires on every
-  // summary change, including incremental streaming updates. The
-  // frontmatter on short/full is not user-visible markdown, so it
-  // shouldn't contribute to the badge.
+  // header can render the "X min" reading-time badge. summary.short
+  // and summary.full are already frontmatter-stripped (GET path
+  // parses on receipt, POST path stores clean structured-output
+  // content), so counting is direct.
   useEffect(() => {
     if (summary == null) {
       onSummaryWordsChange(0);
       return;
     }
-    const shortDoc = parseMarkdownDocument(summary.short ?? '');
-    const fullDoc = parseMarkdownDocument(summary.full ?? '');
-    const shortBody = shortDoc.frontmatterPending ? '' : shortDoc.content;
-    const fullBody = fullDoc.frontmatterPending ? '' : fullDoc.content;
-    const total = countWords(summary.headline) + countWords(shortBody) + countWords(fullBody);
+    const total =
+      countWords(summary.headline) + countWords(summary.short) + countWords(summary.full);
     onSummaryWordsChange(total);
   }, [summary, onSummaryWordsChange]);
-
-  // Short and full are stored as markdown-with-frontmatter; the
-  // frontmatter carries hasLatex. Parse once per field change, and
-  // hold off rendering while the frontmatter is still streaming in.
-  // Memoized up here (before any early return) so hook order stays
-  // stable regardless of which render branch we land in below.
-  const shortDoc = useMemo(() => parseMarkdownDocument(summary?.short ?? ''), [summary?.short]);
-  const fullDoc = useMemo(() => parseMarkdownDocument(summary?.full ?? ''), [summary?.full]);
 
   async function handleGenerate(targetFields?: SummaryField[]) {
     const fields = targetFields ?? [...ALL_FIELDS];
@@ -251,6 +256,7 @@ export default function SummaryReader({
           let event: {
             field?: SummaryField;
             delta?: string;
+            hasLatex?: boolean;
             error?: string;
             type?: string;
           };
@@ -273,6 +279,12 @@ export default function SummaryReader({
               full: prev?.full ?? null,
               [fieldName]: fieldValue,
             }));
+          } else if (event.field && typeof event.hasLatex === 'boolean') {
+            const fieldName = event.field;
+            const flag = event.hasLatex;
+            if (fieldName === 'short' || fieldName === 'full') {
+              setHasLatexByField((prev) => ({ ...prev, [fieldName]: flag }));
+            }
           } else if (event.field && event.error) {
             fieldError = event.error;
           }
@@ -373,10 +385,14 @@ export default function SummaryReader({
   // users in production.
   const showRegenerate = !isProduction() && !publicMode;
 
-  const shortContent = shortDoc.frontmatterPending ? '' : shortDoc.content.trim();
-  const fullContent = fullDoc.frontmatterPending ? '' : fullDoc.content.trim();
-  const shortHasLatex = shortDoc.properties.hasLatex === true;
-  const fullHasLatex = fullDoc.properties.hasLatex === true;
+  // summary.short / summary.full are already frontmatter-stripped —
+  // GET parses on receipt, POST streams clean structured-output
+  // content. hasLatex comes from hasLatexByField, populated by the
+  // same two paths.
+  const shortContent = summary.short?.trim() ?? '';
+  const fullContent = summary.full?.trim() ?? '';
+  const shortHasLatex = hasLatexByField.short === true;
+  const fullHasLatex = hasLatexByField.full === true;
 
   // Word counts surfaced next to the multi-sentence section headers
   // so the reader can size up the density before reading. Computed
