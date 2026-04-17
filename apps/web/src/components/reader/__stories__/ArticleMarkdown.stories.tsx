@@ -16,9 +16,9 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const InlineMath: Story = {
+export const InlineMathSingleDollar: Story = {
   args: {
-    children: "Einstein's famous relation $$E = mc^2$$ relates energy and mass.",
+    children: "Einstein's famous relation $E = mc^2$ relates energy and mass.",
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -26,6 +26,27 @@ export const InlineMath: Story = {
     const katex = canvasElement.querySelector('.katex');
     await expect(katex).not.toBeNull();
     await expect(canvasElement.querySelector('.katex-display')).toBeNull();
+  },
+};
+
+export const InlineMathDoubleDollar: Story = {
+  args: {
+    children: 'Double-dollar form also works inline: $$a + b$$ right here.',
+  },
+  play: async ({ canvasElement }) => {
+    await expect(canvasElement.querySelector('.katex')).not.toBeNull();
+    await expect(canvasElement.querySelector('.katex-display')).toBeNull();
+  },
+};
+
+export const LooseInlineMathStaysLiteral: Story = {
+  args: {
+    children: 'Leading space: $ x = 1$. Trailing space: $x = 1 $. Both: $ x = 1 $.',
+  },
+  play: async ({ canvasElement }) => {
+    await expect(canvasElement.querySelector('.katex')).toBeNull();
+    await expect(canvasElement.textContent).toContain('$ x = 1$');
+    await expect(canvasElement.textContent).toContain('$x = 1 $');
   },
 };
 
@@ -44,7 +65,7 @@ export const MixedProseAndMath: Story = {
     children: [
       '## Theorem',
       '',
-      'The inline form $$a^2 + b^2 = c^2$$ is Pythagoras.',
+      'The inline form $a^2 + b^2 = c^2$ is Pythagoras.',
       '',
       'Here is the display form:',
       '',
@@ -64,16 +85,6 @@ export const MixedProseAndMath: Story = {
     await expect(canvasElement.querySelector('.katex-display')).not.toBeNull();
     const listItems = canvasElement.querySelectorAll('li');
     await expect(listItems.length).toBe(2);
-  },
-};
-
-export const SingleDollarStaysLiteral: Story = {
-  args: {
-    children: 'Text with $x = 1$ should stay literal because single-$ math is disabled.',
-  },
-  play: async ({ canvasElement }) => {
-    await expect(canvasElement.querySelector('.katex')).toBeNull();
-    await expect(canvasElement.textContent).toContain('$x = 1$');
   },
 };
 
@@ -120,7 +131,7 @@ export const TrailingDollar: Story = {
 
 export const ScriptInjectionStripped: Story = {
   args: {
-    children: 'Safe math $$x^2$$ text <script>alert(1)</script> after.',
+    children: 'Safe math $x^2$ text <script>alert(1)</script> after.',
   },
   play: async ({ canvasElement }) => {
     await expect(canvasElement.querySelector('.katex')).not.toBeNull();
@@ -133,7 +144,7 @@ export const ScriptInjectionStripped: Story = {
 
 export const ShortSummaryVariant: Story = {
   args: {
-    children: 'A short summary using the muted color variant: $$f(x) = x + 1$$.',
+    children: 'A short summary using the muted color variant: $f(x) = x + 1$.',
     className: 'text-gray-700',
   },
   play: async ({ canvasElement }) => {
