@@ -65,13 +65,28 @@ export const DollarSignsInProsePlain: Story = {
     children: 'She raised **$2.2 million** and **$1.5 billion** across two rounds.',
   },
   play: async ({ canvasElement }) => {
-    // hasLatex=false → remark-math is not loaded → dollar signs stay
+    // hasLatex=false → single-$ math is disabled → dollar signs stay
     // literal and the bold structure survives intact.
     await expect(canvasElement.querySelector('.katex')).toBeNull();
     const strongs = canvasElement.querySelectorAll('strong');
     await expect(strongs.length).toBe(2);
     await expect(strongs[0]?.textContent).toBe('$2.2 million');
     await expect(strongs[1]?.textContent).toBe('$1.5 billion');
+  },
+};
+
+export const DisplayMathEvenWithoutFlag: Story = {
+  args: {
+    hasLatex: false,
+    children:
+      'Plain prose with **$5** money and an explicit display block:\n\n$$\na^2 + b^2 = c^2\n$$',
+  },
+  play: async ({ canvasElement }) => {
+    // hasLatex=false still renders $$…$$ because the delimiters are
+    // unambiguous. Only single-$ is disabled.
+    await expect(canvasElement.querySelector('.katex-display')).not.toBeNull();
+    const strong = canvasElement.querySelector('strong');
+    await expect(strong?.textContent).toBe('$5');
   },
 };
 

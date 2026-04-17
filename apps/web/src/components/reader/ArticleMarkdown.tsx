@@ -29,21 +29,26 @@ const EXTERNAL_LINKS_PLUGIN: PluggableList[number] = [
  * Shared Markdown renderer for AI-generated reader content (summaries,
  * articles). Single source of truth for the remark/rehype plugin set.
  *
- * LaTeX is gated by the `hasLatex` prop, which comes from the LLM-
- * declared flag in the frontmatter. This avoids remark-math's
- * permissive single-`$` tokenizer mis-matching prose dollar sign
- * pairs (`$5 for $10`, `**$2.2M** and **$1.5B**`) when the content
- * is plain prose.
+ * LaTeX delimiter behaviour is gated by the `hasLatex` prop:
+ *   - `hasLatex: true`  — both `$…$` and `$$…$$` render as math.
+ *   - `hasLatex: false` or undefined — only `$$…$$` renders; single-`$`
+ *     is disabled via `singleDollarTextMath: false` so prose dollar
+ *     sign pairs (`$5 for $10`, `**$2.2M** and **$1.5B**`) stay
+ *     literal. Display math still works because `$$…$$` is
+ *     unambiguous.
+ * The flag originates from the LLM-declared frontmatter — see
+ * `lib/markdownFrontmatter.ts`.
  *
  * Safety: react-markdown does not parse raw HTML by default, so
  * `<script>alert(1)</script>` in the source becomes a text node,
  * never an element. No sanitizer needed.
  */
 export default function ArticleMarkdown({ children, className, hasLatex }: Props) {
-  const remarkPlugins: PluggableList = hasLatex ? [remarkGfm, remarkMath] : [remarkGfm];
-  const rehypePlugins: PluggableList = hasLatex
-    ? [rehypeKatex, EXTERNAL_LINKS_PLUGIN]
-    : [EXTERNAL_LINKS_PLUGIN];
+  const mathPlugin: PluggableList[number] = hasLatex
+    ? remarkMath
+    : [remarkMath, { singleDollarTextMath: false }];
+  const remarkPlugins: PluggableList = [remarkGfm, mathPlugin];
+  const rehypePlugins: PluggableList = [rehypeKatex, EXTERNAL_LINKS_PLUGIN];
   return (
     <article className={className != null ? `${BASE_CLASS} ${className}` : BASE_CLASS}>
       <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins}>
