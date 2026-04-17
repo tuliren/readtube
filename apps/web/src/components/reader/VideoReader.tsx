@@ -134,12 +134,6 @@ export default function VideoReader({ video, publicMode = false }: Props) {
     video.hasArticle,
   ]);
 
-  // Derived flag for the Transcript tab dot — once transcriptStatus
-  // is 'present', a transcript exists in the cache. Keeps the dot's
-  // source of truth in one place rather than maintaining a parallel
-  // hasTranscript local state that could drift.
-  const hasTranscript = transcriptStatus === 'present';
-
   // Stable callbacks the children pass into their effect dep arrays.
   // useState's setters are already stable, but wrapping the
   // single-update closures in useCallback gives a clean reference
@@ -351,11 +345,8 @@ export default function VideoReader({ video, publicMode = false }: Props) {
             <>
               {/* Tabs — Summary first because it's the cheapest scannable
                 view, then Article (the long-form rewrite), then Transcript
-                (the raw firehose). Each tab carries a small dot:
-                  - blue when the corresponding artifact has been generated
-                  - red when no content exists yet for that tab
-                The dot color is stable across active/inactive states so
-                the signal doesn't depend on which tab the user clicked. */}
+                (the raw firehose). Tabs with generated content show a
+                reading-time badge; missing content shows nothing. */}
               <div className="mt-8 border-b border-gray-200">
                 <div className="flex gap-6">
                   {TABS.filter((tab) => {
@@ -374,12 +365,6 @@ export default function VideoReader({ video, publicMode = false }: Props) {
                     }
                     return true;
                   }).map((tab) => {
-                    const generated =
-                      tab.key === 'summary'
-                        ? hasSummary
-                        : tab.key === 'article'
-                          ? hasArticle
-                          : hasTranscript;
                     const words =
                       tab.key === 'summary'
                         ? summaryWords
@@ -397,15 +382,7 @@ export default function VideoReader({ video, publicMode = false }: Props) {
                         }`}
                       >
                         {tab.label}
-                        {words > 0 ? (
-                          <ReadingTimeBadge wordCount={words} />
-                        ) : !generated ? (
-                          <span
-                            className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-500"
-                            title={`${tab.label} not generated yet`}
-                            aria-label={`${tab.label} not generated yet`}
-                          />
-                        ) : null}
+                        {words > 0 && <ReadingTimeBadge wordCount={words} />}
                       </button>
                     );
                   })}
