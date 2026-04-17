@@ -17,12 +17,29 @@ interface Props {
 const BASE_CLASS = 'prose prose-gray max-w-none font-sans text-[17px] leading-[1.8]';
 
 /**
- * Pandoc-style filter over remark-math's output. remark-math's
- * default tokenizer pairs any two `$` signs regardless of surrounding
- * whitespace, which mis-renders "$5 for $10" as math `5 for `. This
- * plugin reverts any inlineMath whose content starts or ends with
- * whitespace back to literal text — the strong signal that the
- * delimiters were prose dollar signs, not math.
+ * Escape prose dollar signs before remark-math sees them. A `$`
+ * followed immediately by a digit is almost always money ("$2.2
+ * million", "$5", "$100"), never the opener of real math. Escaping
+ * these up front has two benefits:
+ *   1. remark-math never mis-pairs "$2.2 million** and **$1.5 billion"
+ *      into a single math span that destroys the surrounding bolds.
+ *   2. lone prose dollar signs stay literal without relying on the
+ *      tokenizer failing to find a closer.
+ *
+ * The negative lookbehind avoids touching `$$` (display math opener)
+ * or `\$` (already-escaped). Tradeoff: inline math that opens on a
+ * digit ("$1+1=2$") must use `$$…$$` instead — rare enough to accept.
+ */
+function escapeProseDollars(markdown: string): string {
+  return markdown.replace(/(?<![\\$])\$(?=\d)/g, '\\$');
+}
+
+/**
+ * Backstop for prose dollar signs that slip past escapeProseDollars
+ * (e.g. "$x$" where "x" is non-digit but surrounded by whitespace).
+ * Reverts inlineMath nodes whose source span violates Pandoc's
+ * delimiter rules. Kept as defense-in-depth; the real work happens
+ * in the preprocessor.
  */
 function remarkStrictInlineMath() {
   return (tree: unknown, file: { value: unknown }) => {
@@ -39,9 +56,6 @@ function remarkStrictInlineMath() {
       if (startOffset == null || endOffset == null) {
         return;
       }
-      // Count leading `$`s to find the delimiter size. `$$...$$` is
-      // unambiguous so we leave it alone; the pandoc rule only
-      // applies to single-`$` pairs.
       let delim = 0;
       while (source[startOffset + delim] === '$') {
         delim++;
@@ -49,15 +63,14 @@ function remarkStrictInlineMath() {
       if (delim !== 1) {
         return;
       }
-      const afterOpen = source[startOffset + 1] ?? '';
-      const beforeClose = source[endOffset - 2] ?? '';
-      if (!/\s/.test(afterOpen) && !/\s/.test(beforeClose)) {
+      const raw = source.slice(startOffset, endOffset);
+      const inner = raw.slice(1, -1);
+      const looseBoundary = /^\s|\s$/.test(inner);
+      const crossesEmphasis = /\*\*|__/.test(inner);
+      if (!looseBoundary && !crossesEmphasis) {
         return;
       }
-      (parent as { children: unknown[] }).children[index] = {
-        type: 'text',
-        value: source.slice(startOffset, endOffset),
-      };
+      (parent as { children: unknown[] }).children[index] = { type: 'text', value: raw };
     });
   };
 }
@@ -83,6 +96,7 @@ function remarkStrictInlineMath() {
  *     literal; "$E = mc^2$" renders as inline math.
  */
 export default function ArticleMarkdown({ children, className }: Props) {
+  const preprocessed = escapeProseDollars(children);
   return (
     <article className={className != null ? `${BASE_CLASS} ${className}` : BASE_CLASS}>
       <ReactMarkdown
@@ -92,7 +106,7 @@ export default function ArticleMarkdown({ children, className }: Props) {
           [rehypeExternalLinks, { target: '_blank', rel: ['noopener', 'noreferrer'] }],
         ]}
       >
-        {children}
+        {preprocessed}
       </ReactMarkdown>
     </article>
   );

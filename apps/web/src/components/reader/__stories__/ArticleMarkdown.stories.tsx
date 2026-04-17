@@ -88,6 +88,31 @@ export const MixedProseAndMath: Story = {
   },
 };
 
+export const BoldAroundDollarAmount: Story = {
+  args: {
+    children: 'The total raised was **$2.2 million** in seed funding.',
+  },
+  play: async ({ canvasElement }) => {
+    await expect(canvasElement.querySelector('.katex')).toBeNull();
+    const strong = canvasElement.querySelector('strong');
+    await expect(strong).not.toBeNull();
+    await expect(strong?.textContent).toBe('$2.2 million');
+  },
+};
+
+export const BoldAroundTwoDollarAmounts: Story = {
+  args: {
+    children: 'She raised **$2.2 million** and **$1.5 billion** across two rounds.',
+  },
+  play: async ({ canvasElement }) => {
+    await expect(canvasElement.querySelector('.katex')).toBeNull();
+    const strongs = canvasElement.querySelectorAll('strong');
+    await expect(strongs.length).toBe(2);
+    await expect(strongs[0]?.textContent).toBe('$2.2 million');
+    await expect(strongs[1]?.textContent).toBe('$1.5 billion');
+  },
+};
+
 export const LoneDollarSign: Story = {
   args: {
     children: 'The price is $5.',
