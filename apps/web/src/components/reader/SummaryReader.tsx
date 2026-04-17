@@ -10,7 +10,6 @@ import remarkGfm from 'remark-gfm';
 import { countWords } from '@/lib/format/wordCount';
 import { isProduction } from '@/lib/vercelEnv';
 
-import ReadingTimeBadge from './ReadingTimeBadge';
 import type { TranscriptStatus } from './VideoReader';
 
 interface Props {
@@ -26,6 +25,11 @@ interface Props {
    *  the Summary tab dot can flip from red → blue. Fired on the
    *  initial GET cache hit AND after a successful generation. */
   onSummaryAvailable: () => void;
+  /** Reports the total word count (headline + short + full) up to
+   *  VideoReader so the Summary tab header can render the reading
+   *  time badge. Fires on every summary state change, so the badge
+   *  updates live as content streams in. */
+  onSummaryWordsChange: (words: number) => void;
   /** When true, fetch from the unauthenticated public endpoint and
    *  render a read-only view — no generate / regenerate affordances. */
   publicMode?: boolean;
@@ -83,6 +87,7 @@ export default function SummaryReader({
   transcriptStatus,
   onTranscriptStatusChange,
   onSummaryAvailable,
+  onSummaryWordsChange,
   publicMode = false,
 }: Props) {
   const apiBase = publicMode ? '/api/public/videos' : '/api/videos';
@@ -125,6 +130,17 @@ export default function SummaryReader({
       cancelled = true;
     };
   }, [videoDbId, onSummaryAvailable, apiBase]);
+
+  // Stream the total word count up to VideoReader so the Summary tab
+  // header can render the "X min" reading-time badge. Fires on every
+  // summary change, including incremental streaming updates.
+  useEffect(() => {
+    const total =
+      summary == null
+        ? 0
+        : countWords(summary.headline) + countWords(summary.short) + countWords(summary.full);
+    onSummaryWordsChange(total);
+  }, [summary, onSummaryWordsChange]);
 
   async function handleGenerate(targetFields?: SummaryField[]) {
     const fields = targetFields ?? [...ALL_FIELDS];
@@ -353,25 +369,23 @@ export default function SummaryReader({
   // word count there is just visual noise.
   const shortWords = countWords(summary.short);
   const fullWords = countWords(summary.full);
-  const totalWords = countWords(summary.headline) + shortWords + fullWords;
 
   return (
     <div className="space-y-8">
       {/* Headline */}
       <div className="flex items-start justify-between gap-4">
-        <div className="flex min-w-0 items-start gap-2">
-          {summary.headline ? (
-            <h2 className="text-xl leading-snug font-semibold text-gray-900">{summary.headline}</h2>
-          ) : isRegenerating('headline') ? (
-            <div className="h-6 w-48 animate-pulse rounded bg-gray-200" />
-          ) : (
-            <div className="text-sm text-gray-400 italic">No headline yet.</div>
-          )}
-          {showRegenerate && !isRegenerating('headline') && (
-            <RegenerateButton onClick={() => handleGenerate(['headline'])} disabled={isStreaming} />
-          )}
-        </div>
-        <ReadingTimeBadge wordCount={totalWords} className="mt-1 shrink-0" />
+        {summary.headline ? (
+          <h2 className="flex-1 text-xl leading-snug font-semibold text-gray-900">
+            {summary.headline}
+          </h2>
+        ) : isRegenerating('headline') ? (
+          <div className="h-6 flex-1 animate-pulse rounded bg-gray-200" />
+        ) : (
+          <div className="flex-1 text-sm text-gray-400 italic">No headline yet.</div>
+        )}
+        {showRegenerate && !isRegenerating('headline') && (
+          <RegenerateButton onClick={() => handleGenerate(['headline'])} disabled={isStreaming} />
+        )}
       </div>
 
       {/* Short */}

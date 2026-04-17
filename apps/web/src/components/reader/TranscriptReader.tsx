@@ -6,7 +6,6 @@ import { countWords } from '@/lib/format/wordCount';
 import type { TranscriptSegment } from '@/lib/subtitles/types';
 import { formatTimestamp, groupTranscriptSegments } from '@/lib/youtube/transcript';
 
-import ReadingTimeBadge from './ReadingTimeBadge';
 import type { TranscriptStatus } from './VideoReader';
 
 interface Props {
@@ -19,6 +18,10 @@ interface Props {
   /** Callback into VideoReader so this component can flip the shared
    *  status when its own GET / POST reveals the answer. */
   onTranscriptStatusChange: (next: TranscriptStatus) => void;
+  /** Reports the transcript word count up to VideoReader so the
+   *  Transcript tab header can render the reading time badge. Fires
+   *  whenever the segment list changes (initial load, fetch, etc.). */
+  onTranscriptWordsChange: (words: number) => void;
 }
 
 type LocalStatus = 'checking' | 'notCached' | 'fetching' | 'loaded' | 'error';
@@ -57,9 +60,20 @@ export default function TranscriptReader({
   sourceId,
   transcriptStatus,
   onTranscriptStatusChange,
+  onTranscriptWordsChange,
 }: Props) {
   const [segments, setSegments] = useState<TranscriptSegment[] | null>(null);
   const [localStatus, setLocalStatus] = useState<LocalStatus>('checking');
+
+  // Stream the transcript word count up to VideoReader so the
+  // Transcript tab header can render the reading-time badge.
+  useEffect(() => {
+    if (segments == null) {
+      onTranscriptWordsChange(0);
+      return;
+    }
+    onTranscriptWordsChange(countWords(segments.map((s) => s.text).join(' ')));
+  }, [segments, onTranscriptWordsChange]);
 
   // Track which videoDbId we already have segments for. The effect
   // depends on transcriptStatus so an external flip from the Summary
@@ -235,8 +249,6 @@ export default function TranscriptReader({
     return <UnavailableMessage sourceId={sourceId} />;
   }
 
-  const totalWordCount = countWords(paragraphs.map((p) => p.text).join(' '));
-
   return (
     <div className="space-y-5">
       {paragraphs.map((para, i) => {
@@ -255,12 +267,6 @@ export default function TranscriptReader({
               {formatTimestamp(para.startMs)}
             </a>
             <p className="font-sans text-[17px] leading-[1.8] text-gray-800">{para.text}</p>
-            {i === 0 && (
-              <ReadingTimeBadge
-                wordCount={totalWordCount}
-                className="mt-1 ml-auto shrink-0 self-start"
-              />
-            )}
           </div>
         );
       })}
