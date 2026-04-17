@@ -4,11 +4,24 @@ import { streamText } from 'ai';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { DEFAULT_AI_MODEL } from '@/constants';
+import {
+  CURRENT_FRONTMATTER_VERSION,
+  parseMarkdownDocument,
+  serializeMarkdownDocument,
+} from '@/lib/markdownFrontmatter';
 import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
 
-const SUMMARY_PROMPT_VERSION = 'v4';
+const SUMMARY_PROMPT_VERSION = 'v5';
 
 const LANGUAGE_RULE = `Write in the same language as the transcript below. Do not translate — if the transcript is in Chinese, write in Chinese; if Spanish, write in Spanish; and so on.`;
+
+const FRONTMATTER_RULE = `Begin your output with a YAML frontmatter block before the body:
+---
+version: v1
+hasLatex: <true|false>
+---
+
+Set hasLatex to true only if the body contains at least one LaTeX math formula wrapped in single or double dollar signs (e.g. $E = mc^2$ or $$\\int_0^1 x\\,dx$$). Set hasLatex to false otherwise — dollar amounts like "$5 million" are not math and must not set hasLatex=true. After the closing "---" line, add one blank line, then the body. Output nothing before the opening "---".`;
 
 const PROMPTS = {
   headline: `Write a very short title for this video. Rules:
@@ -21,7 +34,8 @@ Output only the title itself, nothing else.`,
 - First sentence: the essential point.
 - 1-2 more sentences: the most important supporting context.
 - Plain prose. No headings, no lists, no preamble.
-- ${LANGUAGE_RULE}`,
+- ${LANGUAGE_RULE}
+- ${FRONTMATTER_RULE}`,
   full: `Write a compact summary of this video. Rules:
 - Focus only on the main arguments and conclusions. Cut examples, tangents, and non-essential details.
 - Favor density over completeness. A reader should get the gist in under a minute.
@@ -31,8 +45,30 @@ Output only the title itself, nothing else.`,
   - Mix prose and a short bullet list when an introductory point is followed by enumerated takeaways.
 - Bullets must be terse (one line each) and use Markdown "- " syntax. Do not nest more than one level.
 - Never use headings (no #, ##, etc.). Do not bold or italicize.
-- ${LANGUAGE_RULE}`,
+- ${LANGUAGE_RULE}
+- ${FRONTMATTER_RULE}`,
 } as const;
+
+const FIELDS_WITH_FRONTMATTER: ReadonlySet<SummaryField> = new Set<SummaryField>(['short', 'full']);
+
+/**
+ * Normalize the raw model output for DB storage: for fields that are
+ * expected to carry frontmatter, parse what the model emitted and
+ * re-serialize with our canonical format. If the model skipped or
+ * mangled the frontmatter, we synthesize a default header with
+ * hasLatex: false so the stored row is always well-formed.
+ */
+function canonicalizeForStorage(field: SummaryField, raw: string): string {
+  const trimmed = raw.trim();
+  if (!FIELDS_WITH_FRONTMATTER.has(field)) {
+    return trimmed;
+  }
+  const parsed = parseMarkdownDocument(trimmed);
+  return serializeMarkdownDocument(parsed.content, {
+    version: CURRENT_FRONTMATTER_VERSION,
+    hasLatex: parsed.properties.hasLatex === true,
+  });
+}
 
 type SummaryField = keyof typeof PROMPTS;
 const SUMMARY_FIELDS: readonly SummaryField[] = ['headline', 'short', 'full'] as const;
@@ -284,13 +320,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
           const summaryData = {
             headline: fieldsToGenerate.includes('headline')
-              ? accumulated.headline.trim()
+              ? canonicalizeForStorage('headline', accumulated.headline)
               : (existing?.headline ?? null),
             short: fieldsToGenerate.includes('short')
-              ? accumulated.short.trim()
+              ? canonicalizeForStorage('short', accumulated.short)
               : (existing?.short ?? null),
             full: fieldsToGenerate.includes('full')
-              ? accumulated.full.trim()
+              ? canonicalizeForStorage('full', accumulated.full)
               : (existing?.full ?? null),
             prompt_version: SUMMARY_PROMPT_VERSION,
             model: DEFAULT_AI_MODEL,

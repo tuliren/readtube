@@ -4,10 +4,23 @@ import { streamText } from 'ai';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { DEFAULT_AI_MODEL } from '@/constants';
+import {
+  CURRENT_FRONTMATTER_VERSION,
+  parseMarkdownDocument,
+  serializeMarkdownDocument,
+} from '@/lib/markdownFrontmatter';
 import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
 
-const PROMPT_VERSION = 'v2';
+const PROMPT_VERSION = 'v3';
 const DEFAULT_STYLE: ArticleStyle = ArticleStyle.NARRATIVE;
+
+function canonicalizeForStorage(raw: string): string {
+  const parsed = parseMarkdownDocument(raw.trim());
+  return serializeMarkdownDocument(parsed.content, {
+    version: CURRENT_FRONTMATTER_VERSION,
+    hasLatex: parsed.properties.hasLatex === true,
+  });
+}
 
 function parseStyle(raw: string | null | undefined): ArticleStyle | null {
   if (raw == null) {
@@ -35,8 +48,14 @@ ${styleGuidance}
 - Preserve the speaker's voice, key ideas, concrete details, and any numbers or examples.
 - Do not invent facts that aren't in the transcript.
 - Do not include the video title as a top-level heading — it will be shown separately.
-- Start directly with the article content. No preamble like "Here is the article".
 - Write in the same language as the transcript. Do not translate — if the transcript is in Chinese, write in Chinese; if Spanish, write in Spanish; and so on.
+- Begin your output with a YAML frontmatter block before the article body:
+---
+version: v1
+hasLatex: <true|false>
+---
+
+  Set hasLatex to true only if the body contains at least one LaTeX math formula wrapped in single or double dollar signs (e.g. $E = mc^2$ or $$\\int_0^1 x\\,dx$$). Set hasLatex to false otherwise — dollar amounts like "$5 million" are not math and must not set hasLatex=true. After the closing "---" line, add one blank line, then the article. Output nothing before the opening "---" and no preamble like "Here is the article".
 
 Video title: ${title}
 Channel: ${channelName}
@@ -279,7 +298,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
               style,
               prompt_version: PROMPT_VERSION,
               model: DEFAULT_AI_MODEL,
-              content: fullText,
+              content: canonicalizeForStorage(fullText),
               usage: usage ? JSON.parse(JSON.stringify(usage)) : null,
             },
           });

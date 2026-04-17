@@ -1,9 +1,10 @@
 'use client';
 
 import { ArrowPathIcon } from '@heroicons/react/24/outline';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { countWords } from '@/lib/format/wordCount';
+import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { isProduction } from '@/lib/vercelEnv';
 
 import ArticleMarkdown from './ArticleMarkdown';
@@ -130,14 +131,29 @@ export default function SummaryReader({
 
   // Stream the total word count up to VideoReader so the Summary tab
   // header can render the "X min" reading-time badge. Fires on every
-  // summary change, including incremental streaming updates.
+  // summary change, including incremental streaming updates. The
+  // frontmatter on short/full is not user-visible markdown, so it
+  // shouldn't contribute to the badge.
   useEffect(() => {
-    const total =
-      summary == null
-        ? 0
-        : countWords(summary.headline) + countWords(summary.short) + countWords(summary.full);
+    if (summary == null) {
+      onSummaryWordsChange(0);
+      return;
+    }
+    const shortDoc = parseMarkdownDocument(summary.short ?? '');
+    const fullDoc = parseMarkdownDocument(summary.full ?? '');
+    const shortBody = shortDoc.frontmatterPending ? '' : shortDoc.content;
+    const fullBody = fullDoc.frontmatterPending ? '' : fullDoc.content;
+    const total = countWords(summary.headline) + countWords(shortBody) + countWords(fullBody);
     onSummaryWordsChange(total);
   }, [summary, onSummaryWordsChange]);
+
+  // Short and full are stored as markdown-with-frontmatter; the
+  // frontmatter carries hasLatex. Parse once per field change, and
+  // hold off rendering while the frontmatter is still streaming in.
+  // Memoized up here (before any early return) so hook order stays
+  // stable regardless of which render branch we land in below.
+  const shortDoc = useMemo(() => parseMarkdownDocument(summary?.short ?? ''), [summary?.short]);
+  const fullDoc = useMemo(() => parseMarkdownDocument(summary?.full ?? ''), [summary?.full]);
 
   async function handleGenerate(targetFields?: SummaryField[]) {
     const fields = targetFields ?? [...ALL_FIELDS];
@@ -352,11 +368,15 @@ export default function SummaryReader({
 
   const isStreaming = status === 'generating';
   const isRegenerating = (field: SummaryField) => regeneratingFields.includes(field);
-  const fullMarkdown = summary.full?.trim() ?? '';
   // Regenerate is a dev-only escape hatch — costs tokens, can produce
   // worse output than a cached run, and shouldn't be exposed to end
   // users in production.
   const showRegenerate = !isProduction() && !publicMode;
+
+  const shortContent = shortDoc.frontmatterPending ? '' : shortDoc.content.trim();
+  const fullContent = fullDoc.frontmatterPending ? '' : fullDoc.content.trim();
+  const shortHasLatex = shortDoc.properties.hasLatex === true;
+  const fullHasLatex = fullDoc.properties.hasLatex === true;
 
   // Word counts surfaced next to the multi-sentence section headers
   // so the reader can size up the density before reading. Computed
@@ -364,8 +384,8 @@ export default function SummaryReader({
   // visibly as new tokens come in. Headline is intentionally
   // excluded — it's a one-sentence newspaper-style title and a
   // word count there is just visual noise.
-  const shortWords = countWords(summary.short);
-  const fullWords = countWords(summary.full);
+  const shortWords = countWords(shortContent);
+  const fullWords = countWords(fullContent);
 
   return (
     <div className="space-y-8">
@@ -395,8 +415,10 @@ export default function SummaryReader({
             <RegenerateButton onClick={() => handleGenerate(['short'])} disabled={isStreaming} />
           )}
         </div>
-        {summary.short ? (
-          <ArticleMarkdown className="text-gray-700">{summary.short}</ArticleMarkdown>
+        {shortContent.length > 0 ? (
+          <ArticleMarkdown className="text-gray-700" hasLatex={shortHasLatex}>
+            {shortContent}
+          </ArticleMarkdown>
         ) : isRegenerating('short') ? (
           <div className="space-y-2">
             <div className="h-4 w-full animate-pulse rounded bg-gray-200" />
@@ -418,8 +440,8 @@ export default function SummaryReader({
             <RegenerateButton onClick={() => handleGenerate(['full'])} disabled={isStreaming} />
           )}
         </div>
-        {fullMarkdown.length > 0 ? (
-          <ArticleMarkdown>{fullMarkdown}</ArticleMarkdown>
+        {fullContent.length > 0 ? (
+          <ArticleMarkdown hasLatex={fullHasLatex}>{fullContent}</ArticleMarkdown>
         ) : isRegenerating('full') ? (
           <div className="space-y-2">
             {[100, 95, 90, 85, 75].map((w, i) => (

@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { countWords } from '@/lib/format/wordCount';
+import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
 
 import ArticleMarkdown from './ArticleMarkdown';
 import type { TranscriptStatus } from './VideoReader';
@@ -80,12 +81,20 @@ export default function ArticleReader({
     };
   }, [videoDbId, onArticleAvailable, apiBase]);
 
+  // Parse any frontmatter out of the accumulated markdown before it
+  // reaches the renderer. During a stream, the frontmatter arrives
+  // first — hold off rendering until the closing fence lands so the
+  // user never sees raw `---\nversion:` flash on screen.
+  const parsed = useMemo(() => parseMarkdownDocument(markdown), [markdown]);
+  const renderContent = parsed.frontmatterPending ? '' : parsed.content;
+  const hasLatex = parsed.properties.hasLatex === true;
+
   // Stream the article word count up to VideoReader so the Article
   // tab header can render the reading-time badge. Fires on every
   // markdown change, including incremental streaming updates.
   useEffect(() => {
-    onArticleWordsChange(countWords(markdown));
-  }, [markdown, onArticleWordsChange]);
+    onArticleWordsChange(countWords(renderContent));
+  }, [renderContent, onArticleWordsChange]);
 
   async function handleGenerate() {
     setStatus('streaming');
@@ -230,7 +239,7 @@ export default function ArticleReader({
 
   return (
     <div>
-      <ArticleMarkdown>{markdown}</ArticleMarkdown>
+      <ArticleMarkdown hasLatex={hasLatex}>{renderContent}</ArticleMarkdown>
       {status === 'streaming' && (
         <div className="mt-4 flex items-center gap-2 text-xs text-gray-400">
           <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-blue-500" />

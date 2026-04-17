@@ -5,42 +5,48 @@ import rehypeExternalLinks from 'rehype-external-links';
 import rehypeKatex from 'rehype-katex';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
+import type { PluggableList } from 'unified';
 
 interface Props {
   children: string;
   /** Extra classes appended to the default article styling. Used for
    *  per-caller tweaks like the muted color on short summaries. */
   className?: string;
+  /** When true, enable remark-math + rehype-katex so `$…$` / `$$…$$`
+   *  render as LaTeX. When false/undefined, those plugins are skipped
+   *  entirely — every dollar sign stays literal, which is the correct
+   *  behaviour for plain prose containing money amounts etc. */
+  hasLatex?: boolean;
 }
 
 const BASE_CLASS = 'prose prose-gray max-w-none font-sans text-[17px] leading-[1.8]';
+const EXTERNAL_LINKS_PLUGIN: PluggableList[number] = [
+  rehypeExternalLinks,
+  { target: '_blank', rel: ['noopener', 'noreferrer'] },
+];
 
 /**
  * Shared Markdown renderer for AI-generated reader content (summaries,
  * articles). Single source of truth for the remark/rehype plugin set.
  *
- * LaTeX support via remark-math defaults: inline `$…$` and display
- * `$$…$$`. Known edge cases with the permissive single-`$` tokenizer:
- * prose dollar sign pairs ("$5 for $10") may mis-render as math, and
- * bold around money ("**$2.2M** and **$1.5B**") can be fused into
- * one span. Accepted trade-off — prompts use the conventional
- * single-`$` for inline math, which is what models already emit.
+ * LaTeX is gated by the `hasLatex` prop, which comes from the LLM-
+ * declared flag in the frontmatter. This avoids remark-math's
+ * permissive single-`$` tokenizer mis-matching prose dollar sign
+ * pairs (`$5 for $10`, `**$2.2M** and **$1.5B**`) when the content
+ * is plain prose.
  *
  * Safety: react-markdown does not parse raw HTML by default, so
- * `<script>alert(1)</script>` in the markdown source becomes a text
- * node, never an element. The plugin set (gfm, math, katex,
- * external-links) all produce known-safe HAST; no sanitizer needed.
+ * `<script>alert(1)</script>` in the source becomes a text node,
+ * never an element. No sanitizer needed.
  */
-export default function ArticleMarkdown({ children, className }: Props) {
+export default function ArticleMarkdown({ children, className, hasLatex }: Props) {
+  const remarkPlugins: PluggableList = hasLatex ? [remarkGfm, remarkMath] : [remarkGfm];
+  const rehypePlugins: PluggableList = hasLatex
+    ? [rehypeKatex, EXTERNAL_LINKS_PLUGIN]
+    : [EXTERNAL_LINKS_PLUGIN];
   return (
     <article className={className != null ? `${BASE_CLASS} ${className}` : BASE_CLASS}>
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkMath]}
-        rehypePlugins={[
-          rehypeKatex,
-          [rehypeExternalLinks, { target: '_blank', rel: ['noopener', 'noreferrer'] }],
-        ]}
-      >
+      <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins}>
         {children}
       </ReactMarkdown>
     </article>

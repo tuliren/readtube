@@ -10,6 +10,7 @@ const meta = {
   argTypes: {
     children: { control: 'text' },
     className: { control: 'text' },
+    hasLatex: { control: 'boolean' },
   },
 } satisfies Meta<typeof ArticleMarkdown>;
 
@@ -18,6 +19,7 @@ type Story = StoryObj<typeof meta>;
 
 export const InlineMath: Story = {
   args: {
+    hasLatex: true,
     children: "Einstein's famous relation $E = mc^2$ relates energy and mass.",
   },
   play: async ({ canvasElement }) => {
@@ -30,6 +32,7 @@ export const InlineMath: Story = {
 
 export const DisplayMath: Story = {
   args: {
+    hasLatex: true,
     children: 'Consider the integral:\n\n$$\n\\int_0^1 x^2 \\, dx = \\frac{1}{3}\n$$\n\nUseful.',
   },
   play: async ({ canvasElement }) => {
@@ -39,6 +42,7 @@ export const DisplayMath: Story = {
 
 export const MixedProseAndMath: Story = {
   args: {
+    hasLatex: true,
     children: [
       '## Theorem',
       '',
@@ -55,8 +59,25 @@ export const MixedProseAndMath: Story = {
   },
 };
 
+export const DollarSignsInProsePlain: Story = {
+  args: {
+    hasLatex: false,
+    children: 'She raised **$2.2 million** and **$1.5 billion** across two rounds.',
+  },
+  play: async ({ canvasElement }) => {
+    // hasLatex=false → remark-math is not loaded → dollar signs stay
+    // literal and the bold structure survives intact.
+    await expect(canvasElement.querySelector('.katex')).toBeNull();
+    const strongs = canvasElement.querySelectorAll('strong');
+    await expect(strongs.length).toBe(2);
+    await expect(strongs[0]?.textContent).toBe('$2.2 million');
+    await expect(strongs[1]?.textContent).toBe('$1.5 billion');
+  },
+};
+
 export const ScriptInjectionStripped: Story = {
   args: {
+    hasLatex: true,
     children: 'Safe math $x^2$ text <script>alert(1)</script> after.',
   },
   play: async ({ canvasElement }) => {
@@ -67,6 +88,7 @@ export const ScriptInjectionStripped: Story = {
 
 export const ShortSummaryVariant: Story = {
   args: {
+    hasLatex: true,
     children: 'A short summary in the muted variant with math: $f(x) = x + 1$.',
     className: 'text-gray-700',
   },
