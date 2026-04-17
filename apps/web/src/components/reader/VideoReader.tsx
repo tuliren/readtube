@@ -69,8 +69,11 @@ export default function VideoReader({ video, publicMode = false }: Props) {
 
   // Default to Summary because that's the cheapest scannable view —
   // the previous default of Transcript meant every reader open
-  // landed on the densest, longest content first.
-  const [activeTab, setActiveTab] = useState<Tab>('summary');
+  // landed on the densest, longest content first. In public mode
+  // fall back to Article if the shared video has only an article.
+  const [activeTab, setActiveTab] = useState<Tab>(
+    publicMode && !video.hasSummary && video.hasArticle ? 'article' : 'summary'
+  );
   const durationLabel = formatDurationSeconds(video.durationSeconds);
 
   // Shared transcript availability state across all three tabs.
@@ -355,7 +358,22 @@ export default function VideoReader({ video, publicMode = false }: Props) {
                 the signal doesn't depend on which tab the user clicked. */}
               <div className="mt-8 border-b border-gray-200">
                 <div className="flex gap-6">
-                  {TABS.filter((tab) => !(publicMode && tab.key === 'transcript')).map((tab) => {
+                  {TABS.filter((tab) => {
+                    if (tab.key === 'transcript') {
+                      return !publicMode;
+                    }
+                    // In public mode the reader can't generate
+                    // anything — hide tabs whose content doesn't
+                    // exist so the viewer isn't teased with an empty
+                    // panel.
+                    if (publicMode && tab.key === 'summary') {
+                      return hasSummary;
+                    }
+                    if (publicMode && tab.key === 'article') {
+                      return hasArticle;
+                    }
+                    return true;
+                  }).map((tab) => {
                     const generated =
                       tab.key === 'summary'
                         ? hasSummary
@@ -396,26 +414,30 @@ export default function VideoReader({ video, publicMode = false }: Props) {
 
               {/* Tab content */}
               <div className="mt-6">
-                <div className={activeTab === 'summary' ? '' : 'hidden'}>
-                  <SummaryReader
-                    videoDbId={video.id}
-                    transcriptStatus={transcriptStatus}
-                    onTranscriptStatusChange={setTranscriptStatus}
-                    onSummaryAvailable={handleSummaryAvailable}
-                    onSummaryWordsChange={handleSummaryWordsChange}
-                    publicMode={publicMode}
-                  />
-                </div>
-                <div className={activeTab === 'article' ? '' : 'hidden'}>
-                  <ArticleReader
-                    videoDbId={video.id}
-                    transcriptStatus={transcriptStatus}
-                    onTranscriptStatusChange={setTranscriptStatus}
-                    onArticleAvailable={handleArticleAvailable}
-                    onArticleWordsChange={handleArticleWordsChange}
-                    publicMode={publicMode}
-                  />
-                </div>
+                {(!publicMode || hasSummary) && (
+                  <div className={activeTab === 'summary' ? '' : 'hidden'}>
+                    <SummaryReader
+                      videoDbId={video.id}
+                      transcriptStatus={transcriptStatus}
+                      onTranscriptStatusChange={setTranscriptStatus}
+                      onSummaryAvailable={handleSummaryAvailable}
+                      onSummaryWordsChange={handleSummaryWordsChange}
+                      publicMode={publicMode}
+                    />
+                  </div>
+                )}
+                {(!publicMode || hasArticle) && (
+                  <div className={activeTab === 'article' ? '' : 'hidden'}>
+                    <ArticleReader
+                      videoDbId={video.id}
+                      transcriptStatus={transcriptStatus}
+                      onTranscriptStatusChange={setTranscriptStatus}
+                      onArticleAvailable={handleArticleAvailable}
+                      onArticleWordsChange={handleArticleWordsChange}
+                      publicMode={publicMode}
+                    />
+                  </div>
+                )}
                 {!publicMode && (
                   <div className={activeTab === 'transcript' ? '' : 'hidden'}>
                     <TranscriptReader
