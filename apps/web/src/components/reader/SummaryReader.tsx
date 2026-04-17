@@ -2,14 +2,11 @@
 
 import { ArrowPathIcon } from '@heroicons/react/24/outline';
 import { useEffect, useState } from 'react';
-import ReactMarkdown from 'react-markdown';
-import rehypeExternalLinks from 'rehype-external-links';
-import rehypeSanitize from 'rehype-sanitize';
-import remarkGfm from 'remark-gfm';
 
 import { countWords } from '@/lib/format/wordCount';
 import { isProduction } from '@/lib/vercelEnv';
 
+import ArticleMarkdown from './ArticleMarkdown';
 import type { TranscriptStatus } from './VideoReader';
 
 interface Props {
@@ -399,20 +396,7 @@ export default function SummaryReader({
           )}
         </div>
         {summary.short ? (
-          // Render through the same Markdown pipeline as Full summary
-          // since the short-summary prompt may emit `**bold**` or other
-          // inline formatting.
-          <article className="prose prose-gray max-w-none font-sans text-[17px] leading-[1.8] text-gray-700">
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              rehypePlugins={[
-                rehypeSanitize,
-                [rehypeExternalLinks, { target: '_blank', rel: ['noopener', 'noreferrer'] }],
-              ]}
-            >
-              {summary.short}
-            </ReactMarkdown>
-          </article>
+          <ArticleMarkdown className="text-gray-700">{summary.short}</ArticleMarkdown>
         ) : isRegenerating('short') ? (
           <div className="space-y-2">
             <div className="h-4 w-full animate-pulse rounded bg-gray-200" />
@@ -435,22 +419,7 @@ export default function SummaryReader({
           )}
         </div>
         {fullMarkdown.length > 0 ? (
-          // Render via react-markdown so the new bullet-friendly prompt
-          // (SUMMARY_PROMPT_VERSION v4) can mix prose paragraphs and
-          // Markdown lists. Sanitized + external-link safety mirrors
-          // ArticleReader so we don't ship two different sanitization
-          // policies for AI-generated content.
-          <article className="prose prose-gray max-w-none font-sans text-[17px] leading-[1.8]">
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              rehypePlugins={[
-                rehypeSanitize,
-                [rehypeExternalLinks, { target: '_blank', rel: ['noopener', 'noreferrer'] }],
-              ]}
-            >
-              {fullMarkdown}
-            </ReactMarkdown>
-          </article>
+          <ArticleMarkdown>{fullMarkdown}</ArticleMarkdown>
         ) : isRegenerating('full') ? (
           <div className="space-y-2">
             {[100, 95, 90, 85, 75].map((w, i) => (

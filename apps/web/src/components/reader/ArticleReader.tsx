@@ -1,13 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import ReactMarkdown from 'react-markdown';
-import rehypeExternalLinks from 'rehype-external-links';
-import rehypeSanitize from 'rehype-sanitize';
-import remarkGfm from 'remark-gfm';
 
 import { countWords } from '@/lib/format/wordCount';
 
+import ArticleMarkdown from './ArticleMarkdown';
 import type { TranscriptStatus } from './VideoReader';
 
 interface Props {
@@ -233,17 +230,7 @@ export default function ArticleReader({
 
   return (
     <div>
-      <article className="prose prose-gray max-w-none font-sans text-[17px] leading-[1.8]">
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          rehypePlugins={[
-            rehypeSanitize,
-            [rehypeExternalLinks, { target: '_blank', rel: ['noopener', 'noreferrer'] }],
-          ]}
-        >
-          {markdown}
-        </ReactMarkdown>
-      </article>
+      <ArticleMarkdown>{markdown}</ArticleMarkdown>
       {status === 'streaming' && (
         <div className="mt-4 flex items-center gap-2 text-xs text-gray-400">
           <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-blue-500" />
