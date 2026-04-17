@@ -6,7 +6,7 @@ import { Inter, Lexend } from 'next/font/google';
 import { ReactNode } from 'react';
 
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
-import { DESCRIPTION, DOMAIN_URL, TITLE } from '@/constants';
+import { DESCRIPTION, DOMAIN_URL, MAIN_COLOR, TITLE } from '@/constants';
 import '@/styles/globals.css';
 import '@/styles/tailwind.css';
 
@@ -67,7 +67,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
                 termsPageUrl: '/terms',
               },
               variables: {
-                colorPrimary: '#515ada',
+                colorPrimary: MAIN_COLOR,
               },
             }}
           >
