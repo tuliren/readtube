@@ -7,7 +7,8 @@ export default function Home() {
     <>
       <Hero />
       <Features />
-      <CallToAction />
+      {/*<Pricing />*/}
+      <CallToAction theme="light" />
     </>
   );
 }
