@@ -18,6 +18,9 @@ export default function Pricing() {
 
         <div className="mx-auto mt-16 max-w-5xl">
           <PricingTable
+            for="user"
+            collapseFeatures={false}
+            ctaPosition="bottom"
             appearance={{
               theme: 'simple',
             }}
