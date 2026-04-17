@@ -19,12 +19,12 @@ const BASE_CLASS = 'prose prose-gray max-w-none font-sans text-[17px] leading-[1
  * Shared Markdown renderer for AI-generated reader content (summaries,
  * articles). Single source of truth for the remark/rehype plugin set.
  *
- * LaTeX support: only `$$…$$` is treated as math (inline when embedded
- * in prose, display when on its own paragraph). Single-`$` math is
- * disabled because remark-math's tokenizer is too permissive with
- * prose dollar signs and would break "$5 for $10" or bold around
- * "**$2.2 million**". The generation prompts ask the model to use
- * `$$…$$` for any math formula.
+ * LaTeX support via remark-math defaults: inline `$…$` and display
+ * `$$…$$`. Known edge cases with the permissive single-`$` tokenizer:
+ * prose dollar sign pairs ("$5 for $10") may mis-render as math, and
+ * bold around money ("**$2.2M** and **$1.5B**") can be fused into
+ * one span. Accepted trade-off — prompts use the conventional
+ * single-`$` for inline math, which is what models already emit.
  *
  * Safety: react-markdown does not parse raw HTML by default, so
  * `<script>alert(1)</script>` in the markdown source becomes a text
@@ -35,7 +35,7 @@ export default function ArticleMarkdown({ children, className }: Props) {
   return (
     <article className={className != null ? `${BASE_CLASS} ${className}` : BASE_CLASS}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, [remarkMath, { singleDollarTextMath: false }]]}
+        remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[
           rehypeKatex,
           [rehypeExternalLinks, { target: '_blank', rel: ['noopener', 'noreferrer'] }],

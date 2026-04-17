@@ -18,7 +18,7 @@ type Story = StoryObj<typeof meta>;
 
 export const InlineMath: Story = {
   args: {
-    children: "Einstein's famous relation $$E = mc^2$$ relates energy and mass.",
+    children: "Einstein's famous relation $E = mc^2$ relates energy and mass.",
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -37,33 +37,27 @@ export const DisplayMath: Story = {
   },
 };
 
-export const DollarSignsInProseStayLiteral: Story = {
+export const MixedProseAndMath: Story = {
   args: {
-    children: 'She raised $2.2 million and then $1.5 billion. Single $ too.',
+    children: [
+      '## Theorem',
+      '',
+      'The inline form $a^2 + b^2 = c^2$ is Pythagoras.',
+      '',
+      '$$',
+      'a^2 + b^2 = c^2',
+      '$$',
+    ].join('\n'),
   },
   play: async ({ canvasElement }) => {
-    await expect(canvasElement.querySelector('.katex')).toBeNull();
-    await expect(canvasElement.textContent).toContain('$2.2 million');
-    await expect(canvasElement.textContent).toContain('$1.5 billion');
-  },
-};
-
-export const BoldAroundDollarAmounts: Story = {
-  args: {
-    children: 'She raised **$2.2 million** and **$1.5 billion** across two rounds.',
-  },
-  play: async ({ canvasElement }) => {
-    await expect(canvasElement.querySelector('.katex')).toBeNull();
-    const strongs = canvasElement.querySelectorAll('strong');
-    await expect(strongs.length).toBe(2);
-    await expect(strongs[0]?.textContent).toBe('$2.2 million');
-    await expect(strongs[1]?.textContent).toBe('$1.5 billion');
+    await expect(canvasElement.querySelectorAll('.katex').length).toBeGreaterThanOrEqual(2);
+    await expect(canvasElement.querySelector('.katex-display')).not.toBeNull();
   },
 };
 
 export const ScriptInjectionStripped: Story = {
   args: {
-    children: 'Safe math $$x^2$$ text <script>alert(1)</script> after.',
+    children: 'Safe math $x^2$ text <script>alert(1)</script> after.',
   },
   play: async ({ canvasElement }) => {
     await expect(canvasElement.querySelector('.katex')).not.toBeNull();
@@ -73,7 +67,7 @@ export const ScriptInjectionStripped: Story = {
 
 export const ShortSummaryVariant: Story = {
   args: {
-    children: 'A short summary in the muted variant with math: $$f(x) = x + 1$$.',
+    children: 'A short summary in the muted variant with math: $f(x) = x + 1$.',
     className: 'text-gray-700',
   },
   play: async ({ canvasElement }) => {

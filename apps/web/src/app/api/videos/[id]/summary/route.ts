@@ -6,11 +6,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { DEFAULT_AI_MODEL } from '@/constants';
 import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
 
-const SUMMARY_PROMPT_VERSION = 'v5';
+const SUMMARY_PROMPT_VERSION = 'v4';
 
 const LANGUAGE_RULE = `Write in the same language as the transcript below. Do not translate — if the transcript is in Chinese, write in Chinese; if Spanish, write in Spanish; and so on.`;
-
-const MATH_RULE = `For any math formula, wrap it in double dollar signs ($$…$$), not single. Single-dollar math will not render. Example: "$$E = mc^2$$".`;
 
 const PROMPTS = {
   headline: `Write a very short title for this video. Rules:
@@ -23,8 +21,7 @@ Output only the title itself, nothing else.`,
 - First sentence: the essential point.
 - 1-2 more sentences: the most important supporting context.
 - Plain prose. No headings, no lists, no preamble.
-- ${LANGUAGE_RULE}
-- ${MATH_RULE}`,
+- ${LANGUAGE_RULE}`,
   full: `Write a compact summary of this video. Rules:
 - Focus only on the main arguments and conclusions. Cut examples, tangents, and non-essential details.
 - Favor density over completeness. A reader should get the gist in under a minute.
@@ -34,8 +31,7 @@ Output only the title itself, nothing else.`,
   - Mix prose and a short bullet list when an introductory point is followed by enumerated takeaways.
 - Bullets must be terse (one line each) and use Markdown "- " syntax. Do not nest more than one level.
 - Never use headings (no #, ##, etc.). Do not bold or italicize.
-- ${LANGUAGE_RULE}
-- ${MATH_RULE}`,
+- ${LANGUAGE_RULE}`,
 } as const;
 
 type SummaryField = keyof typeof PROMPTS;

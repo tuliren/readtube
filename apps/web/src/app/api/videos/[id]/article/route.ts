@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { DEFAULT_AI_MODEL } from '@/constants';
 import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
 
-const PROMPT_VERSION = 'v3';
+const PROMPT_VERSION = 'v2';
 const DEFAULT_STYLE: ArticleStyle = ArticleStyle.NARRATIVE;
 
 function parseStyle(raw: string | null | undefined): ArticleStyle | null {
@@ -37,7 +37,6 @@ ${styleGuidance}
 - Do not include the video title as a top-level heading — it will be shown separately.
 - Start directly with the article content. No preamble like "Here is the article".
 - Write in the same language as the transcript. Do not translate — if the transcript is in Chinese, write in Chinese; if Spanish, write in Spanish; and so on.
-- For any math formula, wrap it in double dollar signs ($$…$$), not single. Single-dollar math will not render. Example: "$$E = mc^2$$".
 
 Video title: ${title}
 Channel: ${channelName}
