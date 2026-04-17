@@ -4,21 +4,13 @@ import type { Metadata } from 'next';
 import { notFound, redirect } from 'next/navigation';
 
 import VideoReader from '@/components/reader/VideoReader';
+import { capTitle } from '@/lib/format/title';
 import { decorateVideo, loadTriageContext } from '@/lib/inbox/triage';
 import type { VideoData } from '@/lib/types';
 import { resolveVideoSourceId } from '@/lib/videos/resolveVideoSourceId';
 
 interface Props {
   params: Promise<{ videoId: string }>;
-}
-
-const TITLE_CAP = 60;
-
-function capTitle(title: string): string {
-  if (title.length <= TITLE_CAP) {
-    return title;
-  }
-  return `${title.slice(0, TITLE_CAP - 1).trimEnd()}…`;
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {

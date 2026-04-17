@@ -5,6 +5,7 @@ import { notFound, redirect } from 'next/navigation';
 
 import InboxListView from '@/components/inbox/InboxListView';
 import { resolveChannelSlug } from '@/lib/channels/resolveChannelSlug';
+import { capTitle } from '@/lib/format/title';
 import { loadInboxVideos, searchParamsToInboxQuery } from '@/lib/inbox/loadVideos';
 
 interface Props {
@@ -18,7 +19,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (channel == null) {
     return {};
   }
-  return { title: channel.name };
+  return { title: capTitle(channel.name) };
 }
 
 export default async function ChannelPage({ params, searchParams }: Props) {
