@@ -145,7 +145,7 @@ describe('addPlaylistForUser', () => {
     expect(videoB?.channel.source_id).toBe('UC_creator_b');
   });
 
-  it('leaves read_at null when the scrape path produces no publish dates', async () => {
+  it('sets read_at to ~now when the scrape path produces no publish dates', async () => {
     mockScrapePlaylist.mockResolvedValueOnce({
       title: 'P',
       channelId: 'UC_o',
@@ -162,18 +162,83 @@ describe('addPlaylistForUser', () => {
         },
       ],
     });
+    const before = Date.now();
     await addPlaylistForUser({ userId: TEST_USER_ID, input: PL_ID });
+    const after = Date.now();
 
     const playlist = await global.testPrisma.playlist.findFirst({
       where: { user_id: TEST_USER_ID },
       include: { items: { include: { video: true } } },
     });
-    // Scrape-only videos now persist with published_at = null — no
-    // real date exists to anchor the read_at watermark, so read_at
-    // stays null. A later RSS refresh will backfill published_at and
-    // the next mark-all-read action can set read_at from there.
-    expect(playlist?.read_at).toBeNull();
+    // Scrape-only videos persist with published_at = null. The
+    // watermark falls back to now() so existing videos are treated as
+    // read — otherwise the user would see their entire just-added
+    // playlist as unread. `videoNewerThanWatermark` compares against
+    // `created_at` when `published_at` is null, so later additions
+    // still surface as unread.
+    expect(playlist?.read_at).not.toBeNull();
+    expect(playlist!.read_at!.getTime()).toBeGreaterThanOrEqual(before);
+    expect(playlist!.read_at!.getTime()).toBeLessThanOrEqual(after + 1000);
     expect(playlist!.items[0].video.published_at).toBeNull();
+  });
+
+  it('marks every video in a newly added playlist as read (unread count = 0)', async () => {
+    // Mix of RSS-dated and scrape-only videos to exercise both
+    // branches of videoNewerThanWatermark. All of them should be
+    // considered read the moment the playlist is added.
+    mockFetchRssFeed.mockResolvedValueOnce({
+      channelId: 'UC_owner',
+      name: 'Owner',
+      authorName: 'Owner',
+      videos: [
+        {
+          videoId: 'dated_v1',
+          title: 'Dated V1',
+          description: '',
+          publishedAt: new Date('2026-03-01T00:00:00Z'),
+          link: 'https://www.youtube.com/watch?v=dated_v1',
+          thumbnailUrl: null,
+          channelId: 'UC_owner',
+          channelName: 'Owner',
+        },
+        {
+          videoId: 'dated_v2',
+          title: 'Dated V2',
+          description: '',
+          publishedAt: new Date('2026-02-01T00:00:00Z'),
+          link: 'https://www.youtube.com/watch?v=dated_v2',
+          thumbnailUrl: null,
+          channelId: 'UC_owner',
+          channelName: 'Owner',
+        },
+      ],
+    });
+
+    await addPlaylistForUser({ userId: TEST_USER_ID, input: PL_ID });
+
+    const playlist = await global.testPrisma.playlist.findFirst({
+      where: { user_id: TEST_USER_ID },
+    });
+    expect(playlist).not.toBeNull();
+    expect(playlist!.read_at).not.toBeNull();
+
+    // Unread-count query shape mirrors
+    // apps/web/src/app/api/playlists/route.ts — a video is unread iff
+    // no UserVideoConsumption row exists for this user AND its
+    // effective publish date is past the watermark.
+    const unreadCount = await global.testPrisma.playlistVideo.count({
+      where: {
+        playlist_id: playlist!.id,
+        video: {
+          consumptions: { none: { user_id: TEST_USER_ID } },
+          OR: [
+            { published_at: { gt: playlist!.read_at! } },
+            { AND: [{ published_at: null }, { created_at: { gt: playlist!.read_at! } }] },
+          ],
+        },
+      },
+    });
+    expect(unreadCount).toBe(0);
   });
 
   it('sets read_at to max(published_at) + 1s when RSS supplies real dates', async () => {

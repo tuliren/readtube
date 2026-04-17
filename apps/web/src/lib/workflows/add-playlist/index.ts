@@ -240,24 +240,30 @@ export async function addPlaylistForUser(args: {
     videosProcessed++;
   }
 
-  // Set read_at to just after the latest video's published_at so all
-  // initial videos are marked as read. Query the actual max published_at
-  // from the ingested videos rather than guessing with new Date().
-  // Skip null dates explicitly — Postgres sorts NULLS FIRST in DESC and
-  // we don't want a null-dated video to masquerade as "newest."
+  // Mark every video the user just pulled in as already-read. Prefer
+  // the real max(published_at) + 1s so the watermark reflects actual
+  // content times — videos published after this moment will correctly
+  // show as unread. When the scrape path produces no publish dates
+  // (YouTube watch-page playlists), fall back to `new Date()` so at
+  // least the playlist-add moment anchors the watermark; future
+  // additions will have `created_at > read_at` and surface as unread.
+  // (`videoNewerThanWatermark` compares against `created_at` when
+  // `published_at` is null, so the fallback keeps the comparison
+  // coherent.)
   if (videosProcessed > 0) {
     const latest = await prisma.playlistVideo.findFirst({
       where: { playlist_id: playlist.id, video: { published_at: { not: null } } },
       select: { video: { select: { published_at: true } } },
       orderBy: { video: { published_at: 'desc' } },
     });
-    if (latest?.video.published_at != null) {
-      const readAt = new Date(latest.video.published_at.getTime() + 1000);
-      await prisma.playlist.update({
-        where: { id: playlist.id },
-        data: { read_at: readAt },
-      });
-    }
+    const readAt =
+      latest?.video.published_at != null
+        ? new Date(latest.video.published_at.getTime() + 1000)
+        : new Date();
+    await prisma.playlist.update({
+      where: { id: playlist.id },
+      data: { read_at: readAt },
+    });
   }
 
   return { playlistId: playlist.id, playlistName: name, videosProcessed };
