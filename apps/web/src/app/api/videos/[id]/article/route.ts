@@ -1,6 +1,6 @@
 import { auth } from '@clerk/nextjs/server';
 import { ArticleStyle, prisma } from '@readtube/database';
-import { streamObject } from 'ai';
+import { Output, streamText } from 'ai';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -251,21 +251,21 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const transcriptText = transcript.segments.map((s) => s.text).join(' ');
 
-  const result = streamObject({
+  const result = streamText({
     model: DEFAULT_AI_MODEL,
-    schema: ARTICLE_SCHEMA,
+    output: Output.object({ schema: ARTICLE_SCHEMA }),
     prompt: buildPrompt(style, video.title, video.channel.name, transcriptText),
   });
 
   // Eagerly consume the first partial so pre-flight errors (gateway
   // auth, invalid model, etc.) surface as a proper HTTP error before
   // the stream opens.
-  const iterator = result.partialObjectStream[Symbol.asyncIterator]();
+  const iterator = result.partialOutputStream[Symbol.asyncIterator]();
   let firstChunk: IteratorResult<Partial<z.infer<typeof ARTICLE_SCHEMA>>>;
   try {
     firstChunk = await iterator.next();
   } catch (err) {
-    console.error('[article/POST] streamObject pre-flight error:', err);
+    console.error('[article/POST] streamText output pre-flight error:', err);
     const message = err instanceof Error ? err.message : 'Failed to generate article.';
     return NextResponse.json({ error: message }, { status: 500 });
   }
@@ -308,7 +308,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         }
         if (!emittedHasLatex) {
           try {
-            const settled = await result.object;
+            const settled = await result.output;
             hasLatex = settled.hasLatex;
             emittedHasLatex = true;
             emitLine(controller, { hasLatex });
@@ -320,7 +320,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         emitLine(controller, { type: 'done' });
         controller.close();
       } catch (err) {
-        console.error('[article/POST] streamObject mid-stream error:', err);
+        console.error('[article/POST] streamText output mid-stream error:', err);
         const message = err instanceof Error ? err.message : 'Unknown error';
         emitLine(controller, { error: message });
         controller.close();

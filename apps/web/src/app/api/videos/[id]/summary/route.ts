@@ -1,6 +1,6 @@
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@readtube/database';
-import { streamObject, streamText } from 'ai';
+import { Output, streamText } from 'ai';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -217,38 +217,46 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const transcriptText = transcript.segments.map((s) => s.text).join(' ');
 
   // Kick off streams for the requested fields in parallel. Headline
-  // stays on streamText — it's a one-line title, never math. Short
-  // and full use streamObject so the model emits {content, hasLatex}
-  // as a single structured response; hasLatex lands after content is
-  // written, so the classification reflects what the model actually
-  // produced rather than a forward guess.
-  type TextGen = {
+  // uses plain streamText — it's a one-line title, never math. Short
+  // and full use streamText with Output.object({schema}) so the model
+  // emits {content, hasLatex} as a single structured response;
+  // hasLatex lands after content is written, so the classification
+  // reflects what the model actually produced rather than a forward
+  // guess.
+  //
+  // The full StreamTextResult<TOOLS, OUTPUT> type is painful to name
+  // inline, so these interfaces capture only the surface area the
+  // pump logic actually uses. Inference at the call sites keeps the
+  // concrete result types precise.
+  type StructuredOutput = z.infer<typeof CONTENT_WITH_LATEX_SCHEMA>;
+  type UsageProducer = { usage: PromiseLike<unknown> };
+  interface TextGen {
     kind: 'text';
     field: SummaryField;
-    result: ReturnType<typeof streamText>;
+    result: UsageProducer;
     iterator: AsyncIterator<string>;
-  };
-  type ObjectGen = {
+  }
+  interface ObjectGen {
     kind: 'object';
     field: SummaryField;
-    result: ReturnType<typeof streamObject<typeof CONTENT_WITH_LATEX_SCHEMA>>;
-    iterator: AsyncIterator<Partial<z.infer<typeof CONTENT_WITH_LATEX_SCHEMA>>>;
-  };
+    result: UsageProducer & { output: PromiseLike<StructuredOutput> };
+    iterator: AsyncIterator<Partial<StructuredOutput>>;
+  }
   type Generation = TextGen | ObjectGen;
 
-  const generations: Generation[] = fieldsToGenerate.map((field) => {
+  const generations: Generation[] = fieldsToGenerate.map((field): Generation => {
     const prompt = buildPrompt(field, video.title, video.channel.name, transcriptText);
     if (FIELDS_WITH_FRONTMATTER.has(field)) {
-      const result = streamObject({
+      const result = streamText({
         model: DEFAULT_AI_MODEL,
-        schema: CONTENT_WITH_LATEX_SCHEMA,
+        output: Output.object({ schema: CONTENT_WITH_LATEX_SCHEMA }),
         prompt,
       });
       return {
         kind: 'object',
         field,
         result,
-        iterator: result.partialObjectStream[Symbol.asyncIterator](),
+        iterator: result.partialOutputStream[Symbol.asyncIterator](),
       };
     }
     const result = streamText({ model: DEFAULT_AI_MODEL, prompt });
@@ -361,7 +369,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             // resolve from the settled object and emit once.
             if (!emittedHasLatex) {
               try {
-                const settled = await gen.result.object;
+                const settled = await gen.result.output;
                 hasLatexByField[field] = settled.hasLatex;
                 emit({ field, hasLatex: settled.hasLatex });
               } catch {
