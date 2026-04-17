@@ -63,8 +63,12 @@ export default function ArticleReader({
         }
         const data = (await res.json()) as { content: string };
         // Stored content carries a YAML frontmatter with hasLatex.
+        // If the stored body happens to start with `---\n` but lacks
+        // a closing fence (malformed / pre-migration), fall back to
+        // the raw string so the user sees *something* rather than a
+        // blank panel.
         const parsed = parseMarkdownDocument(data.content);
-        setContent(parsed.frontmatterPending ? '' : parsed.content);
+        setContent(parsed.frontmatterPending ? data.content : parsed.content);
         setHasLatex(parsed.properties.hasLatex === true);
         setStatus('done');
         // Cache hit — flip the parent's Article tab dot to blue

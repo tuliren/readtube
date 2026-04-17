@@ -175,6 +175,19 @@ export default function SummaryReader({
       }
       return next;
     });
+    // Drop the stale hasLatex flags too — otherwise the old flag
+    // rides along until the server emits a new {field, hasLatex}
+    // event, briefly rendering the fresh content with the prior
+    // run's remark-math configuration.
+    setHasLatexByField((prev) => {
+      const next = { ...prev };
+      for (const f of fields) {
+        if (f === 'short' || f === 'full') {
+          delete next[f];
+        }
+      }
+      return next;
+    });
 
     try {
       const res = await fetch(`/api/videos/${videoDbId}/summary`, {
