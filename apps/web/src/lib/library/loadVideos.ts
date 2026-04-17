@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@readtube/database';
 
+import { effectivePublishDate } from '@/lib/subscriptions';
 import type { VideoData } from '@/lib/types';
 
 import { decorateVideo, loadTriageContext } from '../inbox/triage';
@@ -15,6 +16,7 @@ const VIDEO_SELECT = {
   title: true,
   description: true,
   published_at: true,
+  created_at: true,
   duration_seconds: true,
   thumbnail_url: true,
   transcript_unavailable: true,
@@ -141,7 +143,12 @@ export async function loadLibraryVideos(
       where: { user_id: userId, read_at: { not: null } },
       select: {
         read_at: true,
-        items: { select: { video_id: true, video: { select: { published_at: true } } } },
+        items: {
+          select: {
+            video_id: true,
+            video: { select: { published_at: true, created_at: true } },
+          },
+        },
       },
     });
     for (const pl of playlists) {
@@ -149,10 +156,9 @@ export async function loadLibraryVideos(
         continue;
       }
       for (const item of pl.items) {
-        // Watermark comparison needs a real published_at; skip nulls
-        // here. A UserVideoConsumption row can still mark the video
-        // as read via the explicit path below.
-        if (item.video.published_at != null && item.video.published_at <= pl.read_at) {
+        // Effective date = published_at ?? created_at, so null-date
+        // videos still get classified relative to the watermark.
+        if (effectivePublishDate(item.video) <= pl.read_at) {
           watermarkReadIds.add(item.video_id);
         }
       }
@@ -166,21 +172,17 @@ export async function loadLibraryVideos(
       continue;
     }
     // Read state: explicit consumption wins, then playlist watermark.
-    // A null published_at can't satisfy the watermark comparison, so
-    // the watermark branches below no-op for such videos — the
-    // consumption-row path above still works unchanged.
+    // Watermark branches use the video's effective publish date
+    // (published_at ?? created_at) so null-date videos get the same
+    // treatment as everything else.
     const explicitRead = consumptionByVideoId.get(id) ?? null;
     let readAt: Date | null = explicitRead;
-    if (
-      readAt == null &&
-      playlistReadAt != null &&
-      row.published_at != null &&
-      row.published_at <= playlistReadAt
-    ) {
+    const effective = effectivePublishDate(row);
+    if (readAt == null && playlistReadAt != null && effective <= playlistReadAt) {
       readAt = playlistReadAt;
     }
-    if (readAt == null && watermarkReadIds.has(id) && row.published_at != null) {
-      readAt = row.published_at; // use published_at as the effective read time
+    if (readAt == null && watermarkReadIds.has(id)) {
+      readAt = effective; // use effective publish date as the read time
     }
     decorated.push(decorateVideo(row, triage, readAt));
   }

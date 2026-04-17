@@ -2,6 +2,7 @@ import { prisma } from '@readtube/database';
 import { NextResponse } from 'next/server';
 
 import { requireUserId } from '@/lib/auth';
+import { effectivePublishDate } from '@/lib/subscriptions';
 
 /**
  * Returns unread counts for the "All" and "Standalone" library views.
@@ -62,7 +63,12 @@ export async function GET() {
     where: { user_id: userId, read_at: { not: null } },
     select: {
       read_at: true,
-      items: { select: { video_id: true, video: { select: { published_at: true } } } },
+      items: {
+        select: {
+          video_id: true,
+          video: { select: { published_at: true, created_at: true } },
+        },
+      },
     },
   });
   const watermarkReadIds = new Set<string>();
@@ -71,10 +77,9 @@ export async function GET() {
       continue;
     }
     for (const item of pl.items) {
-      // Watermark comparison needs a real published_at; skip nulls.
-      // A UserVideoConsumption row still counts these as read via
-      // the consumedIds check in `isRead` below.
-      if (item.video.published_at != null && item.video.published_at <= pl.read_at) {
+      // Effective date = published_at ?? created_at, so null-date
+      // videos still get classified relative to the watermark.
+      if (effectivePublishDate(item.video) <= pl.read_at) {
         watermarkReadIds.add(item.video_id);
       }
     }

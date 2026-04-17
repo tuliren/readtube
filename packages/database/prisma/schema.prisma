@@ -136,10 +136,11 @@ model Video {
   // We prefer a null over a synthetic `new Date()` placeholder so
   // callers can distinguish "unknown" from "actually published now,"
   // and a later scrape can backfill without colliding with a fake
-  // stored date. Range filters and SQL comparisons against NULL are
-  // treated as false, so watermark-based read-state comparisons
-  // silently skip null rows — but explicit UserVideoConsumption
-  // rows still mark them as read like any other video.
+  // stored date. For watermark / unread-count comparisons, callers
+  // use the video's effective publish date — COALESCE(published_at,
+  // created_at) — so a null-date video is still classified relative
+  // to when we learned about it. See `videoNewerThanWatermark` and
+  // `effectivePublishDate` in `lib/subscriptions.ts`.
   published_at           DateTime?
   created_at             DateTime                 @default(now())
   // Length of the video in seconds. Nullable because the channel scraper

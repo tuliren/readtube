@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireUserId } from '@/lib/auth';
 import { ensureUserExists } from '@/lib/db/user';
 import { isEmptyString } from '@/lib/string';
+import { videoNewerThanWatermark } from '@/lib/subscriptions';
 import { AddPlaylistError, addPlaylistForUser } from '@/lib/workflows/add-playlist';
 
 export interface PlaylistData {
@@ -47,9 +48,9 @@ export async function GET() {
 
   // Count unread videos per playlist. A video is unread iff:
   //   - it has no UserVideoConsumption row for this user, AND
-  //   - the playlist has no watermark, OR the video's published_at > read_at.
-  // The consumption check ensures videos the user explicitly opened
-  // are counted as read even when the watermark predates them.
+  //   - the playlist has no watermark, OR the video's effective publish
+  //     date (published_at ?? created_at) is greater than read_at.
+  // Consumption rows still cover videos the user explicitly opened.
   const playlists: PlaylistData[] = await Promise.all(
     rows.map(async (row) => {
       const unreadCount = await prisma.playlistVideo.count({
@@ -57,7 +58,7 @@ export async function GET() {
           playlist_id: row.id,
           video: {
             consumptions: { none: { user_id: userId } },
-            ...(row.read_at != null ? { published_at: { gt: row.read_at } } : {}),
+            ...(row.read_at != null ? videoNewerThanWatermark(row.read_at) : {}),
           },
         },
       });

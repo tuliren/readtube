@@ -1,10 +1,51 @@
-import type { PrismaClient } from '@readtube/database';
+import type { Prisma, PrismaClient } from '@readtube/database';
 
 import {
   NEW_SUBSCRIPTION_MODE,
   type NewSubscriptionMode,
   RECENT_NEW_VIDEO_COUNT,
 } from '@/lib/subscriptionConfig';
+
+/**
+ * Prisma `where` clause matching videos whose effective publish date is
+ * strictly greater than `watermark`. A video's effective date is its
+ * `published_at` when present, otherwise `created_at` — so null-date
+ * videos (scrape failed to find a date) still have a sensible
+ * comparable timestamp and can be correctly classified as read or
+ * unread relative to a user's or playlist's watermark.
+ */
+export function videoNewerThanWatermark(watermark: Date): Prisma.VideoWhereInput {
+  return {
+    OR: [
+      { published_at: { gt: watermark } },
+      { AND: [{ published_at: null }, { created_at: { gt: watermark } }] },
+    ],
+  };
+}
+
+/**
+ * Inverse of `videoNewerThanWatermark` — matches videos whose effective
+ * publish date is less than or equal to `watermark`. Useful for the
+ * "already read" side of watermark comparisons.
+ */
+export function videoAtOrBeforeWatermark(watermark: Date): Prisma.VideoWhereInput {
+  return {
+    OR: [
+      { published_at: { lte: watermark } },
+      { AND: [{ published_at: null }, { created_at: { lte: watermark } }] },
+    ],
+  };
+}
+
+/**
+ * Compute a video's effective publish date: `published_at` when present,
+ * otherwise `created_at`. Use this in JS-side watermark comparisons so
+ * null-date videos are treated consistently with the DB-side filters
+ * above.
+ */
+export function effectivePublishDate(video: { published_at: Date | null; created_at: Date }): Date {
+  return video.published_at ?? video.created_at;
+}
 
 /**
  * Compute the initial value for `UserSubscription.read_at` for a brand-new
@@ -57,7 +98,7 @@ export async function countUnreadVideos(
     where: {
       channel_id: channelId,
       consumptions: { none: { user_id: userId } },
-      ...(readAt != null ? { published_at: { gt: readAt } } : {}),
+      ...(readAt != null ? videoNewerThanWatermark(readAt) : {}),
     },
   });
 }
@@ -129,7 +170,10 @@ export async function getSubscribedChannelsWithUnread(
     FROM "UserSubscription" us
     JOIN "Channel" c ON c."id" = us."channel_id"
     LEFT JOIN "Video" v ON v."channel_id" = us."channel_id"
-      AND (us."read_at" IS NULL OR v."published_at" > us."read_at")
+      AND (
+        us."read_at" IS NULL
+        OR COALESCE(v."published_at", v."created_at") > us."read_at"
+      )
       AND NOT EXISTS (
         SELECT 1
         FROM "UserVideoConsumption" k

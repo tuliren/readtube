@@ -1,5 +1,6 @@
 import type { Prisma } from '@readtube/database';
 
+import { videoNewerThanWatermark } from '@/lib/subscriptions';
 import type { InboxQuery } from '@/lib/types';
 
 /**
@@ -105,7 +106,7 @@ export function buildUnreadClause(
     if (watermark == null) {
       return { channel_id: cid };
     }
-    return { channel_id: cid, published_at: { gt: watermark } };
+    return { channel_id: cid, ...videoNewerThanWatermark(watermark) };
   });
 
   return {
