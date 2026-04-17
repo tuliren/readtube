@@ -16,6 +16,7 @@ import { videoHref } from '@/lib/urls/videoHref';
 
 import ArticleReader from './ArticleReader';
 import NotesPanel from './NotesPanel';
+import ReadingTimeBadge from './ReadingTimeBadge';
 import SummaryReader from './SummaryReader';
 import TranscriptReader from './TranscriptReader';
 import VideoReaderActions from './VideoReaderActions';
@@ -95,6 +96,14 @@ export default function VideoReader({ video, publicMode = false }: Props) {
   const [hasSummary, setHasSummary] = useState<boolean>(video.hasSummary);
   const [hasArticle, setHasArticle] = useState<boolean>(video.hasArticle);
 
+  // Word counts streamed up from each reader so the tab header can
+  // render a live "X min" reading-time badge. 0 means either "content
+  // not loaded yet" or "not generated" — the tab header falls back to
+  // the red dot indicator only when content is known to be missing.
+  const [summaryWords, setSummaryWords] = useState(0);
+  const [articleWords, setArticleWords] = useState(0);
+  const [transcriptWords, setTranscriptWords] = useState(0);
+
   // useState only seeds from the initial render. When the user clicks
   // a different video in the sidebar Next.js performs a soft
   // navigation — VideoReader receives new props but is NOT
@@ -111,6 +120,9 @@ export default function VideoReader({ video, publicMode = false }: Props) {
     );
     setHasSummary(video.hasSummary);
     setHasArticle(video.hasArticle);
+    setSummaryWords(0);
+    setArticleWords(0);
+    setTranscriptWords(0);
   }, [
     video.id,
     video.transcriptUnavailable,
@@ -132,6 +144,9 @@ export default function VideoReader({ video, publicMode = false }: Props) {
   // an effect re-run on every parent render.
   const handleSummaryAvailable = useCallback(() => setHasSummary(true), []);
   const handleArticleAvailable = useCallback(() => setHasArticle(true), []);
+  const handleSummaryWordsChange = useCallback((words: number) => setSummaryWords(words), []);
+  const handleArticleWordsChange = useCallback((words: number) => setArticleWords(words), []);
+  const handleTranscriptWordsChange = useCallback((words: number) => setTranscriptWords(words), []);
 
   // Description collapse state — collapsed by default to keep the header compact.
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
@@ -347,10 +362,12 @@ export default function VideoReader({ video, publicMode = false }: Props) {
                         : tab.key === 'article'
                           ? hasArticle
                           : hasTranscript;
-                    const dotColor = generated ? 'bg-blue-500' : 'bg-red-500';
-                    const dotTitle = generated
-                      ? `${tab.label} already generated`
-                      : `${tab.label} not generated yet`;
+                    const words =
+                      tab.key === 'summary'
+                        ? summaryWords
+                        : tab.key === 'article'
+                          ? articleWords
+                          : transcriptWords;
                     return (
                       <button
                         key={tab.key}
@@ -362,11 +379,15 @@ export default function VideoReader({ video, publicMode = false }: Props) {
                         }`}
                       >
                         {tab.label}
-                        <span
-                          className={`h-1.5 w-1.5 shrink-0 rounded-full ${dotColor}`}
-                          title={dotTitle}
-                          aria-label={dotTitle}
-                        />
+                        {words > 0 ? (
+                          <ReadingTimeBadge wordCount={words} />
+                        ) : !generated ? (
+                          <span
+                            className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-500"
+                            title={`${tab.label} not generated yet`}
+                            aria-label={`${tab.label} not generated yet`}
+                          />
+                        ) : null}
                       </button>
                     );
                   })}
@@ -381,6 +402,7 @@ export default function VideoReader({ video, publicMode = false }: Props) {
                     transcriptStatus={transcriptStatus}
                     onTranscriptStatusChange={setTranscriptStatus}
                     onSummaryAvailable={handleSummaryAvailable}
+                    onSummaryWordsChange={handleSummaryWordsChange}
                     publicMode={publicMode}
                   />
                 </div>
@@ -390,6 +412,7 @@ export default function VideoReader({ video, publicMode = false }: Props) {
                     transcriptStatus={transcriptStatus}
                     onTranscriptStatusChange={setTranscriptStatus}
                     onArticleAvailable={handleArticleAvailable}
+                    onArticleWordsChange={handleArticleWordsChange}
                     publicMode={publicMode}
                   />
                 </div>
@@ -400,6 +423,7 @@ export default function VideoReader({ video, publicMode = false }: Props) {
                       sourceId={video.sourceId}
                       transcriptStatus={transcriptStatus}
                       onTranscriptStatusChange={setTranscriptStatus}
+                      onTranscriptWordsChange={handleTranscriptWordsChange}
                     />
                   </div>
                 )}

@@ -1,4 +1,4 @@
-import { countWords } from '../wordCount';
+import { countWords, formatReadingTime, readingTimeMinutes } from '../wordCount';
 
 describe('countWords', () => {
   it.each<{ input: string | null | undefined; expected: number; desc: string }>([
@@ -30,5 +30,31 @@ describe('countWords', () => {
     },
   ])('$desc', ({ input, expected }) => {
     expect(countWords(input)).toBe(expected);
+  });
+});
+
+describe('readingTimeMinutes', () => {
+  it.each<{ wordCount: number; expected: number }>([
+    { wordCount: 0, expected: 0 },
+    { wordCount: -5, expected: 0 },
+    { wordCount: 1, expected: 1 },
+    { wordCount: 115, expected: 1 },
+    { wordCount: 230, expected: 1 },
+    { wordCount: 231, expected: 2 },
+    { wordCount: 1000, expected: 5 },
+  ])('wordCount=$wordCount -> $expected min', ({ wordCount, expected }) => {
+    expect(readingTimeMinutes(wordCount)).toBe(expected);
+  });
+});
+
+describe('formatReadingTime', () => {
+  it.each<{ wordCount: number; expected: string | null }>([
+    { wordCount: 0, expected: null },
+    { wordCount: -1, expected: null },
+    { wordCount: 1, expected: '1 min' },
+    { wordCount: 230, expected: '1 min' },
+    { wordCount: 231, expected: '2 min' },
+  ])('wordCount=$wordCount -> $expected', ({ wordCount, expected }) => {
+    expect(formatReadingTime(wordCount)).toBe(expected);
   });
 });

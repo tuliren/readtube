@@ -6,6 +6,8 @@ import rehypeExternalLinks from 'rehype-external-links';
 import rehypeSanitize from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
 
+import { countWords } from '@/lib/format/wordCount';
+
 import type { TranscriptStatus } from './VideoReader';
 
 interface Props {
@@ -18,6 +20,10 @@ interface Props {
    *  the Article tab dot can flip from red → blue. Fired on the
    *  initial GET cache hit AND after a successful generation. */
   onArticleAvailable: () => void;
+  /** Reports the article word count up to VideoReader so the Article
+   *  tab header can render the reading time badge. Fires on every
+   *  markdown change, so the badge updates live as content streams. */
+  onArticleWordsChange: (words: number) => void;
   /** When true, fetch from the unauthenticated public endpoint and
    *  render a read-only view — no generate affordance. */
   publicMode?: boolean;
@@ -32,6 +38,7 @@ export default function ArticleReader({
   transcriptStatus,
   onTranscriptStatusChange,
   onArticleAvailable,
+  onArticleWordsChange,
   publicMode = false,
 }: Props) {
   const apiBase = publicMode ? '/api/public/videos' : '/api/videos';
@@ -75,6 +82,13 @@ export default function ArticleReader({
       cancelled = true;
     };
   }, [videoDbId, onArticleAvailable, apiBase]);
+
+  // Stream the article word count up to VideoReader so the Article
+  // tab header can render the reading-time badge. Fires on every
+  // markdown change, including incremental streaming updates.
+  useEffect(() => {
+    onArticleWordsChange(countWords(markdown));
+  }, [markdown, onArticleWordsChange]);
 
   async function handleGenerate() {
     setStatus('streaming');
