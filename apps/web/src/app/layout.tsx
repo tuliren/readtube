@@ -70,6 +70,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
                 privacyPageUrl: '/privacy',
                 termsPageUrl: '/terms',
               },
+              variables: {
+                colorPrimary: '#515ada',
+              },
             }}
           >
             {children}
