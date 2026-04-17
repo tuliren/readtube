@@ -187,11 +187,22 @@ export async function fetchVideoSnapshot(videoId: string): Promise<VideoSnapshot
     firstMatch(html, /<meta property="og:image" content="([^"]+)"/) ??
     buildThumbnailUrl(videoId);
 
-  // ── Published date — scrape-only ──
-  const publishedRaw = firstMatch(html, /<meta itemprop="datePublished" content="([^"]+)"/);
-  const publishedAt = publishedRaw != null ? new Date(publishedRaw) : null;
-  if (publishedAt == null || Number.isNaN(publishedAt.getTime())) {
-    throw new Error('Could not extract publish date');
+  // ── Published date — best-effort; watch pages served to some
+  // serverless IPs omit the itemprop microdata entirely. Falls back
+  // through alternate meta tags, JSON-LD, and finally the current
+  // time rather than failing the add. Publish date is nice-to-have;
+  // a missing date should not block a video from being added.
+  const publishedRaw =
+    firstMatch(html, /<meta itemprop="datePublished" content="([^"]+)"/) ??
+    firstMatch(html, /<meta itemprop="uploadDate" content="([^"]+)"/) ??
+    firstMatch(html, /"datePublished"\s*:\s*"([^"]+)"/) ??
+    firstMatch(html, /"uploadDate"\s*:\s*"([^"]+)"/);
+  const parsed = publishedRaw != null ? new Date(publishedRaw) : null;
+  const publishedAt = parsed != null && !Number.isNaN(parsed.getTime()) ? parsed : new Date();
+  if (publishedRaw == null || parsed == null || Number.isNaN(parsed.getTime())) {
+    console.warn(
+      `[videoSnapshot] Could not extract publish date for ${videoId}; falling back to now`
+    );
   }
 
   const durationIso = firstMatch(html, /<meta itemprop="duration" content="([^"]+)"/);
