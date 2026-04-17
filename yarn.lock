@@ -5662,7 +5662,6 @@ __metadata:
     lucide-react: "npm:^1.8.0"
     minimatch: "npm:^10.1.1"
     next: "npm:^16.2.4"
-    next-plausible: "npm:^3.12.4"
     next-themes: "npm:^0.4.6"
     postcss: "npm:^8.5.3"
     pretty-ms: "npm:^8.0.0"
@@ -20444,17 +20443,6 @@ __metadata:
   version: 2.0.2
   resolution: "netmask@npm:2.0.2"
   checksum: 10c0/cafd28388e698e1138ace947929f842944d0f1c0b87d3fa2601a61b38dc89397d33c0ce2c8e7b99e968584b91d15f6810b91bef3f3826adf71b1833b61d4bf4f
-  languageName: node
-  linkType: hard
-
-"next-plausible@npm:^3.12.4":
-  version: 3.12.4
-  resolution: "next-plausible@npm:3.12.4"
-  peerDependencies:
-    next: "^11.1.0 || ^12.0.0 || ^13.0.0 || ^14.0.0 || ^15.0.0 "
-    react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
-    react-dom: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
-  checksum: 10c0/70f1efd90ed5dc63089cd916e630883a62a03ec3319fde0b3a2a2303704a5e60b1843cf9f821e1b918514e3a9d5b0594eb8af6925a01132cb8705219db3bc99a
   languageName: node
   linkType: hard
 
