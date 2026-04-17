@@ -1,7 +1,6 @@
 import { ArticleStyle, prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 
-const PROMPT_VERSION = 'v2';
 const DEFAULT_STYLE: ArticleStyle = ArticleStyle.NARRATIVE;
 
 function parseStyle(raw: string | null | undefined): ArticleStyle | null {
@@ -61,10 +60,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   const article = await prisma.article.findUnique({
     where: {
-      article_unique_transcript_style_version: {
+      article_unique_transcript_style: {
         transcript_id: transcript.id,
         style,
-        prompt_version: PROMPT_VERSION,
       },
     },
     select: { content: true, style: true, generated_at: true },

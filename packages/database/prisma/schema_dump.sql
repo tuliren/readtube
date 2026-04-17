@@ -343,7 +343,7 @@ CREATE UNIQUE INDEX "UserVideoConsumption_user_id_video_id_key" ON "UserVideoCon
 CREATE INDEX "transcript_index_on_video_id" ON "Transcript" ("video_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Article_transcript_id_style_prompt_version_key" ON "Article" ("transcript_id", "style", "prompt_version");
+CREATE UNIQUE INDEX "Article_transcript_id_style_key" ON "Article" ("transcript_id", "style");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Summary_transcript_id_key" ON "Summary" ("transcript_id");

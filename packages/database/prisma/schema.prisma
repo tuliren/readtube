@@ -213,7 +213,10 @@ model Article {
   id             String       @id @default(cuid())
   transcript_id  String
   style          ArticleStyle
-  // bump when the prompt body changes — new generations get fresh rows
+  // Record-keeping only: tracks which prompt version generated the row.
+  // NOT part of the unique index — once an article exists for a
+  // (transcript_id, style) pair, subsequent prompt-version bumps
+  // leave it alone. Regeneration is an explicit, manual action.
   prompt_version String
   // model identifier, e.g. "anthropic/claude-sonnet-4.5"
   model          String
@@ -224,7 +227,7 @@ model Article {
 
   transcript Transcript @relation(fields: [transcript_id], references: [id], onDelete: Cascade)
 
-  @@unique([transcript_id, style, prompt_version], name: "article_unique_transcript_style_version")
+  @@unique([transcript_id, style], name: "article_unique_transcript_style")
 }
 
 model Summary {

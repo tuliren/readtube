@@ -116,10 +116,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   const article = await prisma.article.findUnique({
     where: {
-      article_unique_transcript_style_version: {
+      article_unique_transcript_style: {
         transcript_id: transcript.id,
         style,
-        prompt_version: PROMPT_VERSION,
       },
     },
     select: { content: true, style: true, generated_at: true },
@@ -226,10 +225,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // format.
   const cached = await prisma.article.findUnique({
     where: {
-      article_unique_transcript_style_version: {
+      article_unique_transcript_style: {
         transcript_id: transcript.id,
         style,
-        prompt_version: PROMPT_VERSION,
       },
     },
     select: { content: true },
