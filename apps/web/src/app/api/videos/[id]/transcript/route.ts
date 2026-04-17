@@ -7,10 +7,13 @@ import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { userId } = await auth();
   if (userId == null) {
+    console.error('[videos/transcript/GET] Unauthorized');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const { id } = await params;
+
+  console.info(`[videos/transcript/GET] Fetching transcript for video ${id}, user ${userId}`);
 
   // IDOR check + fetch most recent cached transcript + the sticky
   // unavailable flag in one round-trip.
@@ -34,6 +37,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     },
   });
   if (!video) {
+    console.error(`[videos/transcript/GET] Video ${id} not accessible by user ${userId}`);
     return NextResponse.json({ error: 'Video not found' }, { status: 404 });
   }
 
@@ -47,22 +51,27 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   // offering a retry button. 404 stays reserved for "we haven't tried
   // yet" — the client renders a Fetch button for that path.
   if (video.transcript_unavailable) {
+    console.error(`[videos/transcript/GET] Transcript sticky-unavailable for video ${id}`);
     return NextResponse.json(
       { error: 'Transcript unavailable', code: 'unavailable' },
       { status: 410 }
     );
   }
 
+  console.error(`[videos/transcript/GET] Transcript not cached for video ${id}`);
   return NextResponse.json({ error: 'Not cached' }, { status: 404 });
 }
 
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { userId } = await auth();
   if (userId == null) {
+    console.error('[videos/transcript/POST] Unauthorized');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const { id } = await params;
+
+  console.info(`[videos/transcript/POST] Ensuring transcript for video ${id}, user ${userId}`);
 
   // ensureTranscript handles the whole pipeline: IDOR check, cache
   // hit, sticky-unavailable short circuit, upstream fetch, and the
@@ -70,14 +79,17 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
   const result = await ensureTranscript(prisma, userId, id);
   if (!result.ok) {
     if (result.reason === 'not-found') {
+      console.error(`[videos/transcript/POST] Video ${id} not found or not accessible`);
       return NextResponse.json({ error: 'Video not found' }, { status: 404 });
     }
     if (result.reason === 'transient-error') {
+      console.error(`[videos/transcript/POST] Transient transcript fetch error for video ${id}`);
       return NextResponse.json(
         { error: 'Transcript fetch failed temporarily — please try again.', code: 'transient' },
         { status: 503 }
       );
     }
+    console.error(`[videos/transcript/POST] Transcript unavailable for video ${id}`);
     return NextResponse.json(
       { error: 'Transcript unavailable', code: 'unavailable' },
       { status: 410 }

@@ -16,8 +16,11 @@ export async function POST(_request: Request, { params }: Params) {
   const userId = authResult;
   const { id } = await params;
 
+  console.info(`[videos/save/POST] Saving video ${id} for user ${userId}`);
+
   const ok = await assertUserCanTouchVideo(prisma, { userId, videoId: id });
   if (!ok) {
+    console.error(`[videos/save/POST] Video ${id} not accessible by user ${userId}`);
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
@@ -32,6 +35,8 @@ export async function DELETE(_request: Request, { params }: Params) {
   }
   const userId = authResult;
   const { id } = await params;
+
+  console.info(`[videos/save/DELETE] Unsaving video ${id} for user ${userId}`);
 
   await unsaveVideo(prisma, userId, id);
   return NextResponse.json({ saved: false });

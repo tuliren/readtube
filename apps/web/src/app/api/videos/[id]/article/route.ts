@@ -48,6 +48,7 @@ ${transcript}`;
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { userId } = await auth();
   if (userId == null) {
+    console.error('[article/GET] Unauthorized');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -55,8 +56,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const styleParam = request.nextUrl.searchParams.get('style');
   const style = parseStyle(styleParam);
   if (!style) {
+    console.error(`[article/GET] Invalid style: ${styleParam}`);
     return NextResponse.json({ error: 'Invalid style' }, { status: 400 });
   }
+
+  console.info(
+    `[article/GET] Fetching cached article for video ${id} (style=${style}), user ${userId}`
+  );
 
   // IDOR check + lookup latest transcript
   const video = await prisma.video.findFirst({
@@ -78,11 +84,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     },
   });
   if (!video) {
+    console.error(`[article/GET] Video ${id} not accessible by user ${userId}`);
     return NextResponse.json({ error: 'Video not found' }, { status: 404 });
   }
 
   const transcript = video.transcripts[0];
   if (!transcript) {
+    console.error(`[article/GET] No transcript cached for video ${id}`);
     return NextResponse.json({ error: 'Not cached' }, { status: 404 });
   }
 
@@ -97,6 +105,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     select: { content: true, style: true, generated_at: true },
   });
   if (!article) {
+    console.error(`[article/GET] No cached article for video ${id} (style=${style})`);
     return NextResponse.json({ error: 'Not cached' }, { status: 404 });
   }
 
@@ -110,6 +119,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { userId } = await auth();
   if (userId == null) {
+    console.error('[article/POST] Unauthorized');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -123,8 +133,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
   const style = parseStyle(body.style);
   if (!style) {
+    console.error(`[article/POST] Invalid style: ${body.style}`);
     return NextResponse.json({ error: 'Invalid style' }, { status: 400 });
   }
+
+  console.info(
+    `[article/POST] Generating article for video ${id} (style=${style}), user ${userId}`
+  );
 
   // Look up title + channel name first; ensureTranscript will do
   // its own IDOR check + transcript resolution.
@@ -144,6 +159,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     },
   });
   if (!video) {
+    console.error(`[article/POST] Video ${id} not accessible by user ${userId}`);
     return NextResponse.json({ error: 'Video not found' }, { status: 404 });
   }
 
@@ -155,9 +171,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const ensured = await ensureTranscript(prisma, userId, id);
   if (!ensured.ok) {
     if (ensured.reason === 'not-found') {
+      console.error(`[article/POST] Video ${id} not found during ensureTranscript`);
       return NextResponse.json({ error: 'Video not found' }, { status: 404 });
     }
     if (ensured.reason === 'transient-error') {
+      console.error(`[article/POST] Transient transcript fetch error for video ${id}`);
       return NextResponse.json(
         {
           error: 'Could not fetch the transcript right now — please try again.',
@@ -166,6 +184,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         { status: 503 }
       );
     }
+    console.error(`[article/POST] Transcript unavailable for video ${id}`);
     return NextResponse.json(
       { error: 'Transcript unavailable for this video.', code: 'unavailable' },
       { status: 410 }

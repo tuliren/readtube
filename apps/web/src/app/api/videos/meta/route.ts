@@ -22,8 +22,11 @@ export async function GET(request: NextRequest) {
 
   const sourceId = request.nextUrl.searchParams.get('sourceId');
   if (sourceId == null || sourceId.length === 0) {
+    console.error('[videos/meta/GET] Missing sourceId query param');
     return NextResponse.json({ error: 'sourceId is required' }, { status: 400 });
   }
+
+  console.info(`[videos/meta/GET] Looking up video meta for sourceId=${sourceId}, user ${userId}`);
 
   const video = await prisma.video.findFirst({
     where: {
@@ -43,6 +46,7 @@ export async function GET(request: NextRequest) {
     },
   });
   if (video == null) {
+    console.error(`[videos/meta/GET] Video not found for sourceId=${sourceId}, user ${userId}`);
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 

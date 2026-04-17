@@ -20,15 +20,21 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   const userId = authResult;
   const { id: videoId, noteId } = await params;
 
+  console.info(
+    `[videos/notes/PATCH] Updating note ${noteId} on video ${videoId} for user ${userId}`
+  );
+
   let body: { body?: string };
   try {
     body = await request.json();
-  } catch {
+  } catch (err) {
+    console.error('[videos/notes/PATCH] Invalid body:', err);
     return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
   }
 
   const text = body.body?.trim() ?? '';
   if (text.length === 0 || text.length > 10000) {
+    console.error(`[videos/notes/PATCH] Invalid body length: ${text.length}`);
     return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
   }
 
@@ -37,6 +43,9 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     data: { body: text },
   });
   if (result.count === 0) {
+    console.error(
+      `[videos/notes/PATCH] Note ${noteId} not found for user ${userId} on video ${videoId}`
+    );
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
@@ -51,10 +60,17 @@ export async function DELETE(_request: NextRequest, { params }: Params) {
   const userId = authResult;
   const { id: videoId, noteId } = await params;
 
+  console.info(
+    `[videos/notes/DELETE] Deleting note ${noteId} on video ${videoId} for user ${userId}`
+  );
+
   const result = await prisma.note.deleteMany({
     where: { id: noteId, user_id: userId, video_id: videoId },
   });
   if (result.count === 0) {
+    console.error(
+      `[videos/notes/DELETE] Note ${noteId} not found for user ${userId} on video ${videoId}`
+    );
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 

@@ -24,6 +24,10 @@ export async function DELETE(_request: Request, { params }: Params) {
   const userId = authResult;
   const { id: videoId } = await params;
 
+  console.info(
+    `[videos/standalone/DELETE] Removing video ${videoId} from library for user ${userId}`
+  );
+
   // Remove from every one of the user's playlists AND delete the
   // StandaloneVideo row in a single round-trip. Both operations are
   // scoped to this user, so there is no IDOR risk even if the caller
