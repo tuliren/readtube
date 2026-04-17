@@ -24,7 +24,7 @@ export default function Hero() {
     <section
       id="hero"
       aria-label="Hero"
-      className="flex min-h-[80vh] flex-col justify-start px-6 pb-16 pt-[20vh] text-center sm:px-8"
+      className="flex min-h-[60vh] flex-col justify-start px-6 pb-16 pt-[14vh] text-center sm:px-8"
     >
       <h1 className="mx-auto max-w-4xl font-display text-5xl font-medium leading-tight tracking-tight text-slate-700 sm:text-7xl sm:leading-tight">
         <RotatingWord /> your
@@ -39,7 +39,7 @@ export default function Hero() {
         </Button>
       </div>
 
-      <div className="mt-36 sm:mt-28 lg:mb-8 lg:mt-44">
+      <div className="mt-20 sm:mt-16 lg:mb-8 lg:mt-24">
         <p className="text-xl tracking-tight text-slate-500">Brought to you by folks from</p>
         <ul
           role="list"
