@@ -149,8 +149,9 @@ export async function loadLibraryVideos(
         continue;
       }
       for (const item of pl.items) {
-        // A null published_at cannot be compared to a watermark; leave
-        // it unread by default until a consumption row is written.
+        // Watermark comparison needs a real published_at; skip nulls
+        // here. A UserVideoConsumption row can still mark the video
+        // as read via the explicit path below.
         if (item.video.published_at != null && item.video.published_at <= pl.read_at) {
           watermarkReadIds.add(item.video_id);
         }
@@ -165,8 +166,9 @@ export async function loadLibraryVideos(
       continue;
     }
     // Read state: explicit consumption wins, then playlist watermark.
-    // Null published_at can't satisfy a watermark comparison, so those
-    // videos fall through to "unread" unless consumption says otherwise.
+    // A null published_at can't satisfy the watermark comparison, so
+    // the watermark branches below no-op for such videos — the
+    // consumption-row path above still works unchanged.
     const explicitRead = consumptionByVideoId.get(id) ?? null;
     let readAt: Date | null = explicitRead;
     if (

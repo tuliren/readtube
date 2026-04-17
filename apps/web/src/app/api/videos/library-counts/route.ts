@@ -71,8 +71,9 @@ export async function GET() {
       continue;
     }
     for (const item of pl.items) {
-      // Null published_at can't satisfy the watermark comparison; such
-      // videos stay unread until an explicit consumption row exists.
+      // Watermark comparison needs a real published_at; skip nulls.
+      // A UserVideoConsumption row still counts these as read via
+      // the consumedIds check in `isRead` below.
       if (item.video.published_at != null && item.video.published_at <= pl.read_at) {
         watermarkReadIds.add(item.video_id);
       }

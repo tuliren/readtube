@@ -155,8 +155,10 @@ export async function loadInboxVideos(
       return explicit;
     }
     const watermark = watermarkByChannelId.get(v.channel_id);
-    // Videos with an unknown publish date never match a watermark —
-    // they stay unread until an explicit consumption row is written.
+    // Watermarks compare published_at to read_at; a null publish date
+    // can't satisfy that comparison, so this branch no-ops for such
+    // videos. They can still be marked read the usual way — via an
+    // explicit UserVideoConsumption row, which is handled above.
     if (
       watermark != null &&
       v.published_at != null &&
