@@ -5,7 +5,8 @@ export interface ChannelData {
   /** YouTube handle (e.g. `@mkbhd`). Null when the scraper hasn't
    *  captured one yet. Used to build nicer sidebar URLs. */
   handle: string | null;
-  rssUrl: string;
+  // Null for platforms without a native RSS feed (Bilibili).
+  rssUrl: string | null;
   /** URL to the channel's logo/avatar. Populated from the
    *  TranscriptAPI /youtube/channel/latest endpoint. Null for
    *  channels that were added before this feature or whose
