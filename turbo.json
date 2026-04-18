@@ -21,7 +21,8 @@
     },
     "test": {},
     "integrationTest": {
-      "dependsOn": ["^db:generate"]
+      "dependsOn": ["^db:generate"],
+      "env": ["INTEGRATION_DATABASE_URL"]
     },
     "db:generate": {
       "cache": false
