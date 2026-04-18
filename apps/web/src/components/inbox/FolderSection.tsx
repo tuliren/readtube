@@ -228,11 +228,11 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
         actions (Add channel / Create folder), aligned to the same
         right rail as the per-row ⋯ menus on channels and folders.
       */}
-      <div className="mb-1 mt-4 flex items-center justify-between px-3">
+      <div className="mb-1 mt-4 flex items-center justify-between px-5">
         <button
           type="button"
           onClick={toggleChannels}
-          className="flex flex-1 items-center gap-1 px-2 text-left"
+          className="flex flex-1 items-center gap-1 text-left"
           aria-expanded={!channelsCollapsed}
           aria-label={channelsCollapsed ? 'Expand channels' : 'Collapse channels'}
         >
