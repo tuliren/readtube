@@ -3,7 +3,11 @@ import { VideoPlatformType } from '@readtube/database';
 import { type PlatformTranscriptResult, VideoPlatform } from '@/lib/platforms/base';
 import { fetchBilibiliChannelSnapshot } from '@/lib/platforms/bilibili/channelSnapshot';
 import { fetchBilibiliTranscript } from '@/lib/platforms/bilibili/transcript';
-import { BVID_PATTERN, extractBilibiliVideoId } from '@/lib/platforms/bilibili/urls';
+import {
+  BVID_PATTERN,
+  extractBilibiliChannelMid,
+  extractBilibiliVideoId,
+} from '@/lib/platforms/bilibili/urls';
 import { fetchBilibiliVideoSnapshot } from '@/lib/platforms/bilibili/videoSnapshot';
 import type { ChannelSnapshot, VideoSnapshot } from '@/lib/platforms/types';
 
@@ -40,6 +44,10 @@ export class BilibiliPlatform extends VideoPlatform {
 
   extractVideoId(input: string): string | null {
     return extractBilibiliVideoId(input);
+  }
+
+  extractChannelSourceId(input: string): string | null {
+    return extractBilibiliChannelMid(input);
   }
 
   fetchVideoSnapshot(videoId: string): Promise<VideoSnapshot> {

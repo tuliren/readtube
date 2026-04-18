@@ -4,7 +4,11 @@ import { type PlatformTranscriptResult, VideoPlatform } from '@/lib/platforms/ba
 import type { ChannelSnapshot, VideoSnapshot } from '@/lib/platforms/types';
 import { fetchChannelSnapshot } from '@/lib/platforms/youtube/channelSnapshot';
 import { fetchSubtitleViaTranscriptApi } from '@/lib/platforms/youtube/subtitles/fetchViaTranscriptApi';
-import { YOUTUBE_VIDEO_ID_PATTERN, buildRssUrl } from '@/lib/platforms/youtube/urls';
+import {
+  YOUTUBE_VIDEO_ID_PATTERN,
+  buildRssUrl,
+  extractChannelId,
+} from '@/lib/platforms/youtube/urls';
 import { extractVideoId, fetchVideoSnapshot } from '@/lib/platforms/youtube/videoSnapshot';
 
 export class YouTubePlatform extends VideoPlatform {
@@ -37,6 +41,13 @@ export class YouTubePlatform extends VideoPlatform {
 
   extractVideoId(input: string): string | null {
     return extractVideoId(input);
+  }
+
+  extractChannelSourceId(input: string): string | null {
+    // YouTube @handle URLs need a scrape to resolve the UC id — the
+    // add-channel route handles that case explicitly via
+    // fetchChannelSnapshot({ channelPageUrl }).
+    return extractChannelId(input);
   }
 
   fetchVideoSnapshot(videoId: string): Promise<VideoSnapshot> {

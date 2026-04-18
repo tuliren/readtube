@@ -1,7 +1,10 @@
 import '@tests/integration-tests';
 
 import { upsertChannelWithVideos } from '@/lib/channels/upsertChannelWithVideos';
-import type { ChannelSnapshot } from '@/lib/platforms/youtube/channelSnapshot';
+import { YouTubePlatform } from '@/lib/platforms';
+import type { ChannelSnapshot } from '@/lib/platforms/types';
+
+const youtube = new YouTubePlatform();
 
 // ─── Module mocks ────────────────────────────────────────────────
 
@@ -57,6 +60,7 @@ describe('upsertChannelWithVideos', () => {
 
     const ch = await upsertChannelWithVideos(
       global.testPrisma,
+      youtube,
       'UC_x',
       snapshot({ channelId: 'UC_x', name: 'Refreshed', handle: '@x' })
     );
@@ -70,6 +74,7 @@ describe('upsertChannelWithVideos', () => {
   it('creates a new channel with the scraped handle when no conflict', async () => {
     const ch = await upsertChannelWithVideos(
       global.testPrisma,
+      youtube,
       'UC_new',
       snapshot({ channelId: 'UC_new', name: 'New', handle: '@new' })
     );
@@ -88,6 +93,7 @@ describe('upsertChannelWithVideos', () => {
 
     const ch = await upsertChannelWithVideos(
       global.testPrisma,
+      youtube,
       'UC_x',
       snapshot({ channelId: 'UC_x', name: 'Scraped', handle: '@x', logoUrl: 'https://logo/x' })
     );
@@ -110,6 +116,7 @@ describe('upsertChannelWithVideos', () => {
     // (stale or renamed upstream). Upserting should not throw.
     const ch = await upsertChannelWithVideos(
       global.testPrisma,
+      youtube,
       'UC_b',
       snapshot({ channelId: 'UC_b', name: 'B', handle: '@collide' })
     );
@@ -147,6 +154,7 @@ describe('upsertChannelWithVideos', () => {
 
     const ch = await upsertChannelWithVideos(
       global.testPrisma,
+      youtube,
       'UC_b',
       snapshot({
         channelId: 'UC_b',
@@ -164,6 +172,7 @@ describe('upsertChannelWithVideos', () => {
   it('creates initial Video rows from the snapshot', async () => {
     await upsertChannelWithVideos(
       global.testPrisma,
+      youtube,
       'UC_v',
       snapshot({
         channelId: 'UC_v',

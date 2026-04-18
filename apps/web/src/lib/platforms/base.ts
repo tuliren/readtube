@@ -34,6 +34,14 @@ export abstract class VideoPlatform {
   /** Parse a platform-specific video id from the input, or null. */
   abstract extractVideoId(input: string): string | null;
 
+  /**
+   * Sync-parse a channel source_id from a channel URL or bare id.
+   * Returns null when resolution requires a network call (e.g. a
+   * YouTube @handle URL needs a scrape to discover the UC id) — the
+   * add-channel route handles that fallback explicitly.
+   */
+  abstract extractChannelSourceId(input: string): string | null;
+
   /** Fetch full metadata for persisting a Video + owning Channel row. */
   abstract fetchVideoSnapshot(videoId: string): Promise<VideoSnapshot>;
 

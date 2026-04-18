@@ -1,8 +1,8 @@
-import { type PrismaClient, VideoPlatformType } from '@readtube/database';
+import type { PrismaClient } from '@readtube/database';
 
 import { hasChannelHandleConflict } from '@/lib/channels/handleConflict';
-import type { ChannelSnapshot } from '@/lib/platforms/youtube/channelSnapshot';
-import { buildRssUrl } from '@/lib/platforms/youtube/urls';
+import type { VideoPlatform } from '@/lib/platforms';
+import type { ChannelSnapshot } from '@/lib/platforms/types';
 import { isEmptyString } from '@/lib/string';
 
 export interface UpsertChannelResult {
@@ -10,8 +10,8 @@ export interface UpsertChannelResult {
   source_id: string;
   name: string;
   handle: string | null;
-  // Nullable globally (Bilibili rows have none), but this helper only
-  // creates YouTube channels so the returned row always has a value.
+  /** Populated for platforms that expose an RSS feed (YouTube); null
+   *  for platforms that don't (Bilibili) — mirrors the DB column. */
   rss_url: string | null;
   logo_url: string | null;
   created_at: Date;
@@ -38,21 +38,22 @@ export interface UpsertChannelResult {
  */
 export async function upsertChannelWithVideos(
   prisma: PrismaClient,
+  platform: VideoPlatform,
   sourceId: string,
   snapshot: ChannelSnapshot
 ): Promise<UpsertChannelResult> {
-  console.info(`Upsert channel with video source id ${sourceId}`);
+  console.info(`Upsert ${platform.type} channel with source id ${sourceId}`);
 
   const existing = await prisma.channel.findUnique({
     where: {
-      channel_unique_source: { source_type: VideoPlatformType.YOUTUBE, source_id: sourceId },
+      channel_unique_source: { source_type: platform.type, source_id: sourceId },
     },
   });
 
   const hasHandle = !isEmptyString(snapshot.handle);
 
   if (existing != null) {
-    console.info(`Channel with video source id ${sourceId} already exists, updating...`);
+    console.info(`Channel with source id ${sourceId} already exists, updating...`);
     // Update path: only refresh the handle when no other row owns it.
     // If the existing row already has the same handle, the update is a
     // no-op for that column; Prisma generates SET handle = '@x' which
@@ -75,10 +76,10 @@ export async function upsertChannelWithVideos(
   console.info(`Channel does not exist, creating...`);
   return prisma.channel.create({
     data: {
-      source_type: VideoPlatformType.YOUTUBE,
+      source_type: platform.type,
       source_id: sourceId,
       name: snapshot.name,
-      rss_url: buildRssUrl(sourceId),
+      rss_url: platform.buildRssUrl(sourceId),
       logo_url: snapshot.logoUrl,
       ...(hasHandle && !handleAlreadyUsed ? { handle: snapshot.handle } : {}),
       videos: {

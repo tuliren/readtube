@@ -1,17 +1,24 @@
 import { auth } from '@clerk/nextjs/server';
-import { prisma } from '@readtube/database';
+import { VideoPlatformType, prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { upsertChannelWithVideos } from '@/lib/channels/upsertChannelWithVideos';
 import { ensureUserExists } from '@/lib/db/user';
-import { fetchChannelSnapshot } from '@/lib/platforms/youtube/channelSnapshot';
-import { buildRssUrl, extractChannelId, extractHandle } from '@/lib/platforms/youtube/urls';
+import { type VideoPlatform, detectChannelSource, getPlatformByType } from '@/lib/platforms';
+import type { ChannelSnapshot } from '@/lib/platforms/types';
+import { fetchChannelSnapshot as fetchYouTubeChannelSnapshot } from '@/lib/platforms/youtube/channelSnapshot';
+import { extractHandle } from '@/lib/platforms/youtube/urls';
 import { isEmptyString } from '@/lib/string';
 import {
   computeInitialReadAt,
   countUnreadVideos,
   getSubscribedChannelsWithUnread,
 } from '@/lib/subscriptions';
+
+const INVALID_URL_MESSAGE =
+  'Invalid channel URL. Paste a YouTube channel URL ' +
+  '(youtube.com/@handle or youtube.com/channel/UC...) or a Bilibili space URL ' +
+  '(space.bilibili.com/<mid>).';
 
 export async function GET() {
   const { userId } = await auth();
@@ -43,6 +50,42 @@ export async function GET() {
   );
 }
 
+/**
+ * Resolve a user-supplied channel URL/id into a platform + snapshot.
+ *
+ * Two-step dispatch:
+ *   1. `detectChannelSource` handles every input a platform can
+ *      sync-parse (YouTube /channel/UC + bare UC, Bilibili space URL +
+ *      bare mid). Returns the platform and canonical source_id, then
+ *      we call `platform.fetchChannelSnapshot`.
+ *   2. YouTube @handle URLs fall through to step 1 because resolving a
+ *      handle to a UC id requires a scrape. We build the channel-page
+ *      URL from the handle and let YouTube's own fetcher do the scrape
+ *      + RSS fetch in one pass.
+ */
+async function resolveChannel(
+  input: string
+): Promise<{ platform: VideoPlatform; sourceId: string; snapshot: ChannelSnapshot } | null> {
+  const match = detectChannelSource(input);
+  if (match != null) {
+    const snapshot = await match.platform.fetchChannelSnapshot(match.sourceId);
+    return { platform: match.platform, sourceId: match.sourceId, snapshot };
+  }
+
+  const handle = extractHandle(input);
+  if (handle != null) {
+    const channelPageUrl = `https://www.youtube.com/@${handle}`;
+    const snapshot = await fetchYouTubeChannelSnapshot({ channelPageUrl });
+    return {
+      platform: getPlatformByType(VideoPlatformType.YOUTUBE),
+      sourceId: snapshot.channelId,
+      snapshot,
+    };
+  }
+
+  return null;
+}
+
 export async function POST(request: NextRequest) {
   const { userId } = await auth();
   if (userId == null) {
@@ -66,50 +109,34 @@ export async function POST(request: NextRequest) {
 
   console.info(`[channels/POST] Adding channel: ${input} for user ${userId}`);
 
-  let channelPageUrl: string | null = null;
-  let preresolvedRssUrl: string | undefined;
-
-  const handle = extractHandle(input);
-  if (handle != null) {
-    channelPageUrl = `https://www.youtube.com/@${handle}`;
-  } else {
-    const bareId = extractChannelId(input);
-    if (bareId != null) {
-      channelPageUrl = `https://www.youtube.com/channel/${bareId}`;
-      preresolvedRssUrl = buildRssUrl(bareId);
-    }
-  }
-
-  if (channelPageUrl == null) {
-    console.error(`[channels/POST] Invalid channel URL: ${input}`);
-    return NextResponse.json(
-      {
-        error:
-          'Invalid channel URL. Paste a URL like youtube.com/@handle, youtube.com/channel/UC..., or a bare UC... channel ID.',
-      },
-      { status: 400 }
-    );
-  }
-
-  let snapshot;
+  let resolved: Awaited<ReturnType<typeof resolveChannel>>;
   try {
-    snapshot = await fetchChannelSnapshot({ channelPageUrl, rssUrl: preresolvedRssUrl });
+    resolved = await resolveChannel(input);
   } catch (err) {
-    console.error(`[channels/POST] fetchChannelSnapshot failed for ${channelPageUrl}:`, err);
+    console.error(`[channels/POST] resolveChannel failed for ${input}:`, err);
     return NextResponse.json(
       { error: 'Channel not found or not accessible. Check the URL and try again.' },
       { status: 400 }
     );
   }
-
-  const sourceId = snapshot.channelId;
+  if (resolved == null) {
+    console.error(`[channels/POST] Invalid channel URL: ${input}`);
+    return NextResponse.json({ error: INVALID_URL_MESSAGE }, { status: 400 });
+  }
+  const { platform, sourceId, snapshot } = resolved;
 
   // Ensure user exists in DB before writing FK reference
   await ensureUserExists(userId);
 
-  // Check if user already subscribed to this channel
+  // Check if user already subscribed to this channel. Scope by both
+  // source_type and source_id so a hypothetical id collision between
+  // platforms (e.g. a BV-shaped string and a YT video id) can't
+  // shadow a different platform's row.
   const existingSub = await prisma.userSubscription.findFirst({
-    where: { user_id: userId, channel: { source_id: sourceId } },
+    where: {
+      user_id: userId,
+      channel: { source_type: platform.type, source_id: sourceId },
+    },
   });
   if (existingSub) {
     console.error(`[channels/POST] User ${userId} already subscribed to channel ${sourceId}`);
@@ -119,7 +146,7 @@ export async function POST(request: NextRequest) {
   // Upsert the channel atomically. upsertChannelWithVideos guards
   // against the `(source_type, handle)` unique constraint when another
   // row already owns the scraped handle.
-  const channel = await upsertChannelWithVideos(prisma, sourceId, snapshot);
+  const channel = await upsertChannelWithVideos(prisma, platform, sourceId, snapshot);
 
   // Compute the initial read watermark per the configured subscription mode
   // (all_new / none_new / recent_n_new). Done after the channel + its videos

@@ -50,6 +50,28 @@ export function getPlatformByType(type: VideoPlatformType): VideoPlatform {
 }
 
 /**
+ * Resolve a channel URL (or bare channel source_id) to a platform +
+ * source_id. Iterates platforms in registry order and returns the
+ * first match. Returns null when no platform can sync-parse the
+ * input — the YouTube @handle case intentionally returns null here
+ * and the add-channel route falls back to a scrape-based resolution.
+ */
+export function detectChannelSource(
+  input: string
+): { platform: VideoPlatform; sourceId: string } | null {
+  if (input == null || typeof input !== 'string') {
+    return null;
+  }
+  for (const platform of PLATFORMS) {
+    const sourceId = platform.extractChannelSourceId(input);
+    if (sourceId != null) {
+      return { platform, sourceId };
+    }
+  }
+  return null;
+}
+
+/**
  * Infer a VideoPlatformType from a bare platform `source_id` (no URL,
  * just the id stored in the Video row). Used by /videos/[videoId]
  * routes where the URL carries only the source_id and the lookup
