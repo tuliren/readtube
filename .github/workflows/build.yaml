@@ -25,6 +25,7 @@ concurrency:
 env:
   TURBO_TELEMETRY_DISABLED: 1
   NEXT_TELEMETRY_DISABLED: 1
+  HUSKY: 0
   CI: 1
 
 jobs:
@@ -41,16 +42,30 @@ jobs:
         with:
           node-version: 22
           cache: yarn
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        id: node-modules-cache
+        with:
+          path: |
+            node_modules
+            apps/*/node_modules
+            packages/*/node_modules
+            .yarn/install-state.gz
+          key: node-modules-${{ runner.os }}-node22-${{ hashFiles('yarn.lock') }}
       - name: Install dependencies
-        run: yarn install --frozen-lockfile
-      - name: Generate database client
-        working-directory: packages/database
-        run: yarn db:generate
+        if: steps.node-modules-cache.outputs.cache-hit != 'true'
+        run: yarn install --immutable
+      - name: Cache turbo
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ github.ref_name }}-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-${{ github.ref_name }}-
+            turbo-${{ runner.os }}-main-
+            turbo-${{ runner.os }}-
       - name: Lint code
-        run: |
-          yarn typecheck
-          yarn lint
-          yarn format:check
+        run: yarn turbo run typecheck lint "//#format:check"
       - name: Run tests
         run: yarn test
       - name: Run integration tests

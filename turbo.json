@@ -42,10 +42,10 @@
       "inputs": ["$TURBO_DEFAULT$", "!**/*.stories.{ts,tsx,jsx,mdx}"],
       "outputs": [".next/**", "!.next/cache/**", "storybook-static/**"]
     },
-    "format:check": {
+    "//#format:check": {
       "cache": false
     },
-    "format:write": {
+    "//#format:write": {
       "cache": false
     }
   }
