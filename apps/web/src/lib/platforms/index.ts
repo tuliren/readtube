@@ -41,3 +41,27 @@ export function getPlatformByType(type: VideoPlatformType): VideoPlatform {
   }
   return platform;
 }
+
+/**
+ * Infer a VideoPlatformType from a bare platform `source_id` (no URL,
+ * just the id stored in the Video row). Used by /videos/[videoId]
+ * routes where the URL carries only the source_id and the lookup
+ * needs to scope to the owning platform.
+ *
+ * Bilibili BV ids have a fixed "BV" prefix + 10 alphanumerics;
+ * YouTube ids are 11 URL-safe chars. The shapes don't overlap so a
+ * single pattern check is sufficient.
+ */
+export function detectPlatformTypeFromSourceId(sourceId: string): VideoPlatformType | null {
+  if (sourceId == null || typeof sourceId !== 'string') {
+    return null;
+  }
+  const trimmed = sourceId.trim();
+  if (/^BV[A-Za-z0-9]{10}$/.test(trimmed)) {
+    return VideoPlatformType.BILIBILI;
+  }
+  if (/^[\w-]{11}$/.test(trimmed)) {
+    return VideoPlatformType.YOUTUBE;
+  }
+  return null;
+}
