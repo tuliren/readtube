@@ -2,12 +2,14 @@ import { prisma } from '@readtube/database';
 import { embed, streamText } from 'ai';
 import { NextRequest, NextResponse } from 'next/server';
 
+import { DEFAULT_AI_MODEL } from '@/constants';
 import { EMBEDDING_MODEL } from '@/lib/ai/embed';
 import { requireUserId } from '@/lib/auth';
 import { headerSafeJson } from '@/lib/http/headerSafeJson';
 
 interface RetrievedChunk {
   video_id: string;
+  video_source_id: string;
   title: string;
   channel_name: string;
   summary: string | null;
@@ -24,7 +26,6 @@ interface RetrievedChunk {
  * render a sidebar of source videos without parsing the stream body.
  */
 const K = 6;
-const GENERATION_MODEL = 'google/gemini-2.5-flash';
 
 export async function POST(request: NextRequest) {
   const authResult = await requireUserId();
@@ -36,13 +37,17 @@ export async function POST(request: NextRequest) {
   let body: { question?: string };
   try {
     body = await request.json();
-  } catch {
+  } catch (err) {
+    console.error('[inbox/ask/POST] Invalid body:', err);
     return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
   }
   const question = body.question?.trim() ?? '';
   if (question.length === 0) {
+    console.error('[inbox/ask/POST] Missing question in body');
     return NextResponse.json({ error: 'Missing question' }, { status: 400 });
   }
+
+  console.info(`[inbox/ask/POST] Asking inbox for user ${userId}: ${question.slice(0, 120)}`);
 
   // Embed the question through the same model used for video embeddings
   // so the vector space lines up.
@@ -57,6 +62,7 @@ export async function POST(request: NextRequest) {
   // can't ask questions against another user's history.
   interface RetrievalRow {
     video_id: string;
+    video_source_id: string;
     title: string;
     channel_name: string;
     summary: string | null;
@@ -71,6 +77,7 @@ export async function POST(request: NextRequest) {
   const rows: RetrievalRow[] = await prisma.$queryRaw<RetrievalRow[]>`
     SELECT
       v."id"         AS video_id,
+      v."source_id"  AS video_source_id,
       v."title"      AS title,
       c."name"       AS channel_name,
       ts."short"     AS summary,
@@ -117,6 +124,7 @@ export async function POST(request: NextRequest) {
 
   const chunks: RetrievedChunk[] = rows.map((row) => ({
     video_id: row.video_id,
+    video_source_id: row.video_source_id,
     title: row.title,
     channel_name: row.channel_name,
     summary: row.summary,
@@ -140,7 +148,7 @@ Question: ${question}
 Answer with citations in the form [1], [2], etc. pointing to the numbered videos above. Keep it tight — no filler, no restating the question.`;
 
   const result = streamText({
-    model: GENERATION_MODEL,
+    model: DEFAULT_AI_MODEL,
     prompt,
   });
 
@@ -160,6 +168,7 @@ Answer with citations in the form [1], [2], etc. pointing to the numbered videos
       'X-Citations': headerSafeJson(
         chunks.map((c) => ({
           videoId: c.video_id,
+          videoSourceId: c.video_source_id,
           title: c.title,
           channelName: c.channel_name,
         }))

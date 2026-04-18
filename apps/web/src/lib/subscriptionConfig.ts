@@ -20,7 +20,7 @@ export type NewSubscriptionMode = 'all_new' | 'none_new' | 'recent_n_new';
  *                    has fewer than (N+1) videos, falls through to `all_new`
  *                    behavior (everything appears unread).
  */
-export const NEW_SUBSCRIPTION_MODE: NewSubscriptionMode = 'recent_n_new';
+export const NEW_SUBSCRIPTION_MODE: NewSubscriptionMode = 'none_new';
 
 /**
  * The number of most recent videos that should appear as unread when

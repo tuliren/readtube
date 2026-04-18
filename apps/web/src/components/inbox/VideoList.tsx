@@ -1,6 +1,6 @@
 'use client';
 
-import { useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { VideoData } from '@/lib/types';
@@ -23,6 +23,10 @@ interface Props {
    *  ~100ms on every filter change. */
   isLoading: boolean;
   onOpenNotes: (videoId: string, videoTitle: string) => void;
+  /** When true, surface library-specific actions (Remove from library)
+   *  in the per-row icons and bulk action bar. Enabled from
+   *  LibraryListView; the channel/inbox views leave it false. */
+  showRemoveFromLibrary?: boolean;
 }
 
 /**
@@ -55,25 +59,41 @@ export default function VideoList({
   emptyMessage,
   isLoading,
   onOpenNotes,
+  showRemoveFromLibrary,
 }: Props) {
   const searchParams = useSearchParams();
+  const pathname = usePathname();
 
-  // Build the "filter context" we want to forward into the reader as
-  // a single ?returnTo=<encoded-query> param so the reader's Back
-  // button can land back in the exact filtered list.
+  // Capture `Date.now()` once after mount so VideoRow's relative-time
+  // label is deterministic across the SSR pass and the first client
+  // render. Staying `null` during SSR + hydration lets VideoRow fall
+  // back to a locale-locked absolute date; the effect swaps to
+  // relative labels a tick after hydration.
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    setNow(Date.now());
+  }, []);
+
+  // Build the full path-and-query the reader's Back link should
+  // return to, forwarded as `?returnTo=<encoded-url>`.
   //
   // Two cases:
-  //   1. We're on `/inbox?starred=1` (or similar) — searchParams IS
-  //      the filter context, so use its toString().
-  //   2. We're already in the reader at `/inbox/<id>?returnTo=<inner>`
-  //      — forward the same `returnTo` value verbatim so navigating
-  //      between sibling videos doesn't lose the back-target.
-  const filterContext = (() => {
-    const returnToInUrl = searchParams.get('returnTo');
-    if (returnToInUrl != null) {
-      return returnToInUrl;
+  //   1. We're on a list page (`/inbox?starred=1`, `/channels/@mkbhd`)
+  //      — compose pathname + searchParams so the back link can
+  //      restore the exact list, whether the scope was in the path
+  //      or the query string.
+  //   2. We're already in the reader at `/videos/<id>?returnTo=<url>`
+  //      — forward that value verbatim so navigating between sibling
+  //      videos doesn't lose the back-target.
+  const returnTo = (() => {
+    const existing = searchParams.get('returnTo');
+    if (existing != null && existing.length > 0) {
+      return existing;
     }
-    return searchParams.toString();
+    const listParams = new URLSearchParams(searchParams);
+    listParams.delete('returnTo');
+    const qs = listParams.toString();
+    return qs.length > 0 ? `${pathname}?${qs}` : pathname;
   })();
 
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
@@ -181,14 +201,15 @@ export default function VideoList({
 
   return (
     <div className="flex flex-col">
-      <BulkActionBar selectedIds={selectedArray} onClear={clearSelection} />
+      <BulkActionBar
+        selectedIds={selectedArray}
+        onClear={clearSelection}
+        showRemoveFromLibrary={showRemoveFromLibrary}
+      />
       <ul className="divide-y divide-gray-100">
         {videos.map((video) => {
           const isSelected = selectedVideoId === video.id;
-          const href =
-            filterContext.length > 0
-              ? `/inbox/${video.id}?returnTo=${encodeURIComponent(filterContext)}`
-              : `/inbox/${video.id}`;
+          const href = `/videos/${encodeURIComponent(video.sourceId)}?returnTo=${encodeURIComponent(returnTo)}`;
 
           return (
             <VideoRow
@@ -200,6 +221,8 @@ export default function VideoList({
               href={href}
               inSelectionMode={inSelectionMode}
               onOpenNotes={onOpenNotes}
+              now={now}
+              showRemoveFromLibrary={showRemoveFromLibrary}
             />
           );
         })}

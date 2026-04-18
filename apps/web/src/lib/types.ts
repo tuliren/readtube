@@ -2,6 +2,9 @@ export interface ChannelData {
   id: string;
   sourceId: string;
   name: string;
+  /** YouTube handle (e.g. `@mkbhd`). Null when the scraper hasn't
+   *  captured one yet. Used to build nicer sidebar URLs. */
+  handle: string | null;
   rssUrl: string;
   /** URL to the channel's logo/avatar. Populated from the
    *  TranscriptAPI /youtube/channel/latest endpoint. Null for
@@ -32,7 +35,10 @@ export interface VideoData {
   sourceId: string;
   title: string;
   description: string | null;
-  publishedAt: string;
+  /** ISO string, or null when the upstream scrape didn't expose a
+   *  parseable publish date. UI should fall back to hiding the
+   *  "X ago" indicator rather than inventing a timestamp. */
+  publishedAt: string | null;
   readAt: string | null;
   // Length of the video in seconds, or null when the channel scraper
   // hasn't captured it yet (Shorts, ad slots, pre-backfill rows).
@@ -55,10 +61,16 @@ export interface VideoData {
   channelId: string;
   channelName: string;
   channelSourceId: string;
+  // YouTube channel handle (e.g. `@mkbhd`). Null when the scraper
+  // hasn't captured one yet. Used to build the public share URL.
+  channelHandle: string | null;
   // Triage flags
   isStarred: boolean;
   isSaved: boolean;
   isArchived: boolean;
+  // True when this video has a StandaloneVideo row for the viewer —
+  // i.e. it lives in the user's personal library (Videos sidebar).
+  isStandalone: boolean;
   // Tags + notes count
   tags: TagData[];
   noteCount: number;
@@ -71,6 +83,11 @@ export interface VideoData {
  */
 export interface InboxQuery {
   q?: string;
+  /** Set server-side by `/channels/[slug]` to scope the inbox to a
+   *  single channel. Not user-facing in the URL (the UI uses the
+   *  canonical `/channels/[slug]` path instead). The client
+   *  `InboxShell` injects it when building the `/api/videos` SWR
+   *  fetch key so the server sees the same scope as SSR. */
   channelId?: string;
   folderId?: string;
   tagIds?: string[];

@@ -2,18 +2,21 @@
 
 import { Archive, Bookmark, BookmarkCheck, MoreHorizontal, NotebookPen, Star } from 'lucide-react';
 import Link from 'next/link';
+import { useEffect, useRef } from 'react';
 
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { formatDurationSeconds } from '@/lib/format/duration';
 import type { VideoData } from '@/lib/types';
 
 import { useSidebar } from './SidebarContext';
+import VideoLibraryMenuItems from './VideoLibraryMenuItems';
 import { useTriage } from './useTriage';
 
 /**
@@ -86,10 +89,36 @@ interface Props {
   href: string;
   inSelectionMode: boolean;
   onOpenNotes: (videoId: string, videoTitle: string) => void;
+  /** Show an inline "Remove from library" icon in ordinary mode.
+   *  Only enabled on the library list views. */
+  showRemoveFromLibrary?: boolean;
+  /**
+   * Client-side `Date.now()` snapshot captured once after mount by the
+   * parent list. `null` during SSR and the first client render so we
+   * render a stable absolute date and avoid the "3m ago" vs "4m ago"
+   * hydration mismatch; the list swaps to relative strings a tick
+   * after hydration.
+   */
+  now: number | null;
 }
 
-function relativeTime(dateStr: string): string {
-  const now = Date.now();
+/**
+ * Locale-locked absolute date used for the SSR + first-client-render
+ * pass. Server and browser both format through the same `en-US`
+ * template so the rendered string is byte-identical.
+ */
+function absoluteDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+function relativeTime(dateStr: string, now: number | null): string {
+  if (now == null) {
+    return absoluteDate(dateStr);
+  }
   const then = new Date(dateStr).getTime();
   const diffMs = now - then;
   const diffSeconds = Math.floor(diffMs / 1000);
@@ -109,7 +138,7 @@ function relativeTime(dateStr: string): string {
   if (diffDays < 30) {
     return `${diffDays}d ago`;
   }
-  return new Date(dateStr).toLocaleDateString();
+  return absoluteDate(dateStr);
 }
 
 /**
@@ -134,17 +163,91 @@ export default function VideoRow({
   href,
   inSelectionMode,
   onOpenNotes,
+  now,
+  showRemoveFromLibrary,
 }: Props) {
   const triage = useTriage();
   const { isMobile } = useSidebar();
   const isUnread = video.readAt == null;
+
+  // Long-press (mobile): touchstart arms a 500ms timer; if it fires
+  // without the finger moving more than LONG_PRESS_SLOP pixels or
+  // lifting off, we flip this row into selection mode.
+  // `longPressedRef` suppresses the synthetic click that follows
+  // touchend so the row doesn't also navigate. Stationary-finger
+  // jitter often fires sub-pixel touchmove events, so we require a
+  // real movement before cancelling the timer.
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressedRef = useRef(false);
+  const touchOriginRef = useRef<{ x: number; y: number } | null>(null);
+  const LONG_PRESS_SLOP = 10;
+
+  useEffect(() => {
+    // Clear any pending long-press timer if the row unmounts mid-hold
+    // (SWR refresh, pagination, navigation). Without this the timer
+    // callback fires against a video id that's no longer in view and
+    // flips the list into an unexpected selection state.
+    return () => {
+      if (longPressTimer.current != null) {
+        clearTimeout(longPressTimer.current);
+        longPressTimer.current = null;
+      }
+    };
+  }, []);
 
   function stop(e: React.MouseEvent | React.KeyboardEvent) {
     e.preventDefault();
     e.stopPropagation();
   }
 
+  function clearLongPress() {
+    if (longPressTimer.current != null) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+    touchOriginRef.current = null;
+  }
+
+  function handleTouchStart(e: React.TouchEvent) {
+    if (inSelectionMode || !isMobile) {
+      return;
+    }
+    longPressedRef.current = false;
+    clearLongPress();
+    const touch = e.touches[0];
+    touchOriginRef.current = touch != null ? { x: touch.clientX, y: touch.clientY } : null;
+    longPressTimer.current = setTimeout(() => {
+      longPressedRef.current = true;
+      if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+        navigator.vibrate(15);
+      }
+      onToggleChecked(video.id, true);
+    }, 500);
+  }
+
+  function handleTouchMove(e: React.TouchEvent) {
+    const origin = touchOriginRef.current;
+    if (origin == null) {
+      return;
+    }
+    const touch = e.touches[0];
+    if (touch == null) {
+      return;
+    }
+    const dx = touch.clientX - origin.x;
+    const dy = touch.clientY - origin.y;
+    if (dx * dx + dy * dy > LONG_PRESS_SLOP * LONG_PRESS_SLOP) {
+      clearLongPress();
+    }
+  }
+
   function handleRowClick(e: React.MouseEvent) {
+    if (longPressedRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      longPressedRef.current = false;
+      return;
+    }
     if (inSelectionMode) {
       e.preventDefault();
       e.stopPropagation();
@@ -179,7 +282,8 @@ export default function VideoRow({
         </p>
         <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-gray-400">
           <span>
-            {video.channelName} · {relativeTime(video.publishedAt)}
+            {video.channelName}
+            {video.publishedAt != null ? ` · ${relativeTime(video.publishedAt, now)}` : null}
             {(() => {
               const duration = formatDurationSeconds(video.durationSeconds);
               return duration != null ? ` · ${duration}` : null;
@@ -202,7 +306,7 @@ export default function VideoRow({
         } ${inSelectionMode ? 'select-none' : ''}`}
       >
         <div
-          className="pt-1"
+          className={`pt-1 ${inSelectionMode || isChecked ? '' : 'hidden sidebar:block'}`}
           onClick={(e) => {
             stop(e);
             onToggleChecked(video.id, !isChecked, e.shiftKey);
@@ -229,7 +333,15 @@ export default function VideoRow({
             {rowContent}
           </div>
         ) : (
-          <Link href={href} className="flex min-w-0 flex-1 items-start gap-2">
+          <Link
+            href={href}
+            className="flex min-w-0 flex-1 items-start gap-2"
+            onClick={handleRowClick}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={clearLongPress}
+            onTouchMove={handleTouchMove}
+            onTouchCancel={clearLongPress}
+          >
             {rowContent}
           </Link>
         )}
@@ -278,6 +390,8 @@ export default function VideoRow({
                     <Archive className="mr-2 h-4 w-4 text-gray-400" />
                     Archive
                   </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <VideoLibraryMenuItems video={video} showRemove={showRemoveFromLibrary} />
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -351,6 +465,22 @@ export default function VideoRow({
               >
                 <Archive className="h-4 w-4" />
               </button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={stop}
+                    title="More actions"
+                    aria-label="More actions"
+                    className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <VideoLibraryMenuItems video={video} showRemove={showRemoveFromLibrary} />
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           ))}
       </div>

@@ -44,6 +44,8 @@ export async function fetchSubtitleViaTranscriptApi(
     throw new SubtitleFetchError('TRANSCRIPT_API_KEY is not set', { transient: true });
   }
 
+  console.info(`[TranscriptAPI] Fetching transcript for video ${videoId}`);
+
   const url = `https://transcriptapi.com/api/v2/youtube/transcript?video_url=${videoId}`;
   let res: Response;
   try {
@@ -54,12 +56,14 @@ export async function fetchSubtitleViaTranscriptApi(
     // Fetch threw before getting a response — DNS, network, abort,
     // etc. All transient by definition.
     const message = err instanceof Error ? err.message : 'Unknown network error';
+    console.error(`[TranscriptAPI] Network error for video ${videoId}:`, message);
     throw new SubtitleFetchError(`TranscriptAPI network error: ${message}`, { transient: true });
   }
 
   if (!res.ok) {
     const body = await res.text();
     const transient = !isPermanentTranscriptStatus(res.status);
+    console.error(`[TranscriptAPI] Error for video ${videoId}: ${res.status} ${body}`);
     throw new SubtitleFetchError(`TranscriptAPI error ${res.status}: ${body}`, {
       transient,
       status: res.status,

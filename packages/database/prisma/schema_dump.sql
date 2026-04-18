@@ -42,6 +42,7 @@ CREATE TABLE "Channel" (
   "description" TEXT,
   "verified" BOOLEAN NOT NULL DEFAULT false,
   "logo_url" TEXT,
+  "checked_at" TIMESTAMP(3),
   CONSTRAINT "Channel_pkey" PRIMARY KEY ("id")
 );
 
@@ -65,7 +66,7 @@ CREATE TABLE "Video" (
   "source_id" TEXT NOT NULL,
   "title" TEXT NOT NULL,
   "description" TEXT,
-  "published_at" TIMESTAMP(3) NOT NULL,
+  "published_at" TIMESTAMP(3),
   "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "search_tsv" tsvector DEFAULT (
     setweight(
@@ -82,6 +83,7 @@ CREATE TABLE "Video" (
   "duration_seconds" INTEGER,
   "transcript_unavailable" BOOLEAN NOT NULL DEFAULT false,
   "thumbnail_url" TEXT,
+  "source_type" "VideoPlatformType" NOT NULL DEFAULT 'YOUTUBE',
   CONSTRAINT "Video_pkey" PRIMARY KEY ("id")
 );
 
@@ -192,6 +194,40 @@ CREATE TABLE "VideoArchive" (
 );
 
 -- CreateTable
+CREATE TABLE "StandaloneVideo" (
+  "id" TEXT NOT NULL,
+  "user_id" TEXT NOT NULL,
+  "video_id" TEXT NOT NULL,
+  "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "StandaloneVideo_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Playlist" (
+  "id" TEXT NOT NULL,
+  "user_id" TEXT NOT NULL,
+  "source_type" "VideoPlatformType" NOT NULL DEFAULT 'YOUTUBE',
+  "source_id" TEXT NOT NULL,
+  "name" TEXT NOT NULL,
+  "sort_order" INTEGER NOT NULL DEFAULT 0,
+  "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" TIMESTAMP(3) NOT NULL,
+  "read_at" TIMESTAMP(3),
+  "custom_name" TEXT,
+  CONSTRAINT "Playlist_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "PlaylistVideo" (
+  "id" TEXT NOT NULL,
+  "playlist_id" TEXT NOT NULL,
+  "video_id" TEXT NOT NULL,
+  "sort_order" INTEGER NOT NULL DEFAULT 0,
+  "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "PlaylistVideo_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "Note" (
   "id" TEXT NOT NULL,
   "user_id" TEXT NOT NULL,
@@ -271,7 +307,10 @@ CREATE UNIQUE INDEX "User_source_id_key" ON "User" ("source_id");
 CREATE UNIQUE INDEX "User_email_key" ON "User" ("email");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Channel_source_id_key" ON "Channel" ("source_id");
+CREATE UNIQUE INDEX "Channel_source_type_source_id_key" ON "Channel" ("source_type", "source_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Channel_source_type_handle_key" ON "Channel" ("source_type", "handle");
 
 -- CreateIndex
 CREATE INDEX "subscription_index_on_channel_id" ON "UserSubscription" ("channel_id");
@@ -286,13 +325,13 @@ CREATE UNIQUE INDEX "UserSubscription_user_id_channel_id_key" ON "UserSubscripti
 CREATE INDEX "video_index_on_channel_published_at" ON "Video" ("channel_id", "published_at");
 
 -- CreateIndex
-CREATE INDEX "video_index_on_source_id" ON "Video" ("source_id");
-
--- CreateIndex
 CREATE INDEX "video_search_tsv_idx" ON "Video" USING GIN ("search_tsv");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Video_channel_id_source_id_key" ON "Video" ("channel_id", "source_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Video_source_type_source_id_key" ON "Video" ("source_type", "source_id");
 
 -- CreateIndex
 CREATE INDEX "user_video_consumption_index_on_video_id" ON "UserVideoConsumption" ("video_id");
@@ -304,7 +343,7 @@ CREATE UNIQUE INDEX "UserVideoConsumption_user_id_video_id_key" ON "UserVideoCon
 CREATE INDEX "transcript_index_on_video_id" ON "Transcript" ("video_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Article_transcript_id_style_prompt_version_key" ON "Article" ("transcript_id", "style", "prompt_version");
+CREATE UNIQUE INDEX "Article_transcript_id_style_key" ON "Article" ("transcript_id", "style");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Summary_transcript_id_key" ON "Summary" ("transcript_id");
@@ -344,6 +383,24 @@ CREATE INDEX "video_archive_index_on_video_id" ON "VideoArchive" ("video_id");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "VideoArchive_user_id_video_id_key" ON "VideoArchive" ("user_id", "video_id");
+
+-- CreateIndex
+CREATE INDEX "standalone_video_index_on_video_id" ON "StandaloneVideo" ("video_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "StandaloneVideo_user_id_video_id_key" ON "StandaloneVideo" ("user_id", "video_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Playlist_user_id_name_key" ON "Playlist" ("user_id", "name");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Playlist_user_id_source_type_source_id_key" ON "Playlist" ("user_id", "source_type", "source_id");
+
+-- CreateIndex
+CREATE INDEX "playlist_video_index_on_video_id" ON "PlaylistVideo" ("video_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "PlaylistVideo_playlist_id_video_id_key" ON "PlaylistVideo" ("playlist_id", "video_id");
 
 -- CreateIndex
 CREATE INDEX "note_index_on_user_video" ON "Note" ("user_id", "video_id");
@@ -445,6 +502,26 @@ ADD CONSTRAINT "VideoArchive_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "U
 -- AddForeignKey
 ALTER TABLE "VideoArchive"
 ADD CONSTRAINT "VideoArchive_video_id_fkey" FOREIGN KEY ("video_id") REFERENCES "Video" ("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "StandaloneVideo"
+ADD CONSTRAINT "StandaloneVideo_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "User" ("source_id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "StandaloneVideo"
+ADD CONSTRAINT "StandaloneVideo_video_id_fkey" FOREIGN KEY ("video_id") REFERENCES "Video" ("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Playlist"
+ADD CONSTRAINT "Playlist_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "User" ("source_id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PlaylistVideo"
+ADD CONSTRAINT "PlaylistVideo_playlist_id_fkey" FOREIGN KEY ("playlist_id") REFERENCES "Playlist" ("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PlaylistVideo"
+ADD CONSTRAINT "PlaylistVideo_video_id_fkey" FOREIGN KEY ("video_id") REFERENCES "Video" ("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Note"

@@ -24,7 +24,7 @@
  */
 import type { LucideIcon } from 'lucide-react';
 
-const BASE_ROW_CLASS = 'flex items-center gap-2 rounded-md px-3 py-1.5 text-sm';
+const BASE_ROW_CLASS = 'flex min-w-0 items-center gap-2 rounded-md px-3 py-1.5 text-sm';
 const ACTIVE_ROW_CLASS = 'bg-blue-50 font-medium text-blue-700';
 const INACTIVE_ROW_CLASS = 'text-gray-700 hover:bg-gray-100';
 
@@ -43,7 +43,7 @@ export function SidebarBadge({ count }: { count: number }) {
     return null;
   }
   return (
-    <span className="ml-auto shrink-0 rounded-full bg-blue-600 px-1.5 py-0.5 text-xs font-medium text-white">
+    <span className="ml-auto flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 px-1.5 text-xs font-medium text-white">
       {count}
     </span>
   );

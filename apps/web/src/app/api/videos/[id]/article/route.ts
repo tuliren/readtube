@@ -1,14 +1,33 @@
 import { auth } from '@clerk/nextjs/server';
-import { ArticleStyle } from '@readtube/database';
-import { prisma } from '@readtube/database';
-import { streamText } from 'ai';
+import { ArticleStyle, prisma } from '@readtube/database';
+import { Output, streamText } from 'ai';
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 
+import { DEFAULT_AI_MODEL } from '@/constants';
+import {
+  CURRENT_FRONTMATTER_VERSION,
+  parseMarkdownDocument,
+  serializeMarkdownDocument,
+} from '@/lib/markdownFrontmatter';
 import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
 
-const PROMPT_VERSION = 'v2';
-const MODEL = 'google/gemini-2.5-flash';
+const PROMPT_VERSION = 'v4';
 const DEFAULT_STYLE: ArticleStyle = ArticleStyle.NARRATIVE;
+
+// Structured-output schema: content first (so the model writes the
+// body before deciding hasLatex), hasLatex second (so the flag
+// reflects what the model actually produced).
+const ARTICLE_SCHEMA = z.object({
+  content: z
+    .string()
+    .describe('The markdown body of the article. Do not include any YAML frontmatter.'),
+  hasLatex: z
+    .boolean()
+    .describe(
+      'True if the content field above contains at least one LaTeX math formula wrapped in single or double dollar signs (e.g. $E = mc^2$ or $$\\int_0^1 x\\,dx$$). False otherwise. Dollar amounts like "$5 million" are not math and must not set this flag to true.'
+    ),
+});
 
 function parseStyle(raw: string | null | undefined): ArticleStyle | null {
   if (raw == null) {
@@ -49,6 +68,7 @@ ${transcript}`;
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { userId } = await auth();
   if (userId == null) {
+    console.error('[article/GET] Unauthorized');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -56,12 +76,24 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const styleParam = request.nextUrl.searchParams.get('style');
   const style = parseStyle(styleParam);
   if (!style) {
+    console.error(`[article/GET] Invalid style: ${styleParam}`);
     return NextResponse.json({ error: 'Invalid style' }, { status: 400 });
   }
 
+  console.info(
+    `[article/GET] Fetching cached article for video ${id} (style=${style}), user ${userId}`
+  );
+
   // IDOR check + lookup latest transcript
   const video = await prisma.video.findFirst({
-    where: { id, channel: { subscriptions: { some: { user_id: userId } } } },
+    where: {
+      id,
+      OR: [
+        { channel: { subscriptions: { some: { user_id: userId } } } },
+        { standalone: { some: { user_id: userId } } },
+        { playlist_items: { some: { playlist: { user_id: userId } } } },
+      ],
+    },
     select: {
       id: true,
       transcripts: {
@@ -72,25 +104,27 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     },
   });
   if (!video) {
+    console.error(`[article/GET] Video ${id} not accessible by user ${userId}`);
     return NextResponse.json({ error: 'Video not found' }, { status: 404 });
   }
 
   const transcript = video.transcripts[0];
   if (!transcript) {
+    console.error(`[article/GET] No transcript cached for video ${id}`);
     return NextResponse.json({ error: 'Not cached' }, { status: 404 });
   }
 
   const article = await prisma.article.findUnique({
     where: {
-      article_unique_transcript_style_version: {
+      article_unique_transcript_style: {
         transcript_id: transcript.id,
         style,
-        prompt_version: PROMPT_VERSION,
       },
     },
     select: { content: true, style: true, generated_at: true },
   });
   if (!article) {
+    console.error(`[article/GET] No cached article for video ${id} (style=${style})`);
     return NextResponse.json({ error: 'Not cached' }, { status: 404 });
   }
 
@@ -104,6 +138,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { userId } = await auth();
   if (userId == null) {
+    console.error('[article/POST] Unauthorized');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -117,13 +152,25 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
   const style = parseStyle(body.style);
   if (!style) {
+    console.error(`[article/POST] Invalid style: ${body.style}`);
     return NextResponse.json({ error: 'Invalid style' }, { status: 400 });
   }
+
+  console.info(
+    `[article/POST] Generating article for video ${id} (style=${style}), user ${userId}`
+  );
 
   // Look up title + channel name first; ensureTranscript will do
   // its own IDOR check + transcript resolution.
   const video = await prisma.video.findFirst({
-    where: { id, channel: { subscriptions: { some: { user_id: userId } } } },
+    where: {
+      id,
+      OR: [
+        { channel: { subscriptions: { some: { user_id: userId } } } },
+        { standalone: { some: { user_id: userId } } },
+        { playlist_items: { some: { playlist: { user_id: userId } } } },
+      ],
+    },
     select: {
       id: true,
       title: true,
@@ -131,6 +178,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     },
   });
   if (!video) {
+    console.error(`[article/POST] Video ${id} not accessible by user ${userId}`);
     return NextResponse.json({ error: 'Video not found' }, { status: 404 });
   }
 
@@ -142,9 +190,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const ensured = await ensureTranscript(prisma, userId, id);
   if (!ensured.ok) {
     if (ensured.reason === 'not-found') {
+      console.error(`[article/POST] Video ${id} not found during ensureTranscript`);
       return NextResponse.json({ error: 'Video not found' }, { status: 404 });
     }
     if (ensured.reason === 'transient-error') {
+      console.error(`[article/POST] Transient transcript fetch error for video ${id}`);
       return NextResponse.json(
         {
           error: 'Could not fetch the transcript right now — please try again.',
@@ -153,6 +203,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         { status: 503 }
       );
     }
+    console.error(`[article/POST] Transcript unavailable for video ${id}`);
     return NextResponse.json(
       { error: 'Transcript unavailable for this video.', code: 'unavailable' },
       { status: 410 }
@@ -160,94 +211,134 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
   const transcript = ensured.transcript;
 
-  // Cache hit: return the saved article as a single stream chunk so the client's
-  // existing stream-reader code path works unchanged.
+  const encoder = new TextEncoder();
+  const emitLine = (controller: ReadableStreamDefaultController<Uint8Array>, event: object) => {
+    controller.enqueue(encoder.encode(JSON.stringify(event) + '\n'));
+  };
+  const ndjsonHeaders = {
+    'Content-Type': 'application/x-ndjson; charset=utf-8',
+    'Cache-Control': 'no-cache, no-transform',
+  } as const;
+
+  // Cache hit: replay the stored article as a single-event NDJSON
+  // stream so the client's POST handler only has to know one wire
+  // format.
   const cached = await prisma.article.findUnique({
     where: {
-      article_unique_transcript_style_version: {
+      article_unique_transcript_style: {
         transcript_id: transcript.id,
         style,
-        prompt_version: PROMPT_VERSION,
       },
     },
     select: { content: true },
   });
 
-  const encoder = new TextEncoder();
-
   if (cached) {
+    const parsed = parseMarkdownDocument(cached.content);
+    const hasLatex = parsed.properties.hasLatex === true;
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
-        controller.enqueue(encoder.encode(cached.content));
+        emitLine(controller, { delta: parsed.content });
+        emitLine(controller, { hasLatex });
+        emitLine(controller, { type: 'done' });
         controller.close();
       },
     });
-    return new Response(stream, {
-      headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
-        'Cache-Control': 'no-cache, no-transform',
-      },
-    });
+    return new Response(stream, { headers: ndjsonHeaders });
   }
 
   const transcriptText = transcript.segments.map((s) => s.text).join(' ');
 
   const result = streamText({
-    model: MODEL,
+    model: DEFAULT_AI_MODEL,
+    output: Output.object({ schema: ARTICLE_SCHEMA }),
     prompt: buildPrompt(style, video.title, video.channel.name, transcriptText),
   });
 
-  // Eagerly consume the first chunk so pre-flight errors (gateway auth,
-  // invalid model, etc.) surface as a proper HTTP error before streaming starts.
-  const iterator = result.textStream[Symbol.asyncIterator]();
-  let firstChunk: IteratorResult<string>;
+  // Eagerly consume the first partial so pre-flight errors (gateway
+  // auth, invalid model, etc.) surface as a proper HTTP error before
+  // the stream opens.
+  const iterator = result.partialOutputStream[Symbol.asyncIterator]();
+  let firstChunk: IteratorResult<Partial<z.infer<typeof ARTICLE_SCHEMA>>>;
   try {
     firstChunk = await iterator.next();
   } catch (err) {
-    console.error('[article/POST] streamText pre-flight error:', err);
+    console.error('[article/POST] streamText output pre-flight error:', err);
     const message = err instanceof Error ? err.message : 'Failed to generate article.';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 
   const transcriptId = transcript.id;
-  let fullText = '';
-  let streamCompleted = false;
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
+      let accumulated = '';
+      let hasLatex: boolean | null = null;
+      let emittedHasLatex = false;
+      let streamCompleted = false;
+
+      const applyPartial = (partial: Partial<z.infer<typeof ARTICLE_SCHEMA>> | undefined) => {
+        if (partial == null) {
+          return;
+        }
+        if (typeof partial.content === 'string' && partial.content.length > accumulated.length) {
+          const delta = partial.content.slice(accumulated.length);
+          accumulated = partial.content;
+          emitLine(controller, { delta });
+        }
+        if (!emittedHasLatex && typeof partial.hasLatex === 'boolean') {
+          emittedHasLatex = true;
+          hasLatex = partial.hasLatex;
+          emitLine(controller, { hasLatex });
+        }
+      };
+
       try {
-        if (!firstChunk.done && firstChunk.value) {
-          fullText += firstChunk.value;
-          controller.enqueue(encoder.encode(firstChunk.value));
+        if (!firstChunk.done) {
+          applyPartial(firstChunk.value);
         }
         while (true) {
           const next = await iterator.next();
           if (next.done) {
             break;
           }
-          fullText += next.value;
-          controller.enqueue(encoder.encode(next.value));
+          applyPartial(next.value);
+        }
+        if (!emittedHasLatex) {
+          try {
+            const settled = await result.output;
+            hasLatex = settled.hasLatex;
+            emittedHasLatex = true;
+            emitLine(controller, { hasLatex });
+          } catch {
+            // Swallow — we already streamed the body.
+          }
         }
         streamCompleted = true;
+        emitLine(controller, { type: 'done' });
         controller.close();
       } catch (err) {
-        console.error('[article/POST] streamText mid-stream error:', err);
+        console.error('[article/POST] streamText output mid-stream error:', err);
         const message = err instanceof Error ? err.message : 'Unknown error';
-        controller.enqueue(encoder.encode(`\n\n> **Error:** ${message}`));
+        emitLine(controller, { error: message });
         controller.close();
       }
 
       // Persist after the stream closes. Do not save partial articles.
-      if (streamCompleted && fullText.trim().length > 0) {
+      if (streamCompleted && accumulated.trim().length > 0) {
         try {
           const usage = await result.usage;
+          const contentForStorage = serializeMarkdownDocument(accumulated.trim(), {
+            version: CURRENT_FRONTMATTER_VERSION,
+            hasLatex: hasLatex === true,
+          });
           await prisma.article.create({
             data: {
               transcript_id: transcriptId,
               style,
               prompt_version: PROMPT_VERSION,
-              model: MODEL,
-              content: fullText,
+              model: DEFAULT_AI_MODEL,
+              content: contentForStorage,
               usage: usage ? JSON.parse(JSON.stringify(usage)) : null,
             },
           });
@@ -258,10 +349,5 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     },
   });
 
-  return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/plain; charset=utf-8',
-      'Cache-Control': 'no-cache, no-transform',
-    },
-  });
+  return new Response(stream, { headers: ndjsonHeaders });
 }

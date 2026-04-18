@@ -15,6 +15,8 @@ export async function GET() {
   }
   const userId = authResult;
 
+  console.info(`[folders/GET] Listing folders for user ${userId}`);
+
   const rows = await prisma.folder.findMany({
     where: { user_id: userId },
     orderBy: [{ sort_order: 'asc' }, { name: 'asc' }],
@@ -34,16 +36,21 @@ export async function POST(request: NextRequest) {
   let body: { name?: string };
   try {
     body = await request.json();
-  } catch {
+  } catch (err) {
+    console.error('[folders/POST] Invalid body:', err);
     return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
   }
   const name = body.name?.trim() ?? '';
   if (name.length === 0) {
+    console.error('[folders/POST] Folder name required');
     return NextResponse.json({ error: 'Folder name required' }, { status: 400 });
   }
   if (name.length > 80) {
+    console.error(`[folders/POST] Folder name too long (${name.length} chars)`);
     return NextResponse.json({ error: 'Folder name too long' }, { status: 400 });
   }
+
+  console.info(`[folders/POST] Creating folder "${name}" for user ${userId}`);
 
   // Append at the end of the list so new folders don't disturb existing order.
   const max = await prisma.folder.aggregate({
@@ -62,6 +69,7 @@ export async function POST(request: NextRequest) {
     // P2002 = unique constraint violation. Caught here so the folder_unique_
     // user_name index surfaces as a friendly 409 instead of a generic 500.
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      console.error(`[folders/POST] Folder name conflict: "${name}"`, err);
       return NextResponse.json(
         { error: `A folder named "${name}" already exists.` },
         { status: 409 }

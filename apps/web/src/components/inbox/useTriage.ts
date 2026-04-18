@@ -1,9 +1,27 @@
 'use client';
 
+import { usePathname, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { useSWRConfig } from 'swr';
 
 import type { BulkAction } from '@/lib/inbox/triageActions';
+
+/**
+ * True for the library list routes whose video data is server-rendered
+ * without a SWR fallback: /videos, /videos/standalone, and
+ * /videos/playlists/[id]. Excludes the reader (/videos/[sourceId])
+ * which renders a single video and doesn't need a list refresh.
+ */
+function isLibraryListRoute(pathname: string | null): boolean {
+  if (pathname == null) {
+    return false;
+  }
+  return (
+    pathname === '/videos' ||
+    pathname === '/videos/standalone' ||
+    pathname.startsWith('/videos/playlists/')
+  );
+}
 
 /**
  * Small client-side hook that hides fetch + SWR invalidation behind
@@ -20,6 +38,8 @@ import type { BulkAction } from '@/lib/inbox/triageActions';
  */
 export function useTriage() {
   const { mutate } = useSWRConfig();
+  const router = useRouter();
+  const pathname = usePathname();
 
   async function call(method: 'POST' | 'DELETE', url: string, body?: unknown): Promise<Response> {
     const res = await fetch(url, {
@@ -45,11 +65,25 @@ export function useTriage() {
   function invalidateLists() {
     // SWR's mutate matches the fetcher key; since /api/videos is used both
     // with and without a channelId query string, we invalidate via a
-    // predicate that matches any /api/videos URL.
-    void mutate((key) => typeof key === 'string' && key.startsWith('/api/videos'), undefined, {
-      revalidate: true,
-    });
+    // predicate that matches any /api/videos URL. /api/playlists is
+    // included because playlist video counts (displayed in the sidebar)
+    // shift when library membership changes.
+    void mutate(
+      (key) =>
+        typeof key === 'string' && (key.startsWith('/api/videos') || key === '/api/playlists'),
+      undefined,
+      { revalidate: true }
+    );
     void mutate('/api/channels', undefined, { revalidate: true });
+    // Library pages (/videos, /videos/standalone, /videos/playlists/[id])
+    // are server-rendered — their video list comes from a loader at page
+    // load time, not SWR. router.refresh() re-runs the RSC so the list
+    // updates without a full page reload. Skip on the inbox/channel
+    // routes where SWR revalidation alone suffices, to avoid an extra
+    // RSC round-trip per rapid triage action.
+    if (isLibraryListRoute(pathname)) {
+      router.refresh();
+    }
   }
 
   return {
@@ -94,6 +128,41 @@ export function useTriage() {
         return true;
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Failed to unarchive');
+        return false;
+      }
+    },
+
+    async addToPlaylist(videoId: string, playlistId: string): Promise<boolean> {
+      try {
+        await call('POST', `/api/playlists/${playlistId}/videos`, { videoId });
+        invalidateLists();
+        toast.success('Added to playlist');
+        return true;
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to add to playlist');
+        return false;
+      }
+    },
+
+    async removeFromPlaylist(videoId: string, playlistId: string): Promise<boolean> {
+      try {
+        await call('DELETE', `/api/playlists/${playlistId}/videos?videoId=${videoId}`);
+        invalidateLists();
+        return true;
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to remove from playlist');
+        return false;
+      }
+    },
+
+    async removeFromLibrary(videoId: string): Promise<boolean> {
+      try {
+        await call('DELETE', `/api/videos/${videoId}/standalone`);
+        invalidateLists();
+        toast.success('Removed from library');
+        return true;
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to remove from library');
         return false;
       }
     },

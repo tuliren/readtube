@@ -117,7 +117,7 @@ describe('buildUnreadClause', () => {
     expect(orClause).toEqual({ OR: [{ channel_id: 'chan_a' }] });
   });
 
-  it('emits per-channel published_at > watermark predicates when the watermark is set', () => {
+  it('emits per-channel watermark predicates with a created_at fallback for null publish dates', () => {
     const clause = buildUnreadClause(
       USER_ID,
       ['chan_a', 'chan_b'],
@@ -130,7 +130,16 @@ describe('buildUnreadClause', () => {
       (entry) => entry.OR != null
     );
     expect(orClause).toEqual({
-      OR: [{ channel_id: 'chan_a', published_at: { gt: watermark } }, { channel_id: 'chan_b' }],
+      OR: [
+        {
+          channel_id: 'chan_a',
+          OR: [
+            { published_at: { gt: watermark } },
+            { AND: [{ published_at: null }, { created_at: { gt: watermark } }] },
+          ],
+        },
+        { channel_id: 'chan_b' },
+      ],
     });
   });
 
@@ -138,7 +147,17 @@ describe('buildUnreadClause', () => {
     const clause = buildUnreadClause(USER_ID, ['chan_a'], new Map([['chan_a', watermark]]));
     expect(clause).toEqual({
       AND: [
-        { OR: [{ channel_id: 'chan_a', published_at: { gt: watermark } }] },
+        {
+          OR: [
+            {
+              channel_id: 'chan_a',
+              OR: [
+                { published_at: { gt: watermark } },
+                { AND: [{ published_at: null }, { created_at: { gt: watermark } }] },
+              ],
+            },
+          ],
+        },
         { consumptions: { none: { user_id: USER_ID } } },
       ],
     });

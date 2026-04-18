@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@readtube/database';
 
 import type { TagData, VideoData } from '@/lib/types';
+import { buildThumbnailUrl } from '@/lib/youtube/urls';
 
 /**
  * Minimal raw row shape that a caller must supply when it wants triage
@@ -12,12 +13,12 @@ export interface TriageRawRow {
   source_id: string;
   title: string;
   description: string | null;
-  published_at: Date;
+  published_at: Date | null;
   duration_seconds: number | null;
   thumbnail_url: string | null;
   transcript_unavailable: boolean;
   channel_id: string;
-  channel: { name: string; source_id: string };
+  channel: { name: string; source_id: string; handle: string | null };
   /**
    * Latest Transcript row (or none) plus whether it has a Summary
    * row attached and whether it has at least one Article row. The
@@ -38,6 +39,7 @@ interface TriageContext {
   starredIds: Set<string>;
   savedIds: Set<string>;
   archivedIds: Set<string>;
+  standaloneIds: Set<string>;
   tagsByVideoId: Map<string, TagData[]>;
   noteCountsByVideoId: Map<string, number>;
 }
@@ -58,12 +60,13 @@ export async function loadTriageContext(
       starredIds: new Set(),
       savedIds: new Set(),
       archivedIds: new Set(),
+      standaloneIds: new Set(),
       tagsByVideoId: new Map(),
       noteCountsByVideoId: new Map(),
     };
   }
 
-  const [stars, saves, archives, videoTags, noteCounts] = await Promise.all([
+  const [stars, saves, archives, standalones, videoTags, noteCounts] = await Promise.all([
     prisma.videoStar.findMany({
       where: { user_id: userId, video_id: { in: videoIds } },
       select: { video_id: true },
@@ -73,6 +76,10 @@ export async function loadTriageContext(
       select: { video_id: true },
     }),
     prisma.videoArchive.findMany({
+      where: { user_id: userId, video_id: { in: videoIds } },
+      select: { video_id: true },
+    }),
+    prisma.standaloneVideo.findMany({
       where: { user_id: userId, video_id: { in: videoIds } },
       select: { video_id: true },
     }),
@@ -110,6 +117,7 @@ export async function loadTriageContext(
     starredIds: new Set(stars.map((r) => r.video_id)),
     savedIds: new Set(saves.map((r) => r.video_id)),
     archivedIds: new Set(archives.map((r) => r.video_id)),
+    standaloneIds: new Set(standalones.map((r) => r.video_id)),
     tagsByVideoId,
     noteCountsByVideoId,
   };
@@ -139,10 +147,13 @@ export function decorateVideo(
     sourceId: row.source_id,
     title: row.title,
     description: row.description,
-    publishedAt: row.published_at.toISOString(),
+    publishedAt: row.published_at?.toISOString() ?? null,
     readAt: readAt != null ? readAt.toISOString() : null,
     durationSeconds: row.duration_seconds,
-    thumbnailUrl: row.thumbnail_url,
+    // Some older rows predate the always-populate-thumbnail rule and
+    // still have null `thumbnail_url`. Fall back to the deterministic
+    // hqdefault URL so the UI never renders a broken/missing image.
+    thumbnailUrl: row.thumbnail_url ?? buildThumbnailUrl(row.source_id),
     transcriptUnavailable: row.transcript_unavailable,
     hasTranscript,
     hasSummary,
@@ -150,9 +161,11 @@ export function decorateVideo(
     channelId: row.channel_id,
     channelName: row.channel.name,
     channelSourceId: row.channel.source_id,
+    channelHandle: row.channel.handle,
     isStarred: context.starredIds.has(row.id),
     isSaved: context.savedIds.has(row.id),
     isArchived: context.archivedIds.has(row.id),
+    isStandalone: context.standaloneIds.has(row.id),
     tags: context.tagsByVideoId.get(row.id) ?? [],
     noteCount: context.noteCountsByVideoId.get(row.id) ?? 0,
   };

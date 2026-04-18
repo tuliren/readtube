@@ -1,11 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import ReactMarkdown from 'react-markdown';
-import rehypeExternalLinks from 'rehype-external-links';
-import rehypeSanitize from 'rehype-sanitize';
-import remarkGfm from 'remark-gfm';
 
+import { countWords } from '@/lib/format/wordCount';
+import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
+
+import ArticleMarkdown from './ArticleMarkdown';
 import type { TranscriptStatus } from './VideoReader';
 
 interface Props {
@@ -18,6 +18,13 @@ interface Props {
    *  the Article tab dot can flip from red → blue. Fired on the
    *  initial GET cache hit AND after a successful generation. */
   onArticleAvailable: () => void;
+  /** Reports the article word count up to VideoReader so the Article
+   *  tab header can render the reading time badge. Fires on every
+   *  markdown change, so the badge updates live as content streams. */
+  onArticleWordsChange: (words: number) => void;
+  /** When true, fetch from the unauthenticated public endpoint and
+   *  render a read-only view — no generate affordance. */
+  publicMode?: boolean;
 }
 
 type Status = 'checking' | 'idle' | 'streaming' | 'done' | 'error';
@@ -29,32 +36,40 @@ export default function ArticleReader({
   transcriptStatus,
   onTranscriptStatusChange,
   onArticleAvailable,
+  onArticleWordsChange,
+  publicMode = false,
 }: Props) {
+  const apiBase = publicMode ? '/api/public/videos' : '/api/videos';
   const [status, setStatus] = useState<Status>('checking');
-  const [markdown, setMarkdown] = useState('');
+  const [content, setContent] = useState('');
+  const [hasLatex, setHasLatex] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setStatus('checking');
-    setMarkdown('');
+    setContent('');
+    setHasLatex(false);
     setErrorMessage(null);
 
-    fetch(`/api/videos/${videoDbId}/article?style=${STYLE}`)
+    fetch(`${apiBase}/${videoDbId}/article?style=${STYLE}`)
       .then(async (res) => {
         if (cancelled) {
           return;
         }
-        if (res.status === 404) {
-          setStatus('idle');
-          return;
-        }
-        if (!res.ok) {
+        if (res.status === 404 || !res.ok) {
           setStatus('idle');
           return;
         }
         const data = (await res.json()) as { content: string };
-        setMarkdown(data.content);
+        // Stored content carries a YAML frontmatter with hasLatex.
+        // If the stored body happens to start with `---\n` but lacks
+        // a closing fence (malformed / pre-migration), fall back to
+        // the raw string so the user sees *something* rather than a
+        // blank panel.
+        const parsed = parseMarkdownDocument(data.content);
+        setContent(parsed.frontmatterPending ? data.content : parsed.content);
+        setHasLatex(parsed.properties.hasLatex === true);
         setStatus('done');
         // Cache hit — flip the parent's Article tab dot to blue
         // immediately, regardless of which tab the user is on.
@@ -69,11 +84,19 @@ export default function ArticleReader({
     return () => {
       cancelled = true;
     };
-  }, [videoDbId, onArticleAvailable]);
+  }, [videoDbId, onArticleAvailable, apiBase]);
+
+  // Stream the article word count up to VideoReader so the Article
+  // tab header can render the reading-time badge. Fires on every
+  // content change, including incremental streaming updates.
+  useEffect(() => {
+    onArticleWordsChange(countWords(content));
+  }, [content, onArticleWordsChange]);
 
   async function handleGenerate() {
     setStatus('streaming');
-    setMarkdown('');
+    setContent('');
+    setHasLatex(false);
     setErrorMessage(null);
 
     try {
@@ -125,9 +148,16 @@ export default function ArticleReader({
       // still showing the Fetch button.
       onTranscriptStatusChange('present');
 
+      // Parse NDJSON. Events:
+      //   { delta: string }   — appended to content
+      //   { hasLatex: bool }  — the LLM-declared flag
+      //   { type: 'done' }    — graceful stream end
+      //   { error: string }   — mid-stream failure
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
+      let accumulated = '';
+      let sawError: string | null = null;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -135,10 +165,43 @@ export default function ArticleReader({
           break;
         }
         buffer += decoder.decode(value, { stream: true });
-        setMarkdown(buffer);
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed.length === 0) {
+            continue;
+          }
+          let event: {
+            delta?: unknown;
+            hasLatex?: unknown;
+            type?: unknown;
+            error?: unknown;
+          };
+          try {
+            event = JSON.parse(trimmed);
+          } catch {
+            continue;
+          }
+          if (typeof event.delta === 'string') {
+            accumulated += event.delta;
+            setContent(accumulated);
+          }
+          if (typeof event.hasLatex === 'boolean') {
+            setHasLatex(event.hasLatex);
+          }
+          if (typeof event.error === 'string') {
+            sawError = event.error;
+          }
+        }
       }
 
-      if (!buffer.trim()) {
+      if (sawError != null) {
+        setErrorMessage(sawError);
+        setStatus('error');
+        return;
+      }
+      if (!accumulated.trim()) {
         setErrorMessage('No content was generated. Please try again.');
         setStatus('error');
         return;
@@ -166,6 +229,9 @@ export default function ArticleReader({
   }
 
   if (status === 'idle') {
+    if (publicMode) {
+      return <div className="py-8 text-center text-sm text-gray-500">No article available.</div>;
+    }
     if (transcriptStatus === 'unavailable') {
       return (
         <div className="py-8 text-center text-sm text-gray-500">
@@ -189,6 +255,13 @@ export default function ArticleReader({
   }
 
   if (status === 'error') {
+    if (publicMode) {
+      return (
+        <div className="py-8 text-center text-sm text-gray-400">
+          {errorMessage ?? 'Article is not available.'}
+        </div>
+      );
+    }
     return (
       <div className="py-8 text-center">
         <p className="mb-4 text-sm text-gray-400">{errorMessage}</p>
@@ -204,17 +277,7 @@ export default function ArticleReader({
 
   return (
     <div>
-      <article className="prose prose-gray max-w-none font-sans text-[17px] leading-[1.8]">
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          rehypePlugins={[
-            rehypeSanitize,
-            [rehypeExternalLinks, { target: '_blank', rel: ['noopener', 'noreferrer'] }],
-          ]}
-        >
-          {markdown}
-        </ReactMarkdown>
-      </article>
+      <ArticleMarkdown hasLatex={hasLatex}>{content}</ArticleMarkdown>
       {status === 'streaming' && (
         <div className="mt-4 flex items-center gap-2 text-xs text-gray-400">
           <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-blue-500" />

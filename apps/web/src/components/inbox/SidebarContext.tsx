@@ -10,6 +10,8 @@ import {
   useState,
 } from 'react';
 
+import { MOBILE_BREAKPOINT } from '@/lib/breakpoints';
+
 interface SidebarState {
   /** Sidebar width in pixels (only used when expanded). */
   width: number;
@@ -31,7 +33,6 @@ const MIN_WIDTH = 200;
 const MAX_WIDTH = 480;
 /** Below this width the sidebar auto-collapses to icon-only mode. */
 const COLLAPSE_THRESHOLD = 180;
-const MOBILE_BREAKPOINT = 1024; // lg
 
 export function SidebarProvider({ children }: { children: React.ReactNode }) {
   const [width, setWidthRaw] = useState(DEFAULT_WIDTH);

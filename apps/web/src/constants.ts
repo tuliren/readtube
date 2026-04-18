@@ -8,4 +8,4 @@ export const DOMAIN = 'read.tube';
 export const DOMAIN_URL = `https://${DOMAIN}`;
 export const CONTACT_EMAIL = `contact@${DOMAIN}`;
 
-export const FREE_TRIAL_MONTHS = 1;
+export const DEFAULT_AI_MODEL = 'google/gemini-3.1-flash-lite-preview';

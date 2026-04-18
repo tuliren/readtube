@@ -20,9 +20,10 @@ interface AssertArgs {
 }
 
 /**
- * Returns true when the user has a subscription whose channel owns the
- * given video. Used by every triage endpoint to prevent IDOR before
- * touching state. A single JOIN, no separate findFirst round-trips.
+ * Returns true when the user can act on the video — either they have
+ * a subscription to the video's channel, or they've added it directly
+ * via the individual-video / playlist flow (StandaloneVideo row).
+ * Used by every triage endpoint to prevent IDOR before touching state.
  */
 export async function assertUserCanTouchVideo(
   prisma: PrismaClient,
@@ -31,7 +32,11 @@ export async function assertUserCanTouchVideo(
   const row = await prisma.video.findFirst({
     where: {
       id: videoId,
-      channel: { subscriptions: { some: { user_id: userId } } },
+      OR: [
+        { channel: { subscriptions: { some: { user_id: userId } } } },
+        { standalone: { some: { user_id: userId } } },
+        { playlist_items: { some: { playlist: { user_id: userId } } } },
+      ],
     },
     select: { id: true },
   });
@@ -117,7 +122,8 @@ export type BulkAction =
   | { type: 'save' }
   | { type: 'unsave' }
   | { type: 'archive' }
-  | { type: 'unarchive' };
+  | { type: 'unarchive' }
+  | { type: 'remove_from_library' };
 
 export async function applyBulk(
   prisma: PrismaClient,
@@ -129,13 +135,19 @@ export async function applyBulk(
     return { affected: 0 };
   }
 
-  // Scope: only videos from channels the user is subscribed to. Anything
-  // else is silently filtered. This keeps IDOR out of bulk without needing
-  // to fail loudly on every stray id.
+  // Scope: videos the user reaches via a channel subscription OR via
+  // their personal library (StandaloneVideo). Anything else is silently
+  // filtered. Mirrors the OR in assertUserCanTouchVideo — keeps IDOR out
+  // of bulk without needing to fail loudly on every stray id, and lets
+  // future library-scoped bulk actions work without a second fix.
   const ownedVideos = await prisma.video.findMany({
     where: {
       id: { in: videoIds },
-      channel: { subscriptions: { some: { user_id: userId } } },
+      OR: [
+        { channel: { subscriptions: { some: { user_id: userId } } } },
+        { standalone: { some: { user_id: userId } } },
+        { playlist_items: { some: { playlist: { user_id: userId } } } },
+      ],
     },
     select: { id: true },
   });
@@ -195,6 +207,21 @@ export async function applyBulk(
         where: { user_id: userId, video_id: { in: ownedIds } },
       });
       return { affected: result.count };
+    }
+    case 'remove_from_library': {
+      // Mirrors DELETE /api/videos/[id]/standalone but batched.
+      // Removes StandaloneVideo rows AND PlaylistVideo rows scoped to
+      // the user's own playlists, so the video disappears from the
+      // library entirely. Videos from subscribed channels are untouched.
+      await prisma.$transaction([
+        prisma.playlistVideo.deleteMany({
+          where: { video_id: { in: ownedIds }, playlist: { user_id: userId } },
+        }),
+        prisma.standaloneVideo.deleteMany({
+          where: { user_id: userId, video_id: { in: ownedIds } },
+        }),
+      ]);
+      return { affected: ownedIds.length };
     }
   }
 }

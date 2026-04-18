@@ -1,10 +1,51 @@
-import type { PrismaClient } from '@readtube/database';
+import type { Prisma, PrismaClient } from '@readtube/database';
 
 import {
   NEW_SUBSCRIPTION_MODE,
   type NewSubscriptionMode,
   RECENT_NEW_VIDEO_COUNT,
 } from '@/lib/subscriptionConfig';
+
+/**
+ * Prisma `where` clause matching videos whose effective publish date is
+ * strictly greater than `watermark`. A video's effective date is its
+ * `published_at` when present, otherwise `created_at` — so null-date
+ * videos (scrape failed to find a date) still have a sensible
+ * comparable timestamp and can be correctly classified as read or
+ * unread relative to a user's or playlist's watermark.
+ */
+export function videoNewerThanWatermark(watermark: Date): Prisma.VideoWhereInput {
+  return {
+    OR: [
+      { published_at: { gt: watermark } },
+      { AND: [{ published_at: null }, { created_at: { gt: watermark } }] },
+    ],
+  };
+}
+
+/**
+ * Inverse of `videoNewerThanWatermark` — matches videos whose effective
+ * publish date is less than or equal to `watermark`. Useful for the
+ * "already read" side of watermark comparisons.
+ */
+export function videoAtOrBeforeWatermark(watermark: Date): Prisma.VideoWhereInput {
+  return {
+    OR: [
+      { published_at: { lte: watermark } },
+      { AND: [{ published_at: null }, { created_at: { lte: watermark } }] },
+    ],
+  };
+}
+
+/**
+ * Compute a video's effective publish date: `published_at` when present,
+ * otherwise `created_at`. Use this in JS-side watermark comparisons so
+ * null-date videos are treated consistently with the DB-side filters
+ * above.
+ */
+export function effectivePublishDate(video: { published_at: Date | null; created_at: Date }): Date {
+  return video.published_at ?? video.created_at;
+}
 
 /**
  * Compute the initial value for `UserSubscription.read_at` for a brand-new
@@ -30,11 +71,12 @@ export async function computeInitialReadAt(
   if (mode === 'none_new') {
     return new Date();
   }
-  // recent_n_new
+  // recent_n_new. Ignore rows with null published_at — an unknown
+  // timestamp can't anchor a "most recent N" cutoff.
   const cutoff = await prisma.video.findMany({
-    where: { channel_id: channelId },
+    where: { channel_id: channelId, published_at: { not: null } },
     select: { published_at: true },
-    orderBy: { published_at: 'desc' },
+    orderBy: { published_at: { sort: 'desc', nulls: 'last' } },
     skip: recentCount,
     take: 1,
   });
@@ -56,7 +98,7 @@ export async function countUnreadVideos(
     where: {
       channel_id: channelId,
       consumptions: { none: { user_id: userId } },
-      ...(readAt != null ? { published_at: { gt: readAt } } : {}),
+      ...(readAt != null ? videoNewerThanWatermark(readAt) : {}),
     },
   });
 }
@@ -74,6 +116,7 @@ export interface SubscribedChannelWithUnread {
   mute_until: Date | null;
   source_id: string;
   name: string;
+  handle: string | null;
   rss_url: string;
   logo_url: string | null;
   created_at: Date;
@@ -104,6 +147,7 @@ export async function getSubscribedChannelsWithUnread(
       mute_until: Date | null;
       source_id: string;
       name: string;
+      handle: string | null;
       rss_url: string;
       logo_url: string | null;
       created_at: Date;
@@ -118,6 +162,7 @@ export async function getSubscribedChannelsWithUnread(
       us."mute_until"  AS mute_until,
       c."source_id"    AS source_id,
       c."name"         AS name,
+      c."handle"       AS handle,
       c."rss_url"      AS rss_url,
       c."logo_url"     AS logo_url,
       c."created_at"   AS created_at,
@@ -125,7 +170,10 @@ export async function getSubscribedChannelsWithUnread(
     FROM "UserSubscription" us
     JOIN "Channel" c ON c."id" = us."channel_id"
     LEFT JOIN "Video" v ON v."channel_id" = us."channel_id"
-      AND (us."read_at" IS NULL OR v."published_at" > us."read_at")
+      AND (
+        us."read_at" IS NULL
+        OR COALESCE(v."published_at", v."created_at") > us."read_at"
+      )
       AND NOT EXISTS (
         SELECT 1
         FROM "UserVideoConsumption" k
@@ -134,7 +182,7 @@ export async function getSubscribedChannelsWithUnread(
     WHERE us."user_id" = ${userId}
     GROUP BY
       us."channel_id", us."read_at", us."folder_id", us."priority", us."mute_until",
-      c."source_id", c."name", c."rss_url", c."logo_url", c."created_at"
+      c."source_id", c."name", c."handle", c."rss_url", c."logo_url", c."created_at"
     ORDER BY LOWER(c."name") ASC
   `;
 
@@ -146,6 +194,7 @@ export async function getSubscribedChannelsWithUnread(
     mute_until: row.mute_until,
     source_id: row.source_id,
     name: row.name,
+    handle: row.handle,
     rss_url: row.rss_url,
     logo_url: row.logo_url,
     created_at: row.created_at,

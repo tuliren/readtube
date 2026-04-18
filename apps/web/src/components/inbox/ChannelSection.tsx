@@ -4,6 +4,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import type { ChannelData } from '@/lib/types';
 
 import FolderSection from './FolderSection';
+import VideosSection from './VideosSection';
 import ViewsSection from './ViewsSection';
 
 interface Props {
@@ -33,8 +34,9 @@ export default function ChannelSection({
 }: Props) {
   return (
     <TooltipProvider delayDuration={300}>
-      <nav className="flex flex-col overflow-y-auto">
+      <nav className="flex min-w-0 flex-col overflow-x-hidden overflow-y-auto">
         <ViewsSection inboxUnread={totalUnread} />
+        <VideosSection />
         <FolderSection
           channels={channels}
           selectedChannelId={selectedChannelId}

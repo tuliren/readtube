@@ -577,4 +577,114 @@ describe('getSubscribedChannelsWithUnread', () => {
     const bResult = await getSubscribedChannelsWithUnread(global.testPrisma, 'u_b_iso');
     expect(bResult).toEqual([]);
   });
+
+  describe('null published_at falls back to created_at', () => {
+    async function setupNullDateChannel(opts: {
+      userSourceId: string;
+      channelSourceId: string;
+      // Offset in ms from now for the synthetic video's created_at.
+      // Negative = in the past, positive = in the future (tests treat
+      // created_at as the authoritative "when we learned" time).
+      createdAtOffsetMs: number;
+    }) {
+      await global.testPrisma.user.create({
+        data: {
+          source_id: opts.userSourceId,
+          email: `${opts.userSourceId}@example.com`,
+          name: 'T',
+        },
+      });
+      const channel = await global.testPrisma.channel.create({
+        data: {
+          source_id: opts.channelSourceId,
+          name: opts.channelSourceId,
+          rss_url: `https://example.com/${opts.channelSourceId}.xml`,
+        },
+      });
+      const createdAt = new Date(Date.now() + opts.createdAtOffsetMs);
+      await global.testPrisma.video.create({
+        data: {
+          channel_id: channel.id,
+          source_id: `${opts.channelSourceId}_v_nulldate`,
+          title: 'Null-date video',
+          published_at: null,
+          created_at: createdAt,
+        },
+      });
+      return { channelId: channel.id, createdAt };
+    }
+
+    it('countUnreadVideos counts a null-date video as unread when created_at is after the watermark', async () => {
+      const { channelId, createdAt } = await setupNullDateChannel({
+        userSourceId: 'u_null_after',
+        channelSourceId: 'ch_null_after',
+        createdAtOffsetMs: 60_000, // created 1 min from now
+      });
+      const watermark = new Date(createdAt.getTime() - 10_000);
+      const unread = await countUnreadVideos(
+        global.testPrisma,
+        'u_null_after',
+        channelId,
+        watermark
+      );
+      expect(unread).toBe(1);
+    });
+
+    it('countUnreadVideos treats a null-date video as read when created_at is before the watermark', async () => {
+      const { channelId, createdAt } = await setupNullDateChannel({
+        userSourceId: 'u_null_before',
+        channelSourceId: 'ch_null_before',
+        createdAtOffsetMs: -60_000, // created 1 min ago
+      });
+      const watermark = new Date(createdAt.getTime() + 10_000);
+      const unread = await countUnreadVideos(
+        global.testPrisma,
+        'u_null_before',
+        channelId,
+        watermark
+      );
+      expect(unread).toBe(0);
+    });
+
+    it('getSubscribedChannelsWithUnread respects the created_at fallback', async () => {
+      const { channelId, createdAt } = await setupNullDateChannel({
+        userSourceId: 'u_null_raw',
+        channelSourceId: 'ch_null_raw',
+        createdAtOffsetMs: 60_000,
+      });
+      await global.testPrisma.userSubscription.create({
+        data: {
+          user_id: 'u_null_raw',
+          channel_id: channelId,
+          read_at: new Date(createdAt.getTime() - 10_000),
+        },
+      });
+      const rows = await getSubscribedChannelsWithUnread(global.testPrisma, 'u_null_raw');
+      expect(rows.length).toBe(1);
+      expect(rows[0].unread_count).toBe(1);
+    });
+
+    it('an explicit UserVideoConsumption row still marks a null-date video as read', async () => {
+      const { channelId, createdAt } = await setupNullDateChannel({
+        userSourceId: 'u_null_consumed',
+        channelSourceId: 'ch_null_consumed',
+        createdAtOffsetMs: 60_000,
+      });
+      const video = await global.testPrisma.video.findFirst({
+        where: { channel_id: channelId },
+        select: { id: true },
+      });
+      await global.testPrisma.userVideoConsumption.create({
+        data: { user_id: 'u_null_consumed', video_id: video!.id },
+      });
+      const watermark = new Date(createdAt.getTime() - 10_000);
+      const unread = await countUnreadVideos(
+        global.testPrisma,
+        'u_null_consumed',
+        channelId,
+        watermark
+      );
+      expect(unread).toBe(0);
+    });
+  });
 });

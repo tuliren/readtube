@@ -50,7 +50,14 @@ export async function ensureTranscript(
   videoDbId: string
 ): Promise<EnsureTranscriptResult> {
   const video = await prisma.video.findFirst({
-    where: { id: videoDbId, channel: { subscriptions: { some: { user_id: userId } } } },
+    where: {
+      id: videoDbId,
+      OR: [
+        { channel: { subscriptions: { some: { user_id: userId } } } },
+        { standalone: { some: { user_id: userId } } },
+        { playlist_items: { some: { playlist: { user_id: userId } } } },
+      ],
+    },
     select: {
       id: true,
       source_id: true,

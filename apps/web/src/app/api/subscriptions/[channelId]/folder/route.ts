@@ -27,7 +27,8 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   let body: { folderId?: string | null };
   try {
     body = await request.json();
-  } catch {
+  } catch (err) {
+    console.error('[subscriptions/folder/PATCH] Invalid body:', err);
     return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
   }
 
@@ -36,6 +37,10 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     body.folderId === undefined || body.folderId === null || body.folderId === ''
       ? null
       : body.folderId;
+
+  console.info(
+    `[subscriptions/folder/PATCH] Moving channel ${channelId} to folder ${folderId ?? '(root)'} for user ${userId}`
+  );
 
   // Verify the folder belongs to this user before pointing a subscription
   // at it. Without this check, a user could assign their subscription to
@@ -47,6 +52,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       select: { id: true },
     });
     if (folder == null) {
+      console.error(`[subscriptions/folder/PATCH] Folder ${folderId} not found for user ${userId}`);
       return NextResponse.json({ error: 'Folder not found' }, { status: 404 });
     }
   }
@@ -56,6 +62,9 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     data: { folder_id: folderId },
   });
   if (result.count === 0) {
+    console.error(
+      `[subscriptions/folder/PATCH] Subscription not found for channel ${channelId}, user ${userId}`
+    );
     return NextResponse.json({ error: 'Subscription not found' }, { status: 404 });
   }
 

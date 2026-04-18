@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 
+import { countWords } from '@/lib/format/wordCount';
 import type { TranscriptSegment } from '@/lib/subtitles/types';
 import { formatTimestamp, groupTranscriptSegments } from '@/lib/youtube/transcript';
 
@@ -17,6 +18,10 @@ interface Props {
   /** Callback into VideoReader so this component can flip the shared
    *  status when its own GET / POST reveals the answer. */
   onTranscriptStatusChange: (next: TranscriptStatus) => void;
+  /** Reports the transcript word count up to VideoReader so the
+   *  Transcript tab header can render the reading time badge. Fires
+   *  whenever the segment list changes (initial load, fetch, etc.). */
+  onTranscriptWordsChange: (words: number) => void;
 }
 
 type LocalStatus = 'checking' | 'notCached' | 'fetching' | 'loaded' | 'error';
@@ -55,9 +60,20 @@ export default function TranscriptReader({
   sourceId,
   transcriptStatus,
   onTranscriptStatusChange,
+  onTranscriptWordsChange,
 }: Props) {
   const [segments, setSegments] = useState<TranscriptSegment[] | null>(null);
   const [localStatus, setLocalStatus] = useState<LocalStatus>('checking');
+
+  // Stream the transcript word count up to VideoReader so the
+  // Transcript tab header can render the reading-time badge.
+  useEffect(() => {
+    if (segments == null) {
+      onTranscriptWordsChange(0);
+      return;
+    }
+    onTranscriptWordsChange(countWords(segments.map((s) => s.text).join(' ')));
+  }, [segments, onTranscriptWordsChange]);
 
   // Track which videoDbId we already have segments for. The effect
   // depends on transcriptStatus so an external flip from the Summary

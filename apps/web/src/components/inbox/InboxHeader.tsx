@@ -2,19 +2,22 @@
 
 import { CheckIcon } from '@heroicons/react/24/outline';
 import { RefreshCw } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { useSWRConfig } from 'swr';
 
+import ExternalLinkActions from '@/components/ExternalLinkActions';
 import { isProduction } from '@/lib/vercelEnv';
 
 import ChannelAvatar from './ChannelAvatar';
-import FilterBar from './FilterBar';
 import Pagination from './Pagination';
 import SearchInput from './SearchInput';
 
 interface Props {
   channelId: string | null;
+  /** YouTube channel source ID (UC-prefixed). Null for aggregate views. */
+  channelSourceId: string | null;
   channelName: string;
   /** Channel logo URL. Only available when viewing a single channel
    *  that has a logo persisted from the scraper. Null for the
@@ -24,16 +27,32 @@ interface Props {
   /** Total videos that match the current filter (across all pages).
    *  Drives the Page X of Y control on the right side of the header. */
   totalVideos: number;
+  /** Optional trailing content after the title (e.g. ExternalLinkActions). */
+  trailing?: React.ReactNode;
+  /** Override the body sent to POST /api/videos/mark-all-read.
+   *  Defaults to `{ channelId }` or `{}` for the inbox. Library views
+   *  pass `{ library: true }` or `{ playlistId }`. */
+  markAllReadBody?: Record<string, unknown>;
+  /** Hide the bottom row (pagination + search). Library views don't
+   *  have server-side pagination or a free-text search endpoint, so
+   *  the controls don't do anything useful there. */
+  hideBottomRow?: boolean;
 }
 
 export default function InboxHeader({
   channelId,
+  channelSourceId,
   channelName,
   channelLogoUrl,
   unreadCount,
   totalVideos,
+  trailing,
+  markAllReadBody,
+  hideBottomRow,
 }: Props) {
   const { mutate } = useSWRConfig();
+  const router = useRouter();
+  const pathname = usePathname();
   const [marking, setMarking] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const showRefresh = !isProduction() && channelId != null;
@@ -52,12 +71,17 @@ export default function InboxHeader({
       }
       const body = (await res.json()) as { videosProcessed: number };
       toast.success(`Refreshed: ${body.videosProcessed} videos processed`);
-      // Invalidate both the channel list (for updated metadata/logo)
-      // and the video list (for new videos + thumbnails).
+      // Two-pronged invalidation:
+      //   1. router.refresh() re-runs the SSR page so the next mount
+      //      picks up the new fallbackData.
+      //   2. SWR's mutate() drops the existing cache entries so any
+      //      currently-mounted hook re-fetches instead of serving stale
+      //      data — fallbackData alone is ignored once an entry exists.
       await Promise.all([
         mutate('/api/channels'),
         mutate((key) => typeof key === 'string' && key.startsWith('/api/videos')),
       ]);
+      router.refresh();
     } finally {
       setRefreshing(false);
     }
@@ -69,7 +93,7 @@ export default function InboxHeader({
       const res = await fetch('/api/videos/mark-all-read', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(channelId != null ? { channelId } : {}),
+        body: JSON.stringify(markAllReadBody ?? (channelId != null ? { channelId } : {})),
       });
       if (!res.ok) {
         return;
@@ -77,8 +101,19 @@ export default function InboxHeader({
       // Refresh the sidebar unread badges and any /api/videos* keys.
       await Promise.all([
         mutate('/api/channels'),
+        mutate('/api/playlists'),
         mutate((key) => typeof key === 'string' && key.startsWith('/api/videos')),
       ]);
+      // Library pages (/videos*) render the list from a server-side
+      // loader without a SWR fallback; without a router.refresh they
+      // keep showing stale readAt on each row.
+      if (
+        pathname === '/videos' ||
+        pathname === '/videos/standalone' ||
+        pathname?.startsWith('/videos/playlists/') === true
+      ) {
+        router.refresh();
+      }
     } finally {
       setMarking(false);
     }
@@ -89,14 +124,25 @@ export default function InboxHeader({
       {/* Title row — action buttons sit next to the title/badge,
           search stays on the right edge. This keeps the actions
           contextually close to the thing they act on. */}
-      <div className="flex h-12 items-center justify-between px-4">
+      <div className="hidden h-12 items-center justify-start gap-2 overflow-hidden px-4 sidebar:flex">
         <div className="flex min-w-0 items-center gap-2">
           {channelLogoUrl != null && (
-            <ChannelAvatar url={channelLogoUrl} size={40} cssSize="h-6 w-6" />
+            <div className="hidden sidebar:block">
+              <ChannelAvatar url={channelLogoUrl} size={40} cssSize="h-6 w-6" />
+            </div>
           )}
-          <h1 className="truncate text-sm font-semibold text-gray-900">{channelName}</h1>
-          {unreadCount > 0 && (
-            <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-700">
+          <h1 className="hidden min-w-0 truncate text-sm font-semibold text-gray-900 sidebar:block">
+            {channelName}
+          </h1>
+          {channelSourceId != null && (
+            <ExternalLinkActions
+              url={`https://www.youtube.com/channel/${channelSourceId}`}
+              label="Open channel on YouTube"
+            />
+          )}
+          {trailing}
+          {channelId == null && unreadCount > 0 && (
+            <span className="shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-700">
               {unreadCount}
             </span>
           )}
@@ -104,35 +150,41 @@ export default function InboxHeader({
             <button
               onClick={handleRefreshChannel}
               disabled={refreshing}
-              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50 disabled:hover:bg-transparent"
+              className="hidden shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50 disabled:hover:bg-transparent sidebar:inline-flex"
               title="Pull latest videos + metadata for this channel"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-              {refreshing ? 'Refreshing…' : 'Refresh'}
+              <span className="hidden sidebar:inline">
+                {refreshing ? 'Refreshing…' : 'Refresh'}
+              </span>
             </button>
           )}
           {unreadCount > 0 && (
             <button
               onClick={handleMarkAllRead}
               disabled={marking}
-              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50 disabled:hover:bg-transparent"
+              className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50 disabled:hover:bg-transparent"
               title="Mark all as read"
             >
               <CheckIcon className="h-4 w-4" />
-              {marking ? 'Marking…' : 'Mark all as read'}
+              <span className="hidden sidebar:inline">
+                {marking ? 'Marking…' : 'Mark all as read'}
+              </span>
             </button>
           )}
         </div>
-        <SearchInput />
       </div>
-      {/* Filter chips row + pagination on the right. The header
-          itself sits above the scrolling video list and never
-          scrolls away, so the pagination control is always
-          reachable while the user is reading rows. */}
-      <div className="flex items-center justify-between px-4 pb-2 pt-0">
-        <FilterBar />
-        <Pagination total={totalVideos} />
-      </div>
+      {/* Video count + pagination on the left, search on the right.
+          The header itself sits above the scrolling video list and
+          never scrolls away, so the pagination control is always
+          reachable while the user is reading rows. Hidden on library
+          views which don't support pagination or free-text search. */}
+      {!hideBottomRow && (
+        <div className="flex items-center justify-between gap-2 px-4 py-2 sidebar:pt-0">
+          <Pagination total={totalVideos} />
+          <SearchInput />
+        </div>
+      )}
     </div>
   );
 }

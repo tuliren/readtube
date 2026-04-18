@@ -9,7 +9,7 @@ import type { InboxQuery } from '@/lib/types';
 /**
  * Read/write the inbox filter state from the URL. A thin wrapper around
  * Next.js's useSearchParams + router.replace so every component
- * (SearchInput, FilterBar, SavedViewMenu) can read and mutate the same
+ * (SearchInput, SavedViewMenu, Pagination) can read and mutate the same
  * canonical shape.
  *
  * We deliberately use router.replace (not push) so filter changes don't
@@ -24,8 +24,8 @@ export function useInboxQuery() {
   // Unwrap the `returnTo` indirection used by the reader: in
   // `/inbox/<id>` the canonical filter context lives in
   // `?returnTo=<encoded-inner>` rather than as direct top-level
-  // params, so the FilterBar / saved views / search box still see
-  // the same query they came from.
+  // params, so saved views and the search box still see the same
+  // query they came from.
   const query = useMemo<InboxQuery>(
     () => parseInboxQuery(extractInboxSearchParams(searchParams)),
     [searchParams]

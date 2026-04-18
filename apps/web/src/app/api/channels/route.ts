@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 
+import { upsertChannelWithVideos } from '@/lib/channels/upsertChannelWithVideos';
 import { ensureUserExists } from '@/lib/db/user';
 import { isEmptyString } from '@/lib/string';
 import {
@@ -9,15 +10,17 @@ import {
   countUnreadVideos,
   getSubscribedChannelsWithUnread,
 } from '@/lib/subscriptions';
-import { buildThumbnailUrl, fetchChannelLatest } from '@/lib/youtube/channelMetadata';
-import { buildRssUrl, extractChannelId, extractHandle } from '@/lib/youtube/channelUrl';
-import { scrapeChannel } from '@/lib/youtube/scrapeChannel';
+import { fetchChannelSnapshot } from '@/lib/youtube/channelSnapshot';
+import { buildRssUrl, extractChannelId, extractHandle } from '@/lib/youtube/urls';
 
 export async function GET() {
   const { userId } = await auth();
   if (userId == null) {
+    console.error('[channels/GET] Unauthorized');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  console.info(`[channels/GET] Listing subscribed channels for user ${userId}`);
 
   // Single SQL query: subscriptions + channel metadata + per-channel unread
   // counts (with watermark + consumption filter), all in one round-trip.
@@ -28,6 +31,7 @@ export async function GET() {
       id: row.channel_id,
       sourceId: row.source_id,
       name: row.name,
+      handle: row.handle,
       rssUrl: row.rss_url,
       logoUrl: row.logo_url ?? null,
       createdAt: row.created_at,
@@ -42,22 +46,28 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const { userId } = await auth();
   if (userId == null) {
+    console.error('[channels/POST] Unauthorized');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   let body: { url?: string };
   try {
     body = await request.json();
-  } catch {
+  } catch (err) {
+    console.error('[channels/POST] Invalid request body:', err);
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
   }
 
   const input = body.url?.trim() ?? '';
   if (isEmptyString(input)) {
+    console.error('[channels/POST] Missing URL in request body');
     return NextResponse.json({ error: 'Missing URL' }, { status: 400 });
   }
 
+  console.info(`[channels/POST] Adding channel: ${input} for user ${userId}`);
+
   let channelPageUrl: string | null = null;
+  let preresolvedRssUrl: string | undefined;
 
   const handle = extractHandle(input);
   if (handle != null) {
@@ -66,10 +76,12 @@ export async function POST(request: NextRequest) {
     const bareId = extractChannelId(input);
     if (bareId != null) {
       channelPageUrl = `https://www.youtube.com/channel/${bareId}`;
+      preresolvedRssUrl = buildRssUrl(bareId);
     }
   }
 
   if (channelPageUrl == null) {
+    console.error(`[channels/POST] Invalid channel URL: ${input}`);
     return NextResponse.json(
       {
         error:
@@ -79,18 +91,18 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  let scraped;
+  let snapshot;
   try {
-    scraped = await scrapeChannel(channelPageUrl);
+    snapshot = await fetchChannelSnapshot({ channelPageUrl, rssUrl: preresolvedRssUrl });
   } catch (err) {
-    console.error('[channels/POST] scrapeChannel failed:', err);
+    console.error(`[channels/POST] fetchChannelSnapshot failed for ${channelPageUrl}:`, err);
     return NextResponse.json(
       { error: 'Channel not found or not accessible. Check the URL and try again.' },
       { status: 400 }
     );
   }
 
-  const sourceId = scraped.channelId;
+  const sourceId = snapshot.channelId;
 
   // Ensure user exists in DB before writing FK reference
   await ensureUserExists(userId);
@@ -100,66 +112,14 @@ export async function POST(request: NextRequest) {
     where: { user_id: userId, channel: { source_id: sourceId } },
   });
   if (existingSub) {
+    console.error(`[channels/POST] User ${userId} already subscribed to channel ${sourceId}`);
     return NextResponse.json({ error: 'You already follow this channel.' }, { status: 409 });
   }
 
-  const rssUrl = buildRssUrl(sourceId);
-
-  // Upsert the channel atomically — avoids a race condition where two users
-  // concurrently subscribe to the same brand-new channel. New videos are created
-  // with no UserVideoConsumption rows, so they appear unread for everyone until
-  // the user actually opens them.
-  const channel = await prisma.channel.upsert({
-    where: { source_id: sourceId },
-    create: {
-      source_id: sourceId,
-      name: scraped.name,
-      rss_url: rssUrl,
-      logo_url: scraped.logoUrl,
-      videos: {
-        create: scraped.videos.map((v) => ({
-          source_id: v.videoId,
-          title: v.title,
-          description: v.description,
-          published_at: v.publishedAt,
-          duration_seconds: v.durationSeconds,
-        })),
-      },
-    },
-    // On re-create (channel already exists), refresh the logo if
-    // the scraper has one and the channel doesn't yet.
-    update: {
-      ...(scraped.logoUrl != null ? { logo_url: scraped.logoUrl } : {}),
-    },
-  });
-
-  // Best-effort metadata enrichment via TranscriptAPI's RSS endpoint.
-  // This gives us per-video thumbnails + view counts. If it fails
-  // (network, rate limit, etc.) we fall back to constructing thumbnail
-  // URLs from the videoId directly.
-  try {
-    const meta = await fetchChannelLatest(sourceId);
-    for (const videoMeta of meta.videos) {
-      await prisma.video.updateMany({
-        where: { channel_id: channel.id, source_id: videoMeta.videoId },
-        data: {
-          thumbnail_url: videoMeta.thumbnailUrl,
-        },
-      });
-    }
-  } catch (err) {
-    console.warn(
-      '[channels/POST] TranscriptAPI enrichment failed, using fallback thumbnails:',
-      err
-    );
-    // Fallback: construct thumbnail URLs directly from videoId.
-    for (const video of scraped.videos) {
-      await prisma.video.updateMany({
-        where: { channel_id: channel.id, source_id: video.videoId },
-        data: { thumbnail_url: buildThumbnailUrl(video.videoId) },
-      });
-    }
-  }
+  // Upsert the channel atomically. upsertChannelWithVideos guards
+  // against the `(source_type, handle)` unique constraint when another
+  // row already owns the scraped handle.
+  const channel = await upsertChannelWithVideos(prisma, sourceId, snapshot);
 
   // Compute the initial read watermark per the configured subscription mode
   // (all_new / none_new / recent_n_new). Done after the channel + its videos
@@ -186,6 +146,7 @@ export async function POST(request: NextRequest) {
       id: true,
       source_id: true,
       name: true,
+      handle: true,
       rss_url: true,
       logo_url: true,
       created_at: true,
@@ -198,6 +159,7 @@ export async function POST(request: NextRequest) {
       id: channelRow.id,
       sourceId: channelRow.source_id,
       name: channelRow.name,
+      handle: channelRow.handle,
       rssUrl: channelRow.rss_url,
       logoUrl: channelRow.logo_url,
       createdAt: channelRow.created_at,
