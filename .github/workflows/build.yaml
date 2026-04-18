@@ -32,6 +32,20 @@ jobs:
   verify:
     if: ${{ !github.event.pull_request.draft || github.event.pull_request.requested_reviewers[0] || github.event.pull_request.requested_teams[0] }}
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: readtube_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
@@ -69,4 +83,6 @@ jobs:
       - name: Run tests
         run: yarn test
       - name: Run integration tests
+        env:
+          INTEGRATION_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/readtube_test
         run: yarn integrationTest
