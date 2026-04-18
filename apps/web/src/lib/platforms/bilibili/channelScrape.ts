@@ -25,6 +25,8 @@ export interface ScrapedBilibiliChannel {
  */
 export async function scrapeBilibiliChannel(mid: string): Promise<ScrapedBilibiliChannel> {
   const url = `${buildBilibiliSpaceUrl(mid)}/upload/video`;
+  console.info(`[bilibili/channelScrape] scraping mid=${mid} url=${url}`);
+
   const result = await fetchHtmlWithJs(url);
   if (result == null) {
     throw new Error(`Puppeteer returned null for ${url}`);
@@ -32,7 +34,7 @@ export async function scrapeBilibiliChannel(mid: string): Promise<ScrapedBilibil
   if ('httpStatus' in result) {
     throw new Error(`Failed to fetch ${url}: HTTP ${result.httpStatus}: ${result.error}`);
   }
-  const { html } = result;
+  const { html, finalUrl } = result;
 
   // Only match BV ids that appear inside a `/video/BVxxx` path — those
   // are the real uploaded-video links rendered into the DOM. A bare
@@ -52,6 +54,28 @@ export async function scrapeBilibiliChannel(mid: string): Promise<ScrapedBilibil
     }
     seen.add(videoId);
     videos.push({ videoId, url: `https://www.bilibili.com/video/${videoId}/` });
+  }
+
+  // If the BV-href regex finds nothing, something upstream is wrong —
+  // likely a consent/bot-wall page or a redirect. Log diagnostics so
+  // Vercel's log stream reveals it: whether *any* BV tokens appeared at
+  // all (even outside /video/ hrefs) and a body-text snippet.
+  if (videos.length === 0) {
+    const anyBvidRegex = new RegExp(bvidCore, 'g');
+    const strayBvidCount = (html.match(anyBvidRegex) ?? []).length;
+    console.warn(
+      `[bilibili/channelScrape] no /video/BV hrefs found for mid=${mid} finalUrl=${finalUrl} htmlLen=${html.length} strayBvidTokens=${strayBvidCount} — likely a bot wall or empty shell page`
+    );
+    console.warn(
+      `[bilibili/channelScrape] HTML body preview: ${html.slice(0, 500).replace(/\s+/g, ' ')}`
+    );
+  } else {
+    console.info(
+      `[bilibili/channelScrape] mid=${mid} finalUrl=${finalUrl} found ${videos.length} BV ids, first 3: ${videos
+        .slice(0, 3)
+        .map((v) => v.videoId)
+        .join(', ')}`
+    );
   }
 
   return { mid, videos };

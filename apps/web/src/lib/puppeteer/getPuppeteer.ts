@@ -20,23 +20,31 @@ export interface PuppeteerHandle {
  */
 export async function getPuppeteer(): Promise<PuppeteerHandle> {
   const isVercel = process.env.VERCEL_ENV != null;
+  console.info(
+    `[puppeteer] getPuppeteer env: isVercel=${isVercel} VERCEL_ENV=${process.env.VERCEL_ENV ?? 'unset'} cwd=${process.cwd()}`
+  );
 
   if (isVercel) {
     const chromium = (await import('@sparticuz/chromium')).default;
     const puppeteer = await import('puppeteer-core');
+    const executablePath = await chromium.executablePath(
+      path.join(process.cwd(), '../../node_modules/@sparticuz/chromium/bin')
+    );
+    console.info(
+      `[puppeteer] resolved Chromium executablePath=${executablePath} argsCount=${chromium.args.length}`
+    );
     return {
       puppeteer: puppeteer as unknown as PuppeteerLauncher,
       launchOptions: {
         headless: true,
         args: chromium.args,
-        executablePath: await chromium.executablePath(
-          path.join(process.cwd(), '../../node_modules/@sparticuz/chromium/bin')
-        ),
+        executablePath,
       },
     };
   }
 
   const puppeteer = await import('puppeteer');
+  console.info('[puppeteer] using local puppeteer package (dev)');
   return {
     puppeteer: puppeteer as unknown as PuppeteerLauncher,
     launchOptions: {

@@ -31,6 +31,9 @@ const FANOUT_CONCURRENCY = 5;
  * convention — `handle` is always null.
  */
 export async function fetchBilibiliChannelSnapshot(mid: string): Promise<ChannelSnapshot> {
+  const overallStart = Date.now();
+  console.info(`[bilibili/channelSnapshot] start mid=${mid}`);
+
   const scraped = await scrapeBilibiliChannel(mid);
   const bvids = scraped.videos.slice(0, MAX_VIDEOS_PER_SNAPSHOT).map((v) => v.videoId);
 
@@ -38,7 +41,15 @@ export async function fetchBilibiliChannelSnapshot(mid: string): Promise<Channel
     throw new Error(`Bilibili channel ${mid} has no videos on the /upload/video page`);
   }
 
+  console.info(
+    `[bilibili/channelSnapshot] mid=${mid} fan-out starting over ${bvids.length}/${scraped.videos.length} BV ids`
+  );
+  const fanOutStart = Date.now();
   const snapshots = await fanOutVideoSnapshots(bvids);
+  const successCount = snapshots.filter((s) => s != null).length;
+  console.info(
+    `[bilibili/channelSnapshot] mid=${mid} fan-out done in ${Date.now() - fanOutStart}ms: ${successCount}/${bvids.length} succeeded`
+  );
 
   // Channel-level info comes from the first successfully fetched video.
   const firstOk = snapshots.find((s) => s != null);
@@ -62,6 +73,9 @@ export async function fetchBilibiliChannelSnapshot(mid: string): Promise<Channel
     });
   }
 
+  console.info(
+    `[bilibili/channelSnapshot] mid=${mid} done in ${Date.now() - overallStart}ms: name="${firstOk.channel.name}" videos=${videos.length}`
+  );
   return {
     channelId: mid,
     name: firstOk.channel.name,
