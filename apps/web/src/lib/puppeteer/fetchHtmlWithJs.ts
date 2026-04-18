@@ -6,7 +6,7 @@ import { JS_HTTP_HEADERS, USER_AGENT } from './headers';
 // networkidle0 waits for all connections to close so that XHR chains in
 // client-rendered pages (e.g. Bilibili space) complete before we capture.
 const JS_NAVIGATION_STRATEGY = 'networkidle0';
-const JS_NAVIGATION_TIMEOUT_MS = 15_000;
+const JS_NAVIGATION_TIMEOUT_MS = 30_000;
 
 // Respond with empty 200s for non-essential resources instead of aborting.
 // Aborting triggers network errors that can stall pages waiting on
