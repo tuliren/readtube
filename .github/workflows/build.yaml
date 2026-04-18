@@ -50,6 +50,7 @@ jobs:
             node_modules
             apps/*/node_modules
             packages/*/node_modules
+            .yarn/install-state.gz
           key: node-modules-${{ runner.os }}-node22-${{ hashFiles('yarn.lock') }}
       - name: Install dependencies
         if: steps.node-modules-cache.outputs.cache-hit != 'true'
@@ -64,7 +65,7 @@ jobs:
             turbo-${{ runner.os }}-main-
             turbo-${{ runner.os }}-
       - name: Lint code
-        run: yarn turbo run typecheck lint format:check
+        run: yarn turbo run typecheck lint "//#format:check"
       - name: Run tests
         run: yarn test
       - name: Run integration tests
