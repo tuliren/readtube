@@ -155,6 +155,7 @@ function DashboardShellInner({ initialChannels, children }: Props) {
                 <div className="flex flex-1 items-center justify-between px-2">
                   <span className="text-base font-bold text-gray-900">ReadTube</span>
                   <div className="flex items-center gap-1">
+                    <UserButton />
                     <button
                       type="button"
                       onClick={toggleCollapsed}
@@ -164,7 +165,6 @@ function DashboardShellInner({ initialChannels, children }: Props) {
                     >
                       <PanelLeft className="h-4 w-4" />
                     </button>
-                    <UserButton />
                   </div>
                 </div>
               )}
