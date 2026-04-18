@@ -25,13 +25,29 @@ export interface FetchHtmlHttpError {
 
 export type FetchHtmlResult = FetchHtmlSuccess | FetchHtmlHttpError | null;
 
+export interface FetchHtmlOptions {
+  /**
+   * CSS selector to wait for after navigation. Use this when the target
+   * content is rendered by JS after `networkidle0` — the generic
+   * "body.innerText > 200 chars" heuristic happily accepts an empty
+   * shell page (Bilibili's space chrome alone crosses 200 chars
+   * before the upload grid hydrates).
+   *
+   * When omitted, falls back to the body-text heuristic.
+   */
+  waitForSelector?: string;
+}
+
 /**
  * Renders `url` in headless Chromium and returns the final DOM as HTML.
  * Intended for client-rendered pages where plain HTTP won't surface the
  * content (e.g. Bilibili space pages). Blocks images/fonts/CSS/media to
  * speed up load and reduce bandwidth. Runs on Vercel via @sparticuz/chromium.
  */
-export async function fetchHtmlWithJs(url: string): Promise<FetchHtmlResult> {
+export async function fetchHtmlWithJs(
+  url: string,
+  options: FetchHtmlOptions = {}
+): Promise<FetchHtmlResult> {
   console.info(`[puppeteer] fetchHtmlWithJs start url=${url}`);
 
   const handleStartTime = Date.now();
@@ -138,23 +154,31 @@ export async function fetchHtmlWithJs(url: string): Promise<FetchHtmlResult> {
       }
     }
 
-    // Guard against networkidle0 timing out before JS-rendered content
-    // painted — wait until body has meaningful text so we don't capture
-    // a shell page.
-    const readinessStartTime = Date.now();
-    let readinessMet = false;
-    try {
-      await page.waitForFunction(() => (document.body?.innerText?.trim().length ?? 0) > 200, {
-        timeout: JS_NAVIGATION_TIMEOUT_MS,
-      });
-      readinessMet = true;
-    } catch {
-      console.warn(
-        `[puppeteer] content readiness check timed out after ${Date.now() - readinessStartTime}ms for ${url} — proceeding with current state`
-      );
-    }
-    if (readinessMet) {
-      console.info(`[puppeteer] content readiness met in ${Date.now() - readinessStartTime}ms`);
+    // Guard against networkidle0 settling before the JS-rendered
+    // content we actually care about painted. Prefer a caller-supplied
+    // selector (the target content's hallmark, e.g. a /video/BV anchor
+    // on Bilibili) because the generic body-text heuristic accepts a
+    // shell page whose menus/footer already exceed 200 chars.
+    //
+    // On selector timeout, reload the page once — in practice
+    // Bilibili's SPA sometimes skips the upload-list XHR entirely on
+    // first render (observed both locally and on Vercel) but reliably
+    // succeeds on a clean reload in the same browser context.
+    if (options.waitForSelector != null) {
+      const ok = await waitForSelectorWithReload(page, options.waitForSelector);
+      void ok;
+    } else {
+      const readinessStartTime = Date.now();
+      try {
+        await page.waitForFunction(() => (document.body?.innerText?.trim().length ?? 0) > 200, {
+          timeout: JS_NAVIGATION_TIMEOUT_MS,
+        });
+        console.info(`[puppeteer] body-text readiness met in ${Date.now() - readinessStartTime}ms`);
+      } catch {
+        console.warn(
+          `[puppeteer] body-text readiness check timed out after ${Date.now() - readinessStartTime}ms for ${url} — proceeding with current state`
+        );
+      }
     }
 
     const html = await page.content();
@@ -192,6 +216,51 @@ export async function fetchHtmlWithJs(url: string): Promise<FetchHtmlResult> {
   }
 }
 
+// Keep each selector-wait attempt shorter than the navigation timeout
+// so we have time for a reload retry before the caller's budget runs
+// out (Bilibili's upload grid either renders immediately — typical
+// observed latency is <100ms once hydration starts — or not at all).
+const SELECTOR_WAIT_TIMEOUT_MS = 15_000;
+
+async function waitForSelectorWithReload(page: PuppeteerPage, selector: string): Promise<boolean> {
+  const firstStart = Date.now();
+  try {
+    await page.waitForSelector(selector, { timeout: SELECTOR_WAIT_TIMEOUT_MS });
+    console.info(`[puppeteer] waitForSelector "${selector}" met in ${Date.now() - firstStart}ms`);
+    return true;
+  } catch {
+    console.warn(
+      `[puppeteer] waitForSelector "${selector}" timed out after ${Date.now() - firstStart}ms — reloading and retrying once`
+    );
+  }
+
+  const reloadStart = Date.now();
+  try {
+    await page.reload({ waitUntil: JS_NAVIGATION_STRATEGY, timeout: JS_NAVIGATION_TIMEOUT_MS });
+    console.info(`[puppeteer] page.reload settled in ${Date.now() - reloadStart}ms`);
+  } catch (error) {
+    console.warn(
+      `[puppeteer] page.reload errored after ${Date.now() - reloadStart}ms: ${
+        error instanceof Error ? error.message : String(error)
+      } — proceeding with post-reload selector wait anyway`
+    );
+  }
+
+  const secondStart = Date.now();
+  try {
+    await page.waitForSelector(selector, { timeout: SELECTOR_WAIT_TIMEOUT_MS });
+    console.info(
+      `[puppeteer] waitForSelector "${selector}" met after reload in ${Date.now() - secondStart}ms`
+    );
+    return true;
+  } catch {
+    console.warn(
+      `[puppeteer] waitForSelector "${selector}" still failing after reload — proceeding with whatever rendered`
+    );
+    return false;
+  }
+}
+
 // Minimal shape of the puppeteer Page/Response surface we use. Kept loose
 // so the local (puppeteer) and serverless (puppeteer-core) types line up
 // without pinning to one package's exports.
@@ -208,6 +277,8 @@ interface PuppeteerPage {
   ) => Promise<PuppeteerResponse | null>;
   mainFrame: () => unknown;
   waitForFunction: (fn: () => boolean, opts: { timeout: number }) => Promise<unknown>;
+  waitForSelector: (selector: string, opts: { timeout: number }) => Promise<unknown>;
+  reload: (opts: { waitUntil: typeof JS_NAVIGATION_STRATEGY; timeout: number }) => Promise<unknown>;
   evaluate: <T>(fn: () => T) => Promise<T>;
   content: () => Promise<string>;
   url: () => string;
