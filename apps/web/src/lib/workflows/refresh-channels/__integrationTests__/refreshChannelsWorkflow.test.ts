@@ -260,7 +260,7 @@ describe('refreshChannel', () => {
       id: ch.id,
       source_id: ch.source_id,
       name: ch.name,
-      rss_url: ch.rss_url,
+      rss_url: ch.rss_url!,
     };
     const result = await refreshChannel(staleChannel);
 
@@ -289,7 +289,7 @@ describe('refreshChannel', () => {
       id: ch.id,
       source_id: ch.source_id,
       name: ch.name,
-      rss_url: ch.rss_url,
+      rss_url: ch.rss_url!,
     });
 
     expect(result.nameUpdated).toBe(true);
@@ -325,7 +325,7 @@ describe('refreshChannel', () => {
       id: ch.id,
       source_id: ch.source_id,
       name: ch.name,
-      rss_url: ch.rss_url,
+      rss_url: ch.rss_url!,
     });
 
     const video = await global.testPrisma.video.findFirst({
@@ -368,7 +368,7 @@ describe('refreshChannel', () => {
       id: ch.id,
       source_id: ch.source_id,
       name: ch.name,
-      rss_url: ch.rss_url,
+      rss_url: ch.rss_url!,
     });
 
     expect(result.videosProcessed).toBe(2);
@@ -418,7 +418,7 @@ describe('refreshChannel', () => {
       id: ch.id,
       source_id: ch.source_id,
       name: ch.name,
-      rss_url: ch.rss_url,
+      rss_url: ch.rss_url!,
     });
 
     const updated = await global.testPrisma.channel.findUnique({ where: { id: ch.id } });
@@ -448,7 +448,7 @@ describe('refreshChannel', () => {
       id: ch.id,
       source_id: ch.source_id,
       name: ch.name,
-      rss_url: ch.rss_url,
+      rss_url: ch.rss_url!,
     });
 
     expect(result.videosProcessed).toBe(1);
@@ -505,7 +505,7 @@ describe('refreshChannel', () => {
       id: ch.id,
       source_id: ch.source_id,
       name: ch.name,
-      rss_url: ch.rss_url,
+      rss_url: ch.rss_url!,
     });
 
     // Scrape is always called now (for logo freshness)
@@ -549,7 +549,7 @@ describe('refreshChannel — Shorts filtering', () => {
       id: ch.id,
       source_id: ch.source_id,
       name: ch.name,
-      rss_url: ch.rss_url,
+      rss_url: ch.rss_url!,
     });
 
     expect(result.videosProcessed).toBe(1);
@@ -591,7 +591,7 @@ describe('refreshChannel — Shorts filtering', () => {
       id: ch.id,
       source_id: ch.source_id,
       name: ch.name,
-      rss_url: ch.rss_url,
+      rss_url: ch.rss_url!,
     });
 
     expect(result.videosProcessed).toBe(1);
@@ -629,7 +629,7 @@ describe('refreshChannel — Shorts filtering', () => {
       id: ch.id,
       source_id: ch.source_id,
       name: ch.name,
-      rss_url: ch.rss_url,
+      rss_url: ch.rss_url!,
     });
 
     // Filtered out of ingest — no upsert ran, stored row unchanged.
@@ -668,7 +668,7 @@ describe('refreshChannel — Shorts filtering', () => {
       id: ch.id,
       source_id: ch.source_id,
       name: ch.name,
-      rss_url: ch.rss_url,
+      rss_url: ch.rss_url!,
     });
     expect(result.videosProcessed).toBe(0);
 

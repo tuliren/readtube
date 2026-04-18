@@ -1,14 +1,14 @@
-import { VideoPlatformType, prisma } from '@readtube/database';
+import { prisma } from '@readtube/database';
 
 import { hasChannelHandleConflict } from '@/lib/channels/handleConflict';
+import { detectPlatform } from '@/lib/platforms';
 import { isEmptyString } from '@/lib/string';
-import { buildRssUrl } from '@/lib/youtube/urls';
-import { extractVideoId, fetchVideoSnapshot } from '@/lib/youtube/videoSnapshot';
 
 export interface AddVideoResult {
   videoId: string;
-  /** YouTube video ID (11-char source_id). Used by the client to
-   *  navigate to `/videos/<sourceId>` after adding. */
+  /** Platform-specific video source_id (YouTube 11-char id, Bilibili
+   *  BV id). Used by the client to navigate to `/videos/<sourceId>`
+   *  after adding. */
   sourceId: string;
   channelId: string;
   standaloneVideoId: string;
@@ -28,10 +28,12 @@ export class AddVideoError extends Error {
 }
 
 /**
- * Adds an individual YouTube video to a user's personal library. Creates
- * a "shadow" Channel row for the video's owning channel if the user
- * isn't subscribed to it — the refresh-channels cron skips shadow
- * channels (see `fetchStaleChannels` in refresh-channels/steps.ts).
+ * Adds an individual video (YouTube or Bilibili) to a user's personal
+ * library. Creates a "shadow" Channel row for the video's owning
+ * channel if the user isn't subscribed to it — the refresh-channels
+ * cron skips shadow channels (see `fetchStaleChannels` in
+ * refresh-channels/steps.ts) and also skips Bilibili channels (no
+ * rss_url).
  *
  * Idempotent: re-running with the same (userId, videoUrl) yields the
  * same StandaloneVideo row without duplicating anything.
@@ -40,17 +42,25 @@ export async function addVideoForUser(args: {
   userId: string;
   input: string;
 }): Promise<AddVideoResult> {
-  const videoId = extractVideoId(args.input);
+  const platform = detectPlatform(args.input);
+  if (platform == null) {
+    throw new AddVideoError(
+      'Invalid video URL. Paste a YouTube URL (youtube.com/watch?v=..., youtu.be/..., or a bare video id) or a Bilibili URL (bilibili.com/video/BV...).',
+      'INVALID_URL'
+    );
+  }
+
+  const videoId = platform.extractVideoId(args.input);
   if (videoId == null) {
     throw new AddVideoError(
-      'Invalid YouTube URL. Paste a URL like youtube.com/watch?v=..., youtu.be/..., or a bare video id.',
+      'Invalid video URL. Paste a YouTube URL (youtube.com/watch?v=..., youtu.be/..., or a bare video id) or a Bilibili URL (bilibili.com/video/BV...).',
       'INVALID_URL'
     );
   }
 
   let snapshot;
   try {
-    snapshot = await fetchVideoSnapshot(videoId);
+    snapshot = await platform.fetchVideoSnapshot(videoId);
   } catch (err) {
     throw new AddVideoError(
       err instanceof Error ? err.message : 'Failed to fetch video metadata',
@@ -68,7 +78,7 @@ export async function addVideoForUser(args: {
   const existingChannel = await prisma.channel.findUnique({
     where: {
       channel_unique_source: {
-        source_type: VideoPlatformType.YOUTUBE,
+        source_type: platform.type,
         source_id: snapshot.channel.sourceId,
       },
     },
@@ -95,10 +105,10 @@ export async function addVideoForUser(args: {
     const handleAlreadyUsed = await hasChannelHandleConflict(prisma, snapshot.channel.handle, null);
     const created = await prisma.channel.create({
       data: {
-        source_type: VideoPlatformType.YOUTUBE,
+        source_type: platform.type,
         source_id: snapshot.channel.sourceId,
         name: snapshot.channel.name,
-        rss_url: buildRssUrl(snapshot.channel.sourceId),
+        rss_url: platform.buildRssUrl(snapshot.channel.sourceId),
         ...(hasHandle && !handleAlreadyUsed ? { handle: snapshot.channel.handle } : {}),
         ...(snapshot.channel.logoUrl != null ? { logo_url: snapshot.channel.logoUrl } : {}),
       },
@@ -115,20 +125,20 @@ export async function addVideoForUser(args: {
   // channel since we have accurate metadata from the watch page.
   const existingVideo = await prisma.video.findUnique({
     where: {
-      video_unique_source: { source_type: VideoPlatformType.YOUTUBE, source_id: snapshot.videoId },
+      video_unique_source: { source_type: platform.type, source_id: snapshot.videoId },
     },
     select: { id: true },
   });
 
   const video = await prisma.video.upsert({
     where: {
-      video_unique_source: { source_type: VideoPlatformType.YOUTUBE, source_id: snapshot.videoId },
+      video_unique_source: { source_type: platform.type, source_id: snapshot.videoId },
     },
     create: {
       channel_id: channel.id,
       // source_type must match the `where` clause so Prisma uses a
       // native Postgres upsert (CLAUDE.md).
-      source_type: VideoPlatformType.YOUTUBE,
+      source_type: platform.type,
       source_id: snapshot.videoId,
       title: snapshot.title,
       description: snapshot.description,

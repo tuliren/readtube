@@ -7,40 +7,15 @@
  * includes the channel id, author handle, publish date, duration
  * (ISO-8601), title, description and thumbnail. No API key required.
  */
+import type { VideoSnapshot } from '@/lib/platforms/types';
+
 import { UNKNOWN_CHANNEL_NAME } from './constants';
 import { buildThumbnailUrl } from './urls';
 
 const YT_USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
-export interface VideoSnapshot {
-  videoId: string;
-  title: string;
-  description: string;
-  thumbnailUrl: string;
-  /**
-   * Null if the page didn't expose a parseable publish date. The
-   * caller decides how to handle this — typically falling back to
-   * the current time on create and skipping the field on update so
-   * a real date from a later scrape can still backfill.
-   */
-  publishedAt: Date | null;
-  /** Null if the page didn't expose a parseable ISO-8601 duration. */
-  durationSeconds: number | null;
-  channel: {
-    sourceId: string;
-    name: string;
-    /**
-     * Channel handle with the leading `@` (e.g. "@mkbhd"), or null.
-     * Matches the storage convention in `channelScrape.ts` and the
-     * `channel_unique_handle` DB constraint — consumers can use the
-     * value verbatim without prefixing.
-     */
-    handle: string | null;
-    /** Logo URL from og:image on the channel page, best-effort. */
-    logoUrl: string | null;
-  };
-}
+export type { VideoSnapshot };
 
 /**
  * Extracts a YouTube video id from several common URL shapes. Also

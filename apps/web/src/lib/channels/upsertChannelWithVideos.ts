@@ -10,7 +10,9 @@ export interface UpsertChannelResult {
   source_id: string;
   name: string;
   handle: string | null;
-  rss_url: string;
+  // Nullable globally (Bilibili rows have none), but this helper only
+  // creates YouTube channels so the returned row always has a value.
+  rss_url: string | null;
   logo_url: string | null;
   created_at: Date;
   updated_at: Date;

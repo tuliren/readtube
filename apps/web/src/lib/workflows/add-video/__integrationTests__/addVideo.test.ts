@@ -21,6 +21,12 @@ jest.mock('@/lib/youtube/videoSnapshot', () => ({
   fetchVideoSnapshot: (id: string) => mockFetchVideoSnapshot(id),
 }));
 
+const mockFetchBilibiliVideoSnapshot = jest.fn<Promise<VideoSnapshot>, [string]>();
+jest.mock('@/lib/bilibili/videoSnapshot', () => ({
+  ...jest.requireActual('@/lib/bilibili/videoSnapshot'),
+  fetchBilibiliVideoSnapshot: (id: string) => mockFetchBilibiliVideoSnapshot(id),
+}));
+
 // ─── Helpers ─────────────────────────────────────────────────────
 
 const TEST_USER_ID = 'clerk_add_video_user';
@@ -58,17 +64,36 @@ async function resetDb() {
   });
 }
 
+function fakeBilibiliSnapshot(overrides: Partial<VideoSnapshot> = {}): VideoSnapshot {
+  return {
+    videoId: 'BV1DgdhBGEq2',
+    title: 'Bilibili Test Video',
+    description: 'Hello bilibili',
+    thumbnailUrl: 'http://i0.hdslb.com/bfs/archive/foo.jpg',
+    publishedAt: new Date('2026-03-01T00:00:00Z'),
+    durationSeconds: 500,
+    channel: {
+      sourceId: '12345',
+      name: 'Bilibili Channel',
+      handle: null,
+      logoUrl: 'http://i0.hdslb.com/bfs/face/foo.jpg',
+    },
+    ...overrides,
+  };
+}
+
 beforeEach(async () => {
   mockFetchVideoSnapshot.mockReset();
+  mockFetchBilibiliVideoSnapshot.mockReset();
   await resetDb();
 });
 
 // ─── Tests ───────────────────────────────────────────────────────
 
 describe('addVideoForUser', () => {
-  it('rejects when the URL is not a recognized YouTube video', async () => {
+  it('rejects when the URL is not a recognized video', async () => {
     await expect(addVideoForUser({ userId: TEST_USER_ID, input: 'not a url' })).rejects.toThrow(
-      /Invalid YouTube URL/
+      /Invalid video URL/
     );
   });
 
@@ -211,6 +236,48 @@ describe('addVideoForUser', () => {
       },
     });
     expect(other?.handle).toBe('@testchan');
+  });
+
+  describe('Bilibili', () => {
+    it('creates a shadow Channel + Video + StandaloneVideo with source_type=BILIBILI', async () => {
+      mockFetchBilibiliVideoSnapshot.mockResolvedValueOnce(fakeBilibiliSnapshot());
+
+      const res = await addVideoForUser({
+        userId: TEST_USER_ID,
+        input: 'https://www.bilibili.com/video/BV1DgdhBGEq2/',
+      });
+      expect(res.createdVideo).toBe(true);
+      expect(res.createdChannel).toBe(true);
+      expect(res.createdStandalone).toBe(true);
+      expect(res.sourceId).toBe('BV1DgdhBGEq2');
+
+      const channel = await global.testPrisma.channel.findUnique({
+        where: {
+          channel_unique_source: { source_type: 'BILIBILI', source_id: '12345' },
+        },
+      });
+      expect(channel).not.toBeNull();
+      // Bilibili channels are created without an RSS feed URL — the
+      // refresh-channels cron's SQL filters on rss_url IS NOT NULL.
+      expect(channel?.rss_url).toBeNull();
+
+      const video = await global.testPrisma.video.findUnique({
+        where: {
+          video_unique_source: { source_type: 'BILIBILI', source_id: 'BV1DgdhBGEq2' },
+        },
+      });
+      expect(video?.title).toBe('Bilibili Test Video');
+    });
+
+    it('does not call the YouTube fetcher when given a Bilibili URL', async () => {
+      mockFetchBilibiliVideoSnapshot.mockResolvedValueOnce(fakeBilibiliSnapshot());
+      await addVideoForUser({
+        userId: TEST_USER_ID,
+        input: 'https://www.bilibili.com/video/BV1DgdhBGEq2/',
+      });
+      expect(mockFetchVideoSnapshot).not.toHaveBeenCalled();
+      expect(mockFetchBilibiliVideoSnapshot).toHaveBeenCalledWith('BV1DgdhBGEq2');
+    });
   });
 
   describe('nullable published_at', () => {
