@@ -25,12 +25,27 @@ concurrency:
 env:
   TURBO_TELEMETRY_DISABLED: 1
   NEXT_TELEMETRY_DISABLED: 1
+  HUSKY: 0
   CI: 1
 
 jobs:
   verify:
     if: ${{ !github.event.pull_request.draft || github.event.pull_request.requested_reviewers[0] || github.event.pull_request.requested_teams[0] }}
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: readtube_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
@@ -41,17 +56,33 @@ jobs:
         with:
           node-version: 22
           cache: yarn
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        id: node-modules-cache
+        with:
+          path: |
+            node_modules
+            apps/*/node_modules
+            packages/*/node_modules
+            .yarn/install-state.gz
+          key: node-modules-${{ runner.os }}-node22-${{ hashFiles('yarn.lock') }}
       - name: Install dependencies
-        run: yarn install --frozen-lockfile
-      - name: Generate database client
-        working-directory: packages/database
-        run: yarn db:generate
+        if: steps.node-modules-cache.outputs.cache-hit != 'true'
+        run: yarn install --immutable
+      - name: Cache turbo
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ github.ref_name }}-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-${{ github.ref_name }}-
+            turbo-${{ runner.os }}-main-
+            turbo-${{ runner.os }}-
       - name: Lint code
-        run: |
-          yarn typecheck
-          yarn lint
-          yarn format:check
+        run: yarn turbo run typecheck lint "//#format:check"
       - name: Run tests
         run: yarn test
       - name: Run integration tests
+        env:
+          INTEGRATION_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/readtube_test
         run: yarn integrationTest
