@@ -454,7 +454,7 @@ function useLibraryTitle(): string | null {
   const { data: playlists = [] } = useSWR<PlaylistSummary[]>('/api/playlists', fetcher);
 
   const inboxViewLabel = useMemo(() => {
-    if (pathname == null || !pathname.startsWith('/inbox')) {
+    if (pathname == null || pathname !== '/inbox') {
       return null;
     }
     const query = parseInboxQuery(extractInboxSearchParams(searchParams));
