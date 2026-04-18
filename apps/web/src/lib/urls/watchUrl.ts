@@ -26,3 +26,23 @@ export function buildWatchLink(platform: VideoPlatform, sourceId: string): Watch
       };
   }
 }
+
+/**
+ * Build the external channel/space URL for a video's owning channel.
+ * YouTube uses `/channel/<UC…>`; Bilibili uses `space.bilibili.com/<mid>`.
+ */
+export function buildChannelLink(platform: VideoPlatform, channelSourceId: string): WatchLink {
+  switch (platform) {
+    case 'BILIBILI':
+      return {
+        url: `https://space.bilibili.com/${channelSourceId}`,
+        platformName: 'Bilibili',
+      };
+    case 'YOUTUBE':
+    default:
+      return {
+        url: `https://www.youtube.com/channel/${channelSourceId}`,
+        platformName: 'YouTube',
+      };
+  }
+}

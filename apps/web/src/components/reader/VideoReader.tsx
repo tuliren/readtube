@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { formatDurationSeconds } from '@/lib/format/duration';
 import type { VideoData } from '@/lib/types';
 import { videoHref } from '@/lib/urls/videoHref';
-import { buildWatchLink } from '@/lib/urls/watchUrl';
+import { buildChannelLink, buildWatchLink } from '@/lib/urls/watchUrl';
 
 import ArticleReader from './ArticleReader';
 import NotesPanel from './NotesPanel';
@@ -67,6 +67,7 @@ export default function VideoReader({ video, publicMode = false }: Props) {
     !returnToParam.startsWith('//');
   const backHref = isSafeReturnTo ? returnToParam : '/inbox';
   const { url: watchUrl, platformName } = buildWatchLink(video.platform, video.sourceId);
+  const { url: channelUrl } = buildChannelLink(video.platform, video.channelSourceId);
 
   // Default to Summary because that's the cheapest scannable view —
   // the previous default of Transcript meant every reader open
@@ -229,10 +230,7 @@ export default function VideoReader({ video, publicMode = false }: Props) {
           <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-gray-400">
             <span className="inline-flex items-center gap-0.5">
               <span>{video.channelName}</span>
-              <ExternalLinkActions
-                url={`https://www.youtube.com/channel/${video.channelSourceId}`}
-                label="Open channel on YouTube"
-              />
+              <ExternalLinkActions url={channelUrl} label={`Open channel on ${platformName}`} />
             </span>
             {video.publishedAt != null && (
               <>

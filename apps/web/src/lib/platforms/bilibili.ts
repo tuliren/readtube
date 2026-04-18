@@ -24,7 +24,11 @@ export class BilibiliPlatform extends VideoPlatform {
     }
     try {
       const host = new URL(trimmed).hostname.toLowerCase();
-      return host.endsWith('bilibili.com') || host === 'b23.tv';
+      // b23.tv short links aren't accepted here because
+      // extractBilibiliVideoId is sync and can't follow the redirect
+      // to recover the BV id — claiming the URL here would produce a
+      // misleading "Invalid video URL" a step later.
+      return host.endsWith('bilibili.com');
     } catch {
       return false;
     }
