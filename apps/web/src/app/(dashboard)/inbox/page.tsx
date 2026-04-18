@@ -1,9 +1,12 @@
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@readtube/database';
+import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 
 import InboxListView from '@/components/inbox/InboxListView';
+import { parseInboxQuery } from '@/lib/inbox/filter';
 import { loadInboxVideos, searchParamsToInboxQuery } from '@/lib/inbox/loadVideos';
+import { resolveInboxView } from '@/lib/inbox/views';
 
 interface Props {
   // Wide Next.js shape — we forward the whole bag through
@@ -11,6 +14,21 @@ interface Props {
   // filter the client codec knows about (starred, saved, snoozed,
   // archived, unread, q, from, to, tagIds, sort, …).
   searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(await searchParams)) {
+    if (typeof v === 'string') {
+      params.set(k, v);
+    } else if (Array.isArray(v)) {
+      for (const item of v) {
+        params.append(k, item);
+      }
+    }
+  }
+  const view = resolveInboxView(parseInboxQuery(params));
+  return { title: view?.label ?? 'Inbox' };
 }
 
 export default async function InboxPage({ searchParams }: Props) {
