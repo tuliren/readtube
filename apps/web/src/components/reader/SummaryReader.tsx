@@ -2,15 +2,15 @@
 
 import { ArrowPathIcon } from '@heroicons/react/24/outline';
 import { useEffect, useState } from 'react';
-import ReactMarkdown from 'react-markdown';
-import rehypeExternalLinks from 'rehype-external-links';
-import rehypeSanitize from 'rehype-sanitize';
-import remarkGfm from 'remark-gfm';
 
 import { countWords } from '@/lib/format/wordCount';
+import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { isProduction } from '@/lib/vercelEnv';
 
+import ArticleMarkdown from './ArticleMarkdown';
 import type { TranscriptStatus } from './VideoReader';
+
+type HasLatexByField = Partial<Record<'short' | 'full', boolean>>;
 
 interface Props {
   videoDbId: string;
@@ -93,6 +93,7 @@ export default function SummaryReader({
   const apiBase = publicMode ? '/api/public/videos' : '/api/videos';
   const [status, setStatus] = useState<Status>('checking');
   const [summary, setSummary] = useState<SummaryData | null>(null);
+  const [hasLatexByField, setHasLatexByField] = useState<HasLatexByField>({});
   const [regeneratingFields, setRegeneratingFields] = useState<SummaryField[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -100,6 +101,7 @@ export default function SummaryReader({
     let cancelled = false;
     setStatus('checking');
     setSummary(null);
+    setHasLatexByField({});
     setErrorMessage(null);
     setRegeneratingFields([]);
 
@@ -113,7 +115,19 @@ export default function SummaryReader({
           return;
         }
         const data = (await res.json()) as SummaryData;
-        setSummary(data);
+        // Stored short/full rows carry a YAML frontmatter with
+        // hasLatex. Peel it off so the renderer sees plain markdown.
+        const shortDoc = parseMarkdownDocument(data.short ?? '');
+        const fullDoc = parseMarkdownDocument(data.full ?? '');
+        setSummary({
+          headline: data.headline,
+          short: shortDoc.frontmatterPending ? (data.short ?? null) : shortDoc.content,
+          full: fullDoc.frontmatterPending ? (data.full ?? null) : fullDoc.content,
+        });
+        setHasLatexByField({
+          short: shortDoc.properties.hasLatex === true,
+          full: fullDoc.properties.hasLatex === true,
+        });
         setStatus('done');
         // Cache hit — flip the parent's Summary tab dot to blue
         // immediately, regardless of whether the user is currently
@@ -132,13 +146,17 @@ export default function SummaryReader({
   }, [videoDbId, onSummaryAvailable, apiBase]);
 
   // Stream the total word count up to VideoReader so the Summary tab
-  // header can render the "X min" reading-time badge. Fires on every
-  // summary change, including incremental streaming updates.
+  // header can render the "X min" reading-time badge. summary.short
+  // and summary.full are already frontmatter-stripped (GET path
+  // parses on receipt, POST path stores clean structured-output
+  // content), so counting is direct.
   useEffect(() => {
+    if (summary == null) {
+      onSummaryWordsChange(0);
+      return;
+    }
     const total =
-      summary == null
-        ? 0
-        : countWords(summary.headline) + countWords(summary.short) + countWords(summary.full);
+      countWords(summary.headline) + countWords(summary.short) + countWords(summary.full);
     onSummaryWordsChange(total);
   }, [summary, onSummaryWordsChange]);
 
@@ -154,6 +172,19 @@ export default function SummaryReader({
       const next = { ...base };
       for (const f of fields) {
         next[f] = '';
+      }
+      return next;
+    });
+    // Drop the stale hasLatex flags too — otherwise the old flag
+    // rides along until the server emits a new {field, hasLatex}
+    // event, briefly rendering the fresh content with the prior
+    // run's remark-math configuration.
+    setHasLatexByField((prev) => {
+      const next = { ...prev };
+      for (const f of fields) {
+        if (f === 'short' || f === 'full') {
+          delete next[f];
+        }
       }
       return next;
     });
@@ -238,6 +269,7 @@ export default function SummaryReader({
           let event: {
             field?: SummaryField;
             delta?: string;
+            hasLatex?: boolean;
             error?: string;
             type?: string;
           };
@@ -260,6 +292,12 @@ export default function SummaryReader({
               full: prev?.full ?? null,
               [fieldName]: fieldValue,
             }));
+          } else if (event.field && typeof event.hasLatex === 'boolean') {
+            const fieldName = event.field;
+            const flag = event.hasLatex;
+            if (fieldName === 'short' || fieldName === 'full') {
+              setHasLatexByField((prev) => ({ ...prev, [fieldName]: flag }));
+            }
           } else if (event.field && event.error) {
             fieldError = event.error;
           }
@@ -355,11 +393,19 @@ export default function SummaryReader({
 
   const isStreaming = status === 'generating';
   const isRegenerating = (field: SummaryField) => regeneratingFields.includes(field);
-  const fullMarkdown = summary.full?.trim() ?? '';
   // Regenerate is a dev-only escape hatch — costs tokens, can produce
   // worse output than a cached run, and shouldn't be exposed to end
   // users in production.
   const showRegenerate = !isProduction() && !publicMode;
+
+  // summary.short / summary.full are already frontmatter-stripped —
+  // GET parses on receipt, POST streams clean structured-output
+  // content. hasLatex comes from hasLatexByField, populated by the
+  // same two paths.
+  const shortContent = summary.short?.trim() ?? '';
+  const fullContent = summary.full?.trim() ?? '';
+  const shortHasLatex = hasLatexByField.short === true;
+  const fullHasLatex = hasLatexByField.full === true;
 
   // Word counts surfaced next to the multi-sentence section headers
   // so the reader can size up the density before reading. Computed
@@ -367,8 +413,8 @@ export default function SummaryReader({
   // visibly as new tokens come in. Headline is intentionally
   // excluded — it's a one-sentence newspaper-style title and a
   // word count there is just visual noise.
-  const shortWords = countWords(summary.short);
-  const fullWords = countWords(summary.full);
+  const shortWords = countWords(shortContent);
+  const fullWords = countWords(fullContent);
 
   return (
     <div className="space-y-8">
@@ -398,21 +444,10 @@ export default function SummaryReader({
             <RegenerateButton onClick={() => handleGenerate(['short'])} disabled={isStreaming} />
           )}
         </div>
-        {summary.short ? (
-          // Render through the same Markdown pipeline as Full summary
-          // since the short-summary prompt may emit `**bold**` or other
-          // inline formatting.
-          <article className="prose prose-gray max-w-none font-sans text-[17px] leading-[1.8] text-gray-700">
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              rehypePlugins={[
-                rehypeSanitize,
-                [rehypeExternalLinks, { target: '_blank', rel: ['noopener', 'noreferrer'] }],
-              ]}
-            >
-              {summary.short}
-            </ReactMarkdown>
-          </article>
+        {shortContent.length > 0 ? (
+          <ArticleMarkdown className="text-gray-700" hasLatex={shortHasLatex}>
+            {shortContent}
+          </ArticleMarkdown>
         ) : isRegenerating('short') ? (
           <div className="space-y-2">
             <div className="h-4 w-full animate-pulse rounded bg-gray-200" />
@@ -434,23 +469,8 @@ export default function SummaryReader({
             <RegenerateButton onClick={() => handleGenerate(['full'])} disabled={isStreaming} />
           )}
         </div>
-        {fullMarkdown.length > 0 ? (
-          // Render via react-markdown so the new bullet-friendly prompt
-          // (SUMMARY_PROMPT_VERSION v4) can mix prose paragraphs and
-          // Markdown lists. Sanitized + external-link safety mirrors
-          // ArticleReader so we don't ship two different sanitization
-          // policies for AI-generated content.
-          <article className="prose prose-gray max-w-none font-sans text-[17px] leading-[1.8]">
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              rehypePlugins={[
-                rehypeSanitize,
-                [rehypeExternalLinks, { target: '_blank', rel: ['noopener', 'noreferrer'] }],
-              ]}
-            >
-              {fullMarkdown}
-            </ReactMarkdown>
-          </article>
+        {fullContent.length > 0 ? (
+          <ArticleMarkdown hasLatex={fullHasLatex}>{fullContent}</ArticleMarkdown>
         ) : isRegenerating('full') ? (
           <div className="space-y-2">
             {[100, 95, 90, 85, 75].map((w, i) => (

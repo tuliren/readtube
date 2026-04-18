@@ -69,8 +69,11 @@ export default function VideoReader({ video, publicMode = false }: Props) {
 
   // Default to Summary because that's the cheapest scannable view —
   // the previous default of Transcript meant every reader open
-  // landed on the densest, longest content first.
-  const [activeTab, setActiveTab] = useState<Tab>('summary');
+  // landed on the densest, longest content first. In public mode
+  // fall back to Article if the shared video has only an article.
+  const [activeTab, setActiveTab] = useState<Tab>(
+    publicMode && !video.hasSummary && video.hasArticle ? 'article' : 'summary'
+  );
   const durationLabel = formatDurationSeconds(video.durationSeconds);
 
   // Shared transcript availability state across all three tabs.
@@ -123,19 +126,19 @@ export default function VideoReader({ video, publicMode = false }: Props) {
     setSummaryWords(0);
     setArticleWords(0);
     setTranscriptWords(0);
+    // Re-pick the default tab for the new video. In public mode tabs
+    // are conditionally rendered, so a stale activeTab from the
+    // previous video can leave the viewer staring at an empty pane
+    // when the new video lacks that tab's content.
+    setActiveTab(publicMode && !video.hasSummary && video.hasArticle ? 'article' : 'summary');
   }, [
     video.id,
     video.transcriptUnavailable,
     video.hasTranscript,
     video.hasSummary,
     video.hasArticle,
+    publicMode,
   ]);
-
-  // Derived flag for the Transcript tab dot — once transcriptStatus
-  // is 'present', a transcript exists in the cache. Keeps the dot's
-  // source of truth in one place rather than maintaining a parallel
-  // hasTranscript local state that could drift.
-  const hasTranscript = transcriptStatus === 'present';
 
   // Stable callbacks the children pass into their effect dep arrays.
   // useState's setters are already stable, but wrapping the
@@ -348,20 +351,26 @@ export default function VideoReader({ video, publicMode = false }: Props) {
             <>
               {/* Tabs — Summary first because it's the cheapest scannable
                 view, then Article (the long-form rewrite), then Transcript
-                (the raw firehose). Each tab carries a small dot:
-                  - blue when the corresponding artifact has been generated
-                  - red when no content exists yet for that tab
-                The dot color is stable across active/inactive states so
-                the signal doesn't depend on which tab the user clicked. */}
+                (the raw firehose). Tabs with generated content show a
+                reading-time badge; missing content shows nothing. */}
               <div className="mt-8 border-b border-gray-200">
                 <div className="flex gap-6">
-                  {TABS.filter((tab) => !(publicMode && tab.key === 'transcript')).map((tab) => {
-                    const generated =
-                      tab.key === 'summary'
-                        ? hasSummary
-                        : tab.key === 'article'
-                          ? hasArticle
-                          : hasTranscript;
+                  {TABS.filter((tab) => {
+                    if (tab.key === 'transcript') {
+                      return !publicMode;
+                    }
+                    // In public mode the reader can't generate
+                    // anything — hide tabs whose content doesn't
+                    // exist so the viewer isn't teased with an empty
+                    // panel.
+                    if (publicMode && tab.key === 'summary') {
+                      return hasSummary;
+                    }
+                    if (publicMode && tab.key === 'article') {
+                      return hasArticle;
+                    }
+                    return true;
+                  }).map((tab) => {
                     const words =
                       tab.key === 'summary'
                         ? summaryWords
@@ -379,15 +388,7 @@ export default function VideoReader({ video, publicMode = false }: Props) {
                         }`}
                       >
                         {tab.label}
-                        {words > 0 ? (
-                          <ReadingTimeBadge wordCount={words} />
-                        ) : !generated ? (
-                          <span
-                            className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-500"
-                            title={`${tab.label} not generated yet`}
-                            aria-label={`${tab.label} not generated yet`}
-                          />
-                        ) : null}
+                        {words > 0 && <ReadingTimeBadge wordCount={words} />}
                       </button>
                     );
                   })}
@@ -396,26 +397,30 @@ export default function VideoReader({ video, publicMode = false }: Props) {
 
               {/* Tab content */}
               <div className="mt-6">
-                <div className={activeTab === 'summary' ? '' : 'hidden'}>
-                  <SummaryReader
-                    videoDbId={video.id}
-                    transcriptStatus={transcriptStatus}
-                    onTranscriptStatusChange={setTranscriptStatus}
-                    onSummaryAvailable={handleSummaryAvailable}
-                    onSummaryWordsChange={handleSummaryWordsChange}
-                    publicMode={publicMode}
-                  />
-                </div>
-                <div className={activeTab === 'article' ? '' : 'hidden'}>
-                  <ArticleReader
-                    videoDbId={video.id}
-                    transcriptStatus={transcriptStatus}
-                    onTranscriptStatusChange={setTranscriptStatus}
-                    onArticleAvailable={handleArticleAvailable}
-                    onArticleWordsChange={handleArticleWordsChange}
-                    publicMode={publicMode}
-                  />
-                </div>
+                {(!publicMode || hasSummary) && (
+                  <div className={activeTab === 'summary' ? '' : 'hidden'}>
+                    <SummaryReader
+                      videoDbId={video.id}
+                      transcriptStatus={transcriptStatus}
+                      onTranscriptStatusChange={setTranscriptStatus}
+                      onSummaryAvailable={handleSummaryAvailable}
+                      onSummaryWordsChange={handleSummaryWordsChange}
+                      publicMode={publicMode}
+                    />
+                  </div>
+                )}
+                {(!publicMode || hasArticle) && (
+                  <div className={activeTab === 'article' ? '' : 'hidden'}>
+                    <ArticleReader
+                      videoDbId={video.id}
+                      transcriptStatus={transcriptStatus}
+                      onTranscriptStatusChange={setTranscriptStatus}
+                      onArticleAvailable={handleArticleAvailable}
+                      onArticleWordsChange={handleArticleWordsChange}
+                      publicMode={publicMode}
+                    />
+                  </div>
+                )}
                 {!publicMode && (
                   <div className={activeTab === 'transcript' ? '' : 'hidden'}>
                     <TranscriptReader

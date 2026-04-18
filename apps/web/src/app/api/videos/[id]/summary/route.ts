@@ -1,12 +1,14 @@
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@readtube/database';
-import { streamText } from 'ai';
+import { Output, streamText } from 'ai';
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 
 import { DEFAULT_AI_MODEL } from '@/constants';
+import { CURRENT_FRONTMATTER_VERSION, serializeMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
 
-const SUMMARY_PROMPT_VERSION = 'v4';
+const SUMMARY_PROMPT_VERSION = 'v6';
 
 const LANGUAGE_RULE = `Write in the same language as the transcript below. Do not translate — if the transcript is in Chinese, write in Chinese; if Spanish, write in Spanish; and so on.`;
 
@@ -33,6 +35,24 @@ Output only the title itself, nothing else.`,
 - Never use headings (no #, ##, etc.). Do not bold or italicize.
 - ${LANGUAGE_RULE}`,
 } as const;
+
+// Structured-output schema for short/full. Keep `content` before
+// `hasLatex` so the model commits to the body text first, then
+// classifies what it wrote. Asking for hasLatex up front produces
+// garbage (the model defaults to false because it's guessing before
+// writing).
+const CONTENT_WITH_LATEX_SCHEMA = z.object({
+  content: z
+    .string()
+    .describe('The markdown body of the summary. Do not include any YAML frontmatter.'),
+  hasLatex: z
+    .boolean()
+    .describe(
+      'True if the content field above contains at least one LaTeX math formula wrapped in single or double dollar signs (e.g. $E = mc^2$ or $$\\int_0^1 x\\,dx$$). False otherwise. Dollar amounts like "$5 million" are not math and must not set this flag to true.'
+    ),
+});
+
+const FIELDS_WITH_FRONTMATTER: ReadonlySet<SummaryField> = new Set<SummaryField>(['short', 'full']);
 
 type SummaryField = keyof typeof PROMPTS;
 const SUMMARY_FIELDS: readonly SummaryField[] = ['headline', 'short', 'full'] as const;
@@ -196,22 +216,78 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const transcript = ensured.transcript;
   const transcriptText = transcript.segments.map((s) => s.text).join(' ');
 
-  // Kick off streams for the requested fields in parallel.
-  const generations = fieldsToGenerate.map((field) => {
-    const result = streamText({
-      model: DEFAULT_AI_MODEL,
-      prompt: buildPrompt(field, video.title, video.channel.name, transcriptText),
-    });
-    return { field, result, iterator: result.textStream[Symbol.asyncIterator]() };
+  // Kick off streams for the requested fields in parallel. Headline
+  // uses plain streamText — it's a one-line title, never math. Short
+  // and full use streamText with Output.object({schema}) so the model
+  // emits {content, hasLatex} as a single structured response;
+  // hasLatex lands after content is written, so the classification
+  // reflects what the model actually produced rather than a forward
+  // guess.
+  //
+  // The full StreamTextResult<TOOLS, OUTPUT> type is painful to name
+  // inline, so these interfaces capture only the surface area the
+  // pump logic actually uses. Inference at the call sites keeps the
+  // concrete result types precise.
+  type StructuredOutput = z.infer<typeof CONTENT_WITH_LATEX_SCHEMA>;
+  type UsageProducer = { usage: PromiseLike<unknown> };
+  interface TextGen {
+    kind: 'text';
+    field: SummaryField;
+    result: UsageProducer;
+    iterator: AsyncIterator<string>;
+  }
+  interface ObjectGen {
+    kind: 'object';
+    field: SummaryField;
+    result: UsageProducer & { output: PromiseLike<StructuredOutput> };
+    iterator: AsyncIterator<Partial<StructuredOutput>>;
+  }
+  type Generation = TextGen | ObjectGen;
+
+  const generations: Generation[] = fieldsToGenerate.map((field): Generation => {
+    const prompt = buildPrompt(field, video.title, video.channel.name, transcriptText);
+    if (FIELDS_WITH_FRONTMATTER.has(field)) {
+      const result = streamText({
+        model: DEFAULT_AI_MODEL,
+        output: Output.object({ schema: CONTENT_WITH_LATEX_SCHEMA }),
+        prompt,
+      });
+      return {
+        kind: 'object',
+        field,
+        result,
+        iterator: result.partialOutputStream[Symbol.asyncIterator](),
+      };
+    }
+    const result = streamText({ model: DEFAULT_AI_MODEL, prompt });
+    return {
+      kind: 'text',
+      field,
+      result,
+      iterator: result.textStream[Symbol.asyncIterator](),
+    };
   });
 
   // Pre-flight: await the first chunk of each stream so auth/gateway errors
   // surface as a proper HTTP error before the stream starts.
-  let firstChunks: IteratorResult<string>[];
+  type FirstChunk =
+    | { kind: 'text'; value: IteratorResult<string> }
+    | {
+        kind: 'object';
+        value: IteratorResult<Partial<z.infer<typeof CONTENT_WITH_LATEX_SCHEMA>>>;
+      };
+  let firstChunks: FirstChunk[];
   try {
-    firstChunks = await Promise.all(generations.map((g) => g.iterator.next()));
+    firstChunks = await Promise.all(
+      generations.map(async (g) => {
+        if (g.kind === 'text') {
+          return { kind: 'text' as const, value: await g.iterator.next() };
+        }
+        return { kind: 'object' as const, value: await g.iterator.next() };
+      })
+    );
   } catch (err) {
-    console.error('[summary/POST] streamText pre-flight error:', err);
+    console.error('[summary/POST] stream pre-flight error:', err);
     const message = err instanceof Error ? err.message : 'Failed to generate summary.';
     return NextResponse.json({ error: message }, { status: 500 });
   }
@@ -226,27 +302,80 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         short: '',
         full: '',
       };
+      const hasLatexByField: Partial<Record<SummaryField, boolean>> = {};
       const fieldErrors: Partial<Record<SummaryField, string>> = {};
 
       function emit(event: object) {
         controller.enqueue(encoder.encode(JSON.stringify(event) + '\n'));
       }
 
-      // Pump each source stream into the output, interleaved.
-      const pumps = generations.map(async ({ field, iterator }, idx) => {
+      // Pump each source stream into the output, interleaved. For
+      // object streams we compute a delta relative to the previous
+      // content length, so the wire format stays chunk-based like
+      // the text path.
+      const pumps = generations.map(async (gen, idx) => {
+        const { field } = gen;
         const first = firstChunks[idx];
         try {
-          if (!first.done && first.value) {
-            accumulated[field] += first.value;
-            emit({ field, delta: first.value });
-          }
-          while (true) {
-            const next = await iterator.next();
-            if (next.done) {
-              break;
+          if (gen.kind === 'text' && first.kind === 'text') {
+            if (!first.value.done && first.value.value) {
+              accumulated[field] += first.value.value;
+              emit({ field, delta: first.value.value });
             }
-            accumulated[field] += next.value;
-            emit({ field, delta: next.value });
+            while (true) {
+              const next = await gen.iterator.next();
+              if (next.done) {
+                break;
+              }
+              accumulated[field] += next.value;
+              emit({ field, delta: next.value });
+            }
+            return;
+          }
+          if (gen.kind === 'object' && first.kind === 'object') {
+            let emittedHasLatex = false;
+            const applyPartial = (
+              partial: Partial<z.infer<typeof CONTENT_WITH_LATEX_SCHEMA>> | undefined
+            ) => {
+              if (partial == null) {
+                return;
+              }
+              if (
+                typeof partial.content === 'string' &&
+                partial.content.length > accumulated[field].length
+              ) {
+                const delta = partial.content.slice(accumulated[field].length);
+                accumulated[field] = partial.content;
+                emit({ field, delta });
+              }
+              if (!emittedHasLatex && typeof partial.hasLatex === 'boolean') {
+                emittedHasLatex = true;
+                hasLatexByField[field] = partial.hasLatex;
+                emit({ field, hasLatex: partial.hasLatex });
+              }
+            };
+            if (!first.value.done) {
+              applyPartial(first.value.value);
+            }
+            while (true) {
+              const next = await gen.iterator.next();
+              if (next.done) {
+                break;
+              }
+              applyPartial(next.value);
+            }
+            // Fallback: if the stream finished without a hasLatex flip
+            // (shouldn't happen — schema requires it — but be safe),
+            // resolve from the settled object and emit once.
+            if (!emittedHasLatex) {
+              try {
+                const settled = await gen.result.output;
+                hasLatexByField[field] = settled.hasLatex;
+                emit({ field, hasLatex: settled.hasLatex });
+              } catch {
+                // Swallow — we already streamed the content.
+              }
+            }
           }
         } catch (err) {
           console.error(`[summary/POST] ${field} stream error:`, err);
@@ -282,15 +411,26 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           // Round-trip through JSON so Prisma's InputJsonValue type is happy.
           const mergedUsage = JSON.parse(JSON.stringify(mergedUsageObj));
 
+          const wrapForStorage = (field: SummaryField): string => {
+            const body = accumulated[field].trim();
+            if (!FIELDS_WITH_FRONTMATTER.has(field)) {
+              return body;
+            }
+            return serializeMarkdownDocument(body, {
+              version: CURRENT_FRONTMATTER_VERSION,
+              hasLatex: hasLatexByField[field] === true,
+            });
+          };
+
           const summaryData = {
             headline: fieldsToGenerate.includes('headline')
-              ? accumulated.headline.trim()
+              ? wrapForStorage('headline')
               : (existing?.headline ?? null),
             short: fieldsToGenerate.includes('short')
-              ? accumulated.short.trim()
+              ? wrapForStorage('short')
               : (existing?.short ?? null),
             full: fieldsToGenerate.includes('full')
-              ? accumulated.full.trim()
+              ? wrapForStorage('full')
               : (existing?.full ?? null),
             prompt_version: SUMMARY_PROMPT_VERSION,
             model: DEFAULT_AI_MODEL,

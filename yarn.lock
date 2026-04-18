@@ -5659,6 +5659,7 @@ __metadata:
     fast-xml-parser: "npm:^5.5.10"
     jest: "npm:^29.7.0"
     jest-environment-jsdom: "npm:^29.7.0"
+    katex: "npm:^0.16"
     lucide-react: "npm:^1.8.0"
     minimatch: "npm:^10.1.1"
     next: "npm:^16.2.4"
@@ -5669,9 +5670,11 @@ __metadata:
     react-hotkeys-hook: "npm:^5.2.4"
     react-markdown: "npm:^9.0.1"
     rehype-external-links: "npm:^3.0.0"
+    rehype-katex: "npm:^7"
     rehype-raw: "npm:^7.0.0"
     rehype-sanitize: "npm:^6.0.0"
     remark-gfm: "npm:^4.0.0"
+    remark-math: "npm:^6"
     sonner: "npm:^2.0.7"
     storybook: "npm:^10.1.2"
     svix: "npm:^1.90.0"
@@ -18545,6 +18548,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"katex@npm:^0.16":
+  version: 0.16.45
+  resolution: "katex@npm:0.16.45"
+  dependencies:
+    commander: "npm:^8.3.0"
+  bin:
+    katex: cli.js
+  checksum: 10c0/f715eb9a73daff68ac14dcc8c2f47f02f5fc756a74077d22479e64e06872b2b44f0d81f1c91a98a9873722a08841388a869a0b9ddb96b224362eb8054ddf533a
+  languageName: node
+  linkType: hard
+
 "katex@npm:^0.16.0, katex@npm:^0.16.21, katex@npm:^0.16.9":
   version: 0.16.21
   resolution: "katex@npm:0.16.21"
@@ -22900,7 +22914,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"rehype-katex@npm:^7.0.0":
+"rehype-katex@npm:^7, rehype-katex@npm:^7.0.0":
   version: 7.0.1
   resolution: "rehype-katex@npm:7.0.1"
   dependencies:
@@ -23016,7 +23030,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"remark-math@npm:^6.0.0":
+"remark-math@npm:^6, remark-math@npm:^6.0.0":
   version: 6.0.0
   resolution: "remark-math@npm:6.0.0"
   dependencies:

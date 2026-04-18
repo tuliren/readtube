@@ -1,6 +1,7 @@
 import { ClerkProvider } from '@clerk/nextjs';
 import { Analytics } from '@vercel/analytics/next';
 import { clsx } from 'clsx';
+import 'katex/dist/katex.min.css';
 import { type Metadata } from 'next';
 import { Inter, Lexend } from 'next/font/google';
 import { ReactNode } from 'react';
