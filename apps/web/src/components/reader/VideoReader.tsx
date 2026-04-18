@@ -431,6 +431,7 @@ export default function VideoReader({ video, publicMode = false }: Props) {
                     <TranscriptReader
                       videoDbId={video.id}
                       sourceId={video.sourceId}
+                      platform={video.platform}
                       transcriptStatus={transcriptStatus}
                       onTranscriptStatusChange={setTranscriptStatus}
                       onTranscriptWordsChange={handleTranscriptWordsChange}

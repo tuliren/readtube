@@ -84,6 +84,11 @@ export async function upsertChannelWithVideos(
       ...(hasHandle && !handleAlreadyUsed ? { handle: snapshot.handle } : {}),
       videos: {
         create: snapshot.videos.map((v) => ({
+          // Explicit source_type — the column defaults to YOUTUBE in
+          // the schema, so omitting it here would mis-tag Bilibili
+          // videos and break any downstream platform dispatch
+          // (ensureTranscript, buildWatchLink, thumbnail fallback).
+          source_type: platform.type,
           source_id: v.videoId,
           title: v.title,
           description: v.description,

@@ -1,8 +1,7 @@
 import type { PrismaClient } from '@readtube/database';
 
 import { getPlatformByType } from '@/lib/platforms';
-import type { TranscriptSegment } from '@/lib/platforms/types';
-import { SubtitleFetchError } from '@/lib/platforms/youtube/subtitles';
+import { SubtitleFetchError, type TranscriptSegment } from '@/lib/platforms/types';
 
 interface CachedTranscript {
   id: string;

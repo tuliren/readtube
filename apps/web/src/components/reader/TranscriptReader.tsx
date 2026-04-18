@@ -5,12 +5,18 @@ import { useEffect, useRef, useState } from 'react';
 import { countWords } from '@/lib/format/wordCount';
 import type { TranscriptSegment } from '@/lib/platforms/types';
 import { formatTimestamp, groupTranscriptSegments } from '@/lib/platforms/youtube/transcript';
+import type { VideoPlatform } from '@/lib/types';
+import { buildWatchLink } from '@/lib/urls/watchUrl';
 
 import type { TranscriptStatus } from './VideoReader';
 
 interface Props {
   videoDbId: string;
   sourceId: string;
+  /** Owning platform — used to build the correct external "Watch on X"
+   *  link for the video, including the timestamped deep-links per
+   *  transcript paragraph. */
+  platform: VideoPlatform;
   /** Shared availability state lifted to VideoReader so the three
    *  reader tabs agree on whether the transcript exists, is missing,
    *  or hasn't been checked yet. */
@@ -39,17 +45,18 @@ function TranscriptSkeleton() {
   );
 }
 
-function UnavailableMessage({ sourceId }: { sourceId: string }) {
+function UnavailableMessage({ platform, sourceId }: { platform: VideoPlatform; sourceId: string }) {
+  const { url, platformName } = buildWatchLink(platform, sourceId);
   return (
     <div className="py-8 text-center text-sm text-gray-500">
       No transcript is available for this video.{' '}
       <a
-        href={`https://youtube.com/watch?v=${sourceId}`}
+        href={url}
         target="_blank"
         rel="noopener noreferrer"
         className="text-blue-600 hover:underline"
       >
-        Watch on YouTube ↗
+        Watch on {platformName} ↗
       </a>
     </div>
   );
@@ -58,6 +65,7 @@ function UnavailableMessage({ sourceId }: { sourceId: string }) {
 export default function TranscriptReader({
   videoDbId,
   sourceId,
+  platform,
   transcriptStatus,
   onTranscriptStatusChange,
   onTranscriptWordsChange,
@@ -192,7 +200,7 @@ export default function TranscriptReader({
 
   // Sticky-unavailable shortcut, regardless of localStatus.
   if (transcriptStatus === 'unavailable') {
-    return <UnavailableMessage sourceId={sourceId} />;
+    return <UnavailableMessage platform={platform} sourceId={sourceId} />;
   }
 
   if (localStatus === 'checking') {
@@ -222,6 +230,7 @@ export default function TranscriptReader({
     // sticky `transcriptStatus === 'unavailable'` branch above:
     // permanent unavailability is handled there, with no retry.
     // Here the next click is likely to succeed, so offer one.
+    const { url: watchUrl, platformName } = buildWatchLink(platform, sourceId);
     return (
       <div className="flex flex-col items-center gap-3 py-8 text-center text-sm text-gray-500">
         <p>Could not fetch the transcript right now.</p>
@@ -232,12 +241,12 @@ export default function TranscriptReader({
           Try again
         </button>
         <a
-          href={`https://youtube.com/watch?v=${sourceId}`}
+          href={watchUrl}
           target="_blank"
           rel="noopener noreferrer"
           className="text-xs text-blue-600 hover:underline"
         >
-          Watch on YouTube ↗
+          Watch on {platformName} ↗
         </a>
       </div>
     );
@@ -246,19 +255,19 @@ export default function TranscriptReader({
   const paragraphs = segments ? groupTranscriptSegments(segments) : [];
 
   if (paragraphs.length === 0) {
-    return <UnavailableMessage sourceId={sourceId} />;
+    return <UnavailableMessage platform={platform} sourceId={sourceId} />;
   }
 
   return (
     <div className="space-y-5">
       {paragraphs.map((para, i) => {
         const startSeconds = Math.floor(para.startMs / 1000);
-        const youtubeUrl = `https://youtube.com/watch?v=${sourceId}&t=${startSeconds}`;
+        const { url: paragraphUrl } = buildWatchLink(platform, sourceId, startSeconds);
 
         return (
           <div key={i} className="flex gap-4">
             <a
-              href={youtubeUrl}
+              href={paragraphUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="w-10 shrink-0 pt-1 font-mono text-xs text-gray-400 hover:text-blue-400"
