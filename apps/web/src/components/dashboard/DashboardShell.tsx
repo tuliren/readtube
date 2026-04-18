@@ -450,7 +450,16 @@ interface PlaylistSummary {
  */
 function useLibraryTitle(): string | null {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { data: playlists = [] } = useSWR<PlaylistSummary[]>('/api/playlists', fetcher);
+
+  const inboxViewLabel = useMemo(() => {
+    if (pathname == null || !pathname.startsWith('/inbox')) {
+      return null;
+    }
+    const query = parseInboxQuery(extractInboxSearchParams(searchParams));
+    return resolveInboxView(query)?.label ?? null;
+  }, [pathname, searchParams]);
 
   // Video reader paths are /videos/<sourceId> where sourceId is the
   // 11-char YouTube id. Distinguish from the library routes which
@@ -490,6 +499,9 @@ function useLibraryTitle(): string | null {
     if (videoSourceId != null) {
       return videoMeta?.title ?? null;
     }
+    if (inboxViewLabel != null) {
+      return inboxViewLabel;
+    }
     return null;
-  }, [pathname, playlists, videoSourceId, videoMeta]);
+  }, [pathname, playlists, videoSourceId, videoMeta, inboxViewLabel]);
 }
