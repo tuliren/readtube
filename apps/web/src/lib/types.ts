@@ -5,7 +5,8 @@ export interface ChannelData {
   /** YouTube handle (e.g. `@mkbhd`). Null when the scraper hasn't
    *  captured one yet. Used to build nicer sidebar URLs. */
   handle: string | null;
-  rssUrl: string;
+  // Null for platforms without a native RSS feed (Bilibili).
+  rssUrl: string | null;
   /** URL to the channel's logo/avatar. Populated from the
    *  TranscriptAPI /youtube/channel/latest endpoint. Null for
    *  channels that were added before this feature or whose
@@ -30,9 +31,14 @@ export interface FolderData {
   sortOrder: number;
 }
 
+export type VideoPlatform = 'YOUTUBE' | 'BILIBILI';
+
 export interface VideoData {
   id: string;
   sourceId: string;
+  /** Video platform — drives the "Watch on X" external link and
+   *  thumbnail fallback behavior. Mirrors Video.source_type. */
+  platform: VideoPlatform;
   title: string;
   description: string | null;
   /** ISO string, or null when the upstream scrape didn't expose a

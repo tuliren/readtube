@@ -265,10 +265,13 @@ export default function VideoRow({
 
       {video.thumbnailUrl != null && (
         <img
-          src={video.thumbnailUrl}
+          // See VideoReader.tsx — Bilibili CDN 403s with our Referer
+          // and returns http:// URLs that would otherwise be blocked.
+          src={video.thumbnailUrl.replace(/^http:\/\//, 'https://')}
           alt=""
           className="mt-0.5 h-12 w-[80px] shrink-0 rounded object-cover"
           loading="lazy"
+          referrerPolicy="no-referrer"
         />
       )}
 

@@ -117,7 +117,9 @@ export interface SubscribedChannelWithUnread {
   source_id: string;
   name: string;
   handle: string | null;
-  rss_url: string;
+  // Nullable to match the schema — platforms without a native RSS
+  // feed (e.g. Bilibili) store null here.
+  rss_url: string | null;
   logo_url: string | null;
   created_at: Date;
   unread_count: number;
@@ -148,7 +150,7 @@ export async function getSubscribedChannelsWithUnread(
       source_id: string;
       name: string;
       handle: string | null;
-      rss_url: string;
+      rss_url: string | null;
       logo_url: string | null;
       created_at: Date;
       unread_count: bigint;

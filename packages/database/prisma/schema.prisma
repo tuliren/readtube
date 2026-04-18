@@ -18,6 +18,7 @@ enum UserSourceType {
 
 enum VideoPlatformType {
   YOUTUBE
+  BILIBILI
 }
 
 enum ArticleStyle {
@@ -71,7 +72,12 @@ model Channel {
   // source platform channel id
   source_id   String
   name        String
-  rss_url     String
+  // Nullable because non-YouTube platforms (e.g. Bilibili) don't have a
+  // native RSS feed — the refresh-channels cron is YouTube-only and
+  // skips channels without rss_url. Existing YouTube rows keep their
+  // feed URL; shadow channels for newly-added Bilibili videos are
+  // created with rss_url = null.
+  rss_url     String?
   // Extended metadata populated from TranscriptAPI /youtube/channel/latest.
   // All nullable because they're backfilled incrementally — older channels
   // may not have them until the next cron refresh picks them up.

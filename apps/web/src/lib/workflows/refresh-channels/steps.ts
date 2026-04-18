@@ -34,24 +34,35 @@ export async function fetchStaleChannels(): Promise<StaleChannel[]> {
   // so that a standalone video always has a valid Channel FK, but until
   // a user actually subscribes to them we don't need to hit the RSS
   // endpoint. They get picked up lazily on first subscribe.
-  return prisma.channel.findMany({
+  //
+  // `rss_url: { not: null }` excludes Bilibili channels (no native RSS
+  // feed). The scraper is YouTube-only; Bilibili refresh isn't wired
+  // yet and would crash the batch if we tried.
+  const rows = await prisma.channel.findMany({
     where: {
       OR: [{ checked_at: null }, { checked_at: { lt: cutoff } }],
       subscriptions: { some: {} },
+      rss_url: { not: null },
     },
     orderBy: { checked_at: { sort: 'asc', nulls: 'first' } },
     take: BATCH_SIZE,
     select: { id: true, source_id: true, name: true, rss_url: true },
   });
+  // Narrow `rss_url` since the query filters out null rows.
+  return rows.map((r) => ({ ...r, rss_url: r.rss_url as string }));
 }
 
 export async function fetchChannelById(channelId: string): Promise<StaleChannel | null> {
   'use step';
 
-  return prisma.channel.findUnique({
+  const row = await prisma.channel.findUnique({
     where: { id: channelId },
     select: { id: true, source_id: true, name: true, rss_url: true },
   });
+  if (row == null || row.rss_url == null) {
+    return null;
+  }
+  return { ...row, rss_url: row.rss_url };
 }
 
 export interface RefreshResult {

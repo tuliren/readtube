@@ -5,7 +5,7 @@ CREATE EXTENSION IF NOT EXISTS "vector";
 CREATE TYPE "UserSourceType" AS ENUM('CLERK');
 
 -- CreateEnum
-CREATE TYPE "VideoPlatformType" AS ENUM('YOUTUBE');
+CREATE TYPE "VideoPlatformType" AS ENUM('YOUTUBE', 'BILIBILI');
 
 -- CreateEnum
 CREATE TYPE "ArticleStyle" AS ENUM('NARRATIVE', 'DIALOG');
@@ -35,7 +35,7 @@ CREATE TABLE "Channel" (
   "source_type" "VideoPlatformType" NOT NULL DEFAULT 'YOUTUBE',
   "source_id" TEXT NOT NULL,
   "name" TEXT NOT NULL,
-  "rss_url" TEXT NOT NULL,
+  "rss_url" TEXT,
   "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updated_at" TIMESTAMP(3) NOT NULL,
   "handle" TEXT,

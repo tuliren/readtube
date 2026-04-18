@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@readtube/database';
 
-import { SubtitleFetchError, fetchSubtitleViaTranscriptApi } from '@/lib/subtitles';
+import { getPlatformByType } from '@/lib/platforms';
+import { SubtitleFetchError } from '@/lib/subtitles';
 import type { TranscriptSegment } from '@/lib/subtitles/types';
 
 interface CachedTranscript {
@@ -61,6 +62,7 @@ export async function ensureTranscript(
     select: {
       id: true,
       source_id: true,
+      source_type: true,
       transcript_unavailable: true,
       transcripts: {
         orderBy: { created_at: 'desc' },
@@ -91,10 +93,11 @@ export async function ensureTranscript(
     return { ok: false, reason: 'unavailable' };
   }
 
-  // First attempt — try to fetch.
+  // First attempt — try to fetch via the video's platform.
   let fetched;
   try {
-    fetched = await fetchSubtitleViaTranscriptApi(video.source_id);
+    const platform = getPlatformByType(video.source_type);
+    fetched = await platform.fetchTranscript(video.source_id);
   } catch (err) {
     console.error('[ensureTranscript] upstream fetch failed:', err);
     // Categorize the failure so the caller can map it to the right

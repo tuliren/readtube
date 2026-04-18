@@ -1,14 +1,16 @@
-import { VideoPlatformType, prisma } from '@readtube/database';
+import { prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { requireUserId } from '@/lib/auth';
+import { detectPlatformTypeFromSourceId } from '@/lib/platforms';
 
 /**
  * Lightweight lookup for a video's display metadata, keyed by the
- * YouTube source_id (the value used in the /videos/[videoId] URL).
- * Used by the mobile top bar to show the current video's title —
- * the page itself is server-rendered, but the top bar lives in the
- * dashboard shell and needs a client-side signal.
+ * platform source_id (the value used in the /videos/[videoId] URL —
+ * 11-char YouTube id or BV-prefixed Bilibili id). Used by the mobile
+ * top bar to show the current video's title — the page itself is
+ * server-rendered, but the top bar lives in the dashboard shell and
+ * needs a client-side signal.
  *
  * Access mirrors the reader: channel subscription, standalone, or
  * the video is in one of the user's playlists.
@@ -26,11 +28,19 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'sourceId is required' }, { status: 400 });
   }
 
-  console.info(`[videos/meta/GET] Looking up video meta for sourceId=${sourceId}, user ${userId}`);
+  const sourceType = detectPlatformTypeFromSourceId(sourceId);
+  if (sourceType == null) {
+    console.error(`[videos/meta/GET] Unrecognized sourceId shape: ${sourceId}`);
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+
+  console.info(
+    `[videos/meta/GET] Looking up video meta for sourceId=${sourceId} (${sourceType}), user ${userId}`
+  );
 
   const video = await prisma.video.findFirst({
     where: {
-      source_type: VideoPlatformType.YOUTUBE,
+      source_type: sourceType,
       source_id: sourceId,
       OR: [
         { channel: { subscriptions: { some: { user_id: userId } } } },
