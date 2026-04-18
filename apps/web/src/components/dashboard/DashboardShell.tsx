@@ -155,6 +155,7 @@ function DashboardShellInner({ initialChannels, children }: Props) {
                 <div className="flex flex-1 items-center justify-between px-2">
                   <span className="text-base font-bold text-gray-900">ReadTube</span>
                   <div className="flex items-center gap-1">
+                    <UserButton />
                     <button
                       type="button"
                       onClick={toggleCollapsed}
@@ -164,7 +165,6 @@ function DashboardShellInner({ initialChannels, children }: Props) {
                     >
                       <PanelLeft className="h-4 w-4" />
                     </button>
-                    <UserButton />
                   </div>
                 </div>
               )}
@@ -450,7 +450,16 @@ interface PlaylistSummary {
  */
 function useLibraryTitle(): string | null {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { data: playlists = [] } = useSWR<PlaylistSummary[]>('/api/playlists', fetcher);
+
+  const inboxViewLabel = useMemo(() => {
+    if (pathname == null || pathname !== '/inbox') {
+      return null;
+    }
+    const query = parseInboxQuery(extractInboxSearchParams(searchParams));
+    return resolveInboxView(query)?.label ?? null;
+  }, [pathname, searchParams]);
 
   // Video reader paths are /videos/<sourceId> where sourceId is the
   // 11-char YouTube id. Distinguish from the library routes which
@@ -490,6 +499,9 @@ function useLibraryTitle(): string | null {
     if (videoSourceId != null) {
       return videoMeta?.title ?? null;
     }
+    if (inboxViewLabel != null) {
+      return inboxViewLabel;
+    }
     return null;
-  }, [pathname, playlists, videoSourceId, videoMeta]);
+  }, [pathname, playlists, videoSourceId, videoMeta, inboxViewLabel]);
 }

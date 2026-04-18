@@ -232,7 +232,7 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
         <button
           type="button"
           onClick={toggleChannels}
-          className="flex flex-1 items-center gap-1 px-2 text-left"
+          className="flex flex-1 items-center gap-1 pl-2 text-left"
           aria-expanded={!channelsCollapsed}
           aria-label={channelsCollapsed ? 'Expand channels' : 'Collapse channels'}
         >
