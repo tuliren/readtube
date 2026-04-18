@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@readtube/database';
+import type { PrismaClient, VideoPlatformType } from '@readtube/database';
 
 import type { TagData, VideoData } from '@/lib/types';
 import { buildThumbnailUrl } from '@/lib/youtube/urls';
@@ -11,6 +11,7 @@ import { buildThumbnailUrl } from '@/lib/youtube/urls';
 export interface TriageRawRow {
   id: string;
   source_id: string;
+  source_type: VideoPlatformType;
   title: string;
   description: string | null;
   published_at: Date | null;
@@ -145,15 +146,20 @@ export function decorateVideo(
   return {
     id: row.id,
     sourceId: row.source_id,
+    platform: row.source_type,
     title: row.title,
     description: row.description,
     publishedAt: row.published_at?.toISOString() ?? null,
     readAt: readAt != null ? readAt.toISOString() : null,
     durationSeconds: row.duration_seconds,
-    // Some older rows predate the always-populate-thumbnail rule and
-    // still have null `thumbnail_url`. Fall back to the deterministic
-    // hqdefault URL so the UI never renders a broken/missing image.
-    thumbnailUrl: row.thumbnail_url ?? buildThumbnailUrl(row.source_id),
+    // YouTube: some older rows predate the always-populate-thumbnail
+    // rule and have null thumbnail_url — fall back to the deterministic
+    // hqdefault URL. Bilibili: the snapshot always populates pic; if
+    // we ever end up with null, render nothing rather than invent a
+    // URL on a CDN that would just 404.
+    thumbnailUrl:
+      row.thumbnail_url ??
+      (row.source_type === 'YOUTUBE' ? buildThumbnailUrl(row.source_id) : null),
     transcriptUnavailable: row.transcript_unavailable,
     hasTranscript,
     hasSummary,

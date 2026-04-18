@@ -12,7 +12,7 @@ import {
 } from '@/lib/markdownFrontmatter';
 import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
 
-const PROMPT_VERSION = 'v4';
+const PROMPT_VERSION = 'v5';
 const DEFAULT_STYLE: ArticleStyle = ArticleStyle.NARRATIVE;
 
 // Structured-output schema: content first (so the model writes the
@@ -47,7 +47,9 @@ function buildPrompt(style: ArticleStyle, title: string, channelName: string, tr
       : `- Rewrite the transcript as a polished narrative article in GitHub Flavored Markdown.
 - Use headings, subheadings, lists, and blockquotes where appropriate.`;
 
-  return `You are an expert editor turning YouTube video transcripts into clean, well-formatted articles.
+  return `CRITICAL LANGUAGE REQUIREMENT: Every word of your output — every heading, every paragraph, every list item — MUST be written in the exact same natural language as the transcript below. Detect the transcript's language from its content and write in THAT language. Do not translate. Do not mix languages. If the transcript is in Chinese, write entirely in Chinese. If Japanese, entirely in Japanese. If Spanish, entirely in Spanish. Apply this rule before anything else below.
+
+You are an expert editor turning video transcripts into clean, well-formatted articles.
 
 Instructions:
 ${styleGuidance}
@@ -56,7 +58,6 @@ ${styleGuidance}
 - Do not invent facts that aren't in the transcript.
 - Do not include the video title as a top-level heading — it will be shown separately.
 - Start directly with the article content. No preamble like "Here is the article".
-- Write in the same language as the transcript. Do not translate — if the transcript is in Chinese, write in Chinese; if Spanish, write in Spanish; and so on.
 
 Video title: ${title}
 Channel: ${channelName}

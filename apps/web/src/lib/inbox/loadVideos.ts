@@ -117,6 +117,7 @@ export async function loadInboxVideos(
     select: {
       id: true,
       source_id: true,
+      source_type: true,
       title: true,
       description: true,
       published_at: true,

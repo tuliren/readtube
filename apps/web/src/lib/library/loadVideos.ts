@@ -13,6 +13,7 @@ import { decorateVideo, loadTriageContext } from '../inbox/triage';
 const VIDEO_SELECT = {
   id: true,
   source_id: true,
+  source_type: true,
   title: true,
   description: true,
   published_at: true,

@@ -8,23 +8,32 @@ import { DEFAULT_AI_MODEL } from '@/constants';
 import { CURRENT_FRONTMATTER_VERSION, serializeMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
 
-const SUMMARY_PROMPT_VERSION = 'v6';
+const SUMMARY_PROMPT_VERSION = 'v7';
 
-const LANGUAGE_RULE = `Write in the same language as the transcript below. Do not translate — if the transcript is in Chinese, write in Chinese; if Spanish, write in Spanish; and so on.`;
+// Leading-position language rule. Prior wording lived at the end of
+// each prompt and the model — especially on the longer full-summary
+// prompt — would revert to English for Chinese transcripts. Putting
+// the instruction first and phrasing it as a hard constraint (rather
+// than a bullet among many) fixes that.
+const LANGUAGE_RULE = `CRITICAL LANGUAGE REQUIREMENT: Every word of your output — every sentence, every bullet, every title — MUST be written in the exact same natural language as the transcript below. Detect the transcript's language from its content and write in THAT language. Do not translate. Do not mix languages. If the transcript is in Chinese, write entirely in Chinese. If Japanese, entirely in Japanese. If Spanish, entirely in Spanish. Apply this rule before anything else below.`;
 
 const PROMPTS = {
-  headline: `Write a very short title for this video. Rules:
+  headline: `${LANGUAGE_RULE}
+
+Write a very short title for this video. Rules:
 - Title style, not a sentence — think newspaper headline.
 - Under 10 words. Shorter is better.
 - No markdown, no surrounding quotes, no prefix like "Title:".
-- ${LANGUAGE_RULE}
 Output only the title itself, nothing else.`,
-  short: `Write a 2-3 sentence summary of this video. Rules:
+  short: `${LANGUAGE_RULE}
+
+Write a 2-3 sentence summary of this video. Rules:
 - First sentence: the essential point.
 - 1-2 more sentences: the most important supporting context.
-- Plain prose. No headings, no lists, no preamble.
-- ${LANGUAGE_RULE}`,
-  full: `Write a compact summary of this video. Rules:
+- Plain prose. No headings, no lists, no preamble.`,
+  full: `${LANGUAGE_RULE}
+
+Write a compact summary of this video. Rules:
 - Focus only on the main arguments and conclusions. Cut examples, tangents, and non-essential details.
 - Favor density over completeness. A reader should get the gist in under a minute.
 - Choose the format that fits the content best:
@@ -32,8 +41,7 @@ Output only the title itself, nothing else.`,
   - Use a Markdown bullet list when the video naturally breaks into discrete items (steps, tips, comparisons, list-of-N).
   - Mix prose and a short bullet list when an introductory point is followed by enumerated takeaways.
 - Bullets must be terse (one line each) and use Markdown "- " syntax. Do not nest more than one level.
-- Never use headings (no #, ##, etc.). Do not bold or italicize.
-- ${LANGUAGE_RULE}`,
+- Never use headings (no #, ##, etc.). Do not bold or italicize.`,
 } as const;
 
 // Structured-output schema for short/full. Keep `content` before

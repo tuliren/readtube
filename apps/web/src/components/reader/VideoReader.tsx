@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { formatDurationSeconds } from '@/lib/format/duration';
 import type { VideoData } from '@/lib/types';
 import { videoHref } from '@/lib/urls/videoHref';
+import { buildWatchLink } from '@/lib/urls/watchUrl';
 
 import ArticleReader from './ArticleReader';
 import NotesPanel from './NotesPanel';
@@ -65,7 +66,7 @@ export default function VideoReader({ video, publicMode = false }: Props) {
     returnToParam.startsWith('/') &&
     !returnToParam.startsWith('//');
   const backHref = isSafeReturnTo ? returnToParam : '/inbox';
-  const watchUrl = `https://youtube.com/watch?v=${video.sourceId}`;
+  const { url: watchUrl, platformName } = buildWatchLink(video.platform, video.sourceId);
 
   // Default to Summary because that's the cheapest scannable view —
   // the previous default of Transcript meant every reader open
@@ -253,9 +254,9 @@ export default function VideoReader({ video, publicMode = false }: Props) {
                 rel="noopener noreferrer"
                 className="text-blue-500 hover:underline"
               >
-                Watch on YouTube ↗
+                Watch on {platformName} ↗
               </a>
-              <CopyButton value={watchUrl} label="Copy YouTube link" />
+              <CopyButton value={watchUrl} label={`Copy ${platformName} link`} />
             </span>
             {!publicMode && (hasSummary || hasArticle) && (
               <>
@@ -289,10 +290,16 @@ export default function VideoReader({ video, publicMode = false }: Props) {
             <div className="mt-5 flex items-start gap-4">
               {video.thumbnailUrl != null && (
                 <img
-                  src={video.thumbnailUrl}
+                  // Bilibili's i0.hdslb.com CDN 403s with a non-bilibili
+                  // Referer, and its JSON API returns http:// URLs that
+                  // would otherwise be blocked as mixed content. Strip
+                  // the Referer and coerce to https so both YouTube
+                  // and Bilibili thumbnails load uniformly.
+                  src={video.thumbnailUrl.replace(/^http:\/\//, 'https://')}
                   alt={video.title}
                   className="w-40 shrink-0 rounded-lg object-cover"
                   loading="eager"
+                  referrerPolicy="no-referrer"
                 />
               )}
               {video.description != null && (
@@ -334,9 +341,9 @@ export default function VideoReader({ video, publicMode = false }: Props) {
                 No transcript is available for this video
               </p>
               <p className="mt-2 text-sm text-amber-700">
-                For now, ReadTube can only generate a summary or article when YouTube provides a
-                native transcript for the video. Support for videos without captions is on the
-                roadmap.
+                For now, ReadTube can only generate a summary or article when {platformName}{' '}
+                provides a native transcript for the video. Support for videos without captions is
+                on the roadmap.
               </p>
               <a
                 href={watchUrl}
@@ -344,7 +351,7 @@ export default function VideoReader({ video, publicMode = false }: Props) {
                 rel="noopener noreferrer"
                 className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:underline"
               >
-                Watch on YouTube ↗
+                Watch on {platformName} ↗
               </a>
             </div>
           ) : (

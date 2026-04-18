@@ -30,9 +30,14 @@ export interface FolderData {
   sortOrder: number;
 }
 
+export type VideoPlatform = 'YOUTUBE' | 'BILIBILI';
+
 export interface VideoData {
   id: string;
   sourceId: string;
+  /** Video platform — drives the "Watch on X" external link and
+   *  thumbnail fallback behavior. Mirrors Video.source_type. */
+  platform: VideoPlatform;
   title: string;
   description: string | null;
   /** ISO string, or null when the upstream scrape didn't expose a
