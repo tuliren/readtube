@@ -105,7 +105,7 @@ export default function VideosSection() {
   return (
     <div className={collapsed ? 'px-1 pt-4' : 'px-3 pt-4'}>
       {!collapsed && (
-        <div className="mb-1 flex items-center justify-between px-2">
+        <div className="mb-1 flex items-center justify-between pl-2">
           <button
             type="button"
             onClick={toggleVideos}
