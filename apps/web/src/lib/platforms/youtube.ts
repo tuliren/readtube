@@ -1,11 +1,12 @@
 import { VideoPlatformType } from '@readtube/database';
 
 import { fetchSubtitleViaTranscriptApi } from '@/lib/subtitles/fetchViaTranscriptApi';
+import { fetchChannelSnapshot } from '@/lib/youtube/channelSnapshot';
 import { YOUTUBE_VIDEO_ID_PATTERN, buildRssUrl } from '@/lib/youtube/urls';
 import { extractVideoId, fetchVideoSnapshot } from '@/lib/youtube/videoSnapshot';
 
 import { type PlatformTranscriptResult, VideoPlatform } from './base';
-import type { VideoSnapshot } from './types';
+import type { ChannelSnapshot, VideoSnapshot } from './types';
 
 export class YouTubePlatform extends VideoPlatform {
   readonly type = VideoPlatformType.YOUTUBE;
@@ -41,6 +42,13 @@ export class YouTubePlatform extends VideoPlatform {
 
   fetchVideoSnapshot(videoId: string): Promise<VideoSnapshot> {
     return fetchVideoSnapshot(videoId);
+  }
+
+  fetchChannelSnapshot(channelSourceId: string): Promise<ChannelSnapshot> {
+    return fetchChannelSnapshot({
+      channelPageUrl: `https://www.youtube.com/channel/${channelSourceId}`,
+      rssUrl: buildRssUrl(channelSourceId),
+    });
   }
 
   async fetchTranscript(videoId: string): Promise<PlatformTranscriptResult> {

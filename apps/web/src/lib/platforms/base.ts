@@ -2,7 +2,7 @@ import type { VideoPlatformType } from '@readtube/database';
 
 import type { TranscriptSegment } from '@/lib/subtitles/types';
 
-import type { VideoSnapshot } from './types';
+import type { ChannelSnapshot, VideoSnapshot } from './types';
 
 export interface PlatformTranscriptResult {
   segments: TranscriptSegment[];
@@ -36,6 +36,14 @@ export abstract class VideoPlatform {
 
   /** Fetch full metadata for persisting a Video + owning Channel row. */
   abstract fetchVideoSnapshot(videoId: string): Promise<VideoSnapshot>;
+
+  /**
+   * Fetch channel metadata + recent videos for a given channel
+   * `source_id` (UC-prefixed for YouTube, numeric mid for Bilibili).
+   * Used by the refresh-channels cron and by the add-channel flow once
+   * the caller has resolved the canonical source id.
+   */
+  abstract fetchChannelSnapshot(channelSourceId: string): Promise<ChannelSnapshot>;
 
   /** Fetch the transcript for an existing video. */
   abstract fetchTranscript(videoId: string): Promise<PlatformTranscriptResult>;

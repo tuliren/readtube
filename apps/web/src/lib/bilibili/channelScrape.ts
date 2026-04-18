@@ -34,15 +34,19 @@ export async function scrapeBilibiliChannel(mid: string): Promise<ScrapedBilibil
   }
   const { html } = result;
 
-  // BV ids appear in href="/video/BVxxx" and in embedded JSON payloads.
-  // A global match over the rendered DOM preserves the upload-list order
-  // (newest first). Dedup via Set while keeping first-seen order.
-  const bvidRegex = new RegExp(BVID_PATTERN.source.slice(1, -1), 'g');
+  // Only match BV ids that appear inside a `/video/BVxxx` path — those
+  // are the real uploaded-video links rendered into the DOM. A bare
+  // `BV[A-Za-z0-9]{10}` scan would also catch unrelated 12-char tokens
+  // (player/component config ids, hashes) that happen to match the
+  // pattern but aren't real video ids, producing 404s at fan-out time.
+  // Dedup via Set while keeping first-seen order (newest first).
+  const bvidCore = BVID_PATTERN.source.slice(1, -1);
+  const videoHrefRegex = new RegExp(`/video/(${bvidCore})`, 'g');
   const seen = new Set<string>();
   const videos: ScrapedBilibiliVideo[] = [];
   let match: RegExpExecArray | null;
-  while ((match = bvidRegex.exec(html)) != null) {
-    const videoId = match[0];
+  while ((match = videoHrefRegex.exec(html)) != null) {
+    const videoId = match[1];
     if (seen.has(videoId)) {
       continue;
     }

@@ -8,7 +8,7 @@ export { VideoPlatform } from './base';
 export type { PlatformTranscriptResult } from './base';
 export { YouTubePlatform } from './youtube';
 export { BilibiliPlatform } from './bilibili';
-export type { VideoSnapshot } from './types';
+export type { ChannelSnapshot, SnapshotVideo, VideoSnapshot } from './types';
 
 // Order matters: `detectPlatform` and `detectPlatformTypeFromSourceId`
 // both return the FIRST platform whose matcher accepts the input.

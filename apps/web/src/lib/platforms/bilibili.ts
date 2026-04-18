@@ -1,11 +1,12 @@
 import { VideoPlatformType } from '@readtube/database';
 
+import { fetchBilibiliChannelSnapshot } from '@/lib/bilibili/channelSnapshot';
 import { fetchBilibiliTranscript } from '@/lib/bilibili/transcript';
 import { BVID_PATTERN, extractBilibiliVideoId } from '@/lib/bilibili/urls';
 import { fetchBilibiliVideoSnapshot } from '@/lib/bilibili/videoSnapshot';
 
 import { type PlatformTranscriptResult, VideoPlatform } from './base';
-import type { VideoSnapshot } from './types';
+import type { ChannelSnapshot, VideoSnapshot } from './types';
 
 export class BilibiliPlatform extends VideoPlatform {
   readonly type = VideoPlatformType.BILIBILI;
@@ -44,6 +45,10 @@ export class BilibiliPlatform extends VideoPlatform {
 
   fetchVideoSnapshot(videoId: string): Promise<VideoSnapshot> {
     return fetchBilibiliVideoSnapshot(videoId);
+  }
+
+  fetchChannelSnapshot(channelSourceId: string): Promise<ChannelSnapshot> {
+    return fetchBilibiliChannelSnapshot(channelSourceId);
   }
 
   fetchTranscript(videoId: string): Promise<PlatformTranscriptResult> {
