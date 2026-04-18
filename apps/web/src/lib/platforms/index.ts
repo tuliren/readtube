@@ -10,6 +10,13 @@ export { YouTubePlatform } from './youtube';
 export { BilibiliPlatform } from './bilibili';
 export type { VideoSnapshot } from './types';
 
+// Order matters: `detectPlatform` and `detectPlatformTypeFromSourceId`
+// both return the FIRST platform whose matcher accepts the input.
+// Today no URL host or id pattern overlaps between the entries, so the
+// ordering is cosmetic. If you add a platform whose patterns could
+// collide with an existing one (e.g. both accept a bare 11-char id),
+// list the more specific matcher first — or tighten the matchers so
+// they're mutually exclusive.
 const PLATFORMS: readonly VideoPlatform[] = [new YouTubePlatform(), new BilibiliPlatform()];
 
 const PLATFORMS_BY_TYPE: Record<VideoPlatformType, VideoPlatform> = PLATFORMS.reduce(
@@ -48,20 +55,19 @@ export function getPlatformByType(type: VideoPlatformType): VideoPlatform {
  * routes where the URL carries only the source_id and the lookup
  * needs to scope to the owning platform.
  *
- * Bilibili BV ids have a fixed "BV" prefix + 10 alphanumerics;
- * YouTube ids are 11 URL-safe chars. The shapes don't overlap so a
- * single pattern check is sufficient.
+ * Each platform owns its id-shape check via `matchesSourceId`; this
+ * function iterates the registry in order and returns the first hit.
+ * Today YouTube (11 URL-safe chars) and Bilibili (`BV` + 10 alphas)
+ * don't overlap, but see the `PLATFORMS` comment above if you add a
+ * platform whose ids might collide.
  */
 export function detectPlatformTypeFromSourceId(sourceId: string): VideoPlatformType | null {
   if (sourceId == null || typeof sourceId !== 'string') {
     return null;
   }
   const trimmed = sourceId.trim();
-  if (/^BV[A-Za-z0-9]{10}$/.test(trimmed)) {
-    return VideoPlatformType.BILIBILI;
+  if (trimmed.length === 0) {
+    return null;
   }
-  if (/^[\w-]{11}$/.test(trimmed)) {
-    return VideoPlatformType.YOUTUBE;
-  }
-  return null;
+  return PLATFORMS.find((p) => p.matchesSourceId(trimmed))?.type ?? null;
 }

@@ -1,7 +1,7 @@
 import { VideoPlatformType } from '@readtube/database';
 
 import { fetchSubtitleViaTranscriptApi } from '@/lib/subtitles/fetchViaTranscriptApi';
-import { buildRssUrl } from '@/lib/youtube/urls';
+import { YOUTUBE_VIDEO_ID_PATTERN, buildRssUrl } from '@/lib/youtube/urls';
 import { extractVideoId, fetchVideoSnapshot } from '@/lib/youtube/videoSnapshot';
 
 import { type PlatformTranscriptResult, VideoPlatform } from './base';
@@ -20,7 +20,7 @@ export class YouTubePlatform extends VideoPlatform {
     }
     // Bare 11-char YouTube id counts as a match so the existing
     // "paste the id" UX keeps working.
-    if (/^[\w-]{11}$/.test(trimmed)) {
+    if (this.matchesSourceId(trimmed)) {
       return true;
     }
     try {
@@ -29,6 +29,10 @@ export class YouTubePlatform extends VideoPlatform {
     } catch {
       return false;
     }
+  }
+
+  matchesSourceId(sourceId: string): boolean {
+    return YOUTUBE_VIDEO_ID_PATTERN.test(sourceId);
   }
 
   extractVideoId(input: string): string | null {

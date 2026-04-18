@@ -10,7 +10,7 @@
 import type { VideoSnapshot } from '@/lib/platforms/types';
 
 import { UNKNOWN_CHANNEL_NAME } from './constants';
-import { buildThumbnailUrl } from './urls';
+import { YOUTUBE_VIDEO_ID_PATTERN, buildThumbnailUrl } from './urls';
 
 const YT_USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
@@ -31,7 +31,7 @@ export function extractVideoId(input: string): string | null {
   }
 
   // Bare video id (11 chars, A-Za-z0-9_-)
-  if (/^[\w-]{11}$/.test(trimmed)) {
+  if (YOUTUBE_VIDEO_ID_PATTERN.test(trimmed)) {
     return trimmed;
   }
 
@@ -40,14 +40,14 @@ export function extractVideoId(input: string): string | null {
     const host = url.hostname.toLowerCase();
     if (host === 'youtu.be') {
       const id = url.pathname.replace(/^\/+/, '').split('/')[0];
-      return /^[\w-]{11}$/.test(id) ? id : null;
+      return YOUTUBE_VIDEO_ID_PATTERN.test(id) ? id : null;
     }
     if (!host.includes('youtube.com')) {
       return null;
     }
     // /watch?v=<id>
     const v = url.searchParams.get('v');
-    if (v != null && /^[\w-]{11}$/.test(v)) {
+    if (v != null && YOUTUBE_VIDEO_ID_PATTERN.test(v)) {
       return v;
     }
     // /shorts/<id> or /embed/<id> or /live/<id>

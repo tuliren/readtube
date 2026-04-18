@@ -22,6 +22,15 @@ export abstract class VideoPlatform {
   /** True if this platform recognizes the URL / bare-id input. */
   abstract matchesUrl(input: string): boolean;
 
+  /**
+   * True if the given bare `source_id` (as stored on Video.source_id)
+   * belongs to this platform. Used when the URL only carries the id
+   * — the `/videos/<sourceId>` reader route, the mobile-meta API —
+   * so the caller can pick the right `source_type` for the DB lookup
+   * without first fetching the row.
+   */
+  abstract matchesSourceId(sourceId: string): boolean;
+
   /** Parse a platform-specific video id from the input, or null. */
   abstract extractVideoId(input: string): string | null;
 

@@ -3,7 +3,10 @@
  * Counterpart to lib/youtube/urls.ts and videoSnapshot.ts.
  */
 
-const BVID_PATTERN = /^BV[A-Za-z0-9]{10}$/;
+/** Shape of a Bilibili BV id: `BV` + 10 alphanumerics. Single source
+ *  of truth reused by URL parsing, `BilibiliPlatform.matchesUrl`, and
+ *  `BilibiliPlatform.matchesSourceId`. */
+export const BVID_PATTERN = /^BV[A-Za-z0-9]{10}$/;
 
 /**
  * Extracts a Bilibili video id (BVxxxxxxxxxx) from common URL shapes or

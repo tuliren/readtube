@@ -9,6 +9,11 @@
  *   - transcriptApi.ts  → call TranscriptAPI's /channel/latest
  */
 
+/** Shape of a YouTube video id: 11 URL-safe chars (A-Z, a-z, 0-9,
+ *  underscore, hyphen). Single source of truth reused by URL parsing,
+ *  `YouTubePlatform.matchesUrl`, and `YouTubePlatform.matchesSourceId`. */
+export const YOUTUBE_VIDEO_ID_PATTERN = /^[\w-]{11}$/;
+
 // ─── Channel URL parsing ────────────────────────────────────────
 
 /**

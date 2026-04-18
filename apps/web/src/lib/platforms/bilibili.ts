@@ -1,7 +1,7 @@
 import { VideoPlatformType } from '@readtube/database';
 
 import { fetchBilibiliTranscript } from '@/lib/bilibili/transcript';
-import { extractBilibiliVideoId } from '@/lib/bilibili/urls';
+import { BVID_PATTERN, extractBilibiliVideoId } from '@/lib/bilibili/urls';
 import { fetchBilibiliVideoSnapshot } from '@/lib/bilibili/videoSnapshot';
 
 import { type PlatformTranscriptResult, VideoPlatform } from './base';
@@ -19,7 +19,7 @@ export class BilibiliPlatform extends VideoPlatform {
       return false;
     }
     // Bare BV id (BV + 10 alphanumeric chars).
-    if (/^BV[A-Za-z0-9]{10}$/.test(trimmed)) {
+    if (this.matchesSourceId(trimmed)) {
       return true;
     }
     try {
@@ -32,6 +32,10 @@ export class BilibiliPlatform extends VideoPlatform {
     } catch {
       return false;
     }
+  }
+
+  matchesSourceId(sourceId: string): boolean {
+    return BVID_PATTERN.test(sourceId);
   }
 
   extractVideoId(input: string): string | null {
