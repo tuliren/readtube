@@ -1,4 +1,5 @@
-import { UNKNOWN_CHANNEL_NAME, UNKNOWN_VIDEO_TITLE } from '@/lib/youtube/constants';
+import type { TranscriptSegment } from '@/lib/platforms/types';
+import { UNKNOWN_CHANNEL_NAME, UNKNOWN_VIDEO_TITLE } from '@/lib/platforms/youtube/constants';
 
 import {
   BROWSER_HEADERS,
@@ -6,7 +7,7 @@ import {
   parseCaptionTracks,
   pickNativeTrack,
 } from './helpers';
-import type { CaptionEvent, SubtitleResult, TranscriptSegment } from './types';
+import type { CaptionEvent, SubtitleResult } from './types';
 
 export async function fetchSubtitleViaHtmlScraping(videoId: string): Promise<SubtitleResult> {
   // 1. Fetch the YouTube watch page

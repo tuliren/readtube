@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { fetchSubtitleViaHtmlScraping, fetchSubtitleViaYoutubei } from '@/lib/subtitles';
+import {
+  fetchSubtitleViaHtmlScraping,
+  fetchSubtitleViaYoutubei,
+} from '@/lib/platforms/youtube/subtitles';
 
 export async function GET(request: NextRequest) {
   const videoId = request.nextUrl.searchParams.get('v');

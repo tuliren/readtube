@@ -9,7 +9,7 @@
  */
 import { program } from 'commander';
 
-import { scrapeBilibiliChannel } from '@/lib/bilibili/channelScrape';
+import { scrapeBilibiliChannel } from '@/lib/platforms/bilibili/channelScrape';
 
 if (process.env.SCRIPT_ENV !== 'development') {
   console.error('This script can only be run in development environment.');

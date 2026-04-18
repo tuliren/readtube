@@ -1,10 +1,10 @@
 import type { ChannelSnapshot, SnapshotVideo } from '@/lib/platforms/types';
-import { type RssChannel, fetchRssFeed, isYouTubeShort } from '@/lib/youtube/channelRss';
-import { type ScrapedChannel, scrapeChannel } from '@/lib/youtube/channelScrape';
-import { fetchChannelLatest } from '@/lib/youtube/transcriptApi';
-import { buildRssUrl, buildThumbnailUrl } from '@/lib/youtube/urls';
+import { type RssChannel, fetchRssFeed, isYouTubeShort } from '@/lib/platforms/youtube/channelRss';
+import { type ScrapedChannel, scrapeChannel } from '@/lib/platforms/youtube/channelScrape';
+import { fetchChannelLatest } from '@/lib/platforms/youtube/transcriptApi';
+import { buildRssUrl, buildThumbnailUrl } from '@/lib/platforms/youtube/urls';
 
-// Re-exported so existing `@/lib/youtube/channelSnapshot` imports keep
+// Re-exported so existing `@/lib/platforms/youtube/channelSnapshot` imports keep
 // working after ChannelSnapshot moved to `@/lib/platforms/types`.
 export type { ChannelSnapshot, SnapshotVideo };
 

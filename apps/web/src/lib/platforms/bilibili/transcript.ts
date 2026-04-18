@@ -1,6 +1,6 @@
-import { parseSrt } from '@/lib/subtitles/parseSrt';
-import { SubtitleFetchError } from '@/lib/subtitles/types';
-import type { TranscriptSegment } from '@/lib/subtitles/types';
+import { parseSrt } from '@/lib/platforms/bilibili/parseSrt';
+import { SubtitleFetchError } from '@/lib/platforms/types';
+import type { TranscriptSegment } from '@/lib/platforms/types';
 
 import { fetchKedouBilibiliSubtitle } from './kedouSubtitle';
 import { buildBilibiliVideoUrl } from './urls';

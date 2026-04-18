@@ -1,8 +1,8 @@
 import '@tests/integration-tests';
 
+import type { RssChannel } from '@/lib/platforms/youtube/channelRss';
+import type { ScrapedPlaylist } from '@/lib/platforms/youtube/playlistScrape';
 import { addPlaylistForUser } from '@/lib/workflows/add-playlist';
-import type { RssChannel } from '@/lib/youtube/channelRss';
-import type { ScrapedPlaylist } from '@/lib/youtube/playlistScrape';
 
 // ─── Module mocks ────────────────────────────────────────────────
 
@@ -17,14 +17,14 @@ jest.mock('@readtube/database', () => {
 });
 
 const mockFetchRssFeed = jest.fn<Promise<RssChannel>, [string]>();
-jest.mock('@/lib/youtube/channelRss', () => ({
-  ...jest.requireActual('@/lib/youtube/channelRss'),
+jest.mock('@/lib/platforms/youtube/channelRss', () => ({
+  ...jest.requireActual('@/lib/platforms/youtube/channelRss'),
   fetchRssFeed: (url: string) => mockFetchRssFeed(url),
 }));
 
 const mockScrapePlaylist = jest.fn<Promise<ScrapedPlaylist>, [string]>();
-jest.mock('@/lib/youtube/playlistScrape', () => ({
-  ...jest.requireActual('@/lib/youtube/playlistScrape'),
+jest.mock('@/lib/platforms/youtube/playlistScrape', () => ({
+  ...jest.requireActual('@/lib/platforms/youtube/playlistScrape'),
   scrapePlaylist: (id: string) => mockScrapePlaylist(id),
 }));
 

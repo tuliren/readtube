@@ -1,4 +1,4 @@
-import type { TranscriptSegment } from './types';
+import type { TranscriptSegment } from '@/lib/platforms/types';
 
 // Kedou emits timestamps like "0:0:0,12 --> 0:0:0,74" — hours/minutes
 // are not zero-padded and the fractional part is 1–3 digits of

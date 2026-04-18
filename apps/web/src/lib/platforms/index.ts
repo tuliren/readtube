@@ -1,13 +1,13 @@
 import { VideoPlatformType } from '@readtube/database';
 
 import { VideoPlatform } from './base';
-import { BilibiliPlatform } from './bilibili';
-import { YouTubePlatform } from './youtube';
+import { BilibiliPlatform } from './bilibili/platform';
+import { YouTubePlatform } from './youtube/platform';
 
 export { VideoPlatform } from './base';
 export type { PlatformTranscriptResult } from './base';
-export { YouTubePlatform } from './youtube';
-export { BilibiliPlatform } from './bilibili';
+export { YouTubePlatform } from './youtube/platform';
+export { BilibiliPlatform } from './bilibili/platform';
 export type { ChannelSnapshot, SnapshotVideo, VideoSnapshot } from './types';
 
 // Order matters: `detectPlatform` and `detectPlatformTypeFromSourceId`

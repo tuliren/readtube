@@ -1,6 +1,8 @@
 import { VideoPlatformType } from '@readtube/database';
 import '@tests/integration-tests';
 
+import type { RssChannel } from '@/lib/platforms/youtube/channelRss';
+import type { ScrapedChannel } from '@/lib/platforms/youtube/channelScrape';
 import { refreshChannelsWorkflow } from '@/lib/workflows/refresh-channels';
 import type { StaleChannel } from '@/lib/workflows/refresh-channels/steps';
 // ─── Imports (after mocks) ───────────────────────────────────────
@@ -10,8 +12,6 @@ import {
   fetchStaleChannels,
   refreshChannel,
 } from '@/lib/workflows/refresh-channels/steps';
-import type { RssChannel } from '@/lib/youtube/channelRss';
-import type { ScrapedChannel } from '@/lib/youtube/channelScrape';
 
 // ─── Module mocks (hoisted by Jest) ──────────────────────────────
 
@@ -32,22 +32,22 @@ jest.mock('@readtube/database', () => {
 
 const mockFetchRssFeed = jest.fn<Promise<RssChannel>, [string]>();
 
-jest.mock('@/lib/youtube/channelRss', () => ({
-  ...jest.requireActual('@/lib/youtube/channelRss'),
+jest.mock('@/lib/platforms/youtube/channelRss', () => ({
+  ...jest.requireActual('@/lib/platforms/youtube/channelRss'),
   fetchRssFeed: (url: string) => mockFetchRssFeed(url),
 }));
 
 const mockScrapeChannel = jest.fn<Promise<ScrapedChannel>, [string]>();
 
-jest.mock('@/lib/youtube/channelScrape', () => ({
-  ...jest.requireActual('@/lib/youtube/channelScrape'),
+jest.mock('@/lib/platforms/youtube/channelScrape', () => ({
+  ...jest.requireActual('@/lib/platforms/youtube/channelScrape'),
   scrapeChannel: (url: string) => mockScrapeChannel(url),
 }));
 
 const mockFetchChannelLatest = jest.fn();
 
-jest.mock('@/lib/youtube/transcriptApi', () => ({
-  ...jest.requireActual('@/lib/youtube/transcriptApi'),
+jest.mock('@/lib/platforms/youtube/transcriptApi', () => ({
+  ...jest.requireActual('@/lib/platforms/youtube/transcriptApi'),
   fetchChannelLatest: (input: string) => mockFetchChannelLatest(input),
 }));
 

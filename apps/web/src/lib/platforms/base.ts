@@ -1,6 +1,6 @@
 import type { VideoPlatformType } from '@readtube/database';
 
-import type { TranscriptSegment } from '@/lib/subtitles/types';
+import type { TranscriptSegment } from '@/lib/platforms/types';
 
 import type { ChannelSnapshot, VideoSnapshot } from './types';
 

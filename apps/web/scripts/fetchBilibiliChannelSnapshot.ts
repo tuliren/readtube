@@ -10,7 +10,7 @@
  */
 import { program } from 'commander';
 
-import { fetchBilibiliChannelSnapshot } from '@/lib/bilibili/channelSnapshot';
+import { fetchBilibiliChannelSnapshot } from '@/lib/platforms/bilibili/channelSnapshot';
 
 if (process.env.SCRIPT_ENV !== 'development') {
   console.error('This script can only be run in development environment.');

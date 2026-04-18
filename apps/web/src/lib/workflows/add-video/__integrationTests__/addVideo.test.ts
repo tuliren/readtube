@@ -1,7 +1,7 @@
 import '@tests/integration-tests';
 
+import type { VideoSnapshot } from '@/lib/platforms/youtube/videoSnapshot';
 import { addVideoForUser } from '@/lib/workflows/add-video';
-import type { VideoSnapshot } from '@/lib/youtube/videoSnapshot';
 
 // ─── Module mocks ────────────────────────────────────────────────
 
@@ -16,14 +16,14 @@ jest.mock('@readtube/database', () => {
 });
 
 const mockFetchVideoSnapshot = jest.fn<Promise<VideoSnapshot>, [string]>();
-jest.mock('@/lib/youtube/videoSnapshot', () => ({
-  ...jest.requireActual('@/lib/youtube/videoSnapshot'),
+jest.mock('@/lib/platforms/youtube/videoSnapshot', () => ({
+  ...jest.requireActual('@/lib/platforms/youtube/videoSnapshot'),
   fetchVideoSnapshot: (id: string) => mockFetchVideoSnapshot(id),
 }));
 
 const mockFetchBilibiliVideoSnapshot = jest.fn<Promise<VideoSnapshot>, [string]>();
-jest.mock('@/lib/bilibili/videoSnapshot', () => ({
-  ...jest.requireActual('@/lib/bilibili/videoSnapshot'),
+jest.mock('@/lib/platforms/bilibili/videoSnapshot', () => ({
+  ...jest.requireActual('@/lib/platforms/bilibili/videoSnapshot'),
   fetchBilibiliVideoSnapshot: (id: string) => mockFetchBilibiliVideoSnapshot(id),
 }));
 

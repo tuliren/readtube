@@ -4,14 +4,14 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { upsertChannelWithVideos } from '@/lib/channels/upsertChannelWithVideos';
 import { ensureUserExists } from '@/lib/db/user';
+import { fetchChannelSnapshot } from '@/lib/platforms/youtube/channelSnapshot';
+import { buildRssUrl, extractChannelId, extractHandle } from '@/lib/platforms/youtube/urls';
 import { isEmptyString } from '@/lib/string';
 import {
   computeInitialReadAt,
   countUnreadVideos,
   getSubscribedChannelsWithUnread,
 } from '@/lib/subscriptions';
-import { fetchChannelSnapshot } from '@/lib/youtube/channelSnapshot';
-import { buildRssUrl, extractChannelId, extractHandle } from '@/lib/youtube/urls';
 
 export async function GET() {
   const { userId } = await auth();

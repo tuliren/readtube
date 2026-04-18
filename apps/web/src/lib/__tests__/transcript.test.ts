@@ -1,5 +1,5 @@
-import type { TranscriptSegment } from '../subtitles/types';
-import { formatTimestamp, groupTranscriptSegments } from '../youtube/transcript';
+import type { TranscriptSegment } from '@/lib/platforms/types';
+import { formatTimestamp, groupTranscriptSegments } from '@/lib/platforms/youtube/transcript';
 
 function seg(text: string, startMs: number, endMs: number): TranscriptSegment {
   return { text, startMs, endMs };

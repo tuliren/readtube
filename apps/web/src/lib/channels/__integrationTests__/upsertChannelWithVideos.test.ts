@@ -1,7 +1,7 @@
 import '@tests/integration-tests';
 
 import { upsertChannelWithVideos } from '@/lib/channels/upsertChannelWithVideos';
-import type { ChannelSnapshot } from '@/lib/youtube/channelSnapshot';
+import type { ChannelSnapshot } from '@/lib/platforms/youtube/channelSnapshot';
 
 // ─── Module mocks ────────────────────────────────────────────────
 

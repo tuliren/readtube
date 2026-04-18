@@ -13,7 +13,7 @@
  */
 import { program } from 'commander';
 
-import { scrapeChannel } from '@/lib/youtube/channelScrape';
+import { scrapeChannel } from '@/lib/platforms/youtube/channelScrape';
 
 if (process.env.SCRIPT_ENV !== 'development') {
   console.error('This script can only be run in development environment.');

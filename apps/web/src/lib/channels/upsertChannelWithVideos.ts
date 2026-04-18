@@ -1,9 +1,9 @@
 import { type PrismaClient, VideoPlatformType } from '@readtube/database';
 
 import { hasChannelHandleConflict } from '@/lib/channels/handleConflict';
+import type { ChannelSnapshot } from '@/lib/platforms/youtube/channelSnapshot';
+import { buildRssUrl } from '@/lib/platforms/youtube/urls';
 import { isEmptyString } from '@/lib/string';
-import type { ChannelSnapshot } from '@/lib/youtube/channelSnapshot';
-import { buildRssUrl } from '@/lib/youtube/urls';
 
 export interface UpsertChannelResult {
   id: string;

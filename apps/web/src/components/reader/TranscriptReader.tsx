@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { countWords } from '@/lib/format/wordCount';
-import type { TranscriptSegment } from '@/lib/subtitles/types';
-import { formatTimestamp, groupTranscriptSegments } from '@/lib/youtube/transcript';
+import type { TranscriptSegment } from '@/lib/platforms/types';
+import { formatTimestamp, groupTranscriptSegments } from '@/lib/platforms/youtube/transcript';
 
 import type { TranscriptStatus } from './VideoReader';
 

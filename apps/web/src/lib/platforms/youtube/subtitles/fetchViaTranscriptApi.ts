@@ -1,6 +1,5 @@
+import { SubtitleFetchError, type TranscriptSegment } from '@/lib/platforms/types';
 import { isEmptyString } from '@/lib/string';
-
-import { SubtitleFetchError, type TranscriptSegment } from './types';
 
 interface TranscriptApiSegment {
   text: string;

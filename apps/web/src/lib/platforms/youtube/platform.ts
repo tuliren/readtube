@@ -1,12 +1,11 @@
 import { VideoPlatformType } from '@readtube/database';
 
-import { fetchSubtitleViaTranscriptApi } from '@/lib/subtitles/fetchViaTranscriptApi';
-import { fetchChannelSnapshot } from '@/lib/youtube/channelSnapshot';
-import { YOUTUBE_VIDEO_ID_PATTERN, buildRssUrl } from '@/lib/youtube/urls';
-import { extractVideoId, fetchVideoSnapshot } from '@/lib/youtube/videoSnapshot';
-
-import { type PlatformTranscriptResult, VideoPlatform } from './base';
-import type { ChannelSnapshot, VideoSnapshot } from './types';
+import { type PlatformTranscriptResult, VideoPlatform } from '@/lib/platforms/base';
+import type { ChannelSnapshot, VideoSnapshot } from '@/lib/platforms/types';
+import { fetchChannelSnapshot } from '@/lib/platforms/youtube/channelSnapshot';
+import { fetchSubtitleViaTranscriptApi } from '@/lib/platforms/youtube/subtitles/fetchViaTranscriptApi';
+import { YOUTUBE_VIDEO_ID_PATTERN, buildRssUrl } from '@/lib/platforms/youtube/urls';
+import { extractVideoId, fetchVideoSnapshot } from '@/lib/platforms/youtube/videoSnapshot';
 
 export class YouTubePlatform extends VideoPlatform {
   readonly type = VideoPlatformType.YOUTUBE;
