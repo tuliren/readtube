@@ -55,6 +55,7 @@ export default function LibraryListView({
         <InboxHeader
           channelId={null}
           channelSourceId={null}
+          channelPlatform={null}
           channelName={title}
           channelLogoUrl={null}
           unreadCount={unreadCount}

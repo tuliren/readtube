@@ -32,6 +32,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   const channels: ChannelData[] = subscriptionRows.map((row) => ({
     id: row.channel_id,
     sourceId: row.source_id,
+    platform: row.source_type,
     name: row.name,
     handle: row.handle,
     rssUrl: row.rss_url,

@@ -1,4 +1,4 @@
-import type { Prisma, PrismaClient } from '@readtube/database';
+import type { Prisma, PrismaClient, VideoPlatformType } from '@readtube/database';
 
 import {
   NEW_SUBSCRIPTION_MODE,
@@ -114,6 +114,7 @@ export interface SubscribedChannelWithUnread {
   folder_id: string | null;
   priority: number;
   mute_until: Date | null;
+  source_type: VideoPlatformType;
   source_id: string;
   name: string;
   handle: string | null;
@@ -147,6 +148,7 @@ export async function getSubscribedChannelsWithUnread(
       folder_id: string | null;
       priority: number;
       mute_until: Date | null;
+      source_type: VideoPlatformType;
       source_id: string;
       name: string;
       handle: string | null;
@@ -162,6 +164,7 @@ export async function getSubscribedChannelsWithUnread(
       us."folder_id"   AS folder_id,
       us."priority"    AS priority,
       us."mute_until"  AS mute_until,
+      c."source_type"  AS source_type,
       c."source_id"    AS source_id,
       c."name"         AS name,
       c."handle"       AS handle,
@@ -184,7 +187,7 @@ export async function getSubscribedChannelsWithUnread(
     WHERE us."user_id" = ${userId}
     GROUP BY
       us."channel_id", us."read_at", us."folder_id", us."priority", us."mute_until",
-      c."source_id", c."name", c."handle", c."rss_url", c."logo_url", c."created_at"
+      c."source_type", c."source_id", c."name", c."handle", c."rss_url", c."logo_url", c."created_at"
     ORDER BY LOWER(c."name") ASC
   `;
 
@@ -194,6 +197,7 @@ export async function getSubscribedChannelsWithUnread(
     folder_id: row.folder_id,
     priority: row.priority,
     mute_until: row.mute_until,
+    source_type: row.source_type,
     source_id: row.source_id,
     name: row.name,
     handle: row.handle,

@@ -1,15 +1,23 @@
+export type VideoPlatform = 'YOUTUBE' | 'BILIBILI';
+
 export interface ChannelData {
   id: string;
   sourceId: string;
+  /** Owning platform — drives the external "Watch on X" / "Open
+   *  channel on X" link and any other platform-specific rendering.
+   *  Mirrors Channel.source_type. */
+  platform: VideoPlatform;
   name: string;
   /** YouTube handle (e.g. `@mkbhd`). Null when the scraper hasn't
-   *  captured one yet. Used to build nicer sidebar URLs. */
+   *  captured one yet. Used to build nicer sidebar URLs. Bilibili
+   *  has no handle convention — always null there. */
   handle: string | null;
   // Null for platforms without a native RSS feed (Bilibili).
   rssUrl: string | null;
   /** URL to the channel's logo/avatar. Populated from the
-   *  TranscriptAPI /youtube/channel/latest endpoint. Null for
-   *  channels that were added before this feature or whose
+   *  TranscriptAPI /youtube/channel/latest endpoint for YouTube,
+   *  and from the first video's `owner.face` for Bilibili. Null
+   *  for channels that were added before this feature or whose
    *  metadata enrichment failed. */
   logoUrl: string | null;
   createdAt: string;
@@ -30,8 +38,6 @@ export interface FolderData {
   name: string;
   sortOrder: number;
 }
-
-export type VideoPlatform = 'YOUTUBE' | 'BILIBILI';
 
 export interface VideoData {
   id: string;

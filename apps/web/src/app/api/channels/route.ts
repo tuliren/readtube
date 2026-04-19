@@ -37,6 +37,7 @@ export async function GET() {
     rows.map((row) => ({
       id: row.channel_id,
       sourceId: row.source_id,
+      platform: row.source_type,
       name: row.name,
       handle: row.handle,
       rssUrl: row.rss_url,
@@ -171,6 +172,7 @@ export async function POST(request: NextRequest) {
     where: { id: channel.id },
     select: {
       id: true,
+      source_type: true,
       source_id: true,
       name: true,
       handle: true,
@@ -185,6 +187,7 @@ export async function POST(request: NextRequest) {
     {
       id: channelRow.id,
       sourceId: channelRow.source_id,
+      platform: channelRow.source_type,
       name: channelRow.name,
       handle: channelRow.handle,
       rssUrl: channelRow.rss_url,
