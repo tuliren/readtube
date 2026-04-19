@@ -1,50 +1,58 @@
 import type { ChannelSnapshot, SnapshotVideo } from '@/lib/platforms/types';
 
-import { fetchBilibiliChannelVideos } from './channelVideos';
+import { fetchBilibiliChannelViaJustOneApi } from './justOneApi';
 import { buildBilibiliVideoUrl } from './urls';
 import { fetchBilibiliVideoSnapshot } from './videoSnapshot';
 
 /**
- * Fetch channel meta + recent videos for a Bilibili uploader via the
- * signed JSON API. Two calls total:
+ * Fetch channel meta + recent videos for a Bilibili uploader via
+ * JustOneAPI (third-party wrapper at justoneapi.com). We delegate the
+ * IP-reputation / WBI-risk-control problem to them — they collect
+ * the data on their own residential infra and expose a simple
+ * token-auth HTTP API.
  *
- *   1. `api.bilibili.com/x/space/wbi/arc/search` → newest-first list
- *      with title, description, thumbnail, pubdate, duration per item.
- *   2. `api.bilibili.com/x/web-interface/view` on the newest video →
- *      owner's name + avatar (used as channel name + logo).
+ * If JustOneAPI's response is missing channel name/avatar (depends on
+ * whether their envelope carries owner info top-level), we fall back
+ * to one `x/web-interface/view` call on the newest BV id to fetch
+ * those fields — the same trick we used with the WBI path.
  *
- * We deliberately reuse the view-endpoint call for channel meta
- * instead of hitting the separate `space/wbi/acc/info` endpoint — it
- * saves a second signed round-trip and lets us reuse the already-tested
- * `fetchBilibiliVideoSnapshot`. Bilibili has no `@handle` convention,
- * so `handle` is always null.
- *
- * NOTE: this path replaces the earlier Puppeteer scrape of
- * `space.bilibili.com/<mid>/upload/video`. The scrape path
- * (`channelScrape.ts` + `lib/puppeteer/`) is kept in the tree as
- * dormant fallback infrastructure. Bilibili's risk engine may still
- * return `code=-352` on certain IP ranges; callers should treat the
- * errors as "Channel not found or not accessible" at the UI layer.
+ * NOTE: two earlier paths live in the tree as dormant fallbacks:
+ *   - `channelScrape.ts` + `lib/puppeteer/` — headless-Chromium scrape
+ *     of `space.bilibili.com/<mid>/upload/video`.
+ *   - `channelVideos.ts` + `wbi.ts` — direct signed call to
+ *     `api.bilibili.com/x/space/wbi/arc/search`.
+ * Both got rate-limited or risk-controlled in real-world use, which
+ * is why we're on JustOneAPI now. They're kept for quick rollback.
  */
 export async function fetchBilibiliChannelSnapshot(mid: string): Promise<ChannelSnapshot> {
   const overallStart = Date.now();
   console.info(`[bilibili/channelSnapshot] start mid=${mid}`);
 
   const listStart = Date.now();
-  const videos = await fetchBilibiliChannelVideos(mid);
+  const result = await fetchBilibiliChannelViaJustOneApi(mid);
   console.info(
-    `[bilibili/channelSnapshot] mid=${mid} arc/search done in ${Date.now() - listStart}ms: ${videos.length} videos`
+    `[bilibili/channelSnapshot] mid=${mid} justOneApi done in ${Date.now() - listStart}ms: ${result.videos.length} videos, channel="${result.channel.name ?? '(unknown)'}"`
   );
 
-  if (videos.length === 0) {
-    throw new Error(`Bilibili channel ${mid} has no videos on the arc/search list`);
+  if (result.videos.length === 0) {
+    throw new Error(`Bilibili channel ${mid} returned no videos from JustOneAPI`);
   }
 
-  const metaStart = Date.now();
-  const firstVideoMeta = await fetchBilibiliVideoSnapshot(videos[0].videoId);
-  console.info(`[bilibili/channelSnapshot] mid=${mid} view done in ${Date.now() - metaStart}ms`);
+  // Fallback to x/web-interface/view only if JustOneAPI's response
+  // lacked channel name or avatar — a single extra call at most.
+  let channelName = result.channel.name;
+  let channelLogo = result.channel.logoUrl;
+  if (channelName == null || channelLogo == null) {
+    const viewStart = Date.now();
+    const firstVideoMeta = await fetchBilibiliVideoSnapshot(result.videos[0].videoId);
+    console.info(
+      `[bilibili/channelSnapshot] mid=${mid} view fallback done in ${Date.now() - viewStart}ms`
+    );
+    channelName = channelName ?? firstVideoMeta.channel.name;
+    channelLogo = channelLogo ?? firstVideoMeta.channel.logoUrl;
+  }
 
-  const snapshotVideos: SnapshotVideo[] = videos.map((v) => ({
+  const snapshotVideos: SnapshotVideo[] = result.videos.map((v) => ({
     videoId: v.videoId,
     title: v.title,
     description: v.description,
@@ -55,13 +63,13 @@ export async function fetchBilibiliChannelSnapshot(mid: string): Promise<Channel
   }));
 
   console.info(
-    `[bilibili/channelSnapshot] mid=${mid} done in ${Date.now() - overallStart}ms: name="${firstVideoMeta.channel.name}" videos=${snapshotVideos.length}`
+    `[bilibili/channelSnapshot] mid=${mid} done in ${Date.now() - overallStart}ms: name="${channelName ?? '(unknown)'}" videos=${snapshotVideos.length}`
   );
   return {
     channelId: mid,
-    name: firstVideoMeta.channel.name,
+    name: channelName ?? 'Unknown',
     handle: null,
-    logoUrl: firstVideoMeta.channel.logoUrl,
+    logoUrl: channelLogo,
     videos: snapshotVideos,
   };
 }
