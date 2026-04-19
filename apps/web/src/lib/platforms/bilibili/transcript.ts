@@ -7,15 +7,15 @@ import { fetchKedouBilibiliSubtitle } from './kedouSubtitle';
 import { buildBilibiliVideoUrl } from './urls';
 
 /**
- * Fetch a transcript for a Bilibili video, with JustOneAPI as a
- * fallback for kedou. Two-tier:
+ * Fetch a transcript for a Bilibili video. Two-tier:
  *
- *   1. Kedou proxy (primary) — kedou.life scrapes Bilibili and returns
- *      SRT. Fast when it works, but occasionally down, encryption-
- *      protocol-mismatched, or lacking AI-generated Chinese captions.
- *   2. JustOneAPI (fallback) — signed caption URLs from
- *      `get-video-caption/v2`, three round-trips, covers AI-generated
- *      tracks kedou may miss.
+ *   1. JustOneAPI (primary) — three signed round-trips (view → captions
+ *      list → subtitle body). Covers AI-generated Chinese captions
+ *      kedou sometimes misses and handles Bilibili's anti-bot noise
+ *      on their own infra.
+ *   2. Kedou proxy (fallback) — kedou.life scrapes Bilibili and
+ *      returns SRT. Used when JustOneAPI is unreachable, out of
+ *      quota, or returns no tracks for a video.
  *
  * Throws a SubtitleFetchError so `ensureTranscript` can distinguish
  * "this video has no captions" (sticky `transcript_unavailable`)
@@ -24,26 +24,26 @@ import { buildBilibiliVideoUrl } from './urls';
 export async function fetchBilibiliTranscript(
   bvid: string
 ): Promise<{ segments: TranscriptSegment[]; language: string }> {
-  // Primary: kedou.
+  // Primary: JustOneAPI.
   try {
-    const result = await fetchViaKedou(bvid);
-    return result;
-  } catch (kedouErr) {
+    return await fetchBilibiliTranscriptViaJustOneApi(bvid);
+  } catch (justOneErr) {
     console.warn(
-      `[bilibili/transcript] kedou failed for ${bvid}, trying JustOneAPI: ${
-        kedouErr instanceof Error ? kedouErr.message : String(kedouErr)
+      `[bilibili/transcript] JustOneAPI failed for ${bvid}, trying kedou: ${
+        justOneErr instanceof Error ? justOneErr.message : String(justOneErr)
       }`
     );
-    // Fallback: JustOneAPI. If this also fails, throw an error whose
-    // transient flag reflects the combined state — if BOTH providers
-    // explicitly report "no captions", call it permanent. Otherwise
-    // treat it as transient so we don't flip the sticky unavailable
-    // flag on a one-provider hiccup.
+    // Fallback: kedou. If it ALSO fails, the thrown SubtitleFetchError's
+    // `transient` flag reflects the combined state — permanent only
+    // when kedou explicitly reports "no captions", because that's the
+    // most reliable non-transient signal we have. JustOneAPI errors
+    // alone stay transient so one-provider quota/outage doesn't flip
+    // the sticky `transcript_unavailable` flag.
     try {
-      return await fetchBilibiliTranscriptViaJustOneApi(bvid);
-    } catch (justOneErr) {
+      return await fetchViaKedou(bvid);
+    } catch (kedouErr) {
       const kedouPermanent = kedouErr instanceof SubtitleFetchError && !kedouErr.transient;
-      const message = `Kedou: ${kedouErr instanceof Error ? kedouErr.message : String(kedouErr)}; JustOneAPI: ${justOneErr instanceof Error ? justOneErr.message : String(justOneErr)}`;
+      const message = `JustOneAPI: ${justOneErr instanceof Error ? justOneErr.message : String(justOneErr)}; Kedou: ${kedouErr instanceof Error ? kedouErr.message : String(kedouErr)}`;
       throw new SubtitleFetchError(message, {
         transient: !kedouPermanent,
       });
@@ -52,10 +52,9 @@ export async function fetchBilibiliTranscript(
 }
 
 /**
- * Kedou-only path, extracted so the primary+fallback composition in
- * fetchBilibiliTranscript stays readable. Preserves the original
- * transient / permanent classification so the fallback orchestrator
- * can reason about which side actually failed.
+ * Kedou-only path. Kept as its own function so the primary+fallback
+ * composition in fetchBilibiliTranscript stays readable and the
+ * transient / permanent classification is explicit at the throw site.
  */
 async function fetchViaKedou(
   bvid: string
@@ -80,8 +79,8 @@ async function fetchViaKedou(
   const items = response.data.subtitleItemVoList;
   if (items == null || items.length === 0) {
     // Permanent: kedou explicitly says this video has no captions.
-    // The JustOneAPI fallback may still find AI-generated ones, but
-    // that decision belongs to the orchestrator above.
+    // JustOneAPI already failed upstream by the time we reach here,
+    // so this is our most reliable signal.
     throw new SubtitleFetchError('Bilibili video has no subtitles', {
       transient: false,
     });
