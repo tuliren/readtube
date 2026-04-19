@@ -27,12 +27,7 @@ export async function scrapeBilibiliChannel(mid: string): Promise<ScrapedBilibil
   const url = `${buildBilibiliSpaceUrl(mid)}/upload/video`;
   console.info(`[bilibili/channelScrape] scraping mid=${mid} url=${url}`);
 
-  // networkidle0 settles before Bilibili's upload grid hydrates on
-  // slow Lambda cold-starts, and the generic body-text readiness
-  // check passes on the empty shell (~268 chars of menu/footer).
-  // Wait for a real /video/BV anchor instead — that's the content
-  // the regex scrape needs to see.
-  const result = await fetchHtmlWithJs(url, { waitForSelector: 'a[href*="/video/BV"]' });
+  const result = await fetchHtmlWithJs(url);
   if (result == null) {
     throw new Error(`Puppeteer returned null for ${url}`);
   }

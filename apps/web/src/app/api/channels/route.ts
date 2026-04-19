@@ -15,14 +15,6 @@ import {
   getSubscribedChannelsWithUnread,
 } from '@/lib/subscriptions';
 
-// The Bilibili add-channel path fires Puppeteer, whose cold-start
-// Chromium launch + page navigation + selector wait + potential reload
-// can take 60-90s end-to-end on Vercel. The YouTube path is fast but
-// shares this handler. Vercel's default (10s Hobby / 60s Pro) is too
-// tight; 120s covers a worst-case Bilibili refresh with one reload
-// retry while leaving headroom.
-export const maxDuration = 120;
-
 const INVALID_URL_MESSAGE =
   'Invalid channel URL. Paste a YouTube channel URL ' +
   '(youtube.com/@handle or youtube.com/channel/UC...) or a Bilibili space URL ' +
