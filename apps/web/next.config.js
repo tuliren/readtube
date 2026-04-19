@@ -3,12 +3,6 @@ const { withWorkflow } = require('workflow/next');
 /** @type {import('next').NextConfig} */
 module.exports = withWorkflow({
   transpilePackages: ['@readtube/lib'],
-  // Required so Next doesn't bundle Chromium when using Puppeteer on Vercel.
-  // See https://vercel.com/guides/deploying-puppeteer-with-nextjs-on-vercel
-  serverExternalPackages: ['@sparticuz/chromium', 'puppeteer-core'],
-  // Needed in this monorepo so Next includes the workspace @sparticuz/chromium
-  // binary in the deploy artifact.
-  outputFileTracingRoot: require('path').join(__dirname, '../../'),
   reactStrictMode: true,
   pageExtensions: ['js', 'jsx', 'md', 'mdx', 'ts', 'tsx'],
   // Expose Vercel's auto-set VERCEL_ENV to client code via the

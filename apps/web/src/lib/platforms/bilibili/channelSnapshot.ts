@@ -13,10 +13,6 @@ import { fetchBilibiliVideoSnapshot } from './videoSnapshot';
  * JustOneAPI's envelope doesn't include the uploader's avatar, so we
  * fall back to one `x/web-interface/view` call on the newest bvid to
  * backfill channel name/avatar whenever either is missing.
- *
- * The Puppeteer-based scraper at `./channelScrape.ts` (+
- * `lib/puppeteer/`) stays in the tree as a dormant fallback if we
- * need to route through a headless browser again.
  */
 export async function fetchBilibiliChannelSnapshot(mid: string): Promise<ChannelSnapshot> {
   const overallStart = Date.now();
