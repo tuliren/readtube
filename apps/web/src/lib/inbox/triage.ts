@@ -1,7 +1,7 @@
 import type { PrismaClient, VideoPlatformType } from '@readtube/database';
 
+import { buildThumbnailUrl } from '@/lib/platforms/youtube/urls';
 import type { TagData, VideoData } from '@/lib/types';
-import { buildThumbnailUrl } from '@/lib/youtube/urls';
 
 /**
  * Minimal raw row shape that a caller must supply when it wants triage

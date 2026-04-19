@@ -1,6 +1,6 @@
 import { program } from 'commander';
 
-import { fetchKedouBilibiliSubtitle } from '@/lib/bilibili/kedouSubtitle';
+import { fetchKedouBilibiliSubtitle } from '@/lib/platforms/bilibili/kedouSubtitle';
 
 if (process.env.SCRIPT_ENV !== 'development') {
   console.error('This script can only be run in development environment.');

@@ -178,6 +178,7 @@ export default function InboxListView({
         <InboxHeader
           channelId={selectedChannelId}
           channelSourceId={selectedChannel?.sourceId ?? null}
+          channelPlatform={selectedChannel?.platform ?? null}
           channelName={headerName}
           channelLogoUrl={headerLogoUrl}
           unreadCount={headerUnread}

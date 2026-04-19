@@ -1,14 +1,14 @@
 import { VideoPlatformType } from '@readtube/database';
 
 import { VideoPlatform } from './base';
-import { BilibiliPlatform } from './bilibili';
-import { YouTubePlatform } from './youtube';
+import { BilibiliPlatform } from './bilibili/platform';
+import { YouTubePlatform } from './youtube/platform';
 
 export { VideoPlatform } from './base';
 export type { PlatformTranscriptResult } from './base';
-export { YouTubePlatform } from './youtube';
-export { BilibiliPlatform } from './bilibili';
-export type { VideoSnapshot } from './types';
+export { YouTubePlatform } from './youtube/platform';
+export { BilibiliPlatform } from './bilibili/platform';
+export type { ChannelSnapshot, SnapshotVideo, VideoSnapshot } from './types';
 
 // Order matters: `detectPlatform` and `detectPlatformTypeFromSourceId`
 // both return the FIRST platform whose matcher accepts the input.
@@ -47,6 +47,28 @@ export function getPlatformByType(type: VideoPlatformType): VideoPlatform {
     throw new Error(`No VideoPlatform implementation for VideoPlatformType=${type}`);
   }
   return platform;
+}
+
+/**
+ * Resolve a channel URL (or bare channel source_id) to a platform +
+ * source_id. Iterates platforms in registry order and returns the
+ * first match. Returns null when no platform can sync-parse the
+ * input — the YouTube @handle case intentionally returns null here
+ * and the add-channel route falls back to a scrape-based resolution.
+ */
+export function detectChannelSource(
+  input: string
+): { platform: VideoPlatform; sourceId: string } | null {
+  if (input == null || typeof input !== 'string') {
+    return null;
+  }
+  for (const platform of PLATFORMS) {
+    const sourceId = platform.extractChannelSourceId(input);
+    if (sourceId != null) {
+      return { platform, sourceId };
+    }
+  }
+  return null;
 }
 
 /**

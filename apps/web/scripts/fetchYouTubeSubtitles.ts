@@ -6,7 +6,7 @@ import {
   extractVideoId,
   fetchSubtitleViaHtmlScraping,
   fetchSubtitleViaYoutubei,
-} from '@/lib/subtitles';
+} from '@/lib/platforms/youtube/subtitles';
 
 if (process.env.SCRIPT_ENV !== 'development') {
   console.error('This script can only be run in development environment.');

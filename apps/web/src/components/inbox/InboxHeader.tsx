@@ -8,6 +8,8 @@ import { toast } from 'sonner';
 import { useSWRConfig } from 'swr';
 
 import ExternalLinkActions from '@/components/ExternalLinkActions';
+import type { VideoPlatform } from '@/lib/types';
+import { buildChannelLink } from '@/lib/urls/watchUrl';
 import { isProduction } from '@/lib/vercelEnv';
 
 import ChannelAvatar from './ChannelAvatar';
@@ -16,8 +18,12 @@ import SearchInput from './SearchInput';
 
 interface Props {
   channelId: string | null;
-  /** YouTube channel source ID (UC-prefixed). Null for aggregate views. */
+  /** Platform source id — YouTube UC-prefixed id, or Bilibili numeric
+   *  mid. Null for aggregate views (Inbox / Starred / etc). */
   channelSourceId: string | null;
+  /** Owning platform — drives the external "Open channel on X" link
+   *  host. Null for aggregate views. */
+  channelPlatform: VideoPlatform | null;
   channelName: string;
   /** Channel logo URL. Only available when viewing a single channel
    *  that has a logo persisted from the scraper. Null for the
@@ -42,6 +48,7 @@ interface Props {
 export default function InboxHeader({
   channelId,
   channelSourceId,
+  channelPlatform,
   channelName,
   channelLogoUrl,
   unreadCount,
@@ -134,10 +141,10 @@ export default function InboxHeader({
           <h1 className="hidden min-w-0 truncate text-sm font-semibold text-gray-900 sidebar:block">
             {channelName}
           </h1>
-          {channelSourceId != null && (
+          {channelSourceId != null && channelPlatform != null && (
             <ExternalLinkActions
-              url={`https://www.youtube.com/channel/${channelSourceId}`}
-              label="Open channel on YouTube"
+              url={buildChannelLink(channelPlatform, channelSourceId).url}
+              label={`Open channel on ${buildChannelLink(channelPlatform, channelSourceId).platformName}`}
             />
           )}
           {trailing}

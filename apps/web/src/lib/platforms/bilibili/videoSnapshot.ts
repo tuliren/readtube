@@ -8,6 +8,8 @@
  */
 import type { VideoSnapshot } from '@/lib/platforms/types';
 
+import { normalizeThumbnail } from './justOneApi';
+
 const BILIBILI_VIEW_URL = 'https://api.bilibili.com/x/web-interface/view';
 const BILIBILI_USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36';
@@ -62,7 +64,7 @@ export async function fetchBilibiliVideoSnapshot(bvid: string): Promise<VideoSna
     videoId: data.bvid,
     title: data.title,
     description: data.desc ?? '',
-    thumbnailUrl: data.pic ?? '',
+    thumbnailUrl: normalizeThumbnail(data.pic ?? null),
     publishedAt,
     durationSeconds,
     channel: {
@@ -71,7 +73,10 @@ export async function fetchBilibiliVideoSnapshot(bvid: string): Promise<VideoSna
       // Bilibili has no @handle convention. Storing null keeps the
       // channel_unique_handle constraint usable for YouTube only.
       handle: null,
-      logoUrl: owner.face ?? null,
+      // hdslb CDN returns 403 for `/bfs/face/...` over HTTPS — keep
+      // the URL on HTTP so ChannelAvatar can load it (paired with
+      // referrerPolicy="no-referrer" on the <img>).
+      logoUrl: normalizeThumbnail(owner.face ?? null) || null,
     },
   };
 }

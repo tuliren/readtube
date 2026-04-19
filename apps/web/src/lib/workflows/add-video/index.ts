@@ -91,7 +91,8 @@ export async function addVideoForUser(args: {
     const conflictOnHandle = await hasChannelHandleConflict(
       prisma,
       snapshot.channel.handle,
-      existingChannel.id
+      existingChannel.id,
+      platform.type
     );
     await prisma.channel.update({
       where: { id: existingChannel.id },
@@ -102,7 +103,12 @@ export async function addVideoForUser(args: {
     });
     channelId = existingChannel.id;
   } else {
-    const handleAlreadyUsed = await hasChannelHandleConflict(prisma, snapshot.channel.handle, null);
+    const handleAlreadyUsed = await hasChannelHandleConflict(
+      prisma,
+      snapshot.channel.handle,
+      null,
+      platform.type
+    );
     const created = await prisma.channel.create({
       data: {
         source_type: platform.type,

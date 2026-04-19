@@ -23,12 +23,13 @@ interface Props {
 }
 
 /**
- * Modal for subscribing to a new YouTube channel. Ported from Headless
- * UI Dialog to shadcn Dialog so every dialog in /inbox uses the same
- * primitive (NewFolderDialog, AddChannelModal, plus the AlertDialog
- * variants for destructive confirms). Visual contract identical to the
- * folder-create dialog: Title + Description in DialogHeader, body with
- * Input + helper copy, DialogFooter with Cancel + Action buttons.
+ * Modal for subscribing to a new channel (YouTube or Bilibili). Ported
+ * from Headless UI Dialog to shadcn Dialog so every dialog in /inbox
+ * uses the same primitive (NewFolderDialog, AddChannelModal, plus the
+ * AlertDialog variants for destructive confirms). Visual contract
+ * identical to the folder-create dialog: Title + Description in
+ * DialogHeader, body with Input + helper copy, DialogFooter with
+ * Cancel + Action buttons.
  */
 export default function AddChannelModal({ isOpen, onClose, onChannelAdded }: Props) {
   const [url, setUrl] = useState('');
@@ -89,12 +90,14 @@ export default function AddChannelModal({ isOpen, onClose, onChannelAdded }: Pro
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Add YouTube channel</DialogTitle>
+          <DialogTitle>Add channel</DialogTitle>
           <DialogDescription>
-            Paste any YouTube channel URL:{' '}
-            <code className="rounded bg-gray-100 px-1">youtube.com/@handle</code>,{' '}
-            <code className="rounded bg-gray-100 px-1">youtube.com/channel/UCxxxxx</code>, or a bare{' '}
-            <code className="rounded bg-gray-100 px-1">UC…</code> channel ID.
+            Paste a channel URL from YouTube (
+            <code className="rounded bg-gray-100 px-1">youtube.com/@handle</code> or{' '}
+            <code className="rounded bg-gray-100 px-1">youtube.com/channel/UCxxxxx</code>) or
+            Bilibili (
+            <code className="rounded bg-gray-100 px-1">space.bilibili.com/&lt;mid&gt;</code>
+            ).
           </DialogDescription>
         </DialogHeader>
 
@@ -104,7 +107,7 @@ export default function AddChannelModal({ isOpen, onClose, onChannelAdded }: Pro
             type="text"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://youtube.com/@ChannelName"
+            placeholder="YouTube channel URL or space.bilibili.com/…"
             disabled={loading}
             autoFocus
           />

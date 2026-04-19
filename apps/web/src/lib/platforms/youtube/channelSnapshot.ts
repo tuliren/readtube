@@ -1,51 +1,15 @@
-import { type RssChannel, fetchRssFeed, isYouTubeShort } from '@/lib/youtube/channelRss';
-import { type ScrapedChannel, scrapeChannel } from '@/lib/youtube/channelScrape';
-import { fetchChannelLatest } from '@/lib/youtube/transcriptApi';
-import { buildRssUrl, buildThumbnailUrl } from '@/lib/youtube/urls';
+import type { ChannelSnapshot, SnapshotVideo } from '@/lib/platforms/types';
+import { type RssChannel, fetchRssFeed, isYouTubeShort } from '@/lib/platforms/youtube/channelRss';
+import { type ScrapedChannel, scrapeChannel } from '@/lib/platforms/youtube/channelScrape';
+import { fetchChannelLatest } from '@/lib/platforms/youtube/transcriptApi';
+import { buildRssUrl, buildThumbnailUrl } from '@/lib/platforms/youtube/urls';
+
+// Re-exported so existing `@/lib/platforms/youtube/channelSnapshot` imports keep
+// working after ChannelSnapshot moved to `@/lib/platforms/types`.
+export type { ChannelSnapshot, SnapshotVideo };
 
 /** Duration threshold (seconds) for filtering Shorts when RSS is unavailable. */
 const SHORTS_DURATION_THRESHOLD = 60;
-
-/**
- * A single ingest-ready video produced by merging RSS + scrape data.
- *
- * - title, description, publishedAt, link come from the RSS feed —
- *   RSS descriptions are complete (scrape truncates them) and the
- *   RSS `published` timestamp is the true publish time (the scrape's
- *   "2 weeks ago" text is actually the last-updated time).
- * - durationSeconds comes from the channel-page scrape, which is the
- *   only free source of video length. Null if scrape failed or the
- *   video wasn't in the scrape grid.
- * - thumbnailUrl prefers the RSS `media:thumbnail`; if the feed omits
- *   it, we fall back to the deterministic `hqdefault.jpg` URL so this
- *   field is always populated.
- */
-export interface SnapshotVideo {
-  videoId: string;
-  title: string;
-  description: string;
-  /**
-   * Null when the upstream source (RSS, TranscriptAPI, channel-page
-   * scrape) fails to expose a parseable publish date. Callers upsert
-   * null as-is; a later fetch that does return a date will backfill
-   * the column via the upsert update branch.
-   */
-  publishedAt: Date | null;
-  link: string;
-  thumbnailUrl: string;
-  durationSeconds: number | null;
-}
-
-export interface ChannelSnapshot {
-  channelId: string;
-  name: string;
-  /** From scrape. Null if scrape failed or the channel has no handle. */
-  handle: string | null;
-  /** From scrape. Null if scrape failed. */
-  logoUrl: string | null;
-  /** Shorts (RSS links containing `/shorts/`) are already filtered out. */
-  videos: SnapshotVideo[];
-}
 
 /**
  * Single entry point for both "subscribe to a new channel" and

@@ -18,19 +18,32 @@ function assertNeverPlatform(platform: never): never {
 /**
  * Build the external "Watch on X" link for a video. Lives on the
  * client side (no Node imports) so the reader component can use it.
+ *
+ * When `startSeconds` is provided, appends a platform-appropriate time
+ * parameter (both YouTube and Bilibili honor `?t=<seconds>`). Used by
+ * the transcript reader so per-paragraph timestamps deep-link into
+ * the right spot in the source video.
  */
-export function buildWatchLink(platform: VideoPlatform, sourceId: string): WatchLink {
+export function buildWatchLink(
+  platform: VideoPlatform,
+  sourceId: string,
+  startSeconds?: number
+): WatchLink {
   switch (platform) {
-    case 'YOUTUBE':
+    case 'YOUTUBE': {
+      const base = `https://youtube.com/watch?v=${sourceId}`;
       return {
-        url: `https://youtube.com/watch?v=${sourceId}`,
+        url: startSeconds != null ? `${base}&t=${startSeconds}` : base,
         platformName: 'YouTube',
       };
-    case 'BILIBILI':
+    }
+    case 'BILIBILI': {
+      const base = `https://www.bilibili.com/video/${sourceId}/`;
       return {
-        url: `https://www.bilibili.com/video/${sourceId}/`,
+        url: startSeconds != null ? `${base}?t=${startSeconds}` : base,
         platformName: 'Bilibili',
       };
+    }
     default:
       return assertNeverPlatform(platform);
   }

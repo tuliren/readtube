@@ -12,7 +12,7 @@ import {
 } from '@/lib/markdownFrontmatter';
 import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
 
-const PROMPT_VERSION = 'v5';
+const PROMPT_VERSION = 'v6';
 const DEFAULT_STYLE: ArticleStyle = ArticleStyle.NARRATIVE;
 
 // Structured-output schema: content first (so the model writes the
@@ -44,18 +44,20 @@ function buildPrompt(style: ArticleStyle, title: string, channelName: string, tr
     style === ArticleStyle.DIALOG
       ? `- Format the article as a dialog or interview transcript, preserving exchanges between speakers when the video is conversational.
 - If there's only one speaker, format as a reflective monologue with paragraph breaks.`
-      : `- Rewrite the transcript as a polished narrative article in GitHub Flavored Markdown.
-- Use headings, subheadings, lists, and blockquotes where appropriate.`;
+      : `- Reformat the transcript as an article in GitHub Flavored Markdown. This is a re-formatting task, not a rewriting or summarization task.`;
 
   return `CRITICAL LANGUAGE REQUIREMENT: Every word of your output — every heading, every paragraph, every list item — MUST be written in the exact same natural language as the transcript below. Detect the transcript's language from its content and write in THAT language. Do not translate. Do not mix languages. If the transcript is in Chinese, write entirely in Chinese. If Japanese, entirely in Japanese. If Spanish, entirely in Spanish. Apply this rule before anything else below.
 
 You are an expert editor turning video transcripts into clean, well-formatted articles.
 
+CRITICAL FIDELITY REQUIREMENT: Do NOT summarize, condense, abstract, paraphrase for brevity, or skip any substantive content. Every idea, argument, example, number, quote, and concrete detail in the transcript must appear in the article. The finished article should be roughly the same length as the transcript minus filler words — NOT shorter. If you find yourself compressing or omitting, stop and include the material.
+
 Instructions:
 ${styleGuidance}
-- Remove filler words ("um", "uh", "like", "you know"), false starts, and verbal tics.
-- Preserve the speaker's voice, key ideas, concrete details, and any numbers or examples.
-- Do not invent facts that aren't in the transcript.
+- Use whatever Markdown features best suit the content. You are not limited to headings, subheadings, lists, and blockquotes — also use tables (for comparisons / specs / enumerations), fenced code blocks (for code, commands, file paths, or configuration), inline code for short technical tokens, bold and italic emphasis, horizontal rules to separate unrelated sections, and links where the speaker references them. Pick the feature that best represents each chunk of content.
+- Remove only filler words ("um", "uh", "like", "you know"), false starts, repeated words, and verbal tics. Do not remove substantive content.
+- Preserve the speaker's voice, phrasing, and stylistic quirks. Keep concrete details, numbers, and examples verbatim.
+- Do not invent facts, claims, or details that aren't in the transcript.
 - Do not include the video title as a top-level heading — it will be shown separately.
 - Start directly with the article content. No preamble like "Here is the article".
 
@@ -145,13 +147,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const { id } = await params;
 
-  let body: { style?: string } = {};
+  let body: { style?: string; force?: boolean } = {};
   try {
-    body = (await request.json()) as { style?: string };
+    body = (await request.json()) as { style?: string; force?: boolean };
   } catch {
     // empty body is OK — use default style
   }
   const style = parseStyle(body.style);
+  const force = body.force === true;
   if (!style) {
     console.error(`[article/POST] Invalid style: ${body.style}`);
     return NextResponse.json({ error: 'Invalid style' }, { status: 400 });
@@ -223,16 +226,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   // Cache hit: replay the stored article as a single-event NDJSON
   // stream so the client's POST handler only has to know one wire
-  // format.
-  const cached = await prisma.article.findUnique({
-    where: {
-      article_unique_transcript_style: {
-        transcript_id: transcript.id,
-        style,
-      },
-    },
-    select: { content: true },
-  });
+  // format. Skipped when `force` is set — the dev-only Regenerate
+  // button wants a fresh LLM run.
+  const cached = force
+    ? null
+    : await prisma.article.findUnique({
+        where: {
+          article_unique_transcript_style: {
+            transcript_id: transcript.id,
+            style,
+          },
+        },
+        select: { content: true },
+      });
 
   if (cached) {
     const parsed = parseMarkdownDocument(cached.content);
@@ -333,14 +339,27 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             version: CURRENT_FRONTMATTER_VERSION,
             hasLatex: hasLatex === true,
           });
-          await prisma.article.create({
-            data: {
+          await prisma.article.upsert({
+            where: {
+              article_unique_transcript_style: {
+                transcript_id: transcriptId,
+                style,
+              },
+            },
+            create: {
               transcript_id: transcriptId,
               style,
               prompt_version: PROMPT_VERSION,
               model: DEFAULT_AI_MODEL,
               content: contentForStorage,
               usage: usage ? JSON.parse(JSON.stringify(usage)) : null,
+            },
+            update: {
+              prompt_version: PROMPT_VERSION,
+              model: DEFAULT_AI_MODEL,
+              content: contentForStorage,
+              usage: usage ? JSON.parse(JSON.stringify(usage)) : null,
+              generated_at: new Date(),
             },
           });
         } catch (err) {

@@ -8,7 +8,7 @@
     "dev": "next dev",
     "dev:workflow": "npx workflow web",
     "integrationTest": "jest --config jest.integration.config.cjs --coverage",
-    "lint": "eslint . --max-warnings 0",
+    "lint": "NODE_OPTIONS='--max-old-space-size=4096' eslint . --max-warnings 0",
     "script": "scripts/runScriptWithEnv.sh development",
     "script:prod": "scripts/runScriptWithEnv.sh production",
     "start": "next start",

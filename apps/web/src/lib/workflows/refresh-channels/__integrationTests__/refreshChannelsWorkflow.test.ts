@@ -1,5 +1,8 @@
+import { VideoPlatformType } from '@readtube/database';
 import '@tests/integration-tests';
 
+import type { RssChannel } from '@/lib/platforms/youtube/channelRss';
+import type { ScrapedChannel } from '@/lib/platforms/youtube/channelScrape';
 import { refreshChannelsWorkflow } from '@/lib/workflows/refresh-channels';
 import type { StaleChannel } from '@/lib/workflows/refresh-channels/steps';
 // ─── Imports (after mocks) ───────────────────────────────────────
@@ -9,8 +12,6 @@ import {
   fetchStaleChannels,
   refreshChannel,
 } from '@/lib/workflows/refresh-channels/steps';
-import type { RssChannel } from '@/lib/youtube/channelRss';
-import type { ScrapedChannel } from '@/lib/youtube/channelScrape';
 
 // ─── Module mocks (hoisted by Jest) ──────────────────────────────
 
@@ -31,23 +32,30 @@ jest.mock('@readtube/database', () => {
 
 const mockFetchRssFeed = jest.fn<Promise<RssChannel>, [string]>();
 
-jest.mock('@/lib/youtube/channelRss', () => ({
-  ...jest.requireActual('@/lib/youtube/channelRss'),
+jest.mock('@/lib/platforms/youtube/channelRss', () => ({
+  ...jest.requireActual('@/lib/platforms/youtube/channelRss'),
   fetchRssFeed: (url: string) => mockFetchRssFeed(url),
 }));
 
 const mockScrapeChannel = jest.fn<Promise<ScrapedChannel>, [string]>();
 
-jest.mock('@/lib/youtube/channelScrape', () => ({
-  ...jest.requireActual('@/lib/youtube/channelScrape'),
+jest.mock('@/lib/platforms/youtube/channelScrape', () => ({
+  ...jest.requireActual('@/lib/platforms/youtube/channelScrape'),
   scrapeChannel: (url: string) => mockScrapeChannel(url),
 }));
 
 const mockFetchChannelLatest = jest.fn();
 
-jest.mock('@/lib/youtube/transcriptApi', () => ({
-  ...jest.requireActual('@/lib/youtube/transcriptApi'),
+jest.mock('@/lib/platforms/youtube/transcriptApi', () => ({
+  ...jest.requireActual('@/lib/platforms/youtube/transcriptApi'),
   fetchChannelLatest: (input: string) => mockFetchChannelLatest(input),
+}));
+
+const mockFetchBilibiliChannelSnapshot = jest.fn();
+
+jest.mock('@/lib/platforms/bilibili/channelSnapshot', () => ({
+  ...jest.requireActual('@/lib/platforms/bilibili/channelSnapshot'),
+  fetchBilibiliChannelSnapshot: (mid: string) => mockFetchBilibiliChannelSnapshot(mid),
 }));
 
 // ─── Helpers ─────────────────────────────────────────────────────
@@ -71,12 +79,18 @@ async function createChannel(opts: {
   name: string;
   checkedAt?: Date | null;
   subscribe?: boolean;
+  platform?: VideoPlatformType;
 }) {
+  const platform = opts.platform ?? VideoPlatformType.YOUTUBE;
   const channel = await global.testPrisma.channel.create({
     data: {
+      source_type: platform,
       source_id: opts.sourceId,
       name: opts.name,
-      rss_url: `https://www.youtube.com/feeds/videos.xml?channel_id=${opts.sourceId}`,
+      rss_url:
+        platform === VideoPlatformType.YOUTUBE
+          ? `https://www.youtube.com/feeds/videos.xml?channel_id=${opts.sourceId}`
+          : null,
       checked_at: opts.checkedAt ?? null,
     },
   });
@@ -124,6 +138,7 @@ beforeEach(async () => {
   mockFetchRssFeed.mockReset();
   mockScrapeChannel.mockReset();
   mockFetchChannelLatest.mockReset();
+  mockFetchBilibiliChannelSnapshot.mockReset();
   // Default: TranscriptAPI is unavailable (no API key in test env)
   mockFetchChannelLatest.mockRejectedValue(new Error('TRANSCRIPT_API_KEY is not set'));
   // Default: scrape returns no extra data (logo/duration tests override this)
@@ -260,7 +275,7 @@ describe('refreshChannel', () => {
       id: ch.id,
       source_id: ch.source_id,
       name: ch.name,
-      rss_url: ch.rss_url!,
+      source_type: VideoPlatformType.YOUTUBE,
     };
     const result = await refreshChannel(staleChannel);
 
@@ -289,7 +304,7 @@ describe('refreshChannel', () => {
       id: ch.id,
       source_id: ch.source_id,
       name: ch.name,
-      rss_url: ch.rss_url!,
+      source_type: VideoPlatformType.YOUTUBE,
     });
 
     expect(result.nameUpdated).toBe(true);
@@ -325,7 +340,7 @@ describe('refreshChannel', () => {
       id: ch.id,
       source_id: ch.source_id,
       name: ch.name,
-      rss_url: ch.rss_url!,
+      source_type: VideoPlatformType.YOUTUBE,
     });
 
     const video = await global.testPrisma.video.findFirst({
@@ -368,7 +383,7 @@ describe('refreshChannel', () => {
       id: ch.id,
       source_id: ch.source_id,
       name: ch.name,
-      rss_url: ch.rss_url!,
+      source_type: VideoPlatformType.YOUTUBE,
     });
 
     expect(result.videosProcessed).toBe(2);
@@ -418,7 +433,7 @@ describe('refreshChannel', () => {
       id: ch.id,
       source_id: ch.source_id,
       name: ch.name,
-      rss_url: ch.rss_url!,
+      source_type: VideoPlatformType.YOUTUBE,
     });
 
     const updated = await global.testPrisma.channel.findUnique({ where: { id: ch.id } });
@@ -448,7 +463,7 @@ describe('refreshChannel', () => {
       id: ch.id,
       source_id: ch.source_id,
       name: ch.name,
-      rss_url: ch.rss_url!,
+      source_type: VideoPlatformType.YOUTUBE,
     });
 
     expect(result.videosProcessed).toBe(1);
@@ -505,7 +520,7 @@ describe('refreshChannel', () => {
       id: ch.id,
       source_id: ch.source_id,
       name: ch.name,
-      rss_url: ch.rss_url!,
+      source_type: VideoPlatformType.YOUTUBE,
     });
 
     // Scrape is always called now (for logo freshness)
@@ -549,7 +564,7 @@ describe('refreshChannel — Shorts filtering', () => {
       id: ch.id,
       source_id: ch.source_id,
       name: ch.name,
-      rss_url: ch.rss_url!,
+      source_type: VideoPlatformType.YOUTUBE,
     });
 
     expect(result.videosProcessed).toBe(1);
@@ -591,7 +606,7 @@ describe('refreshChannel — Shorts filtering', () => {
       id: ch.id,
       source_id: ch.source_id,
       name: ch.name,
-      rss_url: ch.rss_url!,
+      source_type: VideoPlatformType.YOUTUBE,
     });
 
     expect(result.videosProcessed).toBe(1);
@@ -629,7 +644,7 @@ describe('refreshChannel — Shorts filtering', () => {
       id: ch.id,
       source_id: ch.source_id,
       name: ch.name,
-      rss_url: ch.rss_url!,
+      source_type: VideoPlatformType.YOUTUBE,
     });
 
     // Filtered out of ingest — no upsert ran, stored row unchanged.
@@ -668,7 +683,7 @@ describe('refreshChannel — Shorts filtering', () => {
       id: ch.id,
       source_id: ch.source_id,
       name: ch.name,
-      rss_url: ch.rss_url!,
+      source_type: VideoPlatformType.YOUTUBE,
     });
     expect(result.videosProcessed).toBe(0);
 
@@ -755,5 +770,145 @@ describe('refreshChannelsWorkflow', () => {
       where: { id: ch1.id },
     });
     expect(failedChannel!.checked_at).toBeNull();
+  });
+});
+
+describe('refreshChannel — Bilibili', () => {
+  it('dispatches to fetchBilibiliChannelSnapshot and upserts videos with source_type=BILIBILI', async () => {
+    const ch = await createChannel({
+      sourceId: '946974',
+      name: '影视飓风',
+      platform: VideoPlatformType.BILIBILI,
+    });
+    mockFetchBilibiliChannelSnapshot.mockResolvedValueOnce({
+      channelId: '946974',
+      name: '影视飓风',
+      handle: null,
+      logoUrl: 'http://i0.hdslb.com/bfs/face/xxx.jpg',
+      videos: [
+        {
+          videoId: 'BV1DgdhBGEq2',
+          title: 'Pocket 4 上手',
+          description: '',
+          publishedAt: new Date('2026-04-16T12:00:00Z'),
+          link: 'https://www.bilibili.com/video/BV1DgdhBGEq2/',
+          thumbnailUrl: 'http://i0.hdslb.com/bfs/archive/a.jpg',
+          durationSeconds: 1238,
+        },
+        {
+          videoId: 'BV1NGZtBwELa',
+          title: '4K Sample',
+          description: 'desc',
+          publishedAt: new Date('2026-02-18T03:00:00Z'),
+          link: 'https://www.bilibili.com/video/BV1NGZtBwELa/',
+          thumbnailUrl: 'http://i1.hdslb.com/bfs/archive/b.jpg',
+          durationSeconds: 219,
+        },
+      ],
+    });
+
+    const result = await refreshChannel({
+      id: ch.id,
+      source_id: ch.source_id,
+      source_type: VideoPlatformType.BILIBILI,
+      name: ch.name,
+    });
+
+    expect(result.videosProcessed).toBe(2);
+    expect(mockFetchBilibiliChannelSnapshot).toHaveBeenCalledWith('946974');
+    expect(mockFetchRssFeed).not.toHaveBeenCalled();
+
+    const videos = await global.testPrisma.video.findMany({
+      where: { channel_id: ch.id },
+      orderBy: { source_id: 'asc' },
+    });
+    expect(videos).toHaveLength(2);
+    for (const v of videos) {
+      expect(v.source_type).toBe('BILIBILI');
+    }
+
+    const updated = await global.testPrisma.channel.findUnique({ where: { id: ch.id } });
+    expect(updated!.checked_at).not.toBeNull();
+    expect(updated!.logo_url).toBe('http://i0.hdslb.com/bfs/face/xxx.jpg');
+  });
+
+  it('fetchStaleChannels returns mixed YouTube + Bilibili rows', async () => {
+    // Regression guard for the dropped `rss_url: { not: null }` filter
+    // — without it Bilibili channels (whose rss_url is null) were
+    // invisible to the refresh cron. Token is set so the
+    // JUSTONEAPI_TOKEN starvation guard doesn't filter Bilibili out.
+    const originalToken = process.env.JUSTONEAPI_TOKEN;
+    process.env.JUSTONEAPI_TOKEN = 'test-token';
+    try {
+      const yt = await createChannel({
+        sourceId: 'UC_mix_yt',
+        name: 'YT',
+        platform: VideoPlatformType.YOUTUBE,
+      });
+      const bili = await createChannel({
+        sourceId: '123456',
+        name: 'Bili',
+        platform: VideoPlatformType.BILIBILI,
+      });
+
+      const result = await fetchStaleChannels();
+      const ids = result.map((r) => r.id).sort();
+      expect(ids).toEqual([yt.id, bili.id].sort());
+      const platforms = result.map((r) => r.source_type).sort();
+      expect(platforms).toEqual(['BILIBILI', 'YOUTUBE']);
+    } finally {
+      if (originalToken == null) {
+        delete process.env.JUSTONEAPI_TOKEN;
+      } else {
+        process.env.JUSTONEAPI_TOKEN = originalToken;
+      }
+    }
+  });
+});
+
+describe('fetchStaleChannels — JUSTONEAPI_TOKEN guard', () => {
+  // Save + restore the env var between cases so the rest of the suite
+  // sees its normal (test-env) value, whatever that is.
+  const originalToken = process.env.JUSTONEAPI_TOKEN;
+  afterEach(() => {
+    if (originalToken == null) {
+      delete process.env.JUSTONEAPI_TOKEN;
+    } else {
+      process.env.JUSTONEAPI_TOKEN = originalToken;
+    }
+  });
+
+  it('excludes Bilibili rows when JUSTONEAPI_TOKEN is unset', async () => {
+    delete process.env.JUSTONEAPI_TOKEN;
+    const yt = await createChannel({
+      sourceId: 'UC_yt_guard',
+      name: 'YT',
+      platform: VideoPlatformType.YOUTUBE,
+    });
+    await createChannel({
+      sourceId: '789012',
+      name: 'Bili no-token',
+      platform: VideoPlatformType.BILIBILI,
+    });
+
+    const result = await fetchStaleChannels();
+    expect(result.map((r) => r.id)).toEqual([yt.id]);
+  });
+
+  it('includes Bilibili rows when JUSTONEAPI_TOKEN is set', async () => {
+    process.env.JUSTONEAPI_TOKEN = 'test-token';
+    await createChannel({
+      sourceId: 'UC_yt_tok',
+      name: 'YT',
+      platform: VideoPlatformType.YOUTUBE,
+    });
+    const bili = await createChannel({
+      sourceId: '456789',
+      name: 'Bili with-token',
+      platform: VideoPlatformType.BILIBILI,
+    });
+
+    const result = await fetchStaleChannels();
+    expect(result.map((r) => r.id).sort()).toContain(bili.id);
   });
 });

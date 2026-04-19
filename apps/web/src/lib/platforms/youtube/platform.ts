@@ -1,11 +1,15 @@
 import { VideoPlatformType } from '@readtube/database';
 
-import { fetchSubtitleViaTranscriptApi } from '@/lib/subtitles/fetchViaTranscriptApi';
-import { YOUTUBE_VIDEO_ID_PATTERN, buildRssUrl } from '@/lib/youtube/urls';
-import { extractVideoId, fetchVideoSnapshot } from '@/lib/youtube/videoSnapshot';
-
-import { type PlatformTranscriptResult, VideoPlatform } from './base';
-import type { VideoSnapshot } from './types';
+import { type PlatformTranscriptResult, VideoPlatform } from '@/lib/platforms/base';
+import type { ChannelSnapshot, VideoSnapshot } from '@/lib/platforms/types';
+import { fetchChannelSnapshot } from '@/lib/platforms/youtube/channelSnapshot';
+import { fetchSubtitleViaTranscriptApi } from '@/lib/platforms/youtube/subtitles/fetchViaTranscriptApi';
+import {
+  YOUTUBE_VIDEO_ID_PATTERN,
+  buildRssUrl,
+  extractChannelId,
+} from '@/lib/platforms/youtube/urls';
+import { extractVideoId, fetchVideoSnapshot } from '@/lib/platforms/youtube/videoSnapshot';
 
 export class YouTubePlatform extends VideoPlatform {
   readonly type = VideoPlatformType.YOUTUBE;
@@ -39,8 +43,22 @@ export class YouTubePlatform extends VideoPlatform {
     return extractVideoId(input);
   }
 
+  extractChannelSourceId(input: string): string | null {
+    // YouTube @handle URLs need a scrape to resolve the UC id — the
+    // add-channel route handles that case explicitly via
+    // fetchChannelSnapshot({ channelPageUrl }).
+    return extractChannelId(input);
+  }
+
   fetchVideoSnapshot(videoId: string): Promise<VideoSnapshot> {
     return fetchVideoSnapshot(videoId);
+  }
+
+  fetchChannelSnapshot(channelSourceId: string): Promise<ChannelSnapshot> {
+    return fetchChannelSnapshot({
+      channelPageUrl: `https://www.youtube.com/channel/${channelSourceId}`,
+      rssUrl: buildRssUrl(channelSourceId),
+    });
   }
 
   async fetchTranscript(videoId: string): Promise<PlatformTranscriptResult> {

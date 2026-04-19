@@ -1,5 +1,5 @@
-import { isPermanentTranscriptStatus } from '../subtitles/fetchViaTranscriptApi';
-import { SubtitleFetchError } from '../subtitles/types';
+import { SubtitleFetchError } from '@/lib/platforms/types';
+import { isPermanentTranscriptStatus } from '@/lib/platforms/youtube/subtitles/fetchViaTranscriptApi';
 
 describe('isPermanentTranscriptStatus', () => {
   it.each<{ status: number; expected: boolean; desc: string }>([

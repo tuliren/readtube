@@ -1,4 +1,4 @@
-import type { TranscriptSegment } from '@/lib/subtitles/types';
+import type { TranscriptSegment } from '@/lib/platforms/types';
 
 export interface TranscriptParagraph {
   text: string;

@@ -13,12 +13,11 @@ export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { isSignedIn } = useAuth();
 
-  const navigation = isSignedIn
-    ? [{ name: 'Inbox', href: '/inbox' }]
-    : [
-        { name: 'Features', href: '#features' },
-        // { name: 'Pricing', href: '#pricing' },
-      ];
+  const navigation = [
+    { name: 'Features', href: '#features' },
+    // { name: 'Pricing', href: '#pricing' },
+    ...(isSignedIn ? [{ name: 'Inbox', href: '/inbox' }] : []),
+  ];
 
   const linkClass = 'font-semibold leading-6 text-slate-700';
   const mobileLinkClass =

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-import { resizeGoogleAvatar } from '@/lib/youtube/urls';
+import { resizeGoogleAvatar } from '@/lib/platforms/youtube/urls';
 
 interface Props {
   url: string;
@@ -36,6 +36,11 @@ export default function ChannelAvatar({ url, size, cssSize }: Props) {
       alt=""
       className={`${cssSize} shrink-0 rounded-full`}
       loading="lazy"
+      // hdslb (Bilibili) 403s when the Referer points at a non-
+      // bilibili origin; no-referrer is a harmless no-op for YouTube
+      // avatars, and fixes Bilibili avatars without a round-trip
+      // through our own proxy.
+      referrerPolicy="no-referrer"
       onError={() => setFailed(true)}
     />
   );

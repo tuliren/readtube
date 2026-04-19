@@ -1,11 +1,11 @@
 import { VideoPlatformType, prisma } from '@readtube/database';
 
+import type { RssChannel } from '@/lib/platforms/youtube/channelRss';
+import { fetchRssFeed, isYouTubeShort } from '@/lib/platforms/youtube/channelRss';
+import { UNKNOWN_CHANNEL_NAME } from '@/lib/platforms/youtube/constants';
+import { PrivatePlaylistError, scrapePlaylist } from '@/lib/platforms/youtube/playlistScrape';
+import { buildPlaylistRssUrl, buildRssUrl, extractPlaylistId } from '@/lib/platforms/youtube/urls';
 import { isEmptyString } from '@/lib/string';
-import type { RssChannel } from '@/lib/youtube/channelRss';
-import { fetchRssFeed, isYouTubeShort } from '@/lib/youtube/channelRss';
-import { UNKNOWN_CHANNEL_NAME } from '@/lib/youtube/constants';
-import { PrivatePlaylistError, scrapePlaylist } from '@/lib/youtube/playlistScrape';
-import { buildPlaylistRssUrl, buildRssUrl, extractPlaylistId } from '@/lib/youtube/urls';
 
 export interface AddPlaylistResult {
   playlistId: string;

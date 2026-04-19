@@ -1,6 +1,7 @@
-import { UNKNOWN_CHANNEL_NAME, UNKNOWN_VIDEO_TITLE } from '@/lib/youtube/constants';
+import type { TranscriptSegment } from '@/lib/platforms/types';
+import { UNKNOWN_CHANNEL_NAME, UNKNOWN_VIDEO_TITLE } from '@/lib/platforms/youtube/constants';
 
-import type { SubtitleResult, TranscriptSegment } from './types';
+import type { SubtitleResult } from './types';
 
 export async function fetchSubtitleViaYoutubei(videoId: string): Promise<SubtitleResult> {
   const { Innertube } = await import('youtubei.js');

@@ -2,5 +2,6 @@ export { fetchSubtitleViaHtmlScraping } from './fetchViaHtmlScraping';
 export { fetchSubtitleViaTranscriptApi } from './fetchViaTranscriptApi';
 export { fetchSubtitleViaYoutubei } from './fetchViaYoutubei';
 export { extractVideoId } from './helpers';
-export { SubtitleFetchError } from './types';
-export type { CaptionEvent, CaptionTrack, SubtitleResult, TranscriptSegment } from './types';
+export { SubtitleFetchError } from '@/lib/platforms/types';
+export type { TranscriptSegment } from '@/lib/platforms/types';
+export type { CaptionEvent, CaptionTrack, SubtitleResult } from './types';

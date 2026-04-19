@@ -1,7 +1,11 @@
 import '@tests/integration-tests';
 
 import { upsertChannelWithVideos } from '@/lib/channels/upsertChannelWithVideos';
-import type { ChannelSnapshot } from '@/lib/youtube/channelSnapshot';
+import { BilibiliPlatform, YouTubePlatform } from '@/lib/platforms';
+import type { ChannelSnapshot } from '@/lib/platforms/types';
+
+const youtube = new YouTubePlatform();
+const bilibili = new BilibiliPlatform();
 
 // ─── Module mocks ────────────────────────────────────────────────
 
@@ -57,6 +61,7 @@ describe('upsertChannelWithVideos', () => {
 
     const ch = await upsertChannelWithVideos(
       global.testPrisma,
+      youtube,
       'UC_x',
       snapshot({ channelId: 'UC_x', name: 'Refreshed', handle: '@x' })
     );
@@ -70,6 +75,7 @@ describe('upsertChannelWithVideos', () => {
   it('creates a new channel with the scraped handle when no conflict', async () => {
     const ch = await upsertChannelWithVideos(
       global.testPrisma,
+      youtube,
       'UC_new',
       snapshot({ channelId: 'UC_new', name: 'New', handle: '@new' })
     );
@@ -88,6 +94,7 @@ describe('upsertChannelWithVideos', () => {
 
     const ch = await upsertChannelWithVideos(
       global.testPrisma,
+      youtube,
       'UC_x',
       snapshot({ channelId: 'UC_x', name: 'Scraped', handle: '@x', logoUrl: 'https://logo/x' })
     );
@@ -110,6 +117,7 @@ describe('upsertChannelWithVideos', () => {
     // (stale or renamed upstream). Upserting should not throw.
     const ch = await upsertChannelWithVideos(
       global.testPrisma,
+      youtube,
       'UC_b',
       snapshot({ channelId: 'UC_b', name: 'B', handle: '@collide' })
     );
@@ -147,6 +155,7 @@ describe('upsertChannelWithVideos', () => {
 
     const ch = await upsertChannelWithVideos(
       global.testPrisma,
+      youtube,
       'UC_b',
       snapshot({
         channelId: 'UC_b',
@@ -161,9 +170,131 @@ describe('upsertChannelWithVideos', () => {
     expect(ch.logo_url).toBe('https://logo/b');
   });
 
+  it('sets checked_at on the create path', async () => {
+    const ch = await upsertChannelWithVideos(
+      global.testPrisma,
+      youtube,
+      'UC_fresh',
+      snapshot({ channelId: 'UC_fresh', name: 'F', handle: null })
+    );
+    expect(ch.checked_at).not.toBeNull();
+    expect(ch.checked_at!.getTime()).toBeGreaterThan(Date.now() - 5000);
+  });
+
+  it('hydrates videos AND sets checked_at when updating a shadow row', async () => {
+    // Shadow: created by add-video / add-playlist with no videos and
+    // no checked_at. Simulates the user later adding the channel
+    // explicitly — we want full hydration, not a metadata patch.
+    await global.testPrisma.channel.create({
+      data: {
+        source_id: 'UC_shadow',
+        name: 'Shadow',
+        rss_url: 'https://example.com/shadow.xml',
+      },
+    });
+    expect(
+      await global.testPrisma.video.count({ where: { channel: { source_id: 'UC_shadow' } } })
+    ).toBe(0);
+
+    const ch = await upsertChannelWithVideos(
+      global.testPrisma,
+      youtube,
+      'UC_shadow',
+      snapshot({
+        channelId: 'UC_shadow',
+        name: 'Hydrated',
+        handle: '@shadow',
+        videos: [
+          {
+            videoId: 'vid_new',
+            title: 'New',
+            description: '',
+            publishedAt: new Date('2026-01-01T00:00:00Z'),
+            link: 'https://www.youtube.com/watch?v=vid_new',
+            thumbnailUrl: 'https://thumb/new',
+            durationSeconds: 60,
+          },
+        ],
+      })
+    );
+
+    expect(ch.checked_at).not.toBeNull();
+    expect(ch.name).toBe('Hydrated');
+
+    const videos = await global.testPrisma.video.findMany({
+      where: { channel: { source_id: 'UC_shadow' } },
+    });
+    expect(videos).toHaveLength(1);
+    expect(videos[0]!.source_id).toBe('vid_new');
+    expect(videos[0]!.source_type).toBe('YOUTUBE');
+  });
+
+  it('upserts existing videos on the update path (no duplicates)', async () => {
+    // Channel + one existing video.
+    const existing = await global.testPrisma.channel.create({
+      data: {
+        source_id: 'UC_reup',
+        name: 'Stale Name',
+        rss_url: 'https://example.com/reup.xml',
+      },
+    });
+    await global.testPrisma.video.create({
+      data: {
+        channel_id: existing.id,
+        source_type: 'YOUTUBE',
+        source_id: 'vid_dup',
+        title: 'Old Title',
+        description: 'Old desc',
+        published_at: new Date('2026-01-01T00:00:00Z'),
+      },
+    });
+
+    await upsertChannelWithVideos(
+      global.testPrisma,
+      youtube,
+      'UC_reup',
+      snapshot({
+        channelId: 'UC_reup',
+        name: 'Fresh Name',
+        handle: null,
+        videos: [
+          {
+            videoId: 'vid_dup',
+            title: 'New Title',
+            description: '',
+            publishedAt: new Date('2026-01-01T00:00:00Z'),
+            link: 'https://www.youtube.com/watch?v=vid_dup',
+            thumbnailUrl: 'https://thumb/dup',
+            durationSeconds: null,
+          },
+          {
+            videoId: 'vid_extra',
+            title: 'Extra',
+            description: '',
+            publishedAt: new Date('2026-01-02T00:00:00Z'),
+            link: 'https://www.youtube.com/watch?v=vid_extra',
+            thumbnailUrl: 'https://thumb/extra',
+            durationSeconds: 30,
+          },
+        ],
+      })
+    );
+
+    const videos = await global.testPrisma.video.findMany({
+      where: { channel: { source_id: 'UC_reup' } },
+      orderBy: { source_id: 'asc' },
+    });
+    expect(videos).toHaveLength(2);
+    const dup = videos.find((v) => v.source_id === 'vid_dup');
+    expect(dup!.title).toBe('New Title');
+    // Empty description in snapshot does NOT clobber the old one.
+    expect(dup!.description).toBe('Old desc');
+  });
+
   it('creates initial Video rows from the snapshot', async () => {
     await upsertChannelWithVideos(
       global.testPrisma,
+      youtube,
       'UC_v',
       snapshot({
         channelId: 'UC_v',
@@ -196,5 +327,154 @@ describe('upsertChannelWithVideos', () => {
       orderBy: { source_id: 'asc' },
     });
     expect(videos.map((v: { source_id: string }) => v.source_id)).toEqual(['vid1', 'vid2']);
+  });
+});
+
+describe('upsertChannelWithVideos — Bilibili', () => {
+  function bilibiliSnapshot(overrides: Partial<ChannelSnapshot> = {}): ChannelSnapshot {
+    return {
+      channelId: '946974',
+      name: '影视飓风',
+      handle: null,
+      logoUrl: 'http://i0.hdslb.com/bfs/face/xxx.jpg',
+      videos: [],
+      ...overrides,
+    };
+  }
+
+  it('creates a Bilibili channel with source_type=BILIBILI and rss_url=null', async () => {
+    const ch = await upsertChannelWithVideos(
+      global.testPrisma,
+      bilibili,
+      '946974',
+      bilibiliSnapshot()
+    );
+
+    expect(ch.source_id).toBe('946974');
+    expect(ch.handle).toBeNull();
+    expect(ch.rss_url).toBeNull();
+    expect(ch.logo_url).toBe('http://i0.hdslb.com/bfs/face/xxx.jpg');
+
+    // Confirm the row was actually stored as BILIBILI, not the schema
+    // default of YOUTUBE (regression guard for the Devin-flagged
+    // source_type-default bug).
+    const row = await global.testPrisma.channel.findUnique({ where: { id: ch.id } });
+    expect(row!.source_type).toBe('BILIBILI');
+  });
+
+  it('persists Bilibili videos with source_type=BILIBILI on the create path', async () => {
+    await upsertChannelWithVideos(
+      global.testPrisma,
+      bilibili,
+      '946974',
+      bilibiliSnapshot({
+        videos: [
+          {
+            videoId: 'BV1DgdhBGEq2',
+            title: 'Pocket 4 上手',
+            description: '',
+            publishedAt: new Date('2026-04-16T12:00:00Z'),
+            link: 'https://www.bilibili.com/video/BV1DgdhBGEq2/',
+            thumbnailUrl: 'http://i0.hdslb.com/bfs/archive/a.jpg',
+            durationSeconds: 1238,
+          },
+          {
+            videoId: 'BV1NGZtBwELa',
+            title: '4K Sample',
+            description: 'desc',
+            publishedAt: new Date('2026-02-18T03:00:00Z'),
+            link: 'https://www.bilibili.com/video/BV1NGZtBwELa/',
+            thumbnailUrl: 'http://i1.hdslb.com/bfs/archive/b.jpg',
+            durationSeconds: 219,
+          },
+        ],
+      })
+    );
+
+    const videos = await global.testPrisma.video.findMany({
+      where: { channel: { source_id: '946974' } },
+      orderBy: { source_id: 'asc' },
+    });
+    expect(videos).toHaveLength(2);
+    for (const v of videos) {
+      expect(v.source_type).toBe('BILIBILI');
+    }
+    // BV ids preserved verbatim.
+    expect(videos.map((v: { source_id: string }) => v.source_id).sort()).toEqual(
+      ['BV1DgdhBGEq2', 'BV1NGZtBwELa'].sort()
+    );
+  });
+
+  it('hydrates a Bilibili shadow row (no videos, checked_at null)', async () => {
+    // Shadow row: created by the add-video flow when a standalone
+    // Bilibili video was saved. No videos, no checked_at.
+    await global.testPrisma.channel.create({
+      data: {
+        source_type: 'BILIBILI',
+        source_id: '946974',
+        name: 'Shadow',
+        rss_url: null,
+      },
+    });
+
+    const ch = await upsertChannelWithVideos(
+      global.testPrisma,
+      bilibili,
+      '946974',
+      bilibiliSnapshot({
+        name: 'Hydrated',
+        videos: [
+          {
+            videoId: 'BV1hydrated',
+            title: 'Now with videos',
+            description: '',
+            publishedAt: new Date('2026-04-19T00:00:00Z'),
+            link: 'https://www.bilibili.com/video/BV1hydrated/',
+            thumbnailUrl: 'http://i0.hdslb.com/bfs/archive/h.jpg',
+            durationSeconds: 300,
+          },
+        ],
+      })
+    );
+
+    expect(ch.name).toBe('Hydrated');
+    expect(ch.checked_at).not.toBeNull();
+    const videos = await global.testPrisma.video.findMany({
+      where: { channel: { source_id: '946974' } },
+    });
+    expect(videos).toHaveLength(1);
+    expect(videos[0]!.source_type).toBe('BILIBILI');
+  });
+
+  it('does not collide with a same-source_id YouTube row', async () => {
+    // In practice UC ids and Bilibili mids have disjoint shapes, but
+    // the (source_type, source_id) composite unique means we could
+    // persist both. Verify the upsert scopes correctly.
+    await global.testPrisma.channel.create({
+      data: {
+        source_type: 'YOUTUBE',
+        source_id: '946974',
+        name: 'YT 946974',
+        rss_url: 'https://example.com/yt.xml',
+      },
+    });
+
+    const ch = await upsertChannelWithVideos(
+      global.testPrisma,
+      bilibili,
+      '946974',
+      bilibiliSnapshot({ name: 'Bilibili 946974' })
+    );
+
+    expect(ch.name).toBe('Bilibili 946974');
+    const rows = await global.testPrisma.channel.findMany({
+      where: { source_id: '946974' },
+      orderBy: { source_type: 'asc' },
+    });
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r: { source_type: string }) => r.source_type).sort()).toEqual([
+      'BILIBILI',
+      'YOUTUBE',
+    ]);
   });
 });
