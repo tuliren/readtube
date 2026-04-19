@@ -231,19 +231,22 @@ function mapVideoItem(item: RawItem): JustOneApiVideo | null {
 }
 
 /**
- * Bilibili covers are served as `http://i0.hdslb.com/...` — upgrade
- * to https so the thumbnail loads from any origin without mixed-
- * content warnings.
+ * Bilibili's CDN (i0/i1/i2.hdslb.com) returns HTTP 403 over HTTPS for
+ * certain endpoints (observed on `/bfs/face/`). Keep Bilibili image
+ * URLs on `http://` so they load directly — callers must also set
+ * `referrerPolicy="no-referrer"` on the <img> element to dodge
+ * hdslb's hotlink protection. Protocol-relative URLs get an `http:`
+ * prefix, https URLs are downgraded, everything else passes through.
  */
 export function normalizeThumbnail(raw: string | null): string {
   if (raw == null || raw.length === 0) {
     return '';
   }
   if (raw.startsWith('//')) {
-    return `https:${raw}`;
+    return `http:${raw}`;
   }
-  if (raw.startsWith('http://')) {
-    return `https://${raw.slice('http://'.length)}`;
+  if (raw.startsWith('https://')) {
+    return `http://${raw.slice('https://'.length)}`;
   }
   return raw;
 }

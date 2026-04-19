@@ -62,7 +62,7 @@ describe('parseResponse against the real JustOneAPI envelope', () => {
       videoId: 'BV1H7S9B5ENL',
       title: '高等数学（下册）期末必做题｜750题｜宋浩老师',
       description: '',
-      thumbnailUrl: 'https://i1.hdslb.com/bfs/archive/0e566f7f86664d8f139d36210d095a447d0e60cc.jpg',
+      thumbnailUrl: 'http://i1.hdslb.com/bfs/archive/0e566f7f86664d8f139d36210d095a447d0e60cc.jpg',
       publishedAt: new Date(1_775_437_200 * 1000),
       durationSeconds: 3958,
     });
@@ -70,7 +70,7 @@ describe('parseResponse against the real JustOneAPI envelope', () => {
 
   it('normalizes protocol-relative covers on later items', () => {
     const result = parseResponse('946974', REAL_ENVELOPE_FIXTURE as Record<string, unknown>);
-    expect(result.videos[1].thumbnailUrl).toBe('https://i0.hdslb.com/bfs/archive/second.jpg');
+    expect(result.videos[1].thumbnailUrl).toBe('http://i0.hdslb.com/bfs/archive/second.jpg');
     expect(result.videos[1].description).toBe('short description');
   });
 
@@ -174,9 +174,9 @@ describe('parseResponse — missing / malformed', () => {
 
 describe('normalizeThumbnail', () => {
   it.each([
-    ['protocol-relative', '//i0.hdslb.com/p.jpg', 'https://i0.hdslb.com/p.jpg'],
-    ['http upgrade', 'http://i0.hdslb.com/p.jpg', 'https://i0.hdslb.com/p.jpg'],
-    ['https passthrough', 'https://i0.hdslb.com/p.jpg', 'https://i0.hdslb.com/p.jpg'],
+    ['protocol-relative → http', '//i0.hdslb.com/p.jpg', 'http://i0.hdslb.com/p.jpg'],
+    ['http passthrough', 'http://i0.hdslb.com/p.jpg', 'http://i0.hdslb.com/p.jpg'],
+    ['https downgraded to http', 'https://i0.hdslb.com/p.jpg', 'http://i0.hdslb.com/p.jpg'],
   ])('normalizes %s', (_label, input, expected) => {
     expect(normalizeThumbnail(input)).toBe(expected);
   });

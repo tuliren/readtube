@@ -288,12 +288,14 @@ export default function VideoReader({ video, publicMode = false }: Props) {
             <div className="mt-5 flex items-start gap-4">
               {video.thumbnailUrl != null && (
                 <img
-                  // Bilibili's i0.hdslb.com CDN 403s with a non-bilibili
-                  // Referer, and its JSON API returns http:// URLs that
-                  // would otherwise be blocked as mixed content. Strip
-                  // the Referer and coerce to https so both YouTube
-                  // and Bilibili thumbnails load uniformly.
-                  src={video.thumbnailUrl.replace(/^http:\/\//, 'https://')}
+                  // Bilibili's hdslb CDN 403s when the Referer points
+                  // at a non-bilibili origin, AND 403s on HTTPS for
+                  // some paths (observed on `/bfs/face/`, seen rarely
+                  // on `/bfs/archive/`). Use the URL verbatim —
+                  // stored with the correct protocol by the server
+                  // scrapers — and drop the Referer so either
+                  // protocol works.
+                  src={video.thumbnailUrl}
                   alt={video.title}
                   className="w-40 shrink-0 rounded-lg object-cover"
                   loading="eager"
