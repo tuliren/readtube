@@ -1,12 +1,28 @@
 'use client';
 
+import { ArrowPathIcon } from '@heroicons/react/24/outline';
 import { useEffect, useState } from 'react';
 
 import { countWords } from '@/lib/format/wordCount';
 import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
+import { isProduction } from '@/lib/vercelEnv';
 
 import ArticleMarkdown from './ArticleMarkdown';
 import type { TranscriptStatus } from './VideoReader';
+
+function RegenerateButton({ onClick, disabled }: { onClick: () => void; disabled?: boolean }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title="Regenerate article"
+      className="inline-flex shrink-0 items-center gap-1 text-xs text-gray-400 hover:text-gray-700 disabled:opacity-50 disabled:hover:text-gray-400"
+    >
+      <ArrowPathIcon className="h-3.5 w-3.5" />
+      Regenerate
+    </button>
+  );
+}
 
 interface Props {
   videoDbId: string;
@@ -93,7 +109,7 @@ export default function ArticleReader({
     onArticleWordsChange(countWords(content));
   }, [content, onArticleWordsChange]);
 
-  async function handleGenerate() {
+  async function handleGenerate(opts: { force?: boolean } = {}) {
     setStatus('streaming');
     setContent('');
     setHasLatex(false);
@@ -103,7 +119,7 @@ export default function ArticleReader({
       const res = await fetch(`/api/videos/${videoDbId}/article`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ style: STYLE }),
+        body: JSON.stringify({ style: STYLE, force: opts.force === true }),
       });
 
       if (!res.ok) {
@@ -245,7 +261,7 @@ export default function ArticleReader({
           Generate a clean, readable article from the transcript.
         </p>
         <button
-          onClick={handleGenerate}
+          onClick={() => handleGenerate()}
           className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
         >
           Generate article
@@ -266,7 +282,7 @@ export default function ArticleReader({
       <div className="py-8 text-center">
         <p className="mb-4 text-sm text-gray-400">{errorMessage}</p>
         <button
-          onClick={handleGenerate}
+          onClick={() => handleGenerate()}
           className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
         >
           Try again
@@ -275,8 +291,22 @@ export default function ArticleReader({
     );
   }
 
+  // Regenerate is a dev-only escape hatch — costs tokens, can produce
+  // different output every time, not a user-facing affordance. Gated
+  // on non-prod AND non-public so it never renders on app.readtube
+  // deploys or public-share pages.
+  const showRegenerate = !isProduction() && !publicMode;
+
   return (
     <div>
+      {showRegenerate && (
+        <div className="mb-3 flex items-center justify-end border-b border-gray-100 pb-2">
+          <RegenerateButton
+            onClick={() => handleGenerate({ force: true })}
+            disabled={status === 'streaming'}
+          />
+        </div>
+      )}
       <ArticleMarkdown hasLatex={hasLatex}>{content}</ArticleMarkdown>
       {status === 'streaming' && (
         <div className="mt-4 flex items-center gap-2 text-xs text-gray-400">
