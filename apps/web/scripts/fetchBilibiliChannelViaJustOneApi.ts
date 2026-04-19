@@ -1,8 +1,11 @@
 /**
  * Exercises the JustOneAPI path end-to-end for a given Bilibili mid.
- * Dumps the raw response envelope (so the exact field names are
- * visible on first run) alongside the mapped JustOneApiChannelResult
- * that `fetchBilibiliChannelSnapshot` consumes.
+ * Dumps the raw response envelope alongside the mapped
+ * JustOneApiChannelResult that `fetchBilibiliChannelSnapshot`
+ * consumes.
+ *
+ * The `uri` field on each item is very long and noisy — this script
+ * strips it from the raw dump before printing.
  *
  * Requires JUSTONEAPI_TOKEN in the environment (see .env.example).
  *
@@ -11,7 +14,7 @@
  *     scripts/fetchBilibiliChannelViaJustOneApi.ts --mid 946974
  *
  *   # Or use --raw to skip the mapped view entirely and just dump
- *   # the envelope JustOneAPI returned:
+ *   # the (uri-pruned) envelope JustOneAPI returned:
  *   apps/web/scripts/runScriptWithEnv.sh development \
  *     scripts/fetchBilibiliChannelViaJustOneApi.ts --mid 946974 --raw
  */
@@ -22,6 +25,29 @@ import { fetchBilibiliChannelViaJustOneApi } from '@/lib/platforms/bilibili/just
 if (process.env.SCRIPT_ENV !== 'development') {
   console.error('This script can only be run in development environment.');
   process.exit(1);
+}
+
+/** Deep-clone the raw response and drop `uri` from every video item
+ *  so the log isn't dominated by Bilibili's multi-kB m3u8 / tracking
+ *  URI blobs. */
+function pruneRaw(raw: unknown): unknown {
+  if (raw == null) {
+    return raw;
+  }
+  const cloned = JSON.parse(JSON.stringify(raw)) as Record<string, unknown>;
+  // response → data (outer) → data (inner) → item[]
+  const inner = (cloned?.data as Record<string, unknown> | undefined)?.data as
+    | Record<string, unknown>
+    | undefined;
+  const items = inner?.item;
+  if (Array.isArray(items)) {
+    for (const it of items) {
+      if (typeof it === 'object' && it !== null) {
+        delete (it as Record<string, unknown>).uri;
+      }
+    }
+  }
+  return cloned;
 }
 
 (async () => {
@@ -41,14 +67,16 @@ if (process.env.SCRIPT_ENV !== 'development') {
   const result = await fetchBilibiliChannelViaJustOneApi(mid);
   console.info(`Done in ${Date.now() - start}ms`);
 
+  const prunedRaw = pruneRaw(result.raw);
+
   if (raw) {
-    console.info('--- RAW RESPONSE ---');
-    console.info(JSON.stringify(result.raw, null, 2));
+    console.info('--- RAW RESPONSE (uri stripped) ---');
+    console.info(JSON.stringify(prunedRaw, null, 2));
     return;
   }
 
-  console.info('--- RAW RESPONSE ---');
-  console.info(JSON.stringify(result.raw, null, 2));
+  console.info('--- RAW RESPONSE (uri stripped) ---');
+  console.info(JSON.stringify(prunedRaw, null, 2));
   console.info('--- MAPPED CHANNEL ---');
   console.info(JSON.stringify(result.channel, null, 2));
   console.info('--- MAPPED VIDEOS ---');
