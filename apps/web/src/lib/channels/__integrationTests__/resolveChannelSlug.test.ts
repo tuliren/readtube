@@ -80,4 +80,33 @@ describe('resolveChannelSlug', () => {
     expect(await resolveChannelSlug(global.testPrisma, 'UC_missing')).toBeNull();
     expect(await resolveChannelSlug(global.testPrisma, '@nobody')).toBeNull();
   });
+
+  it('picks the Bilibili row when an all-digit slug collides with a YouTube row', async () => {
+    // Worst case the data model permits: YOUTUBE + BILIBILI both with
+    // source_id=946974 (the composite unique constraint is scoped by
+    // source_type, so nothing at the DB layer prevents it). The slug
+    // `946974` is Bilibili-shaped (all digits), so the shape-directed
+    // lookup must pick the Bilibili row — not whichever Postgres
+    // happens to return first from an unordered findFirst.
+    await global.testPrisma.channel.create({
+      data: {
+        source_type: VideoPlatformType.YOUTUBE,
+        source_id: '946974',
+        name: 'YT collision',
+        rss_url: 'https://example.com/yt.xml',
+      },
+    });
+    const bili = await global.testPrisma.channel.create({
+      data: {
+        source_type: VideoPlatformType.BILIBILI,
+        source_id: '946974',
+        name: 'Bili collision',
+        rss_url: null,
+      },
+    });
+
+    const result = await resolveChannelSlug(global.testPrisma, '946974');
+    expect(result?.id).toBe(bili.id);
+    expect(result?.source_type).toBe(VideoPlatformType.BILIBILI);
+  });
 });
