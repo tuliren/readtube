@@ -29,6 +29,16 @@ const FANOUT_CONCURRENCY = 5;
  * same API call already gives us both), so this needs one network call
  * per video and no separate user-info API. Bilibili has no handle
  * convention — `handle` is always null.
+ *
+ * NOTE: a signed-API alternative (`api.bilibili.com/x/space/wbi/arc/search`)
+ * lives at `./channelVideos.ts` — it skips the Puppeteer rendering
+ * entirely. When last tested against a residential IP, Bilibili's risk
+ * engine returned `code=-352` (风控校验失败) despite complete WBI
+ * signing, DM params, and cookie priming (buvid3/4, b_nut, b_lsid,
+ * buvid_fp) — and escalated to HTTP 412 "request was banned" after a
+ * few attempts. The Puppeteer path remains the primary route; the WBI
+ * infra is kept as future option code in case Vercel IP reputation
+ * ends up being friendlier, or we move to a proxy.
  */
 export async function fetchBilibiliChannelSnapshot(mid: string): Promise<ChannelSnapshot> {
   const overallStart = Date.now();
