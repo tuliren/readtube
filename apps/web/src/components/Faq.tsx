@@ -76,7 +76,7 @@ const FAQS: { question: string; answer: ReactNode }[] = [
     ),
   },
   {
-    question: "How is ReadTube different from YouTube's AI summaries or other summarizers?",
+    question: "How is this different from YouTube's AI summaries or other summarizers?",
     answer: (
       <>
         <p>
