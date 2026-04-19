@@ -1,4 +1,4 @@
-import { normalizeThumbnail, parseResponse } from '../justOneApi';
+import { normalizeThumbnail, parseBilibiliSubtitleBody, parseResponse } from '../justOneApi';
 
 const REAL_ENVELOPE_FIXTURE = {
   code: 0,
@@ -186,5 +186,40 @@ describe('normalizeThumbnail', () => {
     ['empty', ''],
   ])('returns empty string for %s', (_label, input) => {
     expect(normalizeThumbnail(input)).toBe('');
+  });
+});
+
+describe('parseBilibiliSubtitleBody', () => {
+  it('maps Bilibili subtitle body entries to TranscriptSegment', () => {
+    const result = parseBilibiliSubtitleBody([
+      { from: 0, to: 2.5, content: 'Hello world' },
+      { from: 2.5, to: 5.125, content: 'Second line' },
+    ]);
+    expect(result).toEqual([
+      { startMs: 0, endMs: 2500, text: 'Hello world' },
+      { startMs: 2500, endMs: 5125, text: 'Second line' },
+    ]);
+  });
+
+  it('trims whitespace from content', () => {
+    const result = parseBilibiliSubtitleBody([{ from: 0, to: 1, content: '  padded  ' }]);
+    expect(result[0].text).toBe('padded');
+  });
+
+  it('drops entries missing from / to / content', () => {
+    const result = parseBilibiliSubtitleBody([
+      { from: 0, to: 1, content: 'ok' },
+      { from: 1, to: 2 },
+      { from: 2, content: 'no to' },
+      { to: 4, content: 'no from' },
+      { from: 4, to: 5, content: '   ' },
+      { from: 'bad' as unknown as number, to: 6, content: 'bad from type' },
+    ]);
+    expect(result).toHaveLength(1);
+    expect(result[0].text).toBe('ok');
+  });
+
+  it('returns [] for an empty body', () => {
+    expect(parseBilibiliSubtitleBody([])).toEqual([]);
   });
 });

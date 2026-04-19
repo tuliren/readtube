@@ -35,6 +35,10 @@
 
 const JUSTONEAPI_BASE_URL = 'https://api.justoneapi.com';
 const USER_VIDEO_LIST_V2_PATH = '/api/bilibili/get-user-video-list/v2';
+const VIDEO_CAPTIONS_V2_PATH = '/api/bilibili/get-video-caption/v2';
+const BILIBILI_VIEW_URL = 'https://api.bilibili.com/x/web-interface/view';
+const BILIBILI_USER_AGENT =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36';
 
 /** Platform-neutral video shape we emit from the mapper. */
 export interface JustOneApiVideo {
@@ -249,4 +253,211 @@ export function normalizeThumbnail(raw: string | null): string {
     return `http://${raw.slice('https://'.length)}`;
   }
   return raw;
+}
+
+// ─── Captions (transcript) ──────────────────────────────────────────
+
+/**
+ * Bilibili's native subtitle JSON (served from the signed
+ * aisubtitle.hdslb.com URL that JustOneAPI hands us). Each entry is
+ * one caption line with seconds-valued from/to and the line text.
+ */
+interface BilibiliSubtitleBody {
+  from?: unknown;
+  to?: unknown;
+  content?: unknown;
+}
+
+interface BilibiliSubtitleFile {
+  body?: BilibiliSubtitleBody[];
+}
+
+/**
+ * One track in the JustOneAPI captions response. `lan` is a language
+ * code ("zh-CN", "en", or "ai-zh" / "ai-en" for auto-generated).
+ * `subtitle_url` is a short-lived signed URL that returns the native
+ * Bilibili subtitle JSON when fetched directly.
+ */
+interface JustOneApiSubtitleTrack {
+  subtitle_url?: unknown;
+  lan_doc?: unknown;
+  lan?: unknown;
+}
+
+interface JustOneApiCaptionsResponse {
+  code: number;
+  message?: string;
+  msg?: string;
+  data?: {
+    data?: JustOneApiSubtitleTrack[];
+  };
+}
+
+interface BilibiliViewAidCidResponse {
+  code: number;
+  message: string;
+  data?: {
+    aid?: number;
+    pages?: Array<{ cid?: number }>;
+  };
+}
+
+/**
+ * Fetch aid + cid for a bvid from Bilibili's own view endpoint.
+ * The captions endpoint needs both; aid is the legacy numeric video
+ * id, cid is the part id (each part of a multi-part video has its
+ * own — we use the first).
+ */
+async function resolveBilibiliAidCid(bvid: string): Promise<{ aid: string; cid: string }> {
+  const url = `${BILIBILI_VIEW_URL}?bvid=${encodeURIComponent(bvid)}`;
+  const res = await fetch(url, {
+    headers: {
+      Accept: 'application/json',
+      'User-Agent': BILIBILI_USER_AGENT,
+      Referer: 'https://www.bilibili.com/',
+    },
+  });
+  if (!res.ok) {
+    throw new Error(`Bilibili view returned HTTP ${res.status}`);
+  }
+  const json = (await res.json()) as BilibiliViewAidCidResponse;
+  if (json.code !== 0 || json.data == null) {
+    throw new Error(`Bilibili view error: code=${json.code} message=${json.message}`);
+  }
+  const aid = typeof json.data.aid === 'number' ? json.data.aid : null;
+  const firstPageCid =
+    Array.isArray(json.data.pages) && typeof json.data.pages[0]?.cid === 'number'
+      ? json.data.pages[0].cid
+      : null;
+  if (aid == null || firstPageCid == null) {
+    throw new Error('Bilibili view response is missing aid or pages[0].cid');
+  }
+  return { aid: String(aid), cid: String(firstPageCid) };
+}
+
+/**
+ * Rank caption tracks so we pick the most useful one for reading.
+ * Lower = better. Prefer Chinese manual > English manual > AI Chinese
+ * > AI English > anything else. `ai-*` prefixes mean auto-generated
+ * (useful but lower quality than a human transcript).
+ */
+function scoreTrack(track: JustOneApiSubtitleTrack): number {
+  const lan = typeof track.lan === 'string' ? track.lan : '';
+  if (lan === 'zh-CN') {
+    return 0;
+  }
+  if (lan === 'en') {
+    return 1;
+  }
+  if (lan.startsWith('ai-zh')) {
+    return 2;
+  }
+  if (lan.startsWith('ai-en')) {
+    return 3;
+  }
+  if (lan.startsWith('ai-')) {
+    return 4;
+  }
+  return 5;
+}
+
+/** Internal: parse Bilibili's native subtitle JSON into TranscriptSegment[]. */
+export function parseBilibiliSubtitleBody(
+  body: BilibiliSubtitleBody[]
+): { startMs: number; endMs: number; text: string }[] {
+  const out: { startMs: number; endMs: number; text: string }[] = [];
+  for (const item of body) {
+    const from = typeof item.from === 'number' ? item.from : null;
+    const to = typeof item.to === 'number' ? item.to : null;
+    const content = typeof item.content === 'string' ? item.content.trim() : '';
+    if (from == null || to == null || content.length === 0) {
+      continue;
+    }
+    out.push({
+      startMs: Math.floor(from * 1000),
+      endMs: Math.floor(to * 1000),
+      text: content,
+    });
+  }
+  return out;
+}
+
+export interface JustOneApiTranscriptResult {
+  segments: { startMs: number; endMs: number; text: string }[];
+  /** Language code of the chosen track ("zh-CN", "ai-zh", etc). */
+  language: string;
+}
+
+/**
+ * Fetch a transcript for a Bilibili video through JustOneAPI as a
+ * fallback for kedou. Three HTTP round-trips total:
+ *
+ *   1. `api.bilibili.com/x/web-interface/view` → aid + cid.
+ *   2. `api.justoneapi.com/api/bilibili/get-video-caption/v2` →
+ *      list of subtitle tracks with `subtitle_url` + `lan`.
+ *   3. The signed `aisubtitle.hdslb.com/.../...json` URL from that
+ *      list → Bilibili's native subtitle JSON with timestamped lines.
+ *
+ * Pick the best track by language (Chinese > English > AI-generated).
+ *
+ * Throws when the token is unset, when any HTTP call fails, when
+ * JustOneAPI responds with a non-zero code, or when no track can be
+ * found. Callers (transcript.ts) decide whether the failure is
+ * transient or permanent based on context.
+ */
+export async function fetchBilibiliTranscriptViaJustOneApi(
+  bvid: string
+): Promise<JustOneApiTranscriptResult> {
+  const token = getToken();
+
+  console.info(`[bilibili/justOneApi] transcript resolving aid/cid for ${bvid}`);
+  const { aid, cid } = await resolveBilibiliAidCid(bvid);
+
+  const captionsUrl =
+    `${JUSTONEAPI_BASE_URL}${VIDEO_CAPTIONS_V2_PATH}` +
+    `?token=${encodeURIComponent(token)}` +
+    `&bvid=${encodeURIComponent(bvid)}` +
+    `&aid=${encodeURIComponent(aid)}` +
+    `&cid=${encodeURIComponent(cid)}`;
+  console.info(`[bilibili/justOneApi] GET captions bvid=${bvid} aid=${aid} cid=${cid}`);
+
+  const captionsRes = await fetch(captionsUrl, { headers: { Accept: 'application/json' } });
+  if (!captionsRes.ok) {
+    throw new Error(`JustOneAPI captions HTTP ${captionsRes.status}`);
+  }
+  const captionsJson = (await captionsRes.json()) as JustOneApiCaptionsResponse;
+  if (captionsJson.code !== 0) {
+    const msg = captionsJson.msg ?? captionsJson.message ?? '';
+    throw new Error(`JustOneAPI captions code=${captionsJson.code} msg=${msg}`);
+  }
+
+  const tracks = (captionsJson.data?.data ?? []).filter(
+    (t): t is JustOneApiSubtitleTrack => typeof t === 'object' && t !== null
+  );
+  if (tracks.length === 0) {
+    throw new Error(`JustOneAPI captions returned no tracks for ${bvid}`);
+  }
+
+  const sorted = [...tracks].sort((a, b) => scoreTrack(a) - scoreTrack(b));
+  const chosen = sorted[0];
+  const subtitleUrl = typeof chosen.subtitle_url === 'string' ? chosen.subtitle_url : '';
+  const language = typeof chosen.lan === 'string' ? chosen.lan : '';
+  if (subtitleUrl.length === 0) {
+    throw new Error(`JustOneAPI captions returned a track without subtitle_url for ${bvid}`);
+  }
+
+  console.info(`[bilibili/justOneApi] chose track lan=${language}, fetching subtitle body`);
+  const bodyRes = await fetch(subtitleUrl);
+  if (!bodyRes.ok) {
+    throw new Error(`Subtitle URL returned HTTP ${bodyRes.status}`);
+  }
+  const subtitle = (await bodyRes.json()) as BilibiliSubtitleFile;
+  const body = Array.isArray(subtitle.body) ? subtitle.body : [];
+  const segments = parseBilibiliSubtitleBody(body);
+  if (segments.length === 0) {
+    throw new Error(`Subtitle body had 0 usable entries for ${bvid}`);
+  }
+
+  console.info(`[bilibili/justOneApi] parsed ${segments.length} segments lan=${language}`);
+  return { segments, language };
 }
