@@ -36,11 +36,23 @@ export async function fetchStaleChannels(): Promise<StaleChannel[]> {
   // They get picked up lazily on first subscribe.
   //
   // Platform-specific fetching is dispatched via getPlatformByType using
-  // source_type — no more filtering on rss_url IS NOT NULL.
+  // source_type.
+  //
+  // Skip Bilibili channels when JUSTONEAPI_TOKEN is unset — their
+  // fetchChannelSnapshot would throw on every cron run, and because
+  // refreshChannel only updates checked_at on success, null-checked_at
+  // Bilibili rows would otherwise sit at the front of the `ORDER BY
+  // checked_at NULLS FIRST` queue forever and starve YouTube refreshes.
+  const excludedPlatforms: VideoPlatformType[] = [];
+  if (process.env.JUSTONEAPI_TOKEN == null || process.env.JUSTONEAPI_TOKEN.length === 0) {
+    excludedPlatforms.push('BILIBILI' as VideoPlatformType);
+  }
+
   const rows = await prisma.channel.findMany({
     where: {
       OR: [{ checked_at: null }, { checked_at: { lt: cutoff } }],
       subscriptions: { some: {} },
+      ...(excludedPlatforms.length > 0 ? { source_type: { notIn: excludedPlatforms } } : {}),
     },
     orderBy: { checked_at: { sort: 'asc', nulls: 'first' } },
     take: BATCH_SIZE,
@@ -120,7 +132,12 @@ export async function refreshChannel(channel: StaleChannel): Promise<RefreshResu
   // Skip the handle update when another channel row already owns it
   // (stale scrape or a rename upstream) — otherwise the update would
   // trip `@@unique([source_type, handle])` and crash the cron.
-  const handleConflict = await hasChannelHandleConflict(prisma, snapshot.handle, channel.id);
+  const handleConflict = await hasChannelHandleConflict(
+    prisma,
+    snapshot.handle,
+    channel.id,
+    channel.source_type
+  );
   await prisma.channel.update({
     where: { id: channel.id },
     data: {

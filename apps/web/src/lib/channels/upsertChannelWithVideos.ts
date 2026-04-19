@@ -65,7 +65,12 @@ export async function upsertChannelWithVideos(
     // the same handle, the update is a no-op for that column; Prisma
     // generates SET handle = '@x' which is fine — Postgres doesn't
     // re-check the unique constraint for unchanged values.
-    const conflictOnHandle = await hasChannelHandleConflict(prisma, snapshot.handle, existing.id);
+    const conflictOnHandle = await hasChannelHandleConflict(
+      prisma,
+      snapshot.handle,
+      existing.id,
+      platform.type
+    );
 
     // Upsert each video. Scoped by `video_unique_source` (the
     // (source_type, source_id) constraint) — same rationale as the
@@ -113,7 +118,12 @@ export async function upsertChannelWithVideos(
   }
 
   // Create path — include handle only when no existing row has it.
-  const handleAlreadyUsed = await hasChannelHandleConflict(prisma, snapshot.handle, null);
+  const handleAlreadyUsed = await hasChannelHandleConflict(
+    prisma,
+    snapshot.handle,
+    null,
+    platform.type
+  );
 
   console.info(`Channel ${sourceId} does not exist — creating with videos`);
   return prisma.channel.create({

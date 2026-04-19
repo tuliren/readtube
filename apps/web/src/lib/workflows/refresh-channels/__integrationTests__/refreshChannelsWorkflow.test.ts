@@ -835,23 +835,80 @@ describe('refreshChannel — Bilibili', () => {
   it('fetchStaleChannels returns mixed YouTube + Bilibili rows', async () => {
     // Regression guard for the dropped `rss_url: { not: null }` filter
     // — without it Bilibili channels (whose rss_url is null) were
-    // invisible to the refresh cron.
+    // invisible to the refresh cron. Token is set so the
+    // JUSTONEAPI_TOKEN starvation guard doesn't filter Bilibili out.
+    const originalToken = process.env.JUSTONEAPI_TOKEN;
+    process.env.JUSTONEAPI_TOKEN = 'test-token';
+    try {
+      const yt = await createChannel({
+        sourceId: 'UC_mix_yt',
+        name: 'YT',
+        platform: VideoPlatformType.YOUTUBE,
+      });
+      const bili = await createChannel({
+        sourceId: '123456',
+        name: 'Bili',
+        platform: VideoPlatformType.BILIBILI,
+      });
+
+      const result = await fetchStaleChannels();
+      const ids = result.map((r) => r.id).sort();
+      expect(ids).toEqual([yt.id, bili.id].sort());
+      const platforms = result.map((r) => r.source_type).sort();
+      expect(platforms).toEqual(['BILIBILI', 'YOUTUBE']);
+    } finally {
+      if (originalToken == null) {
+        delete process.env.JUSTONEAPI_TOKEN;
+      } else {
+        process.env.JUSTONEAPI_TOKEN = originalToken;
+      }
+    }
+  });
+});
+
+describe('fetchStaleChannels — JUSTONEAPI_TOKEN guard', () => {
+  // Save + restore the env var between cases so the rest of the suite
+  // sees its normal (test-env) value, whatever that is.
+  const originalToken = process.env.JUSTONEAPI_TOKEN;
+  afterEach(() => {
+    if (originalToken == null) {
+      delete process.env.JUSTONEAPI_TOKEN;
+    } else {
+      process.env.JUSTONEAPI_TOKEN = originalToken;
+    }
+  });
+
+  it('excludes Bilibili rows when JUSTONEAPI_TOKEN is unset', async () => {
+    delete process.env.JUSTONEAPI_TOKEN;
     const yt = await createChannel({
-      sourceId: 'UC_mix_yt',
+      sourceId: 'UC_yt_guard',
       name: 'YT',
       platform: VideoPlatformType.YOUTUBE,
     });
-    const bili = await createChannel({
-      sourceId: '123456',
-      name: 'Bili',
+    await createChannel({
+      sourceId: '789012',
+      name: 'Bili no-token',
       platform: VideoPlatformType.BILIBILI,
     });
 
     const result = await fetchStaleChannels();
-    const ids = result.map((r) => r.id).sort();
-    expect(ids).toEqual([yt.id, bili.id].sort());
-    // Platform tag comes through so refreshChannel can dispatch.
-    const platforms = result.map((r) => r.source_type).sort();
-    expect(platforms).toEqual(['BILIBILI', 'YOUTUBE']);
+    expect(result.map((r) => r.id)).toEqual([yt.id]);
+  });
+
+  it('includes Bilibili rows when JUSTONEAPI_TOKEN is set', async () => {
+    process.env.JUSTONEAPI_TOKEN = 'test-token';
+    await createChannel({
+      sourceId: 'UC_yt_tok',
+      name: 'YT',
+      platform: VideoPlatformType.YOUTUBE,
+    });
+    const bili = await createChannel({
+      sourceId: '456789',
+      name: 'Bili with-token',
+      platform: VideoPlatformType.BILIBILI,
+    });
+
+    const result = await fetchStaleChannels();
+    expect(result.map((r) => r.id).sort()).toContain(bili.id);
   });
 });

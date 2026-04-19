@@ -64,8 +64,9 @@ export class BilibiliPlatform extends VideoPlatform {
 
   buildRssUrl(_channelSourceId: string): string | null {
     // Bilibili has no native RSS feed. Channel rows for Bilibili are
-    // created with rss_url = null; the refresh-channels cron skips
-    // them because its SQL filters on rss_url IS NOT NULL.
+    // stored with rss_url = null; the refresh-channels cron picks
+    // them up the same way YouTube rows, dispatching via
+    // getPlatformByType(source_type).fetchChannelSnapshot.
     return null;
   }
 }
