@@ -7,22 +7,16 @@ import { fetchBilibiliVideoSnapshot } from './videoSnapshot';
 /**
  * Fetch channel meta + recent videos for a Bilibili uploader via
  * JustOneAPI (third-party wrapper at justoneapi.com). We delegate the
- * IP-reputation / WBI-risk-control problem to them — they collect
- * the data on their own residential infra and expose a simple
- * token-auth HTTP API.
+ * IP-reputation / risk-control problem to them — they collect the
+ * data on their own infra and expose a simple token-auth HTTP API.
  *
- * If JustOneAPI's response is missing channel name/avatar (depends on
- * whether their envelope carries owner info top-level), we fall back
- * to one `x/web-interface/view` call on the newest BV id to fetch
- * those fields — the same trick we used with the WBI path.
+ * JustOneAPI's envelope doesn't include the uploader's avatar, so we
+ * fall back to one `x/web-interface/view` call on the newest bvid to
+ * backfill channel name/avatar whenever either is missing.
  *
- * NOTE: two earlier paths live in the tree as dormant fallbacks:
- *   - `channelScrape.ts` + `lib/puppeteer/` — headless-Chromium scrape
- *     of `space.bilibili.com/<mid>/upload/video`.
- *   - `channelVideos.ts` + `wbi.ts` — direct signed call to
- *     `api.bilibili.com/x/space/wbi/arc/search`.
- * Both got rate-limited or risk-controlled in real-world use, which
- * is why we're on JustOneAPI now. They're kept for quick rollback.
+ * The Puppeteer-based scraper at `./channelScrape.ts` (+
+ * `lib/puppeteer/`) stays in the tree as a dormant fallback if we
+ * need to route through a headless browser again.
  */
 export async function fetchBilibiliChannelSnapshot(mid: string): Promise<ChannelSnapshot> {
   const overallStart = Date.now();

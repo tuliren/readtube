@@ -1,6 +1,6 @@
 /**
  * Third-party wrapper around Bilibili's channel / upload-list data.
- * We delegate the IP-reputation and WBI-risk-control problem to
+ * We delegate the IP-reputation and risk-control problem to
  * justoneapi.com — they run their own collectors and expose a simple
  * token-auth HTTP API.
  *
