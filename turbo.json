@@ -32,6 +32,10 @@
       "cache": false,
       "env": ["DATABASE_URL"]
     },
+    "db:migrate": {
+      "cache": false,
+      "env": ["DATABASE_URL"]
+    },
     "dev": {
       "dependsOn": ["^db:generate"],
       "env": ["NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY", "CLERK_SECRET_KEY"],
