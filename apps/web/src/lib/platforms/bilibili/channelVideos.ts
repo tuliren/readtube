@@ -14,8 +14,6 @@ const BILIBILI_ARC_SEARCH_URL = 'https://api.bilibili.com/x/space/wbi/arc/search
 const BILIBILI_USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36';
 
-const DEFAULT_PAGE_SIZE = 30;
-
 // "DM" (device-monitor) params added by Bilibili ~mid-2024 on signed
 // wbi endpoints. They simulate a browser's canvas/WebGL fingerprint.
 // These static values match what a real Chrome sends and are accepted
@@ -69,24 +67,20 @@ interface ArcSearchResponse {
 }
 
 /**
- * Fetch the newest-first page of a Bilibili user's uploads.
+ * Fetch the newest-first page of a Bilibili user's uploads. Does not
+ * paginate — we only ever return page 1, using Bilibili's own default
+ * page size (omitting `ps` from the signed query makes the request
+ * look like a first-load from the space page).
  *
  * Ordering: `order=pubdate` returns publication-date descending, which
  * matches what the frontend shows by default and what the
  * refresh-channels cron expects.
  */
-export async function fetchBilibiliChannelVideos(
-  mid: string,
-  opts: { page?: number; pageSize?: number } = {}
-): Promise<BilibiliChannelVideo[]> {
-  const pn = opts.page ?? 1;
-  const ps = opts.pageSize ?? DEFAULT_PAGE_SIZE;
-
+export async function fetchBilibiliChannelVideos(mid: string): Promise<BilibiliChannelVideo[]> {
   const [signed, cookieHeader] = await Promise.all([
     signWbi({
       mid,
-      pn,
-      ps,
+      pn: 1,
       order: 'pubdate',
       platform: 'web',
       web_location: '1550101',

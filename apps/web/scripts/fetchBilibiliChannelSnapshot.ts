@@ -1,13 +1,13 @@
 /**
- * Runs the full Bilibili channel-snapshot pipeline (Puppeteer scrape
- * + per-video fan-out) and logs the neutral ChannelSnapshot that
- * upsertChannelWithVideos would persist. Use this to smoke-test the
- * add-channel / refresh-channels flow before wiring it into a workflow.
+ * Runs the full Bilibili channel-snapshot pipeline (signed arc/search
+ * + one view call for channel meta) and logs the neutral ChannelSnapshot
+ * that upsertChannelWithVideos would persist. Use this to smoke-test
+ * the add-channel / refresh-channels flow or to confirm the API path
+ * works on a given mid.
  *
- * A signed-API alternative lives at
- * `apps/web/src/lib/platforms/bilibili/channelVideos.ts` and could be
- * exercised here by swapping the import — see its header for why that
- * path is currently dormant.
+ * The earlier Puppeteer-based scrape (`channelScrape.ts` +
+ * `lib/puppeteer/`) stays in the tree as dormant fallback infra in
+ * case we need to route through a headless browser again.
  *
  * Usage:
  *   apps/web/scripts/runScriptWithEnv.sh development \

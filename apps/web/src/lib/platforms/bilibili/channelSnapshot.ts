@@ -1,129 +1,67 @@
 import type { ChannelSnapshot, SnapshotVideo } from '@/lib/platforms/types';
 
-import { scrapeBilibiliChannel } from './channelScrape';
+import { fetchBilibiliChannelVideos } from './channelVideos';
 import { buildBilibiliVideoUrl } from './urls';
 import { fetchBilibiliVideoSnapshot } from './videoSnapshot';
 
 /**
- * Maximum number of videos to include in an initial channel snapshot.
- * Matches the rough size of a YouTube RSS feed (~15 entries) so the
- * initial subscription views are comparable across platforms.
- */
-const MAX_VIDEOS_PER_SNAPSHOT = 15;
-
-/**
- * Max concurrent per-video HTTP fan-out to api.bilibili.com.
- * 5 is well under Bilibili's public rate limit and keeps the total
- * snapshot time well under a few seconds for a 15-video channel.
- */
-const FANOUT_CONCURRENCY = 5;
-
-/**
- * Fetch channel meta + recent videos for a Bilibili uploader. Two-phase:
- *   1. Scrape the /upload/video space page to get BV ids in
- *      publication-date-descending order.
- *   2. Fan out to the public `web-interface/view` API for per-video
- *      metadata (title, description, duration, thumbnail, pubdate).
+ * Fetch channel meta + recent videos for a Bilibili uploader via the
+ * signed JSON API. Two calls total:
  *
- * Channel name/avatar are sourced from the first video's `owner` (the
- * same API call already gives us both), so this needs one network call
- * per video and no separate user-info API. Bilibili has no handle
- * convention — `handle` is always null.
+ *   1. `api.bilibili.com/x/space/wbi/arc/search` → newest-first list
+ *      with title, description, thumbnail, pubdate, duration per item.
+ *   2. `api.bilibili.com/x/web-interface/view` on the newest video →
+ *      owner's name + avatar (used as channel name + logo).
  *
- * NOTE: a signed-API alternative (`api.bilibili.com/x/space/wbi/arc/search`)
- * lives at `./channelVideos.ts` — it skips the Puppeteer rendering
- * entirely. When last tested against a residential IP, Bilibili's risk
- * engine returned `code=-352` (风控校验失败) despite complete WBI
- * signing, DM params, and cookie priming (buvid3/4, b_nut, b_lsid,
- * buvid_fp) — and escalated to HTTP 412 "request was banned" after a
- * few attempts. The Puppeteer path remains the primary route; the WBI
- * infra is kept as future option code in case Vercel IP reputation
- * ends up being friendlier, or we move to a proxy.
+ * We deliberately reuse the view-endpoint call for channel meta
+ * instead of hitting the separate `space/wbi/acc/info` endpoint — it
+ * saves a second signed round-trip and lets us reuse the already-tested
+ * `fetchBilibiliVideoSnapshot`. Bilibili has no `@handle` convention,
+ * so `handle` is always null.
+ *
+ * NOTE: this path replaces the earlier Puppeteer scrape of
+ * `space.bilibili.com/<mid>/upload/video`. The scrape path
+ * (`channelScrape.ts` + `lib/puppeteer/`) is kept in the tree as
+ * dormant fallback infrastructure. Bilibili's risk engine may still
+ * return `code=-352` on certain IP ranges; callers should treat the
+ * errors as "Channel not found or not accessible" at the UI layer.
  */
 export async function fetchBilibiliChannelSnapshot(mid: string): Promise<ChannelSnapshot> {
   const overallStart = Date.now();
   console.info(`[bilibili/channelSnapshot] start mid=${mid}`);
 
-  const scraped = await scrapeBilibiliChannel(mid);
-  const bvids = scraped.videos.slice(0, MAX_VIDEOS_PER_SNAPSHOT).map((v) => v.videoId);
-
-  if (bvids.length === 0) {
-    throw new Error(`Bilibili channel ${mid} has no videos on the /upload/video page`);
-  }
-
+  const listStart = Date.now();
+  const videos = await fetchBilibiliChannelVideos(mid);
   console.info(
-    `[bilibili/channelSnapshot] mid=${mid} fan-out starting over ${bvids.length}/${scraped.videos.length} BV ids`
-  );
-  const fanOutStart = Date.now();
-  const snapshots = await fanOutVideoSnapshots(bvids);
-  const successCount = snapshots.filter((s) => s != null).length;
-  console.info(
-    `[bilibili/channelSnapshot] mid=${mid} fan-out done in ${Date.now() - fanOutStart}ms: ${successCount}/${bvids.length} succeeded`
+    `[bilibili/channelSnapshot] mid=${mid} arc/search done in ${Date.now() - listStart}ms: ${videos.length} videos`
   );
 
-  // Channel-level info comes from the first successfully fetched video.
-  const firstOk = snapshots.find((s) => s != null);
-  if (firstOk == null) {
-    throw new Error(`All video snapshots failed for Bilibili channel ${mid}`);
+  if (videos.length === 0) {
+    throw new Error(`Bilibili channel ${mid} has no videos on the arc/search list`);
   }
 
-  const videos: SnapshotVideo[] = [];
-  for (const snap of snapshots) {
-    if (snap == null) {
-      continue;
-    }
-    videos.push({
-      videoId: snap.videoId,
-      title: snap.title,
-      description: snap.description,
-      publishedAt: snap.publishedAt,
-      link: buildBilibiliVideoUrl(snap.videoId),
-      thumbnailUrl: snap.thumbnailUrl,
-      durationSeconds: snap.durationSeconds,
-    });
-  }
+  const metaStart = Date.now();
+  const firstVideoMeta = await fetchBilibiliVideoSnapshot(videos[0].videoId);
+  console.info(`[bilibili/channelSnapshot] mid=${mid} view done in ${Date.now() - metaStart}ms`);
+
+  const snapshotVideos: SnapshotVideo[] = videos.map((v) => ({
+    videoId: v.videoId,
+    title: v.title,
+    description: v.description,
+    publishedAt: v.publishedAt,
+    link: buildBilibiliVideoUrl(v.videoId),
+    thumbnailUrl: v.thumbnailUrl,
+    durationSeconds: v.durationSeconds,
+  }));
 
   console.info(
-    `[bilibili/channelSnapshot] mid=${mid} done in ${Date.now() - overallStart}ms: name="${firstOk.channel.name}" videos=${videos.length}`
+    `[bilibili/channelSnapshot] mid=${mid} done in ${Date.now() - overallStart}ms: name="${firstVideoMeta.channel.name}" videos=${snapshotVideos.length}`
   );
   return {
     channelId: mid,
-    name: firstOk.channel.name,
+    name: firstVideoMeta.channel.name,
     handle: null,
-    logoUrl: firstOk.channel.logoUrl,
-    videos,
+    logoUrl: firstVideoMeta.channel.logoUrl,
+    videos: snapshotVideos,
   };
-}
-
-/**
- * Run `fetchBilibiliVideoSnapshot` over `bvids` with a small concurrency
- * cap. Returns results in the same order as the input; individual
- * failures are logged and mapped to null so one bad BV id doesn't sink
- * the whole snapshot.
- */
-async function fanOutVideoSnapshots(bvids: string[]) {
-  const out: (Awaited<ReturnType<typeof fetchBilibiliVideoSnapshot>> | null)[] = new Array(
-    bvids.length
-  ).fill(null);
-  let cursor = 0;
-
-  async function worker() {
-    while (true) {
-      const i = cursor++;
-      if (i >= bvids.length) {
-        return;
-      }
-      try {
-        out[i] = await fetchBilibiliVideoSnapshot(bvids[i]);
-      } catch (err) {
-        console.warn(`[bilibili/channelSnapshot] fetch failed for ${bvids[i]}:`, err);
-      }
-    }
-  }
-
-  const workers = new Array(Math.min(FANOUT_CONCURRENCY, bvids.length))
-    .fill(null)
-    .map(() => worker());
-  await Promise.all(workers);
-  return out;
 }
