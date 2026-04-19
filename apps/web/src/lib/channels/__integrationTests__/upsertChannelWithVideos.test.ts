@@ -169,6 +169,127 @@ describe('upsertChannelWithVideos', () => {
     expect(ch.logo_url).toBe('https://logo/b');
   });
 
+  it('sets checked_at on the create path', async () => {
+    const ch = await upsertChannelWithVideos(
+      global.testPrisma,
+      youtube,
+      'UC_fresh',
+      snapshot({ channelId: 'UC_fresh', name: 'F', handle: null })
+    );
+    expect(ch.checked_at).not.toBeNull();
+    expect(ch.checked_at!.getTime()).toBeGreaterThan(Date.now() - 5000);
+  });
+
+  it('hydrates videos AND sets checked_at when updating a shadow row', async () => {
+    // Shadow: created by add-video / add-playlist with no videos and
+    // no checked_at. Simulates the user later adding the channel
+    // explicitly — we want full hydration, not a metadata patch.
+    await global.testPrisma.channel.create({
+      data: {
+        source_id: 'UC_shadow',
+        name: 'Shadow',
+        rss_url: 'https://example.com/shadow.xml',
+      },
+    });
+    expect(
+      await global.testPrisma.video.count({ where: { channel: { source_id: 'UC_shadow' } } })
+    ).toBe(0);
+
+    const ch = await upsertChannelWithVideos(
+      global.testPrisma,
+      youtube,
+      'UC_shadow',
+      snapshot({
+        channelId: 'UC_shadow',
+        name: 'Hydrated',
+        handle: '@shadow',
+        videos: [
+          {
+            videoId: 'vid_new',
+            title: 'New',
+            description: '',
+            publishedAt: new Date('2026-01-01T00:00:00Z'),
+            link: 'https://www.youtube.com/watch?v=vid_new',
+            thumbnailUrl: 'https://thumb/new',
+            durationSeconds: 60,
+          },
+        ],
+      })
+    );
+
+    expect(ch.checked_at).not.toBeNull();
+    expect(ch.name).toBe('Hydrated');
+
+    const videos = await global.testPrisma.video.findMany({
+      where: { channel: { source_id: 'UC_shadow' } },
+    });
+    expect(videos).toHaveLength(1);
+    expect(videos[0]!.source_id).toBe('vid_new');
+    expect(videos[0]!.source_type).toBe('YOUTUBE');
+  });
+
+  it('upserts existing videos on the update path (no duplicates)', async () => {
+    // Channel + one existing video.
+    const existing = await global.testPrisma.channel.create({
+      data: {
+        source_id: 'UC_reup',
+        name: 'Stale Name',
+        rss_url: 'https://example.com/reup.xml',
+      },
+    });
+    await global.testPrisma.video.create({
+      data: {
+        channel_id: existing.id,
+        source_type: 'YOUTUBE',
+        source_id: 'vid_dup',
+        title: 'Old Title',
+        description: 'Old desc',
+        published_at: new Date('2026-01-01T00:00:00Z'),
+      },
+    });
+
+    await upsertChannelWithVideos(
+      global.testPrisma,
+      youtube,
+      'UC_reup',
+      snapshot({
+        channelId: 'UC_reup',
+        name: 'Fresh Name',
+        handle: null,
+        videos: [
+          {
+            videoId: 'vid_dup',
+            title: 'New Title',
+            description: '',
+            publishedAt: new Date('2026-01-01T00:00:00Z'),
+            link: 'https://www.youtube.com/watch?v=vid_dup',
+            thumbnailUrl: 'https://thumb/dup',
+            durationSeconds: null,
+          },
+          {
+            videoId: 'vid_extra',
+            title: 'Extra',
+            description: '',
+            publishedAt: new Date('2026-01-02T00:00:00Z'),
+            link: 'https://www.youtube.com/watch?v=vid_extra',
+            thumbnailUrl: 'https://thumb/extra',
+            durationSeconds: 30,
+          },
+        ],
+      })
+    );
+
+    const videos = await global.testPrisma.video.findMany({
+      where: { channel: { source_id: 'UC_reup' } },
+      orderBy: { source_id: 'asc' },
+    });
+    expect(videos).toHaveLength(2);
+    const dup = videos.find((v) => v.source_id === 'vid_dup');
+    expect(dup!.title).toBe('New Title');
+    // Empty description in snapshot does NOT clobber the old one.
+    expect(dup!.description).toBe('Old desc');
+  });
+
   it('creates initial Video rows from the snapshot', async () => {
     await upsertChannelWithVideos(
       global.testPrisma,

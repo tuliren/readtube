@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server';
 import { VideoPlatformType, prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 
+import { isChannelFresh } from '@/lib/channels/staleness';
 import { upsertChannelWithVideos } from '@/lib/channels/upsertChannelWithVideos';
 import { ensureUserExists } from '@/lib/db/user';
 import { type VideoPlatform, detectChannelSource, getPlatformByType } from '@/lib/platforms';
@@ -110,6 +111,45 @@ export async function POST(request: NextRequest) {
 
   console.info(`[channels/POST] Adding channel: ${input} for user ${userId}`);
 
+  // Fast path: sync-parse the source_id (works for YouTube /channel/UC
+  // URLs, bare UC ids, Bilibili space URLs, bare numeric mids). Check
+  // the DB before any network I/O. If the row exists AND its
+  // checked_at is within STALE_DAYS, skip the upstream fetch and
+  // just attach the user's subscription.
+  //
+  // Shadow rows (created as a side effect by the add-video /
+  // add-playlist flow) have checked_at = null, so they correctly
+  // fall through to the fetch branch — otherwise the user would
+  // subscribe to a channel that never gets its video list hydrated.
+  const directSource = detectChannelSource(input);
+  if (directSource != null) {
+    const fastRow = await prisma.channel.findUnique({
+      where: {
+        channel_unique_source: {
+          source_type: directSource.platform.type,
+          source_id: directSource.sourceId,
+        },
+      },
+    });
+    if (fastRow != null) {
+      const alreadySubscribed = await prisma.userSubscription.findFirst({
+        where: { user_id: userId, channel_id: fastRow.id },
+        select: { id: true },
+      });
+      if (alreadySubscribed != null) {
+        console.error(
+          `[channels/POST] User ${userId} already subscribed to channel ${directSource.sourceId}`
+        );
+        return NextResponse.json({ error: 'You already follow this channel.' }, { status: 409 });
+      }
+      if (isChannelFresh(fastRow.checked_at)) {
+        console.info(`[channels/POST] Using fresh cached row for ${directSource.sourceId}`);
+        await ensureUserExists(userId);
+        return finishSubscribe(userId, fastRow.id);
+      }
+    }
+  }
+
   let resolved: Awaited<ReturnType<typeof resolveChannel>>;
   try {
     resolved = await resolveChannel(input);
@@ -132,7 +172,9 @@ export async function POST(request: NextRequest) {
   // Check if user already subscribed to this channel. Scope by both
   // source_type and source_id so a hypothetical id collision between
   // platforms (e.g. a BV-shaped string and a YT video id) can't
-  // shadow a different platform's row.
+  // shadow a different platform's row. (The fast path above handles
+  // the common case; this catches the YouTube-@handle flow which
+  // only knows sourceId post-fetch.)
   const existingSub = await prisma.userSubscription.findFirst({
     where: {
       user_id: userId,
@@ -144,32 +186,42 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'You already follow this channel.' }, { status: 409 });
   }
 
-  // Upsert the channel atomically. upsertChannelWithVideos guards
-  // against the `(source_type, handle)` unique constraint when another
-  // row already owns the scraped handle.
+  // Upsert the channel atomically. upsertChannelWithVideos persists
+  // the snapshot's videos and sets checked_at on both create AND
+  // update paths — so a shadow row whose checked_at was null finally
+  // gets fully hydrated when a user explicitly adds the channel.
   const channel = await upsertChannelWithVideos(prisma, platform, sourceId, snapshot);
 
-  // Compute the initial read watermark per the configured subscription mode
-  // (all_new / none_new / recent_n_new). Done after the channel + its videos
-  // have been created above so the videos are queryable.
-  const initialReadAt = await computeInitialReadAt(prisma, channel.id);
+  return finishSubscribe(userId, channel.id);
+}
 
-  // Subscribe user to channel. Use upsert to gracefully handle the race window
-  // between the existingSub check above and this write — if two concurrent
-  // requests from the same user both pass the check, the second one becomes a
-  // no-op instead of failing with a unique-constraint violation. The watermark
-  // is set on create only; the update branch is intentionally empty so a
-  // re-subscription race doesn't reset an existing user's read state.
+/**
+ * Create the UserSubscription (if missing) and return the ChannelData
+ * payload the client expects. Extracted so both the fast-path
+ * (existing+fresh channel, no fetch) and the slow-path (fresh fetch +
+ * upsert) can share it.
+ *
+ * `userSubscription.upsert` gracefully handles the race window between
+ * the "already subscribed" check and this write: if two concurrent
+ * requests from the same user both pass the check, the second one
+ * becomes a no-op on the empty `update` branch instead of failing
+ * with a unique-constraint violation. The read_at watermark is set on
+ * create only so a re-subscribe race can't reset an existing user's
+ * read state.
+ */
+async function finishSubscribe(userId: string, channelId: string) {
+  const initialReadAt = await computeInitialReadAt(prisma, channelId);
+
   await prisma.userSubscription.upsert({
     where: {
-      subscription_unique_user_channel: { user_id: userId, channel_id: channel.id },
+      subscription_unique_user_channel: { user_id: userId, channel_id: channelId },
     },
-    create: { user_id: userId, channel_id: channel.id, read_at: initialReadAt },
+    create: { user_id: userId, channel_id: channelId, read_at: initialReadAt },
     update: {},
   });
 
   const channelRow = await prisma.channel.findUniqueOrThrow({
-    where: { id: channel.id },
+    where: { id: channelId },
     select: {
       id: true,
       source_type: true,
@@ -181,7 +233,7 @@ export async function POST(request: NextRequest) {
       created_at: true,
     },
   });
-  const unreadCount = await countUnreadVideos(prisma, userId, channel.id, initialReadAt);
+  const unreadCount = await countUnreadVideos(prisma, userId, channelId, initialReadAt);
 
   return NextResponse.json(
     {

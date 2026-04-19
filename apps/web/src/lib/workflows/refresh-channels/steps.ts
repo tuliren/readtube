@@ -1,11 +1,11 @@
 import { type VideoPlatformType, prisma } from '@readtube/database';
 
 import { hasChannelHandleConflict } from '@/lib/channels/handleConflict';
+import { STALE_DAYS } from '@/lib/channels/staleness';
 import { getPlatformByType } from '@/lib/platforms';
 import { isEmptyString } from '@/lib/string';
 
-/** Number of days before a channel is considered stale and eligible for refresh. */
-export const STALE_DAYS = 5;
+export { STALE_DAYS };
 
 /** Maximum number of channels to refresh per workflow run. */
 export const BATCH_SIZE = 10;

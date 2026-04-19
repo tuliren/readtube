@@ -20,7 +20,7 @@ export interface UpsertChannelResult {
 }
 
 /**
- * Upsert a Channel + its initial video list from a fresh snapshot.
+ * Upsert a Channel + its full snapshot (metadata + videos).
  *
  * Intentionally does NOT use prisma.channel.upsert. Prisma compiles
  * that to `INSERT ... ON CONFLICT (source_type, source_id) DO UPDATE`.
@@ -29,12 +29,17 @@ export interface UpsertChannelResult {
  * simultaneously violates the `(source_type, handle)` unique
  * constraint, and Postgres can raise that P2002 instead of routing
  * through ON CONFLICT. The ON CONFLICT clause only catches conflicts
- * on the constraint it names.
+ * on the constraint it names. Split into findUnique + create / update
+ * so the INSERT path only runs when there's truly no existing row.
+ * Handle updates are also guarded: if *another* row owns the scraped
+ * handle (stale data, rename upstream), we skip writing it here.
  *
- * Split into findUnique + create / update so the INSERT path only
- * runs when there's truly no existing row. Handle updates are also
- * guarded: if *another* row owns the scraped handle (stale data,
- * rename upstream), we skip writing it here.
+ * On BOTH create and update paths, the snapshot's videos are persisted
+ * (upsert per video) and `checked_at` is set to now. This matters when
+ * a row was first created as a "shadow" channel by the add-video or
+ * add-playlist flow (metadata only, no videos, checked_at = null) and
+ * the user now explicitly adds the channel: we want it fully hydrated,
+ * not just its logo/handle patched.
  */
 export async function upsertChannelWithVideos(
   prisma: PrismaClient,
@@ -53,27 +58,64 @@ export async function upsertChannelWithVideos(
   const hasHandle = !isEmptyString(snapshot.handle);
 
   if (existing != null) {
-    console.info(`Channel with source id ${sourceId} already exists, updating...`);
-    // Update path: only refresh the handle when no other row owns it.
-    // If the existing row already has the same handle, the update is a
-    // no-op for that column; Prisma generates SET handle = '@x' which
-    // is fine — Postgres doesn't re-check the unique constraint for
-    // unchanged values.
+    console.info(`Channel ${sourceId} exists — updating metadata + upserting videos`);
+
+    // Handle updates are guarded: if another row owns the scraped
+    // handle, we skip writing it here. If the existing row already has
+    // the same handle, the update is a no-op for that column; Prisma
+    // generates SET handle = '@x' which is fine — Postgres doesn't
+    // re-check the unique constraint for unchanged values.
     const conflictOnHandle = await hasChannelHandleConflict(prisma, snapshot.handle, existing.id);
+
+    // Upsert each video. Scoped by `video_unique_source` (the
+    // (source_type, source_id) constraint) — same rationale as the
+    // refresh-channels cron: a video may already exist under a
+    // different channel_id (e.g. the playlist-owner's channel from
+    // the add-playlist flow) and we want to correct that.
+    for (const video of snapshot.videos) {
+      await prisma.video.upsert({
+        where: {
+          video_unique_source: {
+            source_type: platform.type,
+            source_id: video.videoId,
+          },
+        },
+        create: {
+          channel_id: existing.id,
+          source_type: platform.type,
+          source_id: video.videoId,
+          title: video.title,
+          description: video.description,
+          published_at: video.publishedAt,
+          thumbnail_url: video.thumbnailUrl,
+          duration_seconds: video.durationSeconds,
+        },
+        update: {
+          channel_id: existing.id,
+          title: video.title,
+          ...(isEmptyString(video.description) ? {} : { description: video.description }),
+          ...(video.publishedAt != null ? { published_at: video.publishedAt } : {}),
+          thumbnail_url: video.thumbnailUrl,
+          ...(video.durationSeconds != null ? { duration_seconds: video.durationSeconds } : {}),
+        },
+      });
+    }
 
     return prisma.channel.update({
       where: { id: existing.id },
       data: {
+        name: snapshot.name,
         ...(snapshot.logoUrl != null ? { logo_url: snapshot.logoUrl } : {}),
         ...(hasHandle && !conflictOnHandle ? { handle: snapshot.handle } : {}),
+        checked_at: new Date(),
       },
     });
   }
 
-  // Create path: only include handle when no existing row has it.
+  // Create path — include handle only when no existing row has it.
   const handleAlreadyUsed = await hasChannelHandleConflict(prisma, snapshot.handle, null);
 
-  console.info(`Channel does not exist, creating...`);
+  console.info(`Channel ${sourceId} does not exist — creating with videos`);
   return prisma.channel.create({
     data: {
       source_type: platform.type,
@@ -81,6 +123,7 @@ export async function upsertChannelWithVideos(
       name: snapshot.name,
       rss_url: platform.buildRssUrl(sourceId),
       logo_url: snapshot.logoUrl,
+      checked_at: new Date(),
       ...(hasHandle && !handleAlreadyUsed ? { handle: snapshot.handle } : {}),
       videos: {
         create: snapshot.videos.map((v) => ({
