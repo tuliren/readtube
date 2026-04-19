@@ -91,23 +91,30 @@ export default function AddChannelModal({ isOpen, onClose, onChannelAdded }: Pro
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Add channel</DialogTitle>
-          <DialogDescription>
-            Paste a channel URL from YouTube (
-            <code className="rounded bg-gray-100 px-1">youtube.com/@handle</code> or{' '}
-            <code className="rounded bg-gray-100 px-1">youtube.com/channel/UCxxxxx</code>) or
-            Bilibili (
-            <code className="rounded bg-gray-100 px-1">space.bilibili.com/&lt;mid&gt;</code>
-            ).
-          </DialogDescription>
+          <DialogDescription>Paste a channel URL from YouTube or Bilibili.</DialogDescription>
+          <ul className="mt-2 space-y-1 text-sm text-gray-600">
+            <li className="flex gap-2">
+              <span aria-hidden>•</span>
+              <code className="rounded bg-gray-100 px-1">youtube.com/@handle</code>
+            </li>
+            <li className="flex gap-2">
+              <span aria-hidden>•</span>
+              <code className="rounded bg-gray-100 px-1">youtube.com/channel/UCxxxxx</code>
+            </li>
+            <li className="flex gap-2">
+              <span aria-hidden>•</span>
+              <code className="rounded bg-gray-100 px-1">space.bilibili.com/&lt;mid&gt;</code>
+            </li>
+          </ul>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="mt-2 space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <Input
             id="channel-url"
             type="text"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            placeholder="YouTube channel URL or space.bilibili.com/…"
+            placeholder="Channel URL"
             disabled={loading}
             autoFocus
           />
