@@ -76,6 +76,24 @@ const FAQS: { question: string; answer: ReactNode }[] = [
     ),
   },
   {
+    question: "How is ReadTube different from YouTube's AI summaries or other summarizers?",
+    answer: (
+      <>
+        <p>
+          Most YouTube summarizers, and YouTube&apos;s own AI features, give you a one-off summary
+          for the video you&apos;re currently watching, then forget it the moment you close the tab.
+          The summary is the product, and nothing compounds.
+        </p>
+        <p>
+          ReadTube is built the other way around. Every video you add becomes a durable entry in
+          your own library: searchable across every channel you follow, annotatable, and organized
+          so you can return to an idea weeks or months later. The summary is a starting point, not
+          the destination.
+        </p>
+      </>
+    ),
+  },
+  {
     question: 'Do I need a YouTube or Bilibili account?',
     answer:
       'No. ReadTube uses public video transcripts: no creator account, no importing your subscriptions. Add the channels you want to follow.',
