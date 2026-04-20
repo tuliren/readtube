@@ -13,7 +13,7 @@ This is a [Turborepo](https://turbo.build/repo) monorepo managed with Yarn 4 wor
 ### Packages
 
 - `packages/database` — Prisma schema, migrations, and the shared Prisma client.
-- `packages/lib` — shared React component library used by `web` and `docs`.
+- `packages/lib` — shared React component library used by app modules.
 - `packages/eslint-config` — shared ESLint configs (includes `eslint-config-next` and `eslint-config-prettier`).
 - `packages/typescript-config` — shared `tsconfig.json`s.
 - `packages/jest-presets` — shared Jest presets.
