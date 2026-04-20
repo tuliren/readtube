@@ -9,7 +9,6 @@ This is a [Turborepo](https://turbo.build/repo) monorepo managed with Yarn 4 wor
 ### Apps
 
 - `apps/web` — the main [Next.js](https://nextjs.org/) application (read.tube).
-- `apps/docs` — a [Nextra](https://nextra.site)-based docs site.
 
 ### Packages
 
