@@ -1,81 +1,23 @@
-# Turborepo starter
+# ReadTube
 
-This is an official starter Turborepo.
+Turn YouTube subscriptions into a personal newsletter. Reclaim focus in a world engineered for distraction.
 
-## Using this example
+Live at [read.tube](https://read.tube).
 
-Run the following command:
+## What it does
 
-```sh
-npx create-turbo@latest
-```
+ReadTube converts the YouTube channels you follow into readable, searchable articles so you can consume videos without being pulled into the feed.
 
-## What's inside?
+- **Subscribe to channels.** Point ReadTube at the YouTube channels you care about. New videos show up in your inbox, not in an autoplay queue.
+- **Read instead of watch.** Each video is transcribed and turned into a clean, readable page — with the original video embedded for when you want it.
+- **Search across everything.** Full-text search over transcripts lets you find the moment you remember without scrubbing a timeline.
+- **Annotate and save.** Highlight passages and come back to them later; your subscriptions become a personal knowledge base instead of a feed.
+- **Skim, don't doomscroll.** An inbox-style layout puts you in control of what you open and when.
 
-This Turborepo includes the following packages/apps:
+## Why
 
-### Apps and Packages
+YouTube is a great source of ideas and a terrible place to think. Long videos bury the substance; the homepage is optimized for the next click, not for you. ReadTube strips the video feed down to the parts you actually subscribed for and hands them back in a format built for reading.
 
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@readtube/lib`: a stub React component library shared by both `web` and `docs` applications
-- `@readtube/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@readtube/typescript-config`: `tsconfig.json`s used throughout the monorepo
+## Development
 
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
-
-### Utilities
-
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
-```
-cd my-turborepo
-pnpm build
-```
-
-### Develop
-
-To develop all apps and packages, run the following command:
-
-```
-cd my-turborepo
-pnpm dev
-```
-
-### Remote Caching
-
-Turborepo can use a technique known as [Remote Caching](https://turbo.build/repo/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup), then enter the following commands:
-
-```
-cd my-turborepo
-npx turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-```
-npx turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turbo.build/repo/docs/core-concepts/monorepos/running-tasks)
-- [Caching](https://turbo.build/repo/docs/core-concepts/caching)
-- [Remote Caching](https://turbo.build/repo/docs/core-concepts/remote-caching)
-- [Filtering](https://turbo.build/repo/docs/core-concepts/monorepos/filtering)
-- [Configuration Options](https://turbo.build/repo/docs/reference/configuration)
-- [CLI Usage](https://turbo.build/repo/docs/reference/command-line-reference)
+See [DEVELOPMENT.md](./DEVELOPMENT.md) for local development.
