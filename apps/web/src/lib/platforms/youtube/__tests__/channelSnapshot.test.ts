@@ -135,6 +135,76 @@ describe('mergeSnapshot', () => {
     // Thumbnail still populated via buildThumbnailUrl fallback.
     expect(snap.videos[0]!.thumbnailUrl).toBe('https://i.ytimg.com/vi/v1/hqdefault.jpg');
   });
+
+  it('appends scrape-only older videos with isScraped flag', () => {
+    const feed = rssFeed([rssVideo({ videoId: 'v1' }), rssVideo({ videoId: 'v2' })]);
+    const scraped = scrapedChannel({
+      videos: [
+        {
+          videoId: 'v1',
+          title: 'Scraped v1',
+          description: 'snippet',
+          publishedAt: new Date('2026-04-01T00:00:00Z'),
+          durationSeconds: 300,
+        },
+        {
+          videoId: 'v_old1',
+          title: 'Old video 1 (truncated...)',
+          description: 'old snippet',
+          publishedAt: new Date('2026-01-15T00:00:00Z'),
+          durationSeconds: 900,
+        },
+        {
+          videoId: 'v_old2',
+          title: 'Old video 2',
+          description: '',
+          publishedAt: null,
+          durationSeconds: 600,
+        },
+      ],
+    });
+
+    const snap = mergeSnapshot(feed, scraped);
+
+    expect(snap.videos.map((v) => v.videoId)).toEqual(['v1', 'v2', 'v_old1', 'v_old2']);
+
+    const old1 = snap.videos.find((v) => v.videoId === 'v_old1')!;
+    expect(old1.isScraped).toBe(true);
+    expect(old1.title).toBe('Old video 1 (truncated...)');
+    expect(old1.durationSeconds).toBe(900);
+    expect(old1.link).toBe('https://www.youtube.com/watch?v=v_old1');
+    expect(old1.thumbnailUrl).toBe('https://i.ytimg.com/vi/v_old1/hqdefault.jpg');
+
+    const old2 = snap.videos.find((v) => v.videoId === 'v_old2')!;
+    expect(old2.isScraped).toBe(true);
+    expect(old2.publishedAt).toBeNull();
+
+    // RSS-sourced videos are not flagged.
+    expect(snap.videos.find((v) => v.videoId === 'v1')!.isScraped).toBeUndefined();
+    expect(snap.videos.find((v) => v.videoId === 'v2')!.isScraped).toBeUndefined();
+  });
+
+  it('does not double-count videos present in both RSS and scrape', () => {
+    const feed = rssFeed([rssVideo({ videoId: 'v1' })]);
+    const scraped = scrapedChannel({
+      videos: [
+        {
+          videoId: 'v1',
+          title: 'Scraped',
+          description: '',
+          publishedAt: null,
+          durationSeconds: 500,
+        },
+      ],
+    });
+
+    const snap = mergeSnapshot(feed, scraped);
+
+    expect(snap.videos).toHaveLength(1);
+    expect(snap.videos[0]!.isScraped).toBeUndefined();
+    // Duration still merged from scrape.
+    expect(snap.videos[0]!.durationSeconds).toBe(500);
+  });
 });
 
 function scrapedVideo(
@@ -166,6 +236,19 @@ describe('buildSnapshotFromScrape', () => {
     expect(snap.videos).toHaveLength(1);
     expect(snap.videos[0]!.link).toBe('https://www.youtube.com/watch?v=v1');
     expect(snap.videos[0]!.thumbnailUrl).toBe('https://i.ytimg.com/vi/v1/hqdefault.jpg');
+  });
+
+  it('marks every video as isScraped (fallback path is lower-fidelity)', () => {
+    const scraped = scrapedChannel({
+      videos: [
+        scrapedVideo({ videoId: 'v1', durationSeconds: 600 }),
+        scrapedVideo({ videoId: 'v2', durationSeconds: 800 }),
+      ],
+    });
+
+    const snap = buildSnapshotFromScrape(scraped);
+
+    expect(snap.videos.every((v) => v.isScraped === true)).toBe(true);
   });
 
   it('filters Shorts by duration (≤60s)', () => {

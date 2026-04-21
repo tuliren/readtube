@@ -45,6 +45,11 @@ export interface SnapshotVideo {
   link: string;
   thumbnailUrl: string;
   durationSeconds: number | null;
+  /** True when this entry came from the channel-page scrape only (no
+   *  RSS hit). Persist on create; skip the update branch so its
+   *  truncated title/description and approximate publishedAt can't
+   *  overwrite richer data from a prior RSS hit. */
+  isScraped?: boolean;
 }
 
 /**

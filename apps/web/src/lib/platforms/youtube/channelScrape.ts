@@ -195,8 +195,6 @@ export async function scrapeChannel(channelUrl: string): Promise<ScrapedChannel>
 
 type YtData = Record<string, unknown>;
 
-const MAX_VIDEOS = 15;
-
 /**
  * Walks the selected tab's `richGridRenderer.contents` array. When we fetch
  * `/videos`, the Videos tab is the selected tab, and its rich grid contains
@@ -233,9 +231,6 @@ function extractVideosFromInitialData(data: YtData): ScrapedVideo[] {
 
   const videos: ScrapedVideo[] = [];
   for (const item of items) {
-    if (videos.length >= MAX_VIDEOS) {
-      break;
-    }
     const richItem = (item as YtData).richItemRenderer as YtData | undefined;
     const v = (richItem?.content as YtData)?.videoRenderer as YtData | undefined;
     if (v?.videoId == null) {

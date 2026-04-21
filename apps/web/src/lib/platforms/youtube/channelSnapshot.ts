@@ -27,7 +27,10 @@ const SHORTS_DURATION_THRESHOLD = 60;
  *
  * Fallback chain for the video list:
  * 1. YouTube RSS — full descriptions, real publish times, canonical
- *    `/shorts/` vs `/watch?v=` links for Shorts filtering.
+ *    `/shorts/` vs `/watch?v=` links for Shorts filtering. Limited to
+ *    the 15 most recent uploads. Older videos returned by scrape but
+ *    missing from RSS are appended as `isScraped: true` entries —
+ *    persisted on create, skipped on update.
  * 2. TranscriptAPI `/channel/latest` — same data shape as RSS
  *    (including `/shorts/` links). Used when RSS returns 404.
  * 3. Scrape-only — truncated descriptions, approximate publish times,
@@ -135,6 +138,11 @@ async function fetchChannelLatestAsRss(channelInput: string): Promise<RssChannel
  * Exported for unit testing.
  */
 export function buildSnapshotFromScrape(scraped: ScrapedChannel): ChannelSnapshot {
+  // `isScraped` applies to every video here too: this whole path runs
+  // only when RSS + TranscriptAPI both failed, so the data is the
+  // lower-fidelity scrape. On a later refresh where RSS is healthy, we
+  // want create-or-skip semantics so truncated titles don't overwrite
+  // the richer RSS data that mergeSnapshot will store.
   const videos: SnapshotVideo[] = scraped.videos
     .filter((v) => v.durationSeconds == null || v.durationSeconds > SHORTS_DURATION_THRESHOLD)
     .map((v) => ({
@@ -145,6 +153,7 @@ export function buildSnapshotFromScrape(scraped: ScrapedChannel): ChannelSnapsho
       link: `https://www.youtube.com/watch?v=${v.videoId}`,
       thumbnailUrl: buildThumbnailUrl(v.videoId),
       durationSeconds: v.durationSeconds,
+      isScraped: true,
     }));
 
   return {
@@ -180,6 +189,28 @@ export function mergeSnapshot(feed: RssChannel, scraped: ScrapedChannel | null):
       thumbnailUrl: v.thumbnailUrl ?? buildThumbnailUrl(v.videoId),
       durationSeconds: durationByVideoId.get(v.videoId) ?? null,
     }));
+
+  // Append scrape-only older videos that fell outside RSS's 15-item
+  // window. The /videos tab is long-form only (Shorts have their own
+  // /shorts tab), so no duration filter is needed.
+  const rssVideoIds = new Set(feed.videos.map((v) => v.videoId));
+  if (scraped != null) {
+    for (const v of scraped.videos) {
+      if (rssVideoIds.has(v.videoId)) {
+        continue;
+      }
+      videos.push({
+        videoId: v.videoId,
+        title: v.title,
+        description: v.description,
+        publishedAt: v.publishedAt,
+        link: `https://www.youtube.com/watch?v=${v.videoId}`,
+        thumbnailUrl: buildThumbnailUrl(v.videoId),
+        durationSeconds: v.durationSeconds,
+        isScraped: true,
+      });
+    }
+  }
 
   return {
     channelId: feed.channelId,

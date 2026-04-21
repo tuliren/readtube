@@ -291,6 +291,201 @@ describe('upsertChannelWithVideos', () => {
     expect(dup!.description).toBe('Old desc');
   });
 
+  it('isScraped videos re-point channel_id even when title/description are preserved', async () => {
+    // Shadow channel owns vid_collide. The user now subscribes to the
+    // real channel; vid_collide is old enough to be scrape-only.
+    // isScraped's no-op update branch must still re-point channel_id
+    // so the video moves to the real owner.
+    const shadow = await global.testPrisma.channel.create({
+      data: {
+        source_id: 'UC_shadow_scraped',
+        name: 'Shadow',
+        rss_url: 'https://example.com/shadow.xml',
+      },
+    });
+    await global.testPrisma.video.create({
+      data: {
+        channel_id: shadow.id,
+        source_type: 'YOUTUBE',
+        source_id: 'vid_collide_scraped',
+        title: 'Original Full Title',
+        description: 'Original full description',
+        published_at: new Date('2026-01-01T00:00:00Z'),
+      },
+    });
+
+    const ch = await upsertChannelWithVideos(
+      global.testPrisma,
+      youtube,
+      'UC_real_scraped',
+      snapshot({
+        channelId: 'UC_real_scraped',
+        name: 'Real',
+        handle: '@real_scraped',
+        videos: [
+          {
+            videoId: 'vid_collide_scraped',
+            title: 'Truncated...',
+            description: 'snippet',
+            publishedAt: new Date('2026-02-01T00:00:00Z'),
+            link: 'https://www.youtube.com/watch?v=vid_collide_scraped',
+            thumbnailUrl: 'https://thumb/cs',
+            durationSeconds: 600,
+            isScraped: true,
+          },
+        ],
+      })
+    );
+
+    const moved = await global.testPrisma.video.findUnique({
+      where: {
+        video_unique_source: { source_type: 'YOUTUBE', source_id: 'vid_collide_scraped' },
+      },
+    });
+    // Re-pointed to the new channel.
+    expect(moved!.channel_id).toBe(ch.id);
+    // But the original full title/description/publishedAt are preserved.
+    expect(moved!.title).toBe('Original Full Title');
+    expect(moved!.description).toBe('Original full description');
+    expect(moved!.published_at).toEqual(new Date('2026-01-01T00:00:00Z'));
+  });
+
+  it('isScraped videos: creates new but does not overwrite an existing video row', async () => {
+    // Channel + one existing video that originally had full RSS data.
+    const existing = await global.testPrisma.channel.create({
+      data: {
+        source_id: 'UC_bf',
+        name: 'BF Channel',
+        rss_url: 'https://example.com/bf.xml',
+      },
+    });
+    await global.testPrisma.video.create({
+      data: {
+        channel_id: existing.id,
+        source_type: 'YOUTUBE',
+        source_id: 'vid_full',
+        title: 'Full RSS Title',
+        description: 'Full RSS description',
+        published_at: new Date('2026-01-01T00:00:00Z'),
+      },
+    });
+
+    await upsertChannelWithVideos(
+      global.testPrisma,
+      youtube,
+      'UC_bf',
+      snapshot({
+        channelId: 'UC_bf',
+        name: 'BF',
+        handle: null,
+        videos: [
+          // vid_full has rolled out of the RSS window — only scrape
+          // sees it now, with truncated metadata.
+          {
+            videoId: 'vid_full',
+            title: 'Truncated...',
+            description: '',
+            publishedAt: new Date('2026-01-15T00:00:00Z'),
+            link: 'https://www.youtube.com/watch?v=vid_full',
+            thumbnailUrl: 'https://thumb/full',
+            durationSeconds: 600,
+            isScraped: true,
+          },
+          // brand-new scrape-only video
+          {
+            videoId: 'vid_new_bf',
+            title: 'Older Video',
+            description: 'snippet',
+            publishedAt: new Date('2025-12-01T00:00:00Z'),
+            link: 'https://www.youtube.com/watch?v=vid_new_bf',
+            thumbnailUrl: 'https://thumb/new_bf',
+            durationSeconds: 800,
+            isScraped: true,
+          },
+        ],
+      })
+    );
+
+    const videos = await global.testPrisma.video.findMany({
+      where: { channel: { source_id: 'UC_bf' } },
+      orderBy: { source_id: 'asc' },
+    });
+    expect(videos.map((v) => v.source_id).sort()).toEqual(['vid_full', 'vid_new_bf']);
+
+    // Existing row preserved — isScraped must NOT overwrite full data.
+    const full = videos.find((v) => v.source_id === 'vid_full')!;
+    expect(full.title).toBe('Full RSS Title');
+    expect(full.description).toBe('Full RSS description');
+    expect(full.published_at).toEqual(new Date('2026-01-01T00:00:00Z'));
+
+    // New scrape-only row created with the truncated data.
+    const created = videos.find((v) => v.source_id === 'vid_new_bf')!;
+    expect(created.title).toBe('Older Video');
+    expect(created.description).toBe('snippet');
+    expect(created.duration_seconds).toBe(800);
+  });
+
+  it('create path: re-points a video that already lives under a shadow channel', async () => {
+    // Shadow channel pre-existing from the add-playlist flow, with a
+    // video that the upcoming channel-add snapshot also references. A
+    // nested `videos: { create: [...] }` would crash with P2002 on the
+    // `video_unique_source` constraint; the per-video upsert must
+    // re-point `channel_id` to the real owner instead.
+    const shadow = await global.testPrisma.channel.create({
+      data: {
+        source_id: 'UC_shadow_owner',
+        name: 'Playlist Owner Shadow',
+        rss_url: 'https://example.com/shadow.xml',
+      },
+    });
+    await global.testPrisma.video.create({
+      data: {
+        channel_id: shadow.id,
+        source_type: 'YOUTUBE',
+        source_id: 'vid_collide',
+        title: 'Originally under shadow',
+        description: '',
+        published_at: new Date('2026-01-01T00:00:00Z'),
+      },
+    });
+
+    const ch = await upsertChannelWithVideos(
+      global.testPrisma,
+      youtube,
+      'UC_real',
+      snapshot({
+        channelId: 'UC_real',
+        name: 'Real Channel',
+        handle: '@real',
+        videos: [
+          {
+            videoId: 'vid_collide',
+            title: 'Real Title',
+            description: 'real desc',
+            publishedAt: new Date('2026-01-15T00:00:00Z'),
+            link: 'https://www.youtube.com/watch?v=vid_collide',
+            thumbnailUrl: 'https://thumb/collide',
+            durationSeconds: 500,
+          },
+        ],
+      })
+    );
+
+    // The video was re-pointed to the new channel, not duplicated.
+    const moved = await global.testPrisma.video.findUnique({
+      where: {
+        video_unique_source: { source_type: 'YOUTUBE', source_id: 'vid_collide' },
+      },
+    });
+    expect(moved!.channel_id).toBe(ch.id);
+    expect(moved!.title).toBe('Real Title');
+    // Shadow channel still exists but no longer owns the video.
+    const shadowVideos = await global.testPrisma.video.findMany({
+      where: { channel_id: shadow.id },
+    });
+    expect(shadowVideos).toHaveLength(0);
+  });
+
   it('creates initial Video rows from the snapshot', async () => {
     await upsertChannelWithVideos(
       global.testPrisma,
