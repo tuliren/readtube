@@ -45,14 +45,11 @@ export interface SnapshotVideo {
   link: string;
   thumbnailUrl: string;
   durationSeconds: number | null;
-  /**
-   * True when this entry came from the channel-page scrape only — the
-   * RSS feed (15-item window) didn't include it. Title/description are
-   * truncated and `publishedAt` is approximate. Persist on create, but
-   * skip the update branch so a later refresh can't overwrite better
-   * data already stored from a previous RSS hit.
-   */
-  isBackfill?: boolean;
+  /** True when this entry came from the channel-page scrape only (no
+   *  RSS hit). Persist on create; skip the update branch so its
+   *  truncated title/description and approximate publishedAt can't
+   *  overwrite richer data from a prior RSS hit. */
+  isScraped?: boolean;
 }
 
 /**

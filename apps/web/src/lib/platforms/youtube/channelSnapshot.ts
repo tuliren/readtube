@@ -29,7 +29,7 @@ const SHORTS_DURATION_THRESHOLD = 60;
  * 1. YouTube RSS — full descriptions, real publish times, canonical
  *    `/shorts/` vs `/watch?v=` links for Shorts filtering. Limited to
  *    the 15 most recent uploads. Older videos returned by scrape but
- *    missing from RSS are appended as `isBackfill: true` entries —
+ *    missing from RSS are appended as `isScraped: true` entries —
  *    persisted on create, skipped on update.
  * 2. TranscriptAPI `/channel/latest` — same data shape as RSS
  *    (including `/shorts/` links). Used when RSS returns 404.
@@ -185,10 +185,8 @@ export function mergeSnapshot(feed: RssChannel, scraped: ScrapedChannel | null):
     }));
 
   // Append scrape-only older videos that fell outside RSS's 15-item
-  // window. The channel /videos tab returns long-form uploads only —
-  // Shorts have their own /shorts tab — so no duration filter here.
-  // Marked isBackfill so the upsert layer creates them but doesn't
-  // overwrite richer RSS data on later refreshes.
+  // window. The /videos tab is long-form only (Shorts have their own
+  // /shorts tab), so no duration filter is needed.
   const rssVideoIds = new Set(feed.videos.map((v) => v.videoId));
   if (scraped != null) {
     for (const v of scraped.videos) {
@@ -203,7 +201,7 @@ export function mergeSnapshot(feed: RssChannel, scraped: ScrapedChannel | null):
         link: `https://www.youtube.com/watch?v=${v.videoId}`,
         thumbnailUrl: buildThumbnailUrl(v.videoId),
         durationSeconds: v.durationSeconds,
-        isBackfill: true,
+        isScraped: true,
       });
     }
   }

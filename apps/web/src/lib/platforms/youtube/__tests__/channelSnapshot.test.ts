@@ -136,7 +136,7 @@ describe('mergeSnapshot', () => {
     expect(snap.videos[0]!.thumbnailUrl).toBe('https://i.ytimg.com/vi/v1/hqdefault.jpg');
   });
 
-  it('appends scrape-only older videos as backfill entries', () => {
+  it('appends scrape-only older videos with isScraped flag', () => {
     const feed = rssFeed([rssVideo({ videoId: 'v1' }), rssVideo({ videoId: 'v2' })]);
     const scraped = scrapedChannel({
       videos: [
@@ -169,19 +169,19 @@ describe('mergeSnapshot', () => {
     expect(snap.videos.map((v) => v.videoId)).toEqual(['v1', 'v2', 'v_old1', 'v_old2']);
 
     const old1 = snap.videos.find((v) => v.videoId === 'v_old1')!;
-    expect(old1.isBackfill).toBe(true);
+    expect(old1.isScraped).toBe(true);
     expect(old1.title).toBe('Old video 1 (truncated...)');
     expect(old1.durationSeconds).toBe(900);
     expect(old1.link).toBe('https://www.youtube.com/watch?v=v_old1');
     expect(old1.thumbnailUrl).toBe('https://i.ytimg.com/vi/v_old1/hqdefault.jpg');
 
     const old2 = snap.videos.find((v) => v.videoId === 'v_old2')!;
-    expect(old2.isBackfill).toBe(true);
+    expect(old2.isScraped).toBe(true);
     expect(old2.publishedAt).toBeNull();
 
-    // RSS-sourced videos are not flagged as backfill.
-    expect(snap.videos.find((v) => v.videoId === 'v1')!.isBackfill).toBeUndefined();
-    expect(snap.videos.find((v) => v.videoId === 'v2')!.isBackfill).toBeUndefined();
+    // RSS-sourced videos are not flagged.
+    expect(snap.videos.find((v) => v.videoId === 'v1')!.isScraped).toBeUndefined();
+    expect(snap.videos.find((v) => v.videoId === 'v2')!.isScraped).toBeUndefined();
   });
 
   it('does not double-count videos present in both RSS and scrape', () => {
@@ -201,7 +201,7 @@ describe('mergeSnapshot', () => {
     const snap = mergeSnapshot(feed, scraped);
 
     expect(snap.videos).toHaveLength(1);
-    expect(snap.videos[0]!.isBackfill).toBeUndefined();
+    expect(snap.videos[0]!.isScraped).toBeUndefined();
     // Duration still merged from scrape.
     expect(snap.videos[0]!.durationSeconds).toBe(500);
   });

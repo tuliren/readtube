@@ -78,10 +78,7 @@ export async function upsertChannelWithVideos(
     // different channel_id (e.g. the playlist-owner's channel from
     // the add-playlist flow) and we want to correct that.
     //
-    // Backfill videos (scrape-only, beyond the RSS 15-item window)
-    // create-or-skip: their truncated title/description and
-    // approximate publishedAt would regress data already stored from
-    // a prior RSS hit, so we never run the update branch for them.
+    // `isScraped` videos are create-or-skip — see SnapshotVideo.
     for (const video of snapshot.videos) {
       await prisma.video.upsert({
         where: {
@@ -101,7 +98,7 @@ export async function upsertChannelWithVideos(
           duration_seconds: video.durationSeconds,
         },
         update:
-          video.isBackfill === true
+          video.isScraped === true
             ? {}
             : {
                 channel_id: existing.id,

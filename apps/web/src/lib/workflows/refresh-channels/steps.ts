@@ -113,12 +113,9 @@ export async function refreshChannel(channel: StaleChannel): Promise<RefreshResu
         thumbnail_url: video.thumbnailUrl,
         duration_seconds: video.durationSeconds,
       },
-      // Backfill videos (scrape-only, outside the RSS 15-item window)
-      // are create-or-skip — running the update branch would overwrite
-      // the full RSS title/description that was stored when the video
-      // was still inside the RSS window.
+      // `isScraped` videos are create-or-skip — see SnapshotVideo.
       update:
-        video.isBackfill === true
+        video.isScraped === true
           ? {}
           : {
               // Correct channel_id if the video was previously assigned to

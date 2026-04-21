@@ -291,7 +291,7 @@ describe('upsertChannelWithVideos', () => {
     expect(dup!.description).toBe('Old desc');
   });
 
-  it('backfill videos: creates new but does not overwrite an existing video row', async () => {
+  it('isScraped videos: creates new but does not overwrite an existing video row', async () => {
     // Channel + one existing video that originally had full RSS data.
     const existing = await global.testPrisma.channel.create({
       data: {
@@ -330,7 +330,7 @@ describe('upsertChannelWithVideos', () => {
             link: 'https://www.youtube.com/watch?v=vid_full',
             thumbnailUrl: 'https://thumb/full',
             durationSeconds: 600,
-            isBackfill: true,
+            isScraped: true,
           },
           // brand-new scrape-only video
           {
@@ -341,7 +341,7 @@ describe('upsertChannelWithVideos', () => {
             link: 'https://www.youtube.com/watch?v=vid_new_bf',
             thumbnailUrl: 'https://thumb/new_bf',
             durationSeconds: 800,
-            isBackfill: true,
+            isScraped: true,
           },
         ],
       })
@@ -353,7 +353,7 @@ describe('upsertChannelWithVideos', () => {
     });
     expect(videos.map((v) => v.source_id).sort()).toEqual(['vid_full', 'vid_new_bf']);
 
-    // Existing row preserved — backfill must NOT overwrite full data.
+    // Existing row preserved — isScraped must NOT overwrite full data.
     const full = videos.find((v) => v.source_id === 'vid_full')!;
     expect(full.title).toBe('Full RSS Title');
     expect(full.description).toBe('Full RSS description');
