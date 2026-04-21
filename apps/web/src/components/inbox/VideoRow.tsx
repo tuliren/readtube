@@ -181,11 +181,24 @@ export default function VideoRow({
   const isUnread = video.readAt == null;
 
   // Track in-flight generate requests so we can swap the button icon
-  // for a spinner. The button unmounts once the artifact lands on the
-  // refreshed video prop, so we only need to clear state on the failure
-  // path — success flows through the prop change.
+  // for a spinner. The button stops rendering once the artifact lands
+  // on the refreshed video prop — we reset the pending flag in sync with
+  // that signal so a later list revalidation that briefly surfaces stale
+  // data can't resurrect the spinner after we've already completed.
   const [pendingSummary, setPendingSummary] = useState(false);
   const [pendingArticle, setPendingArticle] = useState(false);
+
+  useEffect(() => {
+    if (video.hasSummary) {
+      setPendingSummary(false);
+    }
+  }, [video.hasSummary]);
+
+  useEffect(() => {
+    if (video.hasArticle) {
+      setPendingArticle(false);
+    }
+  }, [video.hasArticle]);
 
   // Generate buttons are only meaningful when a transcript can exist.
   // Skip them for videos we've confirmed have no captions so the row

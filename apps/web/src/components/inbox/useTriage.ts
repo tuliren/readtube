@@ -68,13 +68,18 @@ export function useTriage() {
     // predicate that matches any /api/videos URL. /api/playlists is
     // included because playlist video counts (displayed in the sidebar)
     // shift when library membership changes.
+    //
+    // Call mutate with just the key — passing `undefined` as the data arg
+    // clears the cache during revalidation, which causes the hook to fall
+    // back to its SSR `fallbackData` (captured at page load, so the list
+    // reflects pre-mutation state) until the fetch resolves. For a plain
+    // revalidation we want SWR to hold the current cache and swap in the
+    // fresh payload when it arrives.
     void mutate(
       (key) =>
-        typeof key === 'string' && (key.startsWith('/api/videos') || key === '/api/playlists'),
-      undefined,
-      { revalidate: true }
+        typeof key === 'string' && (key.startsWith('/api/videos') || key === '/api/playlists')
     );
-    void mutate('/api/channels', undefined, { revalidate: true });
+    void mutate('/api/channels');
     // Library pages (/videos, /videos/standalone, /videos/playlists/[id])
     // are server-rendered — their video list comes from a loader at page
     // load time, not SWR. router.refresh() re-runs the RSC so the list
