@@ -213,13 +213,12 @@ export default function VideoRow({
   const showGenerateSummary = canGenerate && !video.hasSummary;
   const showGenerateArticle = canGenerate && !video.hasArticle;
 
-  async function handleGenerateSummary(e: React.MouseEvent | React.KeyboardEvent | Event) {
-    if (e != null && 'preventDefault' in e) {
-      e.preventDefault();
-    }
-    if (e != null && 'stopPropagation' in e) {
-      e.stopPropagation();
-    }
+  // These take no event — callers that need to stop a parent Link / row
+  // click (desktop toolbar) wrap the call in `stop(e)`. The mobile
+  // dropdown invokes onSelect without forwarding the Radix event so the
+  // menu still closes (calling preventDefault on a Radix onSelect Event
+  // is the API signal to keep the dropdown open).
+  async function handleGenerateSummary() {
     if (pendingSummary) {
       return;
     }
@@ -230,13 +229,7 @@ export default function VideoRow({
     }
   }
 
-  async function handleGenerateArticle(e: React.MouseEvent | React.KeyboardEvent | Event) {
-    if (e != null && 'preventDefault' in e) {
-      e.preventDefault();
-    }
-    if (e != null && 'stopPropagation' in e) {
-      e.stopPropagation();
-    }
+  async function handleGenerateArticle() {
     if (pendingArticle) {
       return;
     }
@@ -451,7 +444,7 @@ export default function VideoRow({
                   {showGenerateSummary && (
                     <DropdownMenuItem
                       disabled={pendingSummary}
-                      onSelect={(e) => void handleGenerateSummary(e)}
+                      onSelect={() => void handleGenerateSummary()}
                     >
                       {pendingSummary ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin text-blue-500" />
@@ -464,7 +457,7 @@ export default function VideoRow({
                   {showGenerateArticle && (
                     <DropdownMenuItem
                       disabled={pendingArticle}
-                      onSelect={(e) => void handleGenerateArticle(e)}
+                      onSelect={() => void handleGenerateArticle()}
                     >
                       {pendingArticle ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin text-blue-500" />
@@ -520,7 +513,10 @@ export default function VideoRow({
               {showGenerateSummary && (
                 <button
                   type="button"
-                  onClick={handleGenerateSummary}
+                  onClick={(e) => {
+                    stop(e);
+                    void handleGenerateSummary();
+                  }}
                   disabled={pendingSummary}
                   title={pendingSummary ? 'Generating summary…' : 'Generate summary'}
                   aria-label={pendingSummary ? 'Generating summary' : 'Generate summary'}
@@ -536,7 +532,10 @@ export default function VideoRow({
               {showGenerateArticle && (
                 <button
                   type="button"
-                  onClick={handleGenerateArticle}
+                  onClick={(e) => {
+                    stop(e);
+                    void handleGenerateArticle();
+                  }}
                   disabled={pendingArticle}
                   title={pendingArticle ? 'Generating article…' : 'Generate article'}
                   aria-label={pendingArticle ? 'Generating article' : 'Generate article'}
