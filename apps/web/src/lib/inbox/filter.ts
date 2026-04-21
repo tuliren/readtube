@@ -22,9 +22,12 @@ import type { InboxQuery } from '@/lib/types';
 export const PAGE_SIZE = 25;
 
 const BOOL_KEYS = ['unread', 'starred', 'saved', 'archived'] as const;
-const STRING_KEYS = ['q', 'channelId', 'folderId', 'from', 'to'] as const;
+const STRING_KEYS = ['q', 'channelId', 'folderId', 'from', 'to', 'playlistId'] as const;
 type BoolKey = (typeof BOOL_KEYS)[number];
 type StringKey = (typeof STRING_KEYS)[number];
+
+const LIBRARY_VALUES = ['standalone', 'playlist'] as const;
+type LibraryValue = (typeof LIBRARY_VALUES)[number];
 
 function parseBool(value: string | null): boolean {
   if (value == null) {
@@ -73,6 +76,11 @@ export function parseInboxQuery(params: URLSearchParams): InboxQuery {
     query.sort = sort;
   }
 
+  const library = pickString(params, 'library');
+  if (library != null && (LIBRARY_VALUES as readonly string[]).includes(library)) {
+    query.library = library as LibraryValue;
+  }
+
   // Page is a positive integer; anything else (including '1', the
   // default) is dropped from the parsed query so callers see
   // `query.page === undefined` as the canonical "page 1" state.
@@ -109,6 +117,10 @@ export function encodeInboxQuery(query: InboxQuery): URLSearchParams {
 
   if (query.sort != null && query.sort !== 'newest') {
     params.set('sort', query.sort);
+  }
+
+  if (query.library != null) {
+    params.set('library', query.library);
   }
 
   // Drop the default page so the URL stays clean — `?page=1` is

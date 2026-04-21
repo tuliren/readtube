@@ -37,12 +37,12 @@ interface Props {
   trailing?: React.ReactNode;
   /** Override the body sent to POST /api/videos/mark-all-read.
    *  Defaults to `{ channelId }` or `{}` for the inbox. Library views
-   *  pass `{ library: true }` or `{ playlistId }`. */
+   *  pass `{ standaloneOnly: true }` or `{ playlistId }`. */
   markAllReadBody?: Record<string, unknown>;
-  /** Hide the bottom row (pagination + search). Library views don't
-   *  have server-side pagination or a free-text search endpoint, so
-   *  the controls don't do anything useful there. */
-  hideBottomRow?: boolean;
+  /** Hide the search input in the bottom row. Library views paginate
+   *  but don't (yet) support free-text search, so the box is hidden
+   *  there while Prev / X–Y of N / Next still renders. */
+  hideSearch?: boolean;
 }
 
 export default function InboxHeader({
@@ -55,7 +55,7 @@ export default function InboxHeader({
   totalVideos,
   trailing,
   markAllReadBody,
-  hideBottomRow,
+  hideSearch,
 }: Props) {
   const { mutate } = useSWRConfig();
   const router = useRouter();
@@ -111,11 +111,11 @@ export default function InboxHeader({
         mutate('/api/playlists'),
         mutate((key) => typeof key === 'string' && key.startsWith('/api/videos')),
       ]);
-      // Library pages (/videos*) render the list from a server-side
-      // loader without a SWR fallback; without a router.refresh they
-      // keep showing stale readAt on each row.
+      // Library pages render via SSR for the first paint and a SWR
+      // fallback after that, but the server-rendered payload carries
+      // readAt snapshotted at request time. Kick an RSC refresh so
+      // subsequent paints (e.g. after fallback expires) match.
       if (
-        pathname === '/videos' ||
         pathname === '/videos/standalone' ||
         pathname?.startsWith('/videos/playlists/') === true
       ) {
@@ -184,14 +184,12 @@ export default function InboxHeader({
       {/* Video count + pagination on the left, search on the right.
           The header itself sits above the scrolling video list and
           never scrolls away, so the pagination control is always
-          reachable while the user is reading rows. Hidden on library
-          views which don't support pagination or free-text search. */}
-      {!hideBottomRow && (
-        <div className="flex items-center justify-between gap-2 px-4 py-2 sidebar:pt-0">
-          <Pagination total={totalVideos} />
-          <SearchInput />
-        </div>
-      )}
+          reachable while the user is reading rows. Library views
+          render pagination but hide the search box. */}
+      <div className="flex items-center justify-between gap-2 px-4 py-2 sidebar:pt-0">
+        <Pagination total={totalVideos} />
+        {!hideSearch && <SearchInput />}
+      </div>
     </div>
   );
 }

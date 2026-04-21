@@ -187,6 +187,12 @@ export default function VideoRow({
   // data can't resurrect the spinner after we've already completed.
   const [pendingSummary, setPendingSummary] = useState(false);
   const [pendingArticle, setPendingArticle] = useState(false);
+  // Radix portals the dropdown menu, so when it opens the pointer
+  // moves off the `.group` row and the hover-only toolbar fades away
+  // — dragging every other action button with it. Tracking the open
+  // state lets the toolbar's `data-active` pin it visible until the
+  // menu closes.
+  const [moreOpen, setMoreOpen] = useState(false);
 
   useEffect(() => {
     if (video.hasSummary) {
@@ -507,7 +513,8 @@ export default function VideoRow({
                 video.isSaved ||
                 video.noteCount > 0 ||
                 pendingSummary ||
-                pendingArticle
+                pendingArticle ||
+                moreOpen
               }
             >
               {showGenerateSummary && (
@@ -607,7 +614,7 @@ export default function VideoRow({
               >
                 <Archive className="h-4 w-4" />
               </button>
-              <DropdownMenu>
+              <DropdownMenu open={moreOpen} onOpenChange={setMoreOpen}>
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"

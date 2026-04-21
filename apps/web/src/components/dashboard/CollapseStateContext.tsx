@@ -40,7 +40,7 @@ interface EnsureExpandedInput {
   channelSelected?: boolean;
   /** True when a non-default view (Starred / Read Later / Archived) is active. */
   nonDefaultView?: boolean;
-  /** True when the active page is under /videos (All/Standalone/playlist). */
+  /** True when the active page is under /videos (Standalone/playlist). */
   videosSelected?: boolean;
 }
 

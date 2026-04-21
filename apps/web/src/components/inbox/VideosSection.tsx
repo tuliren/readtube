@@ -89,14 +89,13 @@ export default function VideosSection() {
   } | null>(null);
 
   const { data: playlists = [], mutate } = useSWR<PlaylistRow[]>('/api/playlists', fetcher);
-  const { data: libCounts } = useSWR<{ allUnread: number; standaloneUnread: number }>(
+  const { data: libCounts } = useSWR<{ standaloneUnread: number }>(
     '/api/videos/library-counts',
     fetcher
   );
 
   const sectionCollapsed = !collapsed && videosCollapsed;
 
-  const isAllActive = pathname === '/videos';
   const isStandaloneActive = pathname === '/videos/standalone';
   const activePlaylistId = pathname?.startsWith('/videos/playlists/')
     ? pathname.slice('/videos/playlists/'.length).split('/')[0]
@@ -146,14 +145,6 @@ export default function VideosSection() {
       )}
       {sectionCollapsed ? null : (
         <ul className="space-y-0.5">
-          <VideoEntry
-            href="/videos"
-            label="All"
-            icon={Video}
-            active={isAllActive}
-            sidebarCollapsed={collapsed}
-            unreadCount={libCounts?.allUnread}
-          />
           <VideoEntry
             href="/videos/standalone"
             label="Standalone"

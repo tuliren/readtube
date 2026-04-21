@@ -45,6 +45,14 @@ export async function loadInboxVideos(
 ): Promise<InboxVideosResult> {
   const requestedPage = Math.max(1, query.page ?? 1);
 
+  // Library scopes (standalone / playlist) resolve their base set from
+  // StandaloneVideo / PlaylistVideo membership and paginate the ordered
+  // id list in JS to preserve insertion / sort_order semantics that
+  // don't map cleanly onto `ORDER BY published_at`.
+  if (query.library != null) {
+    return loadLibraryScope(prisma, userId, query, requestedPage);
+  }
+
   const userSubs = await prisma.userSubscription.findMany({
     where: { user_id: userId },
     select: { channel_id: true, read_at: true },
@@ -184,6 +192,155 @@ export async function loadInboxVideos(
     page,
     pageSize: PAGE_SIZE,
   };
+}
+
+/**
+ * Library path. Scopes by StandaloneVideo / PlaylistVideo membership
+ * and paginates an ordered id list in JS so we preserve playlist
+ * sort_order and standalone insertion order — neither of which maps
+ * onto `ORDER BY published_at`. Filter chips (archived / starred /
+ * saved / unread / tagIds / date range) are intentionally ignored
+ * here; the library header doesn't render them, and wiring them
+ * would require re-counting against a filtered subset.
+ */
+async function loadLibraryScope(
+  prisma: PrismaClient,
+  userId: string,
+  query: InboxQuery,
+  requestedPage: number
+): Promise<InboxVideosResult> {
+  let orderedVideoIds: string[] = [];
+  let playlistReadAt: Date | null = null;
+
+  if (query.library === 'playlist') {
+    if (query.playlistId == null) {
+      return { videos: [], total: 0, page: 1, pageSize: PAGE_SIZE };
+    }
+    // The route handler IDOR-checks the playlist; guard here too so
+    // SSR pages don't leak another user's playlist on direct navigation.
+    const playlist = await prisma.playlist.findFirst({
+      where: { id: query.playlistId, user_id: userId },
+      select: { id: true, read_at: true },
+    });
+    if (playlist == null) {
+      return { videos: [], total: 0, page: 1, pageSize: PAGE_SIZE };
+    }
+    playlistReadAt = playlist.read_at;
+    const rows = await prisma.playlistVideo.findMany({
+      where: { playlist_id: playlist.id },
+      select: { video_id: true },
+      orderBy: [{ sort_order: 'asc' }, { created_at: 'desc' }],
+    });
+    orderedVideoIds = rows.map((r) => r.video_id);
+  } else {
+    // standalone: StandaloneVideo rows that AREN'T members of any
+    // playlist the user owns. PlaylistVideo is a global junction
+    // table, so the `none` clause has to be scoped to this user's
+    // playlists — otherwise another user filing the same video into
+    // their playlist would kick it out of our Standalone bucket.
+    const rows = await prisma.standaloneVideo.findMany({
+      where: {
+        user_id: userId,
+        video: { playlist_items: { none: { playlist: { user_id: userId } } } },
+      },
+      select: { video_id: true },
+      orderBy: { created_at: 'desc' },
+    });
+    orderedVideoIds = rows.map((r) => r.video_id);
+  }
+
+  const total = orderedVideoIds.length;
+  if (total === 0) {
+    return { videos: [], total: 0, page: 1, pageSize: PAGE_SIZE };
+  }
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const page = Math.min(requestedPage, totalPages);
+  const skip = (page - 1) * PAGE_SIZE;
+  const pageIds = orderedVideoIds.slice(skip, skip + PAGE_SIZE);
+
+  const videos = await prisma.video.findMany({
+    where: { id: { in: pageIds } },
+    select: {
+      id: true,
+      source_id: true,
+      source_type: true,
+      title: true,
+      description: true,
+      published_at: true,
+      created_at: true,
+      duration_seconds: true,
+      thumbnail_url: true,
+      transcript_unavailable: true,
+      channel_id: true,
+      channel: { select: { id: true, name: true, source_id: true, handle: true } },
+      consumptions: {
+        where: { user_id: userId },
+        select: { read_at: true },
+        take: 1,
+      },
+      transcripts: {
+        orderBy: { created_at: 'desc' },
+        take: 1,
+        select: {
+          summary: { select: { transcript_id: true } },
+          articles: { take: 1, select: { id: true } },
+        },
+      },
+    },
+  });
+  const byId = new Map(videos.map((v) => [v.id, v]));
+
+  // Watermark-driven read state for videos that live in any of this
+  // user's playlists. Standalone videos not in any playlist fall
+  // through to the explicit-consumption path only.
+  const watermarkReadIds = new Set<string>();
+  if (query.library === 'standalone') {
+    const playlists = await prisma.playlist.findMany({
+      where: { user_id: userId, read_at: { not: null } },
+      select: {
+        read_at: true,
+        items: {
+          select: {
+            video_id: true,
+            video: { select: { published_at: true, created_at: true } },
+          },
+        },
+      },
+    });
+    for (const pl of playlists) {
+      if (pl.read_at == null) {
+        continue;
+      }
+      for (const item of pl.items) {
+        if (effectivePublishDate(item.video) <= pl.read_at) {
+          watermarkReadIds.add(item.video_id);
+        }
+      }
+    }
+  }
+
+  const triage = await loadTriageContext(prisma, userId, pageIds);
+
+  const decorated: VideoData[] = [];
+  for (const id of pageIds) {
+    const row = byId.get(id);
+    if (row == null) {
+      continue;
+    }
+    const explicit = row.consumptions[0]?.read_at ?? null;
+    let readAt: Date | null = explicit;
+    const effective = effectivePublishDate(row);
+    if (readAt == null && playlistReadAt != null && effective <= playlistReadAt) {
+      readAt = playlistReadAt;
+    }
+    if (readAt == null && watermarkReadIds.has(id)) {
+      readAt = effective;
+    }
+    decorated.push(decorateVideo(row, triage, readAt));
+  }
+
+  return { videos: decorated, total, page, pageSize: PAGE_SIZE };
 }
 
 /**

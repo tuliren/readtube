@@ -54,9 +54,9 @@ export default function DeletePlaylistDialog({ target, onClose }: Props) {
       toast.success(`Deleted ${target.name}`);
       onClose();
       // If the user was viewing the deleted playlist, bounce them back
-      // to the library root so they don't see a 404.
+      // to the Standalone library so they don't see a 404.
       if (window.location.pathname.startsWith(`/videos/playlists/${target.id}`)) {
-        router.push('/videos');
+        router.push('/videos/standalone');
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to delete playlist');

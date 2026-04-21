@@ -35,6 +35,15 @@ describe('parseInboxQuery', () => {
     { url: 'page=-3', expected: {} },
     { url: 'page=abc', expected: {} },
     { url: 'starred=1&page=3', expected: { starred: true, page: 3 } },
+    // Library scope
+    { url: 'library=standalone', expected: { library: 'standalone' } },
+    {
+      url: 'library=playlist&playlistId=pl1',
+      expected: { library: 'playlist', playlistId: 'pl1' },
+    },
+    { url: 'library=bogus', expected: {} },
+    { url: 'library=', expected: {} },
+    { url: 'playlistId=pl1', expected: { playlistId: 'pl1' } },
   ])('parses %s correctly', ({ url, expected }) => {
     const params = new URLSearchParams(url);
     expect(parseInboxQuery(params)).toEqual(expected);
@@ -57,6 +66,12 @@ describe('encodeInboxQuery', () => {
     { query: { page: 1 }, expected: '' }, // default dropped
     { query: { page: 2 }, expected: 'page=2' },
     { query: { starred: true, page: 5 }, expected: 'starred=1&page=5' },
+    // Library scope
+    { query: { library: 'standalone' }, expected: 'library=standalone' },
+    {
+      query: { library: 'playlist', playlistId: 'pl1' },
+      expected: 'playlistId=pl1&library=playlist',
+    },
   ])('encodes $query correctly', ({ query, expected }) => {
     expect(encodeInboxQuery(query).toString()).toEqual(expected);
   });
@@ -68,6 +83,9 @@ describe('encodeInboxQuery', () => {
     { tagIds: ['tag-a', 'tag-b'], starred: true },
     { from: '2026-01-01', to: '2026-02-01', sort: 'oldest' },
     { folderId: 'f1', archived: true },
+    { library: 'standalone' },
+    { library: 'playlist', playlistId: 'pl1' },
+    { library: 'playlist', playlistId: 'pl1', starred: true, page: 2 },
   ])('round-trips %s through encode -> parse', (query) => {
     const encoded = encodeInboxQuery(query);
     const parsed = parseInboxQuery(encoded);

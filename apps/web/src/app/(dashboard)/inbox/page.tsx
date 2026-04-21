@@ -3,7 +3,7 @@ import { prisma } from '@readtube/database';
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 
-import InboxListView from '@/components/inbox/InboxListView';
+import VideoListView from '@/components/inbox/VideoListView';
 import { parseInboxQuery } from '@/lib/inbox/filter';
 import { loadInboxVideos, searchParamsToInboxQuery } from '@/lib/inbox/loadVideos';
 import { resolveInboxView } from '@/lib/inbox/views';
@@ -50,7 +50,7 @@ export default async function InboxPage({ searchParams }: Props) {
   const initial = await loadInboxVideos(prisma, userId, query);
 
   return (
-    <InboxListView
+    <VideoListView
       initialVideos={initial.videos}
       initialTotal={initial.total}
       selectedChannelId={null}

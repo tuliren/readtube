@@ -117,4 +117,21 @@ export interface InboxQuery {
    * default state is still a clean URL.
    */
   page?: number;
+  /**
+   * Library scope discriminator. When set, the base set of videos
+   * comes from the user's library membership instead of their
+   * subscribed channels:
+   *   - `standalone`: videos with a StandaloneVideo row and no
+   *     PlaylistVideo membership in any of the user's playlists.
+   *   - `playlist`: videos in the playlist identified by
+   *     `playlistId` — the route handler enforces ownership.
+   * Omitted for inbox + channel views.
+   */
+  library?: 'standalone' | 'playlist';
+  /**
+   * Required when `library === 'playlist'`. Ignored otherwise.
+   * The `/api/videos` route handler verifies the playlist belongs
+   * to the authenticated user.
+   */
+  playlistId?: string;
 }
