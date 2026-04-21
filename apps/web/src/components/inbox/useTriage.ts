@@ -1,26 +1,76 @@
 'use client';
 
-import { usePathname, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { useSWRConfig } from 'swr';
 
 import type { BulkAction } from '@/lib/inbox/triageActions';
 
 /**
- * True for the library list routes whose video data is server-rendered
- * without a SWR fallback: /videos, /videos/standalone, and
- * /videos/playlists/[id]. Excludes the reader (/videos/[sourceId])
- * which renders a single video and doesn't need a list refresh.
+ * Drain an NDJSON stream that emits either `{ error }` or
+ * `{ type: 'done' }` as its terminal event (plus whatever domain
+ * events come before). Resolves when the stream closes cleanly with
+ * a `done` event and no intervening error. Throws the first error
+ * message if the server reports one mid-stream, or a generic message
+ * if the stream ends without signaling completion.
+ *
+ * This matters because the generate streams open with HTTP 200 as
+ * soon as the first chunk is produced — LLM / persist failures are
+ * reported inside the body, not via status. A plain byte-drain would
+ * happily return `true` on a failed generation and leave the UI
+ * with a stuck spinner.
  */
-function isLibraryListRoute(pathname: string | null): boolean {
-  if (pathname == null) {
-    return false;
+async function drainNdjsonStream(response: Response): Promise<void> {
+  const reader = response.body?.getReader();
+  if (reader == null) {
+    return;
   }
-  return (
-    pathname === '/videos' ||
-    pathname === '/videos/standalone' ||
-    pathname.startsWith('/videos/playlists/')
-  );
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let errorMessage: string | null = null;
+  let sawDone = false;
+
+  const consumeLine = (line: string) => {
+    if (line.length === 0) {
+      return;
+    }
+    let event: { error?: unknown; type?: unknown };
+    try {
+      event = JSON.parse(line);
+    } catch {
+      return; // tolerate non-JSON keep-alive lines
+    }
+    if (event.error != null && errorMessage == null) {
+      errorMessage = typeof event.error === 'string' ? event.error : String(event.error);
+    }
+    if (event.type === 'done') {
+      sawDone = true;
+    }
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() ?? '';
+    for (const line of lines) {
+      consumeLine(line);
+    }
+  }
+  // Flush any trailing partial line that ran to end-of-stream without
+  // a newline terminator.
+  if (buffer.length > 0) {
+    consumeLine(buffer);
+  }
+
+  if (errorMessage != null) {
+    throw new Error(errorMessage);
+  }
+  if (!sawDone) {
+    throw new Error('Stream closed before completion');
+  }
 }
 
 /**
@@ -38,8 +88,6 @@ function isLibraryListRoute(pathname: string | null): boolean {
  */
 export function useTriage() {
   const { mutate } = useSWRConfig();
-  const router = useRouter();
-  const pathname = usePathname();
 
   async function call(method: 'POST' | 'DELETE', url: string, body?: unknown): Promise<Response> {
     const res = await fetch(url, {
@@ -80,15 +128,6 @@ export function useTriage() {
         typeof key === 'string' && (key.startsWith('/api/videos') || key === '/api/playlists')
     );
     void mutate('/api/channels');
-    // Library pages (/videos, /videos/standalone, /videos/playlists/[id])
-    // are server-rendered — their video list comes from a loader at page
-    // load time, not SWR. router.refresh() re-runs the RSC so the list
-    // updates without a full page reload. Skip on the inbox/channel
-    // routes where SWR revalidation alone suffices, to avoid an extra
-    // RSC round-trip per rapid triage action.
-    if (isLibraryListRoute(pathname)) {
-      router.refresh();
-    }
   }
 
   return {
@@ -175,18 +214,12 @@ export function useTriage() {
           }
           throw new Error(msg);
         }
-        // Drain the NDJSON stream so the server can finish persisting
-        // before we invalidate. Without this the /api/videos refetch
-        // races the upsert and the artifact badge still reads false.
-        const reader = res.body?.getReader();
-        if (reader != null) {
-          while (true) {
-            const { done } = await reader.read();
-            if (done) {
-              break;
-            }
-          }
-        }
+        // Drain the NDJSON stream until the server signals completion.
+        // The helper throws on any `{ error }` event so a mid-stream
+        // LLM or persist failure surfaces as a toast + returns false
+        // (instead of silently returning true and leaving the caller
+        // with a stuck pending flag).
+        await drainNdjsonStream(res);
         invalidateLists();
         return true;
       } catch (err) {
@@ -214,15 +247,7 @@ export function useTriage() {
           }
           throw new Error(msg);
         }
-        const reader = res.body?.getReader();
-        if (reader != null) {
-          while (true) {
-            const { done } = await reader.read();
-            if (done) {
-              break;
-            }
-          }
-        }
+        await drainNdjsonStream(res);
         invalidateLists();
         return true;
       } catch (err) {
