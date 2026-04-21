@@ -327,7 +327,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // upsert against `invalidateLists()` and left the UI with a
         // stuck spinner when the refetch landed first.
         let persistError: string | null = null;
-        if (accumulated.trim().length > 0) {
+        if (accumulated.trim().length === 0) {
+          // Stream said `done` but the LLM produced nothing — treat
+          // as a failure so the row's pending flag resets. Without
+          // this the client drains cleanly, returns true, and the
+          // spinner stays pinned forever since `hasArticle` never
+          // flips.
+          persistError = 'Generation produced no content';
+        } else {
           try {
             const usage = await result.usage;
             const contentForStorage = serializeMarkdownDocument(accumulated.trim(), {
