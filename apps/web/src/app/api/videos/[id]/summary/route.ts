@@ -400,6 +400,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         Object.keys(fieldErrors).length === 0 &&
         fieldsToGenerate.every((f) => accumulated[f].trim().length > 0);
 
+      let persistError: string | null = null;
       if (allSuccessful) {
         try {
           const usages = await Promise.all(generations.map((g) => g.result.usage));
@@ -452,10 +453,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           });
         } catch (err) {
           console.error('[summary/POST] failed to persist summary:', err);
+          persistError = err instanceof Error ? err.message : 'Failed to save summary';
         }
       }
 
-      emit({ type: 'done' });
+      // Emit a terminal error instead of `done` when persist fails so
+      // the client's stream drain throws, the row's pending flag
+      // clears, and the user sees a toast + can retry. Silently
+      // logging and still emitting `done` left the UI spinner stuck.
+      if (persistError != null) {
+        emit({ error: persistError });
+      } else {
+        emit({ type: 'done' });
+      }
       controller.close();
     },
   });

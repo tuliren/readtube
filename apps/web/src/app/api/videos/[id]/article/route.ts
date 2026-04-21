@@ -326,6 +326,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // earlier order (close first, persist after) raced the
         // upsert against `invalidateLists()` and left the UI with a
         // stuck spinner when the refetch landed first.
+        let persistError: string | null = null;
         if (accumulated.trim().length > 0) {
           try {
             const usage = await result.usage;
@@ -358,10 +359,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             });
           } catch (err) {
             console.error('[article/POST] failed to persist article:', err);
+            persistError = err instanceof Error ? err.message : 'Failed to save article';
           }
         }
 
-        emitLine(controller, { type: 'done' });
+        // See the summary route for the rationale — emitting `error`
+        // instead of `done` on persist failure lets the client's
+        // stream drain throw and reset the row's pending flag.
+        if (persistError != null) {
+          emitLine(controller, { error: persistError });
+        } else {
+          emitLine(controller, { type: 'done' });
+        }
         controller.close();
       } catch (err) {
         console.error('[article/POST] streamText output mid-stream error:', err);
