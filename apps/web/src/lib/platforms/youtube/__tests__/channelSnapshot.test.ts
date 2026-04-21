@@ -238,6 +238,19 @@ describe('buildSnapshotFromScrape', () => {
     expect(snap.videos[0]!.thumbnailUrl).toBe('https://i.ytimg.com/vi/v1/hqdefault.jpg');
   });
 
+  it('marks every video as isScraped (fallback path is lower-fidelity)', () => {
+    const scraped = scrapedChannel({
+      videos: [
+        scrapedVideo({ videoId: 'v1', durationSeconds: 600 }),
+        scrapedVideo({ videoId: 'v2', durationSeconds: 800 }),
+      ],
+    });
+
+    const snap = buildSnapshotFromScrape(scraped);
+
+    expect(snap.videos.every((v) => v.isScraped === true)).toBe(true);
+  });
+
   it('filters Shorts by duration (≤60s)', () => {
     const scraped = scrapedChannel({
       videos: [

@@ -291,6 +291,65 @@ describe('upsertChannelWithVideos', () => {
     expect(dup!.description).toBe('Old desc');
   });
 
+  it('isScraped videos re-point channel_id even when title/description are preserved', async () => {
+    // Shadow channel owns vid_collide. The user now subscribes to the
+    // real channel; vid_collide is old enough to be scrape-only.
+    // isScraped's no-op update branch must still re-point channel_id
+    // so the video moves to the real owner.
+    const shadow = await global.testPrisma.channel.create({
+      data: {
+        source_id: 'UC_shadow_scraped',
+        name: 'Shadow',
+        rss_url: 'https://example.com/shadow.xml',
+      },
+    });
+    await global.testPrisma.video.create({
+      data: {
+        channel_id: shadow.id,
+        source_type: 'YOUTUBE',
+        source_id: 'vid_collide_scraped',
+        title: 'Original Full Title',
+        description: 'Original full description',
+        published_at: new Date('2026-01-01T00:00:00Z'),
+      },
+    });
+
+    const ch = await upsertChannelWithVideos(
+      global.testPrisma,
+      youtube,
+      'UC_real_scraped',
+      snapshot({
+        channelId: 'UC_real_scraped',
+        name: 'Real',
+        handle: '@real_scraped',
+        videos: [
+          {
+            videoId: 'vid_collide_scraped',
+            title: 'Truncated...',
+            description: 'snippet',
+            publishedAt: new Date('2026-02-01T00:00:00Z'),
+            link: 'https://www.youtube.com/watch?v=vid_collide_scraped',
+            thumbnailUrl: 'https://thumb/cs',
+            durationSeconds: 600,
+            isScraped: true,
+          },
+        ],
+      })
+    );
+
+    const moved = await global.testPrisma.video.findUnique({
+      where: {
+        video_unique_source: { source_type: 'YOUTUBE', source_id: 'vid_collide_scraped' },
+      },
+    });
+    // Re-pointed to the new channel.
+    expect(moved!.channel_id).toBe(ch.id);
+    // But the original full title/description/publishedAt are preserved.
+    expect(moved!.title).toBe('Original Full Title');
+    expect(moved!.description).toBe('Original full description');
+    expect(moved!.published_at).toEqual(new Date('2026-01-01T00:00:00Z'));
+  });
+
   it('isScraped videos: creates new but does not overwrite an existing video row', async () => {
     // Channel + one existing video that originally had full RSS data.
     const existing = await global.testPrisma.channel.create({

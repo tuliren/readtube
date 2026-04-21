@@ -113,10 +113,13 @@ export async function refreshChannel(channel: StaleChannel): Promise<RefreshResu
         thumbnail_url: video.thumbnailUrl,
         duration_seconds: video.durationSeconds,
       },
-      // `isScraped` videos are create-or-skip — see SnapshotVideo.
+      // `isScraped` videos preserve title/description/publishedAt
+      // (truncated scrape data would regress richer RSS data) but
+      // still re-point `channel_id` to migrate a video out from under
+      // a shadow channel — see SnapshotVideo.
       update:
         video.isScraped === true
-          ? {}
+          ? { channel_id: channel.id }
           : {
               // Correct channel_id if the video was previously assigned to
               // a different channel (e.g. playlist-owner shadow channel).

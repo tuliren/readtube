@@ -154,7 +154,11 @@ async function upsertSnapshotVideos(
       },
       update:
         video.isScraped === true
-          ? {}
+          ? // Preserve title/description/publishedAt (truncated scrape
+            // data would regress richer RSS data), but still re-point
+            // channel_id so a video previously stored under a shadow
+            // channel migrates to the real owner. Same→same is a no-op.
+            { channel_id: channelId }
           : {
               channel_id: channelId,
               title: video.title,

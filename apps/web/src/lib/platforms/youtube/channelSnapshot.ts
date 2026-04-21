@@ -138,6 +138,11 @@ async function fetchChannelLatestAsRss(channelInput: string): Promise<RssChannel
  * Exported for unit testing.
  */
 export function buildSnapshotFromScrape(scraped: ScrapedChannel): ChannelSnapshot {
+  // `isScraped` applies to every video here too: this whole path runs
+  // only when RSS + TranscriptAPI both failed, so the data is the
+  // lower-fidelity scrape. On a later refresh where RSS is healthy, we
+  // want create-or-skip semantics so truncated titles don't overwrite
+  // the richer RSS data that mergeSnapshot will store.
   const videos: SnapshotVideo[] = scraped.videos
     .filter((v) => v.durationSeconds == null || v.durationSeconds > SHORTS_DURATION_THRESHOLD)
     .map((v) => ({
@@ -148,6 +153,7 @@ export function buildSnapshotFromScrape(scraped: ScrapedChannel): ChannelSnapsho
       link: `https://www.youtube.com/watch?v=${v.videoId}`,
       thumbnailUrl: buildThumbnailUrl(v.videoId),
       durationSeconds: v.durationSeconds,
+      isScraped: true,
     }));
 
   return {
