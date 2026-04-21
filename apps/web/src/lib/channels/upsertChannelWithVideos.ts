@@ -77,6 +77,11 @@ export async function upsertChannelWithVideos(
     // refresh-channels cron: a video may already exist under a
     // different channel_id (e.g. the playlist-owner's channel from
     // the add-playlist flow) and we want to correct that.
+    //
+    // Backfill videos (scrape-only, beyond the RSS 15-item window)
+    // create-or-skip: their truncated title/description and
+    // approximate publishedAt would regress data already stored from
+    // a prior RSS hit, so we never run the update branch for them.
     for (const video of snapshot.videos) {
       await prisma.video.upsert({
         where: {
@@ -95,14 +100,19 @@ export async function upsertChannelWithVideos(
           thumbnail_url: video.thumbnailUrl,
           duration_seconds: video.durationSeconds,
         },
-        update: {
-          channel_id: existing.id,
-          title: video.title,
-          ...(isEmptyString(video.description) ? {} : { description: video.description }),
-          ...(video.publishedAt != null ? { published_at: video.publishedAt } : {}),
-          thumbnail_url: video.thumbnailUrl,
-          ...(video.durationSeconds != null ? { duration_seconds: video.durationSeconds } : {}),
-        },
+        update:
+          video.isBackfill === true
+            ? {}
+            : {
+                channel_id: existing.id,
+                title: video.title,
+                ...(isEmptyString(video.description) ? {} : { description: video.description }),
+                ...(video.publishedAt != null ? { published_at: video.publishedAt } : {}),
+                thumbnail_url: video.thumbnailUrl,
+                ...(video.durationSeconds != null
+                  ? { duration_seconds: video.durationSeconds }
+                  : {}),
+              },
       });
     }
 

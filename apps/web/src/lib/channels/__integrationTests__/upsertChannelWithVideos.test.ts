@@ -291,6 +291,81 @@ describe('upsertChannelWithVideos', () => {
     expect(dup!.description).toBe('Old desc');
   });
 
+  it('backfill videos: creates new but does not overwrite an existing video row', async () => {
+    // Channel + one existing video that originally had full RSS data.
+    const existing = await global.testPrisma.channel.create({
+      data: {
+        source_id: 'UC_bf',
+        name: 'BF Channel',
+        rss_url: 'https://example.com/bf.xml',
+      },
+    });
+    await global.testPrisma.video.create({
+      data: {
+        channel_id: existing.id,
+        source_type: 'YOUTUBE',
+        source_id: 'vid_full',
+        title: 'Full RSS Title',
+        description: 'Full RSS description',
+        published_at: new Date('2026-01-01T00:00:00Z'),
+      },
+    });
+
+    await upsertChannelWithVideos(
+      global.testPrisma,
+      youtube,
+      'UC_bf',
+      snapshot({
+        channelId: 'UC_bf',
+        name: 'BF',
+        handle: null,
+        videos: [
+          // vid_full has rolled out of the RSS window — only scrape
+          // sees it now, with truncated metadata.
+          {
+            videoId: 'vid_full',
+            title: 'Truncated...',
+            description: '',
+            publishedAt: new Date('2026-01-15T00:00:00Z'),
+            link: 'https://www.youtube.com/watch?v=vid_full',
+            thumbnailUrl: 'https://thumb/full',
+            durationSeconds: 600,
+            isBackfill: true,
+          },
+          // brand-new scrape-only video
+          {
+            videoId: 'vid_new_bf',
+            title: 'Older Video',
+            description: 'snippet',
+            publishedAt: new Date('2025-12-01T00:00:00Z'),
+            link: 'https://www.youtube.com/watch?v=vid_new_bf',
+            thumbnailUrl: 'https://thumb/new_bf',
+            durationSeconds: 800,
+            isBackfill: true,
+          },
+        ],
+      })
+    );
+
+    const videos = await global.testPrisma.video.findMany({
+      where: { channel: { source_id: 'UC_bf' } },
+      orderBy: { source_id: 'asc' },
+    });
+    expect(videos.map((v) => v.source_id).sort()).toEqual(['vid_full', 'vid_new_bf']);
+
+    // Existing row preserved — backfill must NOT overwrite full data.
+    const full = videos.find((v) => v.source_id === 'vid_full')!;
+    expect(full.title).toBe('Full RSS Title');
+    expect(full.description).toBe('Full RSS description');
+    expect(full.published_at).toEqual(new Date('2026-01-01T00:00:00Z'));
+
+    // New scrape-only row created with the truncated data.
+    const created = videos.find((v) => v.source_id === 'vid_new_bf')!;
+    expect(created.title).toBe('Older Video');
+    expect(created.description).toBe('snippet');
+    expect(created.duration_seconds).toBe(800);
+  });
+
   it('creates initial Video rows from the snapshot', async () => {
     await upsertChannelWithVideos(
       global.testPrisma,

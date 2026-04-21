@@ -27,7 +27,10 @@ const SHORTS_DURATION_THRESHOLD = 60;
  *
  * Fallback chain for the video list:
  * 1. YouTube RSS — full descriptions, real publish times, canonical
- *    `/shorts/` vs `/watch?v=` links for Shorts filtering.
+ *    `/shorts/` vs `/watch?v=` links for Shorts filtering. Limited to
+ *    the 15 most recent uploads. Older videos returned by scrape but
+ *    missing from RSS are appended as `isBackfill: true` entries —
+ *    persisted on create, skipped on update.
  * 2. TranscriptAPI `/channel/latest` — same data shape as RSS
  *    (including `/shorts/` links). Used when RSS returns 404.
  * 3. Scrape-only — truncated descriptions, approximate publish times,
@@ -180,6 +183,30 @@ export function mergeSnapshot(feed: RssChannel, scraped: ScrapedChannel | null):
       thumbnailUrl: v.thumbnailUrl ?? buildThumbnailUrl(v.videoId),
       durationSeconds: durationByVideoId.get(v.videoId) ?? null,
     }));
+
+  // Append scrape-only older videos that fell outside RSS's 15-item
+  // window. The channel /videos tab returns long-form uploads only —
+  // Shorts have their own /shorts tab — so no duration filter here.
+  // Marked isBackfill so the upsert layer creates them but doesn't
+  // overwrite richer RSS data on later refreshes.
+  const rssVideoIds = new Set(feed.videos.map((v) => v.videoId));
+  if (scraped != null) {
+    for (const v of scraped.videos) {
+      if (rssVideoIds.has(v.videoId)) {
+        continue;
+      }
+      videos.push({
+        videoId: v.videoId,
+        title: v.title,
+        description: v.description,
+        publishedAt: v.publishedAt,
+        link: `https://www.youtube.com/watch?v=${v.videoId}`,
+        thumbnailUrl: buildThumbnailUrl(v.videoId),
+        durationSeconds: v.durationSeconds,
+        isBackfill: true,
+      });
+    }
+  }
 
   return {
     channelId: feed.channelId,

@@ -113,19 +113,26 @@ export async function refreshChannel(channel: StaleChannel): Promise<RefreshResu
         thumbnail_url: video.thumbnailUrl,
         duration_seconds: video.durationSeconds,
       },
-      update: {
-        // Correct channel_id if the video was previously assigned to
-        // a different channel (e.g. playlist-owner shadow channel).
-        channel_id: channel.id,
-        title: video.title,
-        ...(isEmptyString(video.description) ? {} : { description: video.description }),
-        // Backfill published_at whenever this refresh produced a real
-        // date — rows that were created with a null placeholder from
-        // a thin scrape path get the real RSS timestamp here.
-        ...(video.publishedAt != null ? { published_at: video.publishedAt } : {}),
-        thumbnail_url: video.thumbnailUrl,
-        ...(video.durationSeconds != null ? { duration_seconds: video.durationSeconds } : {}),
-      },
+      // Backfill videos (scrape-only, outside the RSS 15-item window)
+      // are create-or-skip — running the update branch would overwrite
+      // the full RSS title/description that was stored when the video
+      // was still inside the RSS window.
+      update:
+        video.isBackfill === true
+          ? {}
+          : {
+              // Correct channel_id if the video was previously assigned to
+              // a different channel (e.g. playlist-owner shadow channel).
+              channel_id: channel.id,
+              title: video.title,
+              ...(isEmptyString(video.description) ? {} : { description: video.description }),
+              // Backfill published_at whenever this refresh produced a real
+              // date — rows that were created with a null placeholder from
+              // a thin scrape path get the real RSS timestamp here.
+              ...(video.publishedAt != null ? { published_at: video.publishedAt } : {}),
+              thumbnail_url: video.thumbnailUrl,
+              ...(video.durationSeconds != null ? { duration_seconds: video.durationSeconds } : {}),
+            },
     });
   }
 
