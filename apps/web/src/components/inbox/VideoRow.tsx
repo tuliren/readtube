@@ -1,8 +1,18 @@
 'use client';
 
-import { Archive, Bookmark, BookmarkCheck, MoreHorizontal, NotebookPen, Star } from 'lucide-react';
+import {
+  Archive,
+  Bookmark,
+  BookmarkCheck,
+  FileText,
+  Loader2,
+  MoreHorizontal,
+  Newspaper,
+  NotebookPen,
+  Star,
+} from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -169,6 +179,54 @@ export default function VideoRow({
   const triage = useTriage();
   const { isMobile } = useSidebar();
   const isUnread = video.readAt == null;
+
+  // Track in-flight generate requests so we can swap the button icon
+  // for a spinner. The button unmounts once the artifact lands on the
+  // refreshed video prop, so we only need to clear state on the failure
+  // path — success flows through the prop change.
+  const [pendingSummary, setPendingSummary] = useState(false);
+  const [pendingArticle, setPendingArticle] = useState(false);
+
+  // Generate buttons are only meaningful when a transcript can exist.
+  // Skip them for videos we've confirmed have no captions so the row
+  // doesn't grow buttons that would immediately 410.
+  const canGenerate = !video.transcriptUnavailable;
+  const showGenerateSummary = canGenerate && !video.hasSummary;
+  const showGenerateArticle = canGenerate && !video.hasArticle;
+
+  async function handleGenerateSummary(e: React.MouseEvent | React.KeyboardEvent | Event) {
+    if (e != null && 'preventDefault' in e) {
+      e.preventDefault();
+    }
+    if (e != null && 'stopPropagation' in e) {
+      e.stopPropagation();
+    }
+    if (pendingSummary) {
+      return;
+    }
+    setPendingSummary(true);
+    const ok = await triage.generateSummary(video.id);
+    if (!ok) {
+      setPendingSummary(false);
+    }
+  }
+
+  async function handleGenerateArticle(e: React.MouseEvent | React.KeyboardEvent | Event) {
+    if (e != null && 'preventDefault' in e) {
+      e.preventDefault();
+    }
+    if (e != null && 'stopPropagation' in e) {
+      e.stopPropagation();
+    }
+    if (pendingArticle) {
+      return;
+    }
+    setPendingArticle(true);
+    const ok = await triage.generateArticle(video.id);
+    if (!ok) {
+      setPendingArticle(false);
+    }
+  }
 
   // Long-press (mobile): touchstart arms a 500ms timer; if it fires
   // without the finger moving more than LONG_PRESS_SLOP pixels or
@@ -363,10 +421,40 @@ export default function VideoRow({
                     className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
                     aria-label="Actions"
                   >
-                    <MoreHorizontal className="h-4 w-4" />
+                    {pendingSummary || pendingArticle ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                    ) : (
+                      <MoreHorizontal className="h-4 w-4" />
+                    )}
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-40">
+                <DropdownMenuContent align="end" className="w-44">
+                  {showGenerateSummary && (
+                    <DropdownMenuItem
+                      disabled={pendingSummary}
+                      onSelect={(e) => void handleGenerateSummary(e)}
+                    >
+                      {pendingSummary ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin text-blue-500" />
+                      ) : (
+                        <FileText className="mr-2 h-4 w-4 text-blue-500" />
+                      )}
+                      {pendingSummary ? 'Generating…' : 'Generate summary'}
+                    </DropdownMenuItem>
+                  )}
+                  {showGenerateArticle && (
+                    <DropdownMenuItem
+                      disabled={pendingArticle}
+                      onSelect={(e) => void handleGenerateArticle(e)}
+                    >
+                      {pendingArticle ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin text-blue-500" />
+                      ) : (
+                        <Newspaper className="mr-2 h-4 w-4 text-blue-500" />
+                      )}
+                      {pendingArticle ? 'Generating…' : 'Generate article'}
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem onSelect={() => onOpenNotes(video.id, video.title)}>
                     <NotebookPen className="mr-2 h-4 w-4 text-amber-500" />
                     {video.noteCount > 0 ? `Notes (${video.noteCount})` : 'Add note'}
@@ -401,8 +489,46 @@ export default function VideoRow({
           ) : (
             <div
               className="flex shrink-0 items-center gap-1 opacity-0 group-hover:opacity-100 data-[active=true]:opacity-100"
-              data-active={video.isStarred || video.isSaved || video.noteCount > 0}
+              data-active={
+                video.isStarred ||
+                video.isSaved ||
+                video.noteCount > 0 ||
+                pendingSummary ||
+                pendingArticle
+              }
             >
+              {showGenerateSummary && (
+                <button
+                  type="button"
+                  onClick={handleGenerateSummary}
+                  disabled={pendingSummary}
+                  title={pendingSummary ? 'Generating summary…' : 'Generate summary'}
+                  aria-label={pendingSummary ? 'Generating summary' : 'Generate summary'}
+                  className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-blue-500 disabled:opacity-70"
+                >
+                  {pendingSummary ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <FileText className="h-4 w-4" />
+                  )}
+                </button>
+              )}
+              {showGenerateArticle && (
+                <button
+                  type="button"
+                  onClick={handleGenerateArticle}
+                  disabled={pendingArticle}
+                  title={pendingArticle ? 'Generating article…' : 'Generate article'}
+                  aria-label={pendingArticle ? 'Generating article' : 'Generate article'}
+                  className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-blue-500 disabled:opacity-70"
+                >
+                  {pendingArticle ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Newspaper className="h-4 w-4" />
+                  )}
+                </button>
+              )}
               {/* Notes button: always opens the inline notes panel in the list view. */}
               <button
                 type="button"

@@ -155,6 +155,77 @@ export function useTriage() {
       }
     },
 
+    async generateSummary(videoId: string): Promise<boolean> {
+      try {
+        const res = await fetch(`/api/videos/${videoId}/summary`, { method: 'POST' });
+        if (!res.ok) {
+          let msg = `Request failed (${res.status})`;
+          try {
+            const json = await res.json();
+            if (json?.error != null) {
+              msg = String(json.error);
+            }
+          } catch {
+            // ignore
+          }
+          throw new Error(msg);
+        }
+        // Drain the NDJSON stream so the server can finish persisting
+        // before we invalidate. Without this the /api/videos refetch
+        // races the upsert and the artifact badge still reads false.
+        const reader = res.body?.getReader();
+        if (reader != null) {
+          while (true) {
+            const { done } = await reader.read();
+            if (done) {
+              break;
+            }
+          }
+        }
+        invalidateLists();
+        return true;
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to generate summary');
+        return false;
+      }
+    },
+
+    async generateArticle(videoId: string): Promise<boolean> {
+      try {
+        const res = await fetch(`/api/videos/${videoId}/article`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        if (!res.ok) {
+          let msg = `Request failed (${res.status})`;
+          try {
+            const json = await res.json();
+            if (json?.error != null) {
+              msg = String(json.error);
+            }
+          } catch {
+            // ignore
+          }
+          throw new Error(msg);
+        }
+        const reader = res.body?.getReader();
+        if (reader != null) {
+          while (true) {
+            const { done } = await reader.read();
+            if (done) {
+              break;
+            }
+          }
+        }
+        invalidateLists();
+        return true;
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to generate article');
+        return false;
+      }
+    },
+
     async removeFromLibrary(videoId: string): Promise<boolean> {
       try {
         await call('DELETE', `/api/videos/${videoId}/standalone`);
