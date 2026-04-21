@@ -366,6 +366,67 @@ describe('upsertChannelWithVideos', () => {
     expect(created.duration_seconds).toBe(800);
   });
 
+  it('create path: re-points a video that already lives under a shadow channel', async () => {
+    // Shadow channel pre-existing from the add-playlist flow, with a
+    // video that the upcoming channel-add snapshot also references. A
+    // nested `videos: { create: [...] }` would crash with P2002 on the
+    // `video_unique_source` constraint; the per-video upsert must
+    // re-point `channel_id` to the real owner instead.
+    const shadow = await global.testPrisma.channel.create({
+      data: {
+        source_id: 'UC_shadow_owner',
+        name: 'Playlist Owner Shadow',
+        rss_url: 'https://example.com/shadow.xml',
+      },
+    });
+    await global.testPrisma.video.create({
+      data: {
+        channel_id: shadow.id,
+        source_type: 'YOUTUBE',
+        source_id: 'vid_collide',
+        title: 'Originally under shadow',
+        description: '',
+        published_at: new Date('2026-01-01T00:00:00Z'),
+      },
+    });
+
+    const ch = await upsertChannelWithVideos(
+      global.testPrisma,
+      youtube,
+      'UC_real',
+      snapshot({
+        channelId: 'UC_real',
+        name: 'Real Channel',
+        handle: '@real',
+        videos: [
+          {
+            videoId: 'vid_collide',
+            title: 'Real Title',
+            description: 'real desc',
+            publishedAt: new Date('2026-01-15T00:00:00Z'),
+            link: 'https://www.youtube.com/watch?v=vid_collide',
+            thumbnailUrl: 'https://thumb/collide',
+            durationSeconds: 500,
+          },
+        ],
+      })
+    );
+
+    // The video was re-pointed to the new channel, not duplicated.
+    const moved = await global.testPrisma.video.findUnique({
+      where: {
+        video_unique_source: { source_type: 'YOUTUBE', source_id: 'vid_collide' },
+      },
+    });
+    expect(moved!.channel_id).toBe(ch.id);
+    expect(moved!.title).toBe('Real Title');
+    // Shadow channel still exists but no longer owns the video.
+    const shadowVideos = await global.testPrisma.video.findMany({
+      where: { channel_id: shadow.id },
+    });
+    expect(shadowVideos).toHaveLength(0);
+  });
+
   it('creates initial Video rows from the snapshot', async () => {
     await upsertChannelWithVideos(
       global.testPrisma,

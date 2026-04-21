@@ -1,8 +1,8 @@
-import type { PrismaClient } from '@readtube/database';
+import type { PrismaClient, VideoPlatformType } from '@readtube/database';
 
 import { hasChannelHandleConflict } from '@/lib/channels/handleConflict';
 import type { VideoPlatform } from '@/lib/platforms';
-import type { ChannelSnapshot } from '@/lib/platforms/types';
+import type { ChannelSnapshot, SnapshotVideo } from '@/lib/platforms/types';
 import { isEmptyString } from '@/lib/string';
 
 export interface UpsertChannelResult {
@@ -72,46 +72,7 @@ export async function upsertChannelWithVideos(
       platform.type
     );
 
-    // Upsert each video. Scoped by `video_unique_source` (the
-    // (source_type, source_id) constraint) — same rationale as the
-    // refresh-channels cron: a video may already exist under a
-    // different channel_id (e.g. the playlist-owner's channel from
-    // the add-playlist flow) and we want to correct that.
-    //
-    // `isScraped` videos are create-or-skip — see SnapshotVideo.
-    for (const video of snapshot.videos) {
-      await prisma.video.upsert({
-        where: {
-          video_unique_source: {
-            source_type: platform.type,
-            source_id: video.videoId,
-          },
-        },
-        create: {
-          channel_id: existing.id,
-          source_type: platform.type,
-          source_id: video.videoId,
-          title: video.title,
-          description: video.description,
-          published_at: video.publishedAt,
-          thumbnail_url: video.thumbnailUrl,
-          duration_seconds: video.durationSeconds,
-        },
-        update:
-          video.isScraped === true
-            ? {}
-            : {
-                channel_id: existing.id,
-                title: video.title,
-                ...(isEmptyString(video.description) ? {} : { description: video.description }),
-                ...(video.publishedAt != null ? { published_at: video.publishedAt } : {}),
-                thumbnail_url: video.thumbnailUrl,
-                ...(video.durationSeconds != null
-                  ? { duration_seconds: video.durationSeconds }
-                  : {}),
-              },
-      });
-    }
+    await upsertSnapshotVideos(prisma, platform.type, existing.id, snapshot.videos);
 
     return prisma.channel.update({
       where: { id: existing.id },
@@ -133,7 +94,12 @@ export async function upsertChannelWithVideos(
   );
 
   console.info(`Channel ${sourceId} does not exist — creating with videos`);
-  return prisma.channel.create({
+  // Create the channel first, then upsert videos individually. Using a
+  // nested `videos: { create: [...] }` would batch-INSERT and crash with
+  // P2002 if any snapshot video already exists under a different
+  // channel (e.g. a playlist-owner shadow channel) — the per-video
+  // upsert below correctly re-points `channel_id` instead.
+  const channel = await prisma.channel.create({
     data: {
       source_type: platform.type,
       source_id: sourceId,
@@ -142,21 +108,61 @@ export async function upsertChannelWithVideos(
       logo_url: snapshot.logoUrl,
       checked_at: new Date(),
       ...(hasHandle && !handleAlreadyUsed ? { handle: snapshot.handle } : {}),
-      videos: {
-        create: snapshot.videos.map((v) => ({
-          // Explicit source_type — the column defaults to YOUTUBE in
-          // the schema, so omitting it here would mis-tag Bilibili
-          // videos and break any downstream platform dispatch
-          // (ensureTranscript, buildWatchLink, thumbnail fallback).
-          source_type: platform.type,
-          source_id: v.videoId,
-          title: v.title,
-          description: v.description,
-          published_at: v.publishedAt,
-          thumbnail_url: v.thumbnailUrl,
-          duration_seconds: v.durationSeconds,
-        })),
-      },
     },
   });
+  await upsertSnapshotVideos(prisma, platform.type, channel.id, snapshot.videos);
+  return channel;
+}
+
+/**
+ * Persist snapshot videos against a known channel id. Scoped by
+ * `video_unique_source` (source_type + source_id, globally unique) so a
+ * video already stored under a different channel (typically a
+ * playlist-owner shadow channel from the add-playlist flow) is
+ * re-pointed to the real owner instead of crashing with P2002.
+ *
+ * `isScraped` videos are create-or-skip: their truncated
+ * title/description and approximate publishedAt would regress richer
+ * data already stored from a prior RSS hit, so the update branch is a
+ * no-op. Source-type is always set explicitly on create — the column
+ * defaults to YOUTUBE in the schema, which would mis-tag Bilibili rows
+ * and break downstream platform dispatch.
+ */
+async function upsertSnapshotVideos(
+  prisma: PrismaClient,
+  sourceType: VideoPlatformType,
+  channelId: string,
+  videos: SnapshotVideo[]
+): Promise<void> {
+  for (const video of videos) {
+    await prisma.video.upsert({
+      where: {
+        video_unique_source: {
+          source_type: sourceType,
+          source_id: video.videoId,
+        },
+      },
+      create: {
+        channel_id: channelId,
+        source_type: sourceType,
+        source_id: video.videoId,
+        title: video.title,
+        description: video.description,
+        published_at: video.publishedAt,
+        thumbnail_url: video.thumbnailUrl,
+        duration_seconds: video.durationSeconds,
+      },
+      update:
+        video.isScraped === true
+          ? {}
+          : {
+              channel_id: channelId,
+              title: video.title,
+              ...(isEmptyString(video.description) ? {} : { description: video.description }),
+              ...(video.publishedAt != null ? { published_at: video.publishedAt } : {}),
+              thumbnail_url: video.thumbnailUrl,
+              ...(video.durationSeconds != null ? { duration_seconds: video.durationSeconds } : {}),
+            },
+    });
+  }
 }
