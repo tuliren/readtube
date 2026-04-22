@@ -20,6 +20,7 @@ CREATE TABLE "User" (
   "image" TEXT,
   "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updated_at" TIMESTAMP(3) NOT NULL,
+  "preferred_language" TEXT,
   CONSTRAINT "User_pkey" PRIMARY KEY ("id")
 );
 
@@ -111,6 +112,7 @@ CREATE TABLE "Article" (
   "content" TEXT NOT NULL,
   "usage" JSONB,
   "generated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "language" TEXT,
   CONSTRAINT "Article_pkey" PRIMARY KEY ("id")
 );
 
@@ -125,6 +127,7 @@ CREATE TABLE "Summary" (
   "model" TEXT NOT NULL,
   "usage" JSONB,
   "generated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "language" TEXT,
   CONSTRAINT "Summary_pkey" PRIMARY KEY ("id")
 );
 
@@ -266,10 +269,10 @@ CREATE UNIQUE INDEX "UserVideoConsumption_user_id_video_id_key" ON "UserVideoCon
 CREATE INDEX "transcript_index_on_video_id" ON "Transcript" ("video_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Article_transcript_id_style_key" ON "Article" ("transcript_id", "style");
+CREATE INDEX "Article_transcript_id_style_language_idx" ON "Article" ("transcript_id", "style", "language");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Summary_transcript_id_key" ON "Summary" ("transcript_id");
+CREATE INDEX "Summary_transcript_id_language_idx" ON "Summary" ("transcript_id", "language");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Folder_user_id_name_key" ON "Folder" ("user_id", "name");
