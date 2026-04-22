@@ -220,11 +220,16 @@ export function useTriage() {
         // (instead of silently returning true and leaving the caller
         // with a stuck pending flag).
         await drainNdjsonStream(res);
-        invalidateLists();
         return true;
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Failed to generate summary');
         return false;
+      } finally {
+        // Refresh regardless of outcome: the server may have mutated
+        // video state even when generation fails (e.g. setting the
+        // sticky transcript_unavailable flag on 410), and the row
+        // badges need to reflect that.
+        invalidateLists();
       }
     },
 
@@ -248,11 +253,12 @@ export function useTriage() {
           throw new Error(msg);
         }
         await drainNdjsonStream(res);
-        invalidateLists();
         return true;
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Failed to generate article');
         return false;
+      } finally {
+        invalidateLists();
       }
     },
 
