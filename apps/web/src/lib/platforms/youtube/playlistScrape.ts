@@ -82,17 +82,23 @@ export async function scrapePlaylist(playlistId: string): Promise<ScrapedPlaylis
   }
 
   // Private / deleted / restricted playlists surface as an alerts
-  // array on ytInitialData. The alertRenderer's text usually reads
-  // "This playlist does not exist" or similar.
+  // array on ytInitialData with an ERROR-typed alertRenderer. Unlisted
+  // playlists that simply hide a few entries also produce an alerts
+  // entry, but with type "INFO" (e.g. "N unavailable videos are
+  // hidden") — those are not failures.
   const alerts = data?.alerts as any[] | undefined;
   if (Array.isArray(alerts) && alerts.length > 0) {
-    const firstAlert = alerts[0]?.alertRenderer ?? alerts[0]?.alertWithButtonRenderer;
-    const alertText =
-      firstAlert?.text?.simpleText ??
-      (firstAlert?.text?.runs as any[] | undefined)?.map((r) => r.text).join('') ??
-      '';
-    console.error(alertText);
-    throw new PrivatePlaylistError(PRIVATE_ERROR_MESSAGE);
+    const errorAlert = alerts
+      .map((a) => a?.alertRenderer ?? a?.alertWithButtonRenderer)
+      .find((r) => r != null && r.type !== 'INFO');
+    if (errorAlert != null) {
+      const alertText =
+        errorAlert.text?.simpleText ??
+        (errorAlert.text?.runs as any[] | undefined)?.map((r) => r.text).join('') ??
+        '';
+      console.error(alertText);
+      throw new PrivatePlaylistError(PRIVATE_ERROR_MESSAGE);
+    }
   }
 
   // Navigate the deeply nested YouTube data structure.
