@@ -8,32 +8,77 @@ function isUniqueViolation(err: unknown): boolean {
 }
 
 /**
- * Look up a cached Summary for `(transcript_id, language=target)`. When
- * the row doesn't exist but an Original (`language IS NULL`) one does,
- * detect Original's language and either promote it to `target` (single
- * UPDATE, no new row) or stamp Original with the detected code so future
- * requests skip detection. Returns null when no row matches and the
- * caller should generate fresh content.
+ * Resolve the transcript's source language, detecting it on demand
+ * the first time someone needs to know. Detection runs against the
+ * transcript text (the most reliable signal — way more text than any
+ * single summary or article body) and the result is cached on
+ * `Transcript.language` so future requests skip the work.
  *
- * Race-safe: a concurrent writer that takes the partial unique slot for
- * `(transcript_id, target)` will trigger P2002 on our promote UPDATE; we
- * recover by re-reading the just-created target row.
+ * Returns null only when even franc can't decide ("und") — the caller
+ * should treat that as "we don't know what this is in" and not try
+ * to clone-from-Original.
  */
-export async function findOrPromoteSummary(
+async function resolveTranscriptLanguage(transcriptId: string): Promise<string | null> {
+  const transcript = await prisma.transcript.findUnique({
+    where: { id: transcriptId },
+    select: { language: true, text: true },
+  });
+  if (transcript == null) {
+    return null;
+  }
+  if (transcript.language != null) {
+    return transcript.language;
+  }
+  const detected = detectLanguage(transcript.text);
+  if (detected == null) {
+    return null;
+  }
+  // Best-effort persist so future requests skip detection. Concurrent
+  // writers all converge on the same detected value, so any race here
+  // resolves cleanly without retry logic.
+  try {
+    await prisma.transcript.update({
+      where: { id: transcriptId },
+      data: { language: detected },
+    });
+  } catch {
+    // Ignore — writing the cache is an optimization, not a guarantee.
+  }
+  return detected;
+}
+
+/**
+ * Look up a cached Summary for `(transcript_id, language=target)`.
+ *
+ * - Direct hit: return it.
+ * - Target requested AND no direct hit: if the Original
+ *   (`language IS NULL`) row happens to already be in the target
+ *   language (per the transcript's detected source language), CLONE
+ *   the Original into a new row with `language=target` and return
+ *   the clone. The Original stays untouched so picking "Original"
+ *   later still finds it.
+ * - Otherwise return null and let the caller generate fresh content.
+ *
+ * Why clone instead of returning Original-as-target: keeping the
+ * `language IS NULL` row addressable matters — the picker shows
+ * "Original" as a first-class option and the user can flip back to
+ * it any time. Mutating Original by stamping a language code
+ * would erase it from the Original lookup.
+ */
+export async function findOrCloneSummary(
   transcriptId: string,
   target: string | null
 ): Promise<Summary | null> {
-  if (target === null) {
-    return prisma.summary.findFirst({
-      where: { transcript_id: transcriptId, language: null },
-    });
-  }
-
   const direct = await prisma.summary.findFirst({
     where: { transcript_id: transcriptId, language: target },
   });
   if (direct != null) {
     return direct;
+  }
+
+  if (target === null) {
+    // Original was asked for explicitly. No fallback.
+    return null;
   }
 
   const original = await prisma.summary.findFirst({
@@ -43,68 +88,53 @@ export async function findOrPromoteSummary(
     return null;
   }
 
-  // Prefer the longest body for detection; franc gets steadily more
-  // accurate with more text. Fall back to the shorter fields if the
-  // longer ones are absent.
-  const detectionText = original.full ?? original.short ?? original.headline ?? '';
-  if (detectionText.trim().length === 0) {
-    return null;
-  }
-  const detected = detectLanguage(detectionText);
-  if (detected == null) {
+  const sourceLanguage = await resolveTranscriptLanguage(transcriptId);
+  if (sourceLanguage !== target) {
     return null;
   }
 
-  if (detected === target) {
-    try {
-      return await prisma.summary.update({
-        where: { id: original.id },
-        data: { language: target },
-      });
-    } catch (err) {
-      if (isUniqueViolation(err)) {
-        return prisma.summary.findFirst({
-          where: { transcript_id: transcriptId, language: target },
-        });
-      }
-      throw err;
-    }
-  }
-
-  // Stamp Original with its actual language so the next request for any
-  // target skips detection. Best-effort — a concurrent writer racing on
-  // the same Original is fine to lose to.
+  // Clone the Original into a new (transcript_id, language=target)
+  // row, byte-for-byte. The Original row is untouched.
+  const cloneData = {
+    transcript_id: original.transcript_id,
+    language: target,
+    headline: original.headline,
+    short: original.short,
+    full: original.full,
+    prompt_version: original.prompt_version,
+    model: original.model,
+    usage: original.usage as Prisma.InputJsonValue,
+  };
   try {
-    await prisma.summary.update({
-      where: { id: original.id },
-      data: { language: detected },
-    });
-  } catch {
-    // Ignore: race or unique-violation against an unexpected target row.
+    return await prisma.summary.create({ data: cloneData });
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      return prisma.summary.findFirst({
+        where: { transcript_id: transcriptId, language: target },
+      });
+    }
+    throw err;
   }
-  return null;
 }
 
 /**
- * Article variant of {@link findOrPromoteSummary}. Same semantics; the
- * uniqueness key includes `style`.
+ * Article variant of {@link findOrCloneSummary}. Same semantics; the
+ * cache key includes `style`.
  */
-export async function findOrPromoteArticle(
+export async function findOrCloneArticle(
   transcriptId: string,
   style: ArticleStyle,
   target: string | null
 ): Promise<Article | null> {
-  if (target === null) {
-    return prisma.article.findFirst({
-      where: { transcript_id: transcriptId, style, language: null },
-    });
-  }
-
   const direct = await prisma.article.findFirst({
     where: { transcript_id: transcriptId, style, language: target },
   });
   if (direct != null) {
     return direct;
+  }
+
+  if (target === null) {
+    return null;
   }
 
   const original = await prisma.article.findFirst({
@@ -114,37 +144,28 @@ export async function findOrPromoteArticle(
     return null;
   }
 
-  if (original.content.trim().length === 0) {
-    return null;
-  }
-  const detected = detectLanguage(original.content);
-  if (detected == null) {
+  const sourceLanguage = await resolveTranscriptLanguage(transcriptId);
+  if (sourceLanguage !== target) {
     return null;
   }
 
-  if (detected === target) {
-    try {
-      return await prisma.article.update({
-        where: { id: original.id },
-        data: { language: target },
-      });
-    } catch (err) {
-      if (isUniqueViolation(err)) {
-        return prisma.article.findFirst({
-          where: { transcript_id: transcriptId, style, language: target },
-        });
-      }
-      throw err;
-    }
-  }
-
+  const cloneData = {
+    transcript_id: original.transcript_id,
+    style: original.style,
+    language: target,
+    content: original.content,
+    prompt_version: original.prompt_version,
+    model: original.model,
+    usage: original.usage as Prisma.InputJsonValue,
+  };
   try {
-    await prisma.article.update({
-      where: { id: original.id },
-      data: { language: detected },
-    });
-  } catch {
-    // Ignore.
+    return await prisma.article.create({ data: cloneData });
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      return prisma.article.findFirst({
+        where: { transcript_id: transcriptId, style, language: target },
+      });
+    }
+    throw err;
   }
-  return null;
 }

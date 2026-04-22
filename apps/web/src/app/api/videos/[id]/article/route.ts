@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { DEFAULT_AI_MODEL } from '@/constants';
-import { findOrPromoteArticle } from '@/lib/language/cache';
+import { findOrCloneArticle } from '@/lib/language/cache';
 import { buildLanguageRule } from '@/lib/language/prompt';
 import { resolveTargetLanguage } from '@/lib/language/resolve';
 import {
@@ -127,7 +127,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: 'Not cached' }, { status: 404 });
   }
 
-  const article = await findOrPromoteArticle(transcript.id, style, target);
+  const article = await findOrCloneArticle(transcript.id, style, target);
   if (!article) {
     console.error(
       `[article/GET] No cached article for video ${id} (style=${style}, language=${target ?? 'original'})`
@@ -233,11 +233,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // Cache hit: replay the stored article as a single-event NDJSON
   // stream so the client's POST handler only has to know one wire
   // format. Skipped when `force` is set — the dev-only Regenerate
-  // button wants a fresh LLM run. Use findOrPromoteArticle so a
+  // button wants a fresh LLM run. Use findOrCloneArticle so a
   // request for a target language whose Original happens to already
   // be in that language gets promoted (single UPDATE) instead of
   // regenerating.
-  const cached = force ? null : await findOrPromoteArticle(transcript.id, style, target);
+  const cached = force ? null : await findOrCloneArticle(transcript.id, style, target);
 
   if (cached) {
     const parsed = parseMarkdownDocument(cached.content);

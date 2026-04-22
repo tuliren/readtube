@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { DEFAULT_AI_MODEL } from '@/constants';
-import { findOrPromoteSummary } from '@/lib/language/cache';
+import { findOrCloneSummary } from '@/lib/language/cache';
 import { buildLanguageRule } from '@/lib/language/prompt';
 import { resolveTargetLanguage } from '@/lib/language/resolve';
 import { CURRENT_FRONTMATTER_VERSION, serializeMarkdownDocument } from '@/lib/markdownFrontmatter';
@@ -123,7 +123,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: 'Not cached' }, { status: 404 });
   }
 
-  const summary = await findOrPromoteSummary(transcript.id, target);
+  const summary = await findOrCloneSummary(transcript.id, target);
   if (summary == null) {
     console.error(
       `[summary/GET] No cached summary for video ${id} in language ${target ?? 'original'}`
