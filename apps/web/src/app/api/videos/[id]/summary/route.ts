@@ -88,7 +88,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   }
 
   const { id } = await params;
-  const target = await resolveTargetLanguage(userId, request.nextUrl.searchParams.get('language'));
+  const target = await resolveTargetLanguage(
+    prisma,
+    userId,
+    request.nextUrl.searchParams.get('language')
+  );
 
   console.info(
     `[summary/GET] Fetching cached summary for video ${id}, user ${userId}, language ${target ?? 'original'}`
@@ -123,7 +127,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: 'Not cached' }, { status: 404 });
   }
 
-  const summary = await findOrCloneSummary(transcript.id, target);
+  const summary = await findOrCloneSummary(prisma, transcript.id, target);
   if (summary == null) {
     console.error(
       `[summary/GET] No cached summary for video ${id} in language ${target ?? 'original'}`
@@ -148,7 +152,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 
   const { id } = await params;
-  const target = await resolveTargetLanguage(userId, request.nextUrl.searchParams.get('language'));
+  const target = await resolveTargetLanguage(
+    prisma,
+    userId,
+    request.nextUrl.searchParams.get('language')
+  );
 
   console.info(
     `[summary/POST] Generating summary for video ${id}, user ${userId}, language ${target ?? 'original'}`

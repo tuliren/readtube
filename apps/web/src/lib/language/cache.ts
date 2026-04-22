@@ -1,5 +1,5 @@
-import type { Article, ArticleStyle, Summary } from '@readtube/database';
-import { Prisma, prisma } from '@readtube/database';
+import type { Article, ArticleStyle, PrismaClient, Summary } from '@readtube/database';
+import { Prisma } from '@readtube/database';
 
 import { detectLanguage } from './detect';
 
@@ -18,7 +18,10 @@ function isUniqueViolation(err: unknown): boolean {
  * should treat that as "we don't know what this is in" and not try
  * to clone-from-Original.
  */
-async function resolveTranscriptLanguage(transcriptId: string): Promise<string | null> {
+async function resolveTranscriptLanguage(
+  prisma: PrismaClient,
+  transcriptId: string
+): Promise<string | null> {
   const transcript = await prisma.transcript.findUnique({
     where: { id: transcriptId },
     select: { language: true, text: true },
@@ -66,6 +69,7 @@ async function resolveTranscriptLanguage(transcriptId: string): Promise<string |
  * would erase it from the Original lookup.
  */
 export async function findOrCloneSummary(
+  prisma: PrismaClient,
   transcriptId: string,
   target: string | null
 ): Promise<Summary | null> {
@@ -88,7 +92,7 @@ export async function findOrCloneSummary(
     return null;
   }
 
-  const sourceLanguage = await resolveTranscriptLanguage(transcriptId);
+  const sourceLanguage = await resolveTranscriptLanguage(prisma, transcriptId);
   if (sourceLanguage !== target) {
     return null;
   }
@@ -122,6 +126,7 @@ export async function findOrCloneSummary(
  * cache key includes `style`.
  */
 export async function findOrCloneArticle(
+  prisma: PrismaClient,
   transcriptId: string,
   style: ArticleStyle,
   target: string | null
@@ -144,7 +149,7 @@ export async function findOrCloneArticle(
     return null;
   }
 
-  const sourceLanguage = await resolveTranscriptLanguage(transcriptId);
+  const sourceLanguage = await resolveTranscriptLanguage(prisma, transcriptId);
   if (sourceLanguage !== target) {
     return null;
   }

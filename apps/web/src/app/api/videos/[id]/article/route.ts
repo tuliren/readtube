@@ -91,7 +91,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     console.error(`[article/GET] Invalid style: ${styleParam}`);
     return NextResponse.json({ error: 'Invalid style' }, { status: 400 });
   }
-  const target = await resolveTargetLanguage(userId, request.nextUrl.searchParams.get('language'));
+  const target = await resolveTargetLanguage(
+    prisma,
+    userId,
+    request.nextUrl.searchParams.get('language')
+  );
 
   console.info(
     `[article/GET] Fetching cached article for video ${id} (style=${style}, language=${target ?? 'original'}), user ${userId}`
@@ -127,7 +131,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: 'Not cached' }, { status: 404 });
   }
 
-  const article = await findOrCloneArticle(transcript.id, style, target);
+  const article = await findOrCloneArticle(prisma, transcript.id, style, target);
   if (!article) {
     console.error(
       `[article/GET] No cached article for video ${id} (style=${style}, language=${target ?? 'original'})`
@@ -164,7 +168,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     console.error(`[article/POST] Invalid style: ${body.style}`);
     return NextResponse.json({ error: 'Invalid style' }, { status: 400 });
   }
-  const target = await resolveTargetLanguage(userId, request.nextUrl.searchParams.get('language'));
+  const target = await resolveTargetLanguage(
+    prisma,
+    userId,
+    request.nextUrl.searchParams.get('language')
+  );
 
   console.info(
     `[article/POST] Generating article for video ${id} (style=${style}, language=${target ?? 'original'}), user ${userId}`
@@ -237,7 +245,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // request for a target language whose Original happens to already
   // be in that language gets promoted (single UPDATE) instead of
   // regenerating.
-  const cached = force ? null : await findOrCloneArticle(transcript.id, style, target);
+  const cached = force ? null : await findOrCloneArticle(prisma, transcript.id, style, target);
 
   if (cached) {
     const parsed = parseMarkdownDocument(cached.content);

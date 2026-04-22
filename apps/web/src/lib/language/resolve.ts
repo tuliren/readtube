@@ -1,4 +1,4 @@
-import { prisma } from '@readtube/database';
+import type { PrismaClient } from '@readtube/database';
 
 import { findTargetLanguage } from './names';
 import { parseLanguageQuery } from './prompt';
@@ -23,6 +23,7 @@ import { parseLanguageQuery } from './prompt';
  * throws on an unauthenticated edge.
  */
 export async function resolveTargetLanguage(
+  prisma: PrismaClient,
   userId: string,
   rawQueryLanguage: string | null | undefined
 ): Promise<string | null> {
