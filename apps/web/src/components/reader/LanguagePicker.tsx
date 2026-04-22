@@ -1,7 +1,9 @@
 'use client';
 
-import { ChevronDown, Languages } from 'lucide-react';
+import { ChevronDown, HelpCircle, Languages } from 'lucide-react';
+import Link from 'next/link';
 
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { TARGET_LANGUAGES } from '@/lib/language/names';
 
 interface Props {
@@ -27,32 +29,53 @@ const ORIGINAL_VALUE = '__original__';
  */
 export default function LanguagePicker({ value, onChange, disabled = false }: Props) {
   return (
-    <div className="relative inline-flex items-center">
-      <Languages
-        aria-hidden="true"
-        className="pointer-events-none absolute left-2 h-3.5 w-3.5 text-gray-400"
-      />
-      <select
-        aria-label="Language"
-        disabled={disabled}
-        value={value ?? ORIGINAL_VALUE}
-        onChange={(e) => {
-          const next = e.target.value;
-          onChange(next === ORIGINAL_VALUE ? null : next);
-        }}
-        className="appearance-none rounded-md border border-gray-200 bg-white py-1.5 pr-7 pl-7 text-xs leading-none text-gray-600 hover:border-gray-300 focus:border-gray-400 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        <option value={ORIGINAL_VALUE}>Original</option>
-        {TARGET_LANGUAGES.map((lang) => (
-          <option key={lang.code} value={lang.code}>
-            {lang.nativeName}
-          </option>
-        ))}
-      </select>
-      <ChevronDown
-        aria-hidden="true"
-        className="pointer-events-none absolute right-2 h-3.5 w-3.5 text-gray-400"
-      />
+    <div className="inline-flex items-center gap-1.5">
+      <div className="relative inline-flex items-center">
+        <Languages
+          aria-hidden="true"
+          className="pointer-events-none absolute left-2 h-3.5 w-3.5 text-gray-400"
+        />
+        <select
+          aria-label="Language"
+          disabled={disabled}
+          value={value ?? ORIGINAL_VALUE}
+          onChange={(e) => {
+            const next = e.target.value;
+            onChange(next === ORIGINAL_VALUE ? null : next);
+          }}
+          className="appearance-none rounded-md border border-gray-200 bg-white py-1.5 pr-7 pl-7 text-xs leading-none text-gray-600 hover:border-gray-300 focus:border-gray-400 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <option value={ORIGINAL_VALUE}>Original</option>
+          {TARGET_LANGUAGES.map((lang) => (
+            <option key={lang.code} value={lang.code}>
+              {lang.nativeName}
+            </option>
+          ))}
+        </select>
+        <ChevronDown
+          aria-hidden="true"
+          className="pointer-events-none absolute right-2 h-3.5 w-3.5 text-gray-400"
+        />
+      </div>
+      <TooltipProvider delayDuration={200}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            {/* Wrapping in a span keeps the trigger small and gives the
+                tooltip a stable focusable target — Link works for click
+                + keyboard navigation, the icon is just decoration. */}
+            <Link
+              href="/settings"
+              aria-label="Change default reader language"
+              className="rounded p-0.5 text-gray-400 hover:text-gray-600 focus:text-gray-600 focus:outline-none"
+            >
+              <HelpCircle className="h-3.5 w-3.5" />
+            </Link>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="max-w-xs text-center">
+            Set your default reader language in Settings. The picker only changes the current video.
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     </div>
   );
 }
