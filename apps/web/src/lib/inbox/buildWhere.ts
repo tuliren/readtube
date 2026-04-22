@@ -55,14 +55,6 @@ export function buildVideoWhere(
     }
   }
 
-  // Tags: ALL selected tags must match (implicit AND). Rare to want OR here;
-  // if it ever comes up, add a `tagMatch: 'any'|'all'` flag.
-  if (query.tagIds != null && query.tagIds.length > 0) {
-    where.AND = query.tagIds.map((tagId) => ({
-      tags: { some: { tag_id: tagId, user_id: userId } },
-    }));
-  }
-
   // Triage: archived is a hard exclude by default; set archived=true to flip
   // into the archived view.
   if (query.archived === true) {

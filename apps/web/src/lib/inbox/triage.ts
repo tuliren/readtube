@@ -1,7 +1,7 @@
 import type { PrismaClient, VideoPlatformType } from '@readtube/database';
 
 import { buildThumbnailUrl } from '@/lib/platforms/youtube/urls';
-import type { TagData, VideoData } from '@/lib/types';
+import type { VideoData } from '@/lib/types';
 
 /**
  * Minimal raw row shape that a caller must supply when it wants triage
@@ -41,15 +41,14 @@ interface TriageContext {
   savedIds: Set<string>;
   archivedIds: Set<string>;
   standaloneIds: Set<string>;
-  tagsByVideoId: Map<string, TagData[]>;
   noteCountsByVideoId: Map<string, number>;
 }
 
 /**
  * Load all triage state for a user across a set of videos in one pass.
- * Batches five small queries instead of N per-row lookups. Callers should
- * pass the *filtered* id set (not every video the user ever saw) to keep
- * each query bounded.
+ * Batches a handful of small queries instead of N per-row lookups. Callers
+ * should pass the *filtered* id set (not every video the user ever saw) to
+ * keep each query bounded.
  */
 export async function loadTriageContext(
   prisma: PrismaClient,
@@ -62,12 +61,11 @@ export async function loadTriageContext(
       savedIds: new Set(),
       archivedIds: new Set(),
       standaloneIds: new Set(),
-      tagsByVideoId: new Map(),
       noteCountsByVideoId: new Map(),
     };
   }
 
-  const [stars, saves, archives, standalones, videoTags, noteCounts] = await Promise.all([
+  const [stars, saves, archives, standalones, noteCounts] = await Promise.all([
     prisma.videoStar.findMany({
       where: { user_id: userId, video_id: { in: videoIds } },
       select: { video_id: true },
@@ -84,30 +82,12 @@ export async function loadTriageContext(
       where: { user_id: userId, video_id: { in: videoIds } },
       select: { video_id: true },
     }),
-    prisma.videoTag.findMany({
-      where: { user_id: userId, video_id: { in: videoIds } },
-      select: {
-        video_id: true,
-        tag: { select: { id: true, name: true, color: true } },
-      },
-    }),
     prisma.note.groupBy({
       by: ['video_id'],
       where: { user_id: userId, video_id: { in: videoIds } },
       _count: { _all: true },
     }),
   ]);
-
-  const tagsByVideoId = new Map<string, TagData[]>();
-  for (const row of videoTags) {
-    const existing = tagsByVideoId.get(row.video_id) ?? [];
-    existing.push({
-      id: row.tag.id,
-      name: row.tag.name,
-      color: row.tag.color,
-    });
-    tagsByVideoId.set(row.video_id, existing);
-  }
 
   const noteCountsByVideoId = new Map<string, number>();
   for (const row of noteCounts) {
@@ -119,7 +99,6 @@ export async function loadTriageContext(
     savedIds: new Set(saves.map((r) => r.video_id)),
     archivedIds: new Set(archives.map((r) => r.video_id)),
     standaloneIds: new Set(standalones.map((r) => r.video_id)),
-    tagsByVideoId,
     noteCountsByVideoId,
   };
 }
@@ -172,7 +151,6 @@ export function decorateVideo(
     isSaved: context.savedIds.has(row.id),
     isArchived: context.archivedIds.has(row.id),
     isStandalone: context.standaloneIds.has(row.id),
-    tags: context.tagsByVideoId.get(row.id) ?? [],
     noteCount: context.noteCountsByVideoId.get(row.id) ?? 0,
   };
 }

@@ -47,8 +47,6 @@ export async function DELETE(
           prisma.videoSave.deleteMany({ where: userVideoFilter }),
           prisma.videoArchive.deleteMany({ where: userVideoFilter }),
           prisma.note.deleteMany({ where: userVideoFilter }),
-          prisma.highlight.deleteMany({ where: userVideoFilter }),
-          prisma.videoTag.deleteMany({ where: userVideoFilter }),
         ]
       : []),
   ]);

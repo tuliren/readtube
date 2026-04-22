@@ -121,9 +121,6 @@ function isPlainInbox(query: InboxQuery): boolean {
   if (query.to != null) {
     return false;
   }
-  if (query.tagIds != null && query.tagIds.length > 0) {
-    return false;
-  }
   if (query.sort != null && query.sort !== 'newest') {
     return false;
   }

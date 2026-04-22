@@ -27,12 +27,6 @@ export interface ChannelData {
   muteUntil: string | null;
 }
 
-export interface TagData {
-  id: string;
-  name: string;
-  color: string | null;
-}
-
 export interface FolderData {
   id: string;
   name: string;
@@ -83,8 +77,7 @@ export interface VideoData {
   // True when this video has a StandaloneVideo row for the viewer —
   // i.e. it lives in the user's personal library (Videos sidebar).
   isStandalone: boolean;
-  // Tags + notes count
-  tags: TagData[];
+  // Notes count
   noteCount: number;
 }
 
@@ -102,7 +95,6 @@ export interface InboxQuery {
    *  fetch key so the server sees the same scope as SSR. */
   channelId?: string;
   folderId?: string;
-  tagIds?: string[];
   unread?: boolean;
   starred?: boolean;
   saved?: boolean;

@@ -8,7 +8,6 @@ import type { InboxQuery } from '@/lib/types';
  * - Unknown keys are dropped (forward-compat).
  * - Empty strings are treated as absent.
  * - Booleans: `?unread=1` or `?unread=true` is true; anything else is false.
- * - tagIds is comma-separated in the URL (`?tag=a,b,c`).
  * - from/to are ISO date strings (YYYY-MM-DD ok; server normalizes).
  * - Defaults (sort='newest', page=1) are NOT
  *   emitted when encoding, so a "default" view has an empty query string.
@@ -60,17 +59,6 @@ export function parseInboxQuery(params: URLSearchParams): InboxQuery {
     }
   }
 
-  const tagIdsRaw = pickString(params, 'tagIds');
-  if (tagIdsRaw != null) {
-    const tagIds = tagIdsRaw
-      .split(',')
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-    if (tagIds.length > 0) {
-      query.tagIds = tagIds;
-    }
-  }
-
   const sort = pickString(params, 'sort');
   if (sort === 'newest' || sort === 'oldest') {
     query.sort = sort;
@@ -109,10 +97,6 @@ export function encodeInboxQuery(query: InboxQuery): URLSearchParams {
     if (query[key as BoolKey] === true) {
       params.set(key, '1');
     }
-  }
-
-  if (query.tagIds != null && query.tagIds.length > 0) {
-    params.set('tagIds', query.tagIds.join(','));
   }
 
   if (query.sort != null && query.sort !== 'newest') {

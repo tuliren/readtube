@@ -26,18 +26,6 @@ enum ArticleStyle {
   DIALOG
 }
 
-enum VideoTagSource {
-  MANUAL
-  AUTO_RULE
-  AUTO_AI
-}
-
-enum HighlightSource {
-  TRANSCRIPT
-  SUMMARY
-  ARTICLE
-}
-
 model User {
   id          String         @id @default(cuid())
   source_type UserSourceType @default(CLERK)
@@ -52,18 +40,12 @@ model User {
   subscriptions      UserSubscription[]
   video_consumptions UserVideoConsumption[]
   folders            Folder[]
-  tags               Tag[]
-  video_tags         VideoTag[]
   stars              VideoStar[]
   saves              VideoSave[]
   archives           VideoArchive[]
   standalone_videos  StandaloneVideo[]
   playlists          Playlist[]
   notes              Note[]
-  highlights         Highlight[]
-  rules              Rule[]
-  preference         UserPreference?
-  digest_runs        DigestRun[]
 }
 
 model Channel {
@@ -172,14 +154,12 @@ model Video {
   channel        Channel                @relation(fields: [channel_id], references: [id], onDelete: Cascade)
   transcripts    Transcript[]
   consumptions   UserVideoConsumption[]
-  tags           VideoTag[]
   stars          VideoStar[]
   saves          VideoSave[]
   archives       VideoArchive[]
   standalone     StandaloneVideo[]
   playlist_items PlaylistVideo[]
   notes          Note[]
-  highlights     Highlight[]
   embedding      VideoEmbedding?
 
   @@unique([channel_id, source_id], name: "video_unique_channel_source")
@@ -255,7 +235,7 @@ model Summary {
 }
 
 // ───────────────────────────────────────────────────────────────────────────
-// Inbox feature expansion — organization, triage, notes, rules, digest, AI
+// Inbox feature expansion — organization, triage, notes, AI
 // ───────────────────────────────────────────────────────────────────────────
 
 // User-defined channel groupings in the sidebar. Sort order is manual.
@@ -274,39 +254,6 @@ model Folder {
   // Postgres uses its leading column for any user-scoped range scan, so
   // a separate @@index([user_id]) would be redundant.
   @@unique([user_id, name], name: "folder_unique_user_name")
-}
-
-// User-owned tags. Scoped per user so two users can have independent taxonomies.
-model Tag {
-  id         String   @id @default(cuid())
-  user_id    String
-  name       String
-  color      String?
-  created_at DateTime @default(now())
-
-  user       User       @relation(fields: [user_id], references: [source_id], onDelete: Cascade)
-  video_tags VideoTag[]
-
-  @@unique([user_id, name], name: "tag_unique_user_name")
-  @@index([user_id], name: "tag_index_on_user_id")
-}
-
-// Junction: a user tags a video. Source lets us distinguish manual vs auto.
-model VideoTag {
-  id         String         @id @default(cuid())
-  user_id    String
-  video_id   String
-  tag_id     String
-  source     VideoTagSource @default(MANUAL)
-  created_at DateTime       @default(now())
-
-  user  User  @relation(fields: [user_id], references: [source_id], onDelete: Cascade)
-  video Video @relation(fields: [video_id], references: [id], onDelete: Cascade)
-  tag   Tag   @relation(fields: [tag_id], references: [id], onDelete: Cascade)
-
-  @@unique([user_id, video_id, tag_id], name: "video_tag_unique_user_video_tag")
-  @@index([video_id], name: "video_tag_index_on_video_id")
-  @@index([tag_id], name: "video_tag_index_on_tag_id")
 }
 
 // Starred videos (favorites).
@@ -432,74 +379,6 @@ model Note {
   video Video @relation(fields: [video_id], references: [id], onDelete: Cascade)
 
   @@index([user_id, video_id], name: "note_index_on_user_video")
-}
-
-// Text highlights — char-offset anchor into transcript, summary, or article.
-model Highlight {
-  id           String          @id @default(cuid())
-  user_id      String
-  video_id     String
-  source       HighlightSource
-  anchor_start Int
-  anchor_end   Int
-  text         String
-  created_at   DateTime        @default(now())
-
-  user  User  @relation(fields: [user_id], references: [source_id], onDelete: Cascade)
-  video Video @relation(fields: [video_id], references: [id], onDelete: Cascade)
-
-  @@index([user_id, video_id], name: "highlight_index_on_user_video")
-}
-
-// Auto-rules: run on new video ingest + on demand via run-once.
-// conditions: { field, op, value }[] — implicit AND (no OR/nested yet).
-// actions: { type, payload? }[] — each action applies to every match.
-model Rule {
-  id         String   @id @default(cuid())
-  user_id    String
-  name       String
-  enabled    Boolean  @default(true)
-  conditions Json
-  actions    Json
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-
-  user User @relation(fields: [user_id], references: [source_id], onDelete: Cascade)
-
-  @@index([user_id], name: "rule_index_on_user_id")
-}
-
-// Per-user preferences: theme, density, digest opt-in, digest hour.
-model UserPreference {
-  id              String   @id @default(cuid())
-  user_id         String   @unique
-  // "light" | "dark" | "system"
-  theme           String   @default("system")
-  // "comfortable" | "compact"
-  density         String   @default("comfortable")
-  digest_enabled  Boolean  @default(false)
-  // 0..23 UTC hour when the daily digest is sent
-  digest_hour_utc Int      @default(13)
-  created_at      DateTime @default(now())
-  updated_at      DateTime @updatedAt
-
-  user User @relation(fields: [user_id], references: [source_id], onDelete: Cascade)
-}
-
-// Audit trail of digest emails sent (one row per user per send attempt).
-model DigestRun {
-  id           String   @id @default(cuid())
-  user_id      String
-  sent_at      DateTime @default(now())
-  // string[] of Video.id that were included in the digest
-  video_ids    Json
-  // "sent" | "failed" | "skipped"
-  email_status String
-  error        String?
-
-  user User @relation(fields: [user_id], references: [source_id], onDelete: Cascade)
-
-  @@index([user_id, sent_at], name: "digest_run_index_on_user_sent_at")
 }
 
 // pgvector embedding per video. 1536 dims matches OpenAI's

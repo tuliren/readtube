@@ -52,21 +52,6 @@ describe('buildVideoWhere — date window', () => {
   });
 });
 
-describe('buildVideoWhere — tags', () => {
-  it('omits tag filter when tagIds is absent or empty', () => {
-    expect(buildVideoWhere({}, USER_ID, CHANNEL_IDS).AND).toBeUndefined();
-    expect(buildVideoWhere({ tagIds: [] }, USER_ID, CHANNEL_IDS).AND).toBeUndefined();
-  });
-
-  it('ANDs every tag (each must match independently)', () => {
-    const where = buildVideoWhere({ tagIds: ['tag_a', 'tag_b'] }, USER_ID, CHANNEL_IDS);
-    expect(where.AND).toEqual([
-      { tags: { some: { tag_id: 'tag_a', user_id: USER_ID } } },
-      { tags: { some: { tag_id: 'tag_b', user_id: USER_ID } } },
-    ]);
-  });
-});
-
 describe('buildVideoWhere — archive mode', () => {
   it('excludes archived videos by default', () => {
     const where = buildVideoWhere({}, USER_ID, CHANNEL_IDS);
@@ -180,7 +165,6 @@ describe('buildVideoWhere — compositional sanity', () => {
         starred: true,
         archived: false,
         from: '2026-01-01',
-        tagIds: ['tag_x'],
       },
       USER_ID,
       CHANNEL_IDS
@@ -190,6 +174,5 @@ describe('buildVideoWhere — compositional sanity', () => {
     expect(where.stars).toEqual({ some: { user_id: USER_ID } });
     expect(where.archives).toEqual({ none: { user_id: USER_ID } });
     expect(where.published_at).toEqual({ gte: new Date('2026-01-01') });
-    expect(where.AND).toEqual([{ tags: { some: { tag_id: 'tag_x', user_id: USER_ID } } }]);
   });
 });
