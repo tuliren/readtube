@@ -8,7 +8,11 @@ import { DEFAULT_AI_MODEL } from '@/constants';
 import { findOrCloneSummary } from '@/lib/language/cache';
 import { buildLanguageRule } from '@/lib/language/prompt';
 import { resolveTargetLanguage } from '@/lib/language/resolve';
-import { CURRENT_FRONTMATTER_VERSION, serializeMarkdownDocument } from '@/lib/markdownFrontmatter';
+import {
+  CURRENT_FRONTMATTER_VERSION,
+  parseMarkdownDocument,
+  serializeMarkdownDocument,
+} from '@/lib/markdownFrontmatter';
 import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
 
 const SUMMARY_PROMPT_VERSION = 'v7';
@@ -234,6 +238,48 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
   const transcript = ensured.transcript;
   const transcriptText = transcript.segments.map((s) => s.text).join(' ');
+
+  // Cache + clone short-circuit. Mirrors the article POST cache check:
+  // if the user clicked the main "Generate" button (all 3 fields
+  // requested) and a row already exists for `(transcript, target)` —
+  // either via a direct hit or by cloning the Original when its
+  // language matches the picker target — replay that row as NDJSON
+  // instead of running the LLM. Per-field regenerate (fields ⊂ all)
+  // skips this path because that click means "fresh content for THIS
+  // field", and cloning would defeat it.
+  const isFullGenerate = fieldsToGenerate.length === SUMMARY_FIELDS.length;
+  const cached = isFullGenerate ? await findOrCloneSummary(prisma, transcript.id, target) : null;
+  if (cached != null && cached.headline != null && cached.short != null && cached.full != null) {
+    const shortDoc = parseMarkdownDocument(cached.short);
+    const fullDoc = parseMarkdownDocument(cached.full);
+    const cachedEncoder = new TextEncoder();
+    const cachedStream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const emit = (event: object) => {
+          controller.enqueue(cachedEncoder.encode(JSON.stringify(event) + '\n'));
+        };
+        emit({ field: 'headline', delta: cached.headline });
+        emit({
+          field: 'short',
+          delta: shortDoc.frontmatterPending ? cached.short : shortDoc.content,
+        });
+        emit({ field: 'short', hasLatex: shortDoc.properties.hasLatex === true });
+        emit({
+          field: 'full',
+          delta: fullDoc.frontmatterPending ? cached.full : fullDoc.content,
+        });
+        emit({ field: 'full', hasLatex: fullDoc.properties.hasLatex === true });
+        emit({ type: 'done' });
+        controller.close();
+      },
+    });
+    return new Response(cachedStream, {
+      headers: {
+        'Content-Type': 'application/x-ndjson; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+      },
+    });
+  }
 
   // Kick off streams for the requested fields in parallel. Headline
   // uses plain streamText — it's a one-line title, never math. Short
@@ -469,10 +515,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             usage: mergedUsage,
           };
 
+          // Bump `generated_at` on UPDATE — the schema's @default(now())
+          // only fires on CREATE, so without an explicit timestamp here
+          // the row would keep its original generated_at across regens.
+          // Matches the article POST's update behavior.
           if (existing) {
             await prisma.summary.update({
               where: { id: existing.id },
-              data: summaryData,
+              data: { ...summaryData, generated_at: new Date() },
             });
           } else {
             try {
@@ -490,7 +540,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 if (raced) {
                   await prisma.summary.update({
                     where: { id: raced.id },
-                    data: summaryData,
+                    data: { ...summaryData, generated_at: new Date() },
                   });
                 } else {
                   throw err;
