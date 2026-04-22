@@ -26,16 +26,22 @@ import type { InboxQuery } from '@/lib/types';
 export function buildVideoWhere(
   query: InboxQuery,
   userId: string,
-  channelIds: string[]
+  channelIds: string[],
+  options: { skipChannelScope?: boolean } = {}
 ): Prisma.VideoWhereInput {
   const where: Prisma.VideoWhereInput = {};
 
   // Scope to the user's subscribed channels. If a specific channelId is
   // passed, validate membership (caller should ensure this, but be safe).
-  if (query.channelId != null && channelIds.includes(query.channelId)) {
-    where.channel_id = query.channelId;
-  } else {
-    where.channel_id = { in: channelIds };
+  // Library scopes skip this and restrict to a pre-computed id set at
+  // the caller instead — the standalone / playlist views don't live on
+  // the channel axis at all.
+  if (!options.skipChannelScope) {
+    if (query.channelId != null && channelIds.includes(query.channelId)) {
+      where.channel_id = query.channelId;
+    } else {
+      where.channel_id = { in: channelIds };
+    }
   }
 
   // Date window

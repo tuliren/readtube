@@ -282,7 +282,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       let accumulated = '';
       let hasLatex: boolean | null = null;
       let emittedHasLatex = false;
-      let streamCompleted = false;
 
       const applyPartial = (partial: Partial<z.infer<typeof ARTICLE_SCHEMA>> | undefined) => {
         if (partial == null) {
@@ -321,50 +320,70 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             // Swallow — we already streamed the body.
           }
         }
-        streamCompleted = true;
-        emitLine(controller, { type: 'done' });
+        // Persist BEFORE emitting `done` + closing the stream, so a
+        // client that drains until `done` can trust the row to be
+        // committed by the time its follow-up SWR refetch runs. The
+        // earlier order (close first, persist after) raced the
+        // upsert against `invalidateLists()` and left the UI with a
+        // stuck spinner when the refetch landed first.
+        let persistError: string | null = null;
+        if (accumulated.trim().length === 0) {
+          // Stream said `done` but the LLM produced nothing — treat
+          // as a failure so the row's pending flag resets. Without
+          // this the client drains cleanly, returns true, and the
+          // spinner stays pinned forever since `hasArticle` never
+          // flips.
+          persistError = 'Generation produced no content';
+        } else {
+          try {
+            const usage = await result.usage;
+            const contentForStorage = serializeMarkdownDocument(accumulated.trim(), {
+              version: CURRENT_FRONTMATTER_VERSION,
+              hasLatex: hasLatex === true,
+            });
+            await prisma.article.upsert({
+              where: {
+                article_unique_transcript_style: {
+                  transcript_id: transcriptId,
+                  style,
+                },
+              },
+              create: {
+                transcript_id: transcriptId,
+                style,
+                prompt_version: PROMPT_VERSION,
+                model: DEFAULT_AI_MODEL,
+                content: contentForStorage,
+                usage: usage ? JSON.parse(JSON.stringify(usage)) : null,
+              },
+              update: {
+                prompt_version: PROMPT_VERSION,
+                model: DEFAULT_AI_MODEL,
+                content: contentForStorage,
+                usage: usage ? JSON.parse(JSON.stringify(usage)) : null,
+                generated_at: new Date(),
+              },
+            });
+          } catch (err) {
+            console.error('[article/POST] failed to persist article:', err);
+            persistError = err instanceof Error ? err.message : 'Failed to save article';
+          }
+        }
+
+        // See the summary route for the rationale — emitting `error`
+        // instead of `done` on persist failure lets the client's
+        // stream drain throw and reset the row's pending flag.
+        if (persistError != null) {
+          emitLine(controller, { error: persistError });
+        } else {
+          emitLine(controller, { type: 'done' });
+        }
         controller.close();
       } catch (err) {
         console.error('[article/POST] streamText output mid-stream error:', err);
         const message = err instanceof Error ? err.message : 'Unknown error';
         emitLine(controller, { error: message });
         controller.close();
-      }
-
-      // Persist after the stream closes. Do not save partial articles.
-      if (streamCompleted && accumulated.trim().length > 0) {
-        try {
-          const usage = await result.usage;
-          const contentForStorage = serializeMarkdownDocument(accumulated.trim(), {
-            version: CURRENT_FRONTMATTER_VERSION,
-            hasLatex: hasLatex === true,
-          });
-          await prisma.article.upsert({
-            where: {
-              article_unique_transcript_style: {
-                transcript_id: transcriptId,
-                style,
-              },
-            },
-            create: {
-              transcript_id: transcriptId,
-              style,
-              prompt_version: PROMPT_VERSION,
-              model: DEFAULT_AI_MODEL,
-              content: contentForStorage,
-              usage: usage ? JSON.parse(JSON.stringify(usage)) : null,
-            },
-            update: {
-              prompt_version: PROMPT_VERSION,
-              model: DEFAULT_AI_MODEL,
-              content: contentForStorage,
-              usage: usage ? JSON.parse(JSON.stringify(usage)) : null,
-              generated_at: new Date(),
-            },
-          });
-        } catch (err) {
-          console.error('[article/POST] failed to persist article:', err);
-        }
       }
     },
   });

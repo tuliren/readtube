@@ -5,7 +5,7 @@ import { requireUserId } from '@/lib/auth';
 import { effectivePublishDate } from '@/lib/subscriptions';
 
 /**
- * Returns unread counts for the "All" and "Standalone" library views.
+ * Returns the unread count for the Standalone library view.
  *
  * Library membership is the union of:
  *   - StandaloneVideo (user explicitly added the video)
@@ -15,7 +15,6 @@ import { effectivePublishDate } from '@/lib/subscriptions';
  *   - UserVideoConsumption row (user opened the video)
  *   - Playlist watermark: video's published_at <= playlist.read_at
  *
- * "All" counts every library video that's unread.
  * "Standalone" counts StandaloneVideo rows whose video isn't in any
  * of the user's playlists AND is unread.
  */
@@ -42,23 +41,23 @@ export async function GET() {
   const standaloneIds = new Set(standaloneRows.map((r) => r.video_id));
   const inPlaylistIds = new Set(playlistItemRows.map((r) => r.video_id));
 
-  // All library video IDs = standalone ∪ playlist-items.
-  const allIdsSet = new Set<string>();
-  standaloneIds.forEach((id) => allIdsSet.add(id));
-  inPlaylistIds.forEach((id) => allIdsSet.add(id));
-  const allVideoIds: string[] = [];
-  allIdsSet.forEach((id) => allVideoIds.push(id));
-  if (allVideoIds.length === 0) {
-    return NextResponse.json({ allUnread: 0, standaloneUnread: 0 });
+  if (standaloneIds.size === 0) {
+    return NextResponse.json({ standaloneUnread: 0 });
   }
 
+  // Consumption lookup is scoped to the standalone candidates — the
+  // playlist-only ids don't affect the Standalone count.
+  const standaloneIdList: string[] = [];
+  standaloneIds.forEach((id) => standaloneIdList.push(id));
   const consumedRows = await prisma.userVideoConsumption.findMany({
-    where: { user_id: userId, video_id: { in: allVideoIds } },
+    where: { user_id: userId, video_id: { in: standaloneIdList } },
     select: { video_id: true },
   });
   const consumedIds = new Set(consumedRows.map((r) => r.video_id));
 
-  // Playlist watermark coverage.
+  // Playlist watermark coverage — a standalone video might simultaneously
+  // live in a playlist (in which case it isn't counted toward Standalone
+  // below anyway), but keep the check consistent with /videos/standalone.
   const playlists = await prisma.playlist.findMany({
     where: { user_id: userId, read_at: { not: null } },
     select: {
@@ -77,8 +76,6 @@ export async function GET() {
       continue;
     }
     for (const item of pl.items) {
-      // Effective date = published_at ?? created_at, so null-date
-      // videos still get classified relative to the watermark.
       if (effectivePublishDate(item.video) <= pl.read_at) {
         watermarkReadIds.add(item.video_id);
       }
@@ -86,7 +83,6 @@ export async function GET() {
   }
 
   const isRead = (id: string) => consumedIds.has(id) || watermarkReadIds.has(id);
-  const allUnread = allVideoIds.filter((id) => !isRead(id)).length;
 
   // Standalone = StandaloneVideo rows not also in any of the user's playlists.
   let standaloneUnread = 0;
@@ -96,5 +92,5 @@ export async function GET() {
     }
   });
 
-  return NextResponse.json({ allUnread, standaloneUnread });
+  return NextResponse.json({ standaloneUnread });
 }

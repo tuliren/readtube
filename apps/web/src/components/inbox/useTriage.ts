@@ -1,26 +1,76 @@
 'use client';
 
-import { usePathname, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { useSWRConfig } from 'swr';
 
 import type { BulkAction } from '@/lib/inbox/triageActions';
 
 /**
- * True for the library list routes whose video data is server-rendered
- * without a SWR fallback: /videos, /videos/standalone, and
- * /videos/playlists/[id]. Excludes the reader (/videos/[sourceId])
- * which renders a single video and doesn't need a list refresh.
+ * Drain an NDJSON stream that emits either `{ error }` or
+ * `{ type: 'done' }` as its terminal event (plus whatever domain
+ * events come before). Resolves when the stream closes cleanly with
+ * a `done` event and no intervening error. Throws the first error
+ * message if the server reports one mid-stream, or a generic message
+ * if the stream ends without signaling completion.
+ *
+ * This matters because the generate streams open with HTTP 200 as
+ * soon as the first chunk is produced — LLM / persist failures are
+ * reported inside the body, not via status. A plain byte-drain would
+ * happily return `true` on a failed generation and leave the UI
+ * with a stuck spinner.
  */
-function isLibraryListRoute(pathname: string | null): boolean {
-  if (pathname == null) {
-    return false;
+async function drainNdjsonStream(response: Response): Promise<void> {
+  const reader = response.body?.getReader();
+  if (reader == null) {
+    return;
   }
-  return (
-    pathname === '/videos' ||
-    pathname === '/videos/standalone' ||
-    pathname.startsWith('/videos/playlists/')
-  );
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let errorMessage: string | null = null;
+  let sawDone = false;
+
+  const consumeLine = (line: string) => {
+    if (line.length === 0) {
+      return;
+    }
+    let event: { error?: unknown; type?: unknown };
+    try {
+      event = JSON.parse(line);
+    } catch {
+      return; // tolerate non-JSON keep-alive lines
+    }
+    if (event.error != null && errorMessage == null) {
+      errorMessage = typeof event.error === 'string' ? event.error : String(event.error);
+    }
+    if (event.type === 'done') {
+      sawDone = true;
+    }
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() ?? '';
+    for (const line of lines) {
+      consumeLine(line);
+    }
+  }
+  // Flush any trailing partial line that ran to end-of-stream without
+  // a newline terminator.
+  if (buffer.length > 0) {
+    consumeLine(buffer);
+  }
+
+  if (errorMessage != null) {
+    throw new Error(errorMessage);
+  }
+  if (!sawDone) {
+    throw new Error('Stream closed before completion');
+  }
 }
 
 /**
@@ -38,8 +88,6 @@ function isLibraryListRoute(pathname: string | null): boolean {
  */
 export function useTriage() {
   const { mutate } = useSWRConfig();
-  const router = useRouter();
-  const pathname = usePathname();
 
   async function call(method: 'POST' | 'DELETE', url: string, body?: unknown): Promise<Response> {
     const res = await fetch(url, {
@@ -68,22 +116,18 @@ export function useTriage() {
     // predicate that matches any /api/videos URL. /api/playlists is
     // included because playlist video counts (displayed in the sidebar)
     // shift when library membership changes.
+    //
+    // Call mutate with just the key — passing `undefined` as the data arg
+    // clears the cache during revalidation, which causes the hook to fall
+    // back to its SSR `fallbackData` (captured at page load, so the list
+    // reflects pre-mutation state) until the fetch resolves. For a plain
+    // revalidation we want SWR to hold the current cache and swap in the
+    // fresh payload when it arrives.
     void mutate(
       (key) =>
-        typeof key === 'string' && (key.startsWith('/api/videos') || key === '/api/playlists'),
-      undefined,
-      { revalidate: true }
+        typeof key === 'string' && (key.startsWith('/api/videos') || key === '/api/playlists')
     );
-    void mutate('/api/channels', undefined, { revalidate: true });
-    // Library pages (/videos, /videos/standalone, /videos/playlists/[id])
-    // are server-rendered — their video list comes from a loader at page
-    // load time, not SWR. router.refresh() re-runs the RSC so the list
-    // updates without a full page reload. Skip on the inbox/channel
-    // routes where SWR revalidation alone suffices, to avoid an extra
-    // RSC round-trip per rapid triage action.
-    if (isLibraryListRoute(pathname)) {
-      router.refresh();
-    }
+    void mutate('/api/channels');
   }
 
   return {
@@ -151,6 +195,63 @@ export function useTriage() {
         return true;
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Failed to remove from playlist');
+        return false;
+      }
+    },
+
+    async generateSummary(videoId: string): Promise<boolean> {
+      try {
+        const res = await fetch(`/api/videos/${videoId}/summary`, { method: 'POST' });
+        if (!res.ok) {
+          let msg = `Request failed (${res.status})`;
+          try {
+            const json = await res.json();
+            if (json?.error != null) {
+              msg = String(json.error);
+            }
+          } catch {
+            // ignore
+          }
+          throw new Error(msg);
+        }
+        // Drain the NDJSON stream until the server signals completion.
+        // The helper throws on any `{ error }` event so a mid-stream
+        // LLM or persist failure surfaces as a toast + returns false
+        // (instead of silently returning true and leaving the caller
+        // with a stuck pending flag).
+        await drainNdjsonStream(res);
+        invalidateLists();
+        return true;
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to generate summary');
+        return false;
+      }
+    },
+
+    async generateArticle(videoId: string): Promise<boolean> {
+      try {
+        const res = await fetch(`/api/videos/${videoId}/article`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        if (!res.ok) {
+          let msg = `Request failed (${res.status})`;
+          try {
+            const json = await res.json();
+            if (json?.error != null) {
+              msg = String(json.error);
+            }
+          } catch {
+            // ignore
+          }
+          throw new Error(msg);
+        }
+        await drainNdjsonStream(res);
+        invalidateLists();
+        return true;
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to generate article');
         return false;
       }
     },

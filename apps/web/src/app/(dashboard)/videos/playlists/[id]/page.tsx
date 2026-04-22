@@ -3,11 +3,13 @@ import { prisma } from '@readtube/database';
 import type { Metadata } from 'next';
 import { notFound, redirect } from 'next/navigation';
 
-import LibraryListView from '@/components/library/LibraryListView';
-import { loadLibraryVideos } from '@/lib/library/loadVideos';
+import ExternalLinkActions from '@/components/ExternalLinkActions';
+import VideoListView from '@/components/inbox/VideoListView';
+import { loadInboxVideos, searchParamsToInboxQuery } from '@/lib/inbox/loadVideos';
 
 interface Props {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -32,9 +34,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 /**
  * /videos/playlists/[id] — videos in the playlist. 404s if the
- * playlist doesn't exist or isn't owned by the viewer.
+ * playlist doesn't exist or isn't owned by the viewer. Pagination
+ * preserves playlist sort_order: the shared `VideoListView` talks to
+ * `/api/videos?library=playlist&playlistId=…`, which routes to the
+ * library branch of `loadInboxVideos`.
  */
-export default async function PlaylistPage({ params }: Props) {
+export default async function PlaylistPage({ params, searchParams }: Props) {
   const { userId } = await auth();
   if (userId == null) {
     redirect('/');
@@ -49,17 +54,32 @@ export default async function PlaylistPage({ params }: Props) {
     notFound();
   }
 
-  const videos = await loadLibraryVideos(prisma, userId, { kind: 'playlist', playlistId: id });
+  const baseQuery = searchParamsToInboxQuery(await searchParams);
+  const query = {
+    ...baseQuery,
+    library: 'playlist' as const,
+    playlistId: playlist.id,
+  };
+  const initial = await loadInboxVideos(prisma, userId, query);
 
   const hasCustom = playlist.custom_name != null && playlist.custom_name.length > 0;
   const title = hasCustom ? `${playlist.custom_name} (${playlist.name})` : playlist.name;
+  const youtubeUrl = `https://www.youtube.com/playlist?list=${playlist.source_id}`;
 
   return (
-    <LibraryListView
-      title={title}
-      videos={videos}
-      youtubeUrl={`https://www.youtube.com/playlist?list=${playlist.source_id}`}
-      playlistId={playlist.id}
+    <VideoListView
+      initialVideos={initial.videos}
+      initialTotal={initial.total}
+      selectedChannelId={null}
+      selectedVideoId={null}
+      library={{
+        scope: { library: 'playlist', playlistId: playlist.id },
+        title,
+        emptyMessage: 'No videos in this playlist.',
+        markAllReadBody: { playlistId: playlist.id },
+        trailing: <ExternalLinkActions url={youtubeUrl} label="Open on YouTube" />,
+      }}
+      showRemoveFromLibrary
     />
   );
 }

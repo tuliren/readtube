@@ -1,8 +1,18 @@
 'use client';
 
-import { Archive, Bookmark, BookmarkCheck, MoreHorizontal, NotebookPen, Star } from 'lucide-react';
+import {
+  Archive,
+  Bookmark,
+  BookmarkCheck,
+  FileText,
+  Loader2,
+  MoreHorizontal,
+  Newspaper,
+  NotebookPen,
+  Star,
+} from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -169,6 +179,76 @@ export default function VideoRow({
   const triage = useTriage();
   const { isMobile } = useSidebar();
   const isUnread = video.readAt == null;
+
+  // Track in-flight generate requests so we can swap the button icon
+  // for a spinner. The button stops rendering once the artifact lands
+  // on the refreshed video prop — we reset the pending flag in sync with
+  // that signal so a later list revalidation that briefly surfaces stale
+  // data can't resurrect the spinner after we've already completed.
+  const [pendingSummary, setPendingSummary] = useState(false);
+  const [pendingArticle, setPendingArticle] = useState(false);
+  // Radix portals the dropdown menu, so when it opens the pointer
+  // moves off the `.group` row and the hover-only toolbar fades away
+  // — dragging every other action button with it. Tracking the open
+  // state lets the toolbar's `data-active` pin it visible until the
+  // menu closes.
+  const [moreOpen, setMoreOpen] = useState(false);
+
+  useEffect(() => {
+    if (video.hasSummary) {
+      setPendingSummary(false);
+    }
+  }, [video.hasSummary]);
+
+  useEffect(() => {
+    if (video.hasArticle) {
+      setPendingArticle(false);
+    }
+  }, [video.hasArticle]);
+
+  // Generate buttons are only meaningful when a transcript can exist.
+  // Skip them for videos we've confirmed have no captions so the row
+  // doesn't grow buttons that would immediately 410.
+  const canGenerate = !video.transcriptUnavailable;
+  const showGenerateSummary = canGenerate && !video.hasSummary;
+  const showGenerateArticle = canGenerate && !video.hasArticle;
+
+  // These take no event — callers that need to stop a parent Link / row
+  // click (desktop toolbar) wrap the call in `stop(e)`. The mobile
+  // dropdown invokes onSelect without forwarding the Radix event so the
+  // menu still closes (calling preventDefault on a Radix onSelect Event
+  // is the API signal to keep the dropdown open).
+  //
+  // The `finally` reset is belt-and-suspenders: the server now reports
+  // persist failures / empty content via `{ error }` so the hook
+  // returns false there, but if the SWR refetch itself fails (network
+  // outage right after a successful generate) we'd otherwise be stuck
+  // with a spinning, disabled button that never unmounts. Accepting
+  // the brief FileText / Newspaper flash between the POST resolving
+  // and SWR landing `hasSummary=true` buys the recoverable state.
+  async function handleGenerateSummary() {
+    if (pendingSummary) {
+      return;
+    }
+    setPendingSummary(true);
+    try {
+      await triage.generateSummary(video.id);
+    } finally {
+      setPendingSummary(false);
+    }
+  }
+
+  async function handleGenerateArticle() {
+    if (pendingArticle) {
+      return;
+    }
+    setPendingArticle(true);
+    try {
+      await triage.generateArticle(video.id);
+    } finally {
+      setPendingArticle(false);
+    }
+  }
 
   // Long-press (mobile): touchstart arms a 500ms timer; if it fires
   // without the finger moving more than LONG_PRESS_SLOP pixels or
@@ -363,10 +443,40 @@ export default function VideoRow({
                     className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
                     aria-label="Actions"
                   >
-                    <MoreHorizontal className="h-4 w-4" />
+                    {pendingSummary || pendingArticle ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                    ) : (
+                      <MoreHorizontal className="h-4 w-4" />
+                    )}
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-40">
+                <DropdownMenuContent align="end" className="w-44">
+                  {showGenerateSummary && (
+                    <DropdownMenuItem
+                      disabled={pendingSummary}
+                      onSelect={() => void handleGenerateSummary()}
+                    >
+                      {pendingSummary ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin text-blue-500" />
+                      ) : (
+                        <FileText className="mr-2 h-4 w-4 text-blue-500" />
+                      )}
+                      {pendingSummary ? 'Generating…' : 'Generate summary'}
+                    </DropdownMenuItem>
+                  )}
+                  {showGenerateArticle && (
+                    <DropdownMenuItem
+                      disabled={pendingArticle}
+                      onSelect={() => void handleGenerateArticle()}
+                    >
+                      {pendingArticle ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin text-blue-500" />
+                      ) : (
+                        <Newspaper className="mr-2 h-4 w-4 text-blue-500" />
+                      )}
+                      {pendingArticle ? 'Generating…' : 'Generate article'}
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem onSelect={() => onOpenNotes(video.id, video.title)}>
                     <NotebookPen className="mr-2 h-4 w-4 text-amber-500" />
                     {video.noteCount > 0 ? `Notes (${video.noteCount})` : 'Add note'}
@@ -401,8 +511,53 @@ export default function VideoRow({
           ) : (
             <div
               className="flex shrink-0 items-center gap-1 opacity-0 group-hover:opacity-100 data-[active=true]:opacity-100"
-              data-active={video.isStarred || video.isSaved || video.noteCount > 0}
+              data-active={
+                video.isStarred ||
+                video.isSaved ||
+                video.noteCount > 0 ||
+                pendingSummary ||
+                pendingArticle ||
+                moreOpen
+              }
             >
+              {showGenerateSummary && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    stop(e);
+                    void handleGenerateSummary();
+                  }}
+                  disabled={pendingSummary}
+                  title={pendingSummary ? 'Generating summary…' : 'Generate summary'}
+                  aria-label={pendingSummary ? 'Generating summary' : 'Generate summary'}
+                  className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-blue-500 disabled:opacity-70"
+                >
+                  {pendingSummary ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <FileText className="h-4 w-4" />
+                  )}
+                </button>
+              )}
+              {showGenerateArticle && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    stop(e);
+                    void handleGenerateArticle();
+                  }}
+                  disabled={pendingArticle}
+                  title={pendingArticle ? 'Generating article…' : 'Generate article'}
+                  aria-label={pendingArticle ? 'Generating article' : 'Generate article'}
+                  className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-blue-500 disabled:opacity-70"
+                >
+                  {pendingArticle ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Newspaper className="h-4 w-4" />
+                  )}
+                </button>
+              )}
               {/* Notes button: always opens the inline notes panel in the list view. */}
               <button
                 type="button"
@@ -468,7 +623,7 @@ export default function VideoRow({
               >
                 <Archive className="h-4 w-4" />
               </button>
-              <DropdownMenu>
+              <DropdownMenu open={moreOpen} onOpenChange={setMoreOpen}>
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"

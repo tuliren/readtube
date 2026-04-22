@@ -400,6 +400,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         Object.keys(fieldErrors).length === 0 &&
         fieldsToGenerate.every((f) => accumulated[f].trim().length > 0);
 
+      let persistError: string | null = null;
+      // When the LLM streams cleanly but produces empty content (or a
+      // field errored so we skipped persist), there's nothing for the
+      // next SWR refetch to pick up. Per-field stream errors already
+      // emit `{ field, error }` inside the pump; the remaining gap is
+      // the "stream said done, nothing written" case — surface that
+      // as a terminal error so the client's spinner can reset.
+      if (!allSuccessful && Object.keys(fieldErrors).length === 0) {
+        persistError = 'Generation produced no content';
+      }
       if (allSuccessful) {
         try {
           const usages = await Promise.all(generations.map((g) => g.result.usage));
@@ -452,10 +462,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           });
         } catch (err) {
           console.error('[summary/POST] failed to persist summary:', err);
+          persistError = err instanceof Error ? err.message : 'Failed to save summary';
         }
       }
 
-      emit({ type: 'done' });
+      // Emit a terminal error instead of `done` when persist fails so
+      // the client's stream drain throws, the row's pending flag
+      // clears, and the user sees a toast + can retry. Silently
+      // logging and still emitting `done` left the UI spinner stuck.
+      if (persistError != null) {
+        emit({ error: persistError });
+      } else {
+        emit({ type: 'done' });
+      }
       controller.close();
     },
   });

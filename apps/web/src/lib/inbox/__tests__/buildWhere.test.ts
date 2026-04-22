@@ -23,6 +23,14 @@ describe('buildVideoWhere — channel scope', () => {
     const where = buildVideoWhere({ channelId: 'chan_intruder' }, USER_ID, CHANNEL_IDS);
     expect(where.channel_id).toEqual({ in: CHANNEL_IDS });
   });
+
+  it('omits the channel scope clause entirely when skipChannelScope is set', () => {
+    // Library scopes pre-compute the allowed video id set and pass it
+    // in as `id: { in: ... }` at the call site, so the channel clause
+    // should not be emitted.
+    const where = buildVideoWhere({}, USER_ID, CHANNEL_IDS, { skipChannelScope: true });
+    expect(where.channel_id).toBeUndefined();
+  });
 });
 
 describe('buildVideoWhere — date window', () => {

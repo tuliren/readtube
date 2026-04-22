@@ -33,6 +33,24 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // Same IDOR guard for the library=playlist scope. `loadInboxVideos`
+  // re-checks ownership but returns an empty list on miss (so SSR
+  // pages render gracefully); for an explicit API call, 404 is the
+  // right signal to the client.
+  if (query.library === 'playlist') {
+    if (query.playlistId == null) {
+      return NextResponse.json({ error: 'playlistId required' }, { status: 400 });
+    }
+    const owns = await prisma.playlist.findFirst({
+      where: { id: query.playlistId, user_id: userId },
+      select: { id: true },
+    });
+    if (owns == null) {
+      console.error(`[videos/GET] Playlist not owned by user: ${query.playlistId}`);
+      return NextResponse.json({ error: 'Playlist not found' }, { status: 404 });
+    }
+  }
+
   const videos = await loadInboxVideos(prisma, userId, query);
   return NextResponse.json(videos);
 }
