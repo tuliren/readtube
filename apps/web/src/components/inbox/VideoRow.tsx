@@ -218,13 +218,22 @@ export default function VideoRow({
   // dropdown invokes onSelect without forwarding the Radix event so the
   // menu still closes (calling preventDefault on a Radix onSelect Event
   // is the API signal to keep the dropdown open).
+  //
+  // The `finally` reset is belt-and-suspenders: the server now reports
+  // persist failures / empty content via `{ error }` so the hook
+  // returns false there, but if the SWR refetch itself fails (network
+  // outage right after a successful generate) we'd otherwise be stuck
+  // with a spinning, disabled button that never unmounts. Accepting
+  // the brief FileText / Newspaper flash between the POST resolving
+  // and SWR landing `hasSummary=true` buys the recoverable state.
   async function handleGenerateSummary() {
     if (pendingSummary) {
       return;
     }
     setPendingSummary(true);
-    const ok = await triage.generateSummary(video.id);
-    if (!ok) {
+    try {
+      await triage.generateSummary(video.id);
+    } finally {
       setPendingSummary(false);
     }
   }
@@ -234,8 +243,9 @@ export default function VideoRow({
       return;
     }
     setPendingArticle(true);
-    const ok = await triage.generateArticle(video.id);
-    if (!ok) {
+    try {
+      await triage.generateArticle(video.id);
+    } finally {
       setPendingArticle(false);
     }
   }

@@ -46,9 +46,19 @@ interface LibraryOverrides {
   markAllReadBody: Record<string, unknown>;
   /** Optional trailing content next to the title (e.g. YouTube link). */
   trailing?: React.ReactNode;
-  /** Unread count for the library scope. Surfaced on the right side
-   *  of the title row (inbox uses totalUnread / channel unreadCount). */
-  unreadCount?: number;
+}
+
+// Minimal shape of /api/videos/library-counts — we only need the
+// standalone total to drive the Mark-all-read button here.
+interface LibraryCounts {
+  standaloneUnread: number;
+}
+
+// Minimal shape of /api/playlists — same data the sidebar consumes,
+// so SWR usually serves the sibling hook's cache.
+interface PlaylistSummary {
+  id: string;
+  unreadCount: number;
 }
 
 interface Props {
@@ -144,6 +154,36 @@ export default function VideoListView({
   const videoList = useMemo(() => videosData?.videos ?? [], [videosData]);
   const totalVideos = videosData?.total ?? 0;
 
+  // Library unread counts. Fetched from the same endpoints the sidebar
+  // uses, so SWR's cache usually serves them instantly. The standalone
+  // total comes from /api/videos/library-counts; per-playlist counts
+  // are attached to each /api/playlists row (same shape VideosSection
+  // consumes). Both endpoints are invalidated by useTriage, so the
+  // mark-all-read button appears and disappears in sync with the row
+  // states.
+  const libraryKind = library?.scope.library ?? null;
+  const libraryPlaylistId = library?.scope.playlistId ?? null;
+  const { data: libraryCounts } = useSWR<LibraryCounts>(
+    libraryKind === 'standalone' ? '/api/videos/library-counts' : null,
+    fetcher
+  );
+  const { data: playlistSummaries } = useSWR<PlaylistSummary[]>(
+    libraryKind === 'playlist' ? '/api/playlists' : null,
+    fetcher
+  );
+  const libraryUnread = (() => {
+    if (library == null) {
+      return 0;
+    }
+    if (libraryKind === 'standalone') {
+      return libraryCounts?.standaloneUnread ?? 0;
+    }
+    if (libraryKind === 'playlist' && libraryPlaylistId != null) {
+      return playlistSummaries?.find((p) => p.id === libraryPlaylistId)?.unreadCount ?? 0;
+    }
+    return 0;
+  })();
+
   // Resolve the active view from the URL so the header label and the
   // empty-state copy can change with the filter the user is in. Skip
   // for library views — they have static overrides.
@@ -169,7 +209,7 @@ export default function VideoListView({
   if (library != null) {
     headerName = library.title;
     headerLogoUrl = null;
-    headerUnread = library.unreadCount ?? 0;
+    headerUnread = libraryUnread;
     emptyMessage = library.emptyMessage;
     headerChannelId = null;
     headerChannelSourceId = null;
