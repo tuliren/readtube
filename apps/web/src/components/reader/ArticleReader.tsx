@@ -64,9 +64,10 @@ export default function ArticleReader({
   const [content, setContent] = useState('');
   const [hasLatex, setHasLatex] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [selectedLanguage, setSelectedLanguage] = useState<string | null>(
-    publicMode ? null : preferredLanguage
-  );
+  // In public mode the picker UI is hidden but `preferredLanguage` is
+  // still threaded in from the page's `?language=` URL param. See
+  // SummaryReader for the longer note.
+  const [selectedLanguage, setSelectedLanguage] = useState<string | null>(preferredLanguage);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,10 +76,8 @@ export default function ArticleReader({
     setHasLatex(false);
     setErrorMessage(null);
 
-    const langFragment = publicMode ? '' : languageQueryFragment(selectedLanguage);
-    const url = `${apiBase}/${videoDbId}/article?style=${STYLE}${
-      langFragment ? `&${langFragment}` : ''
-    }`;
+    const langFragment = languageQueryFragment(selectedLanguage);
+    const url = `${apiBase}/${videoDbId}/article?style=${STYLE}&${langFragment}`;
     fetch(url)
       .then(async (res) => {
         if (cancelled) {
@@ -111,7 +110,7 @@ export default function ArticleReader({
     return () => {
       cancelled = true;
     };
-  }, [videoDbId, onArticleAvailable, apiBase, selectedLanguage, publicMode]);
+  }, [videoDbId, onArticleAvailable, apiBase, selectedLanguage]);
 
   // Stream the article word count up to VideoReader so the Article
   // tab header can render the reading-time badge. Fires on every

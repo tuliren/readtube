@@ -7,11 +7,13 @@ import Header from '@/components/Header';
 import VideoReader from '@/components/reader/VideoReader';
 import { capTitle } from '@/lib/format/title';
 import { decorateVideo } from '@/lib/inbox/triage';
+import { findTargetLanguage } from '@/lib/language/names';
 import type { VideoData } from '@/lib/types';
 import { resolveVideoSourceId } from '@/lib/videos/resolveVideoSourceId';
 
 interface Props {
   params: Promise<{ videoId: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -38,8 +40,18 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
  * Accessible regardless of auth state so shared links work for
  * anyone with the URL.
  */
-export default async function PublicVideoPage({ params }: Props) {
+export default async function PublicVideoPage({ params, searchParams }: Props) {
   const { videoId } = await params;
+  const sp = await searchParams;
+
+  // ?language=<bcp47> selects which translated row to render. Unknown
+  // codes are ignored so a tampered URL falls back to Original
+  // instead of 404'ing the public share. Empty / missing means
+  // Original. Arrays (Next.js allows ?language=a&language=b) take the
+  // first value.
+  const rawLang = Array.isArray(sp.language) ? sp.language[0] : sp.language;
+  const requestedLanguage =
+    rawLang != null && rawLang.length > 0 && findTargetLanguage(rawLang) != null ? rawLang : null;
 
   const stub = await resolveVideoSourceId(prisma, videoId);
   if (stub == null) {
@@ -97,7 +109,7 @@ export default async function PublicVideoPage({ params }: Props) {
     <div className="flex min-h-screen flex-col">
       <Header />
       <main className="flex flex-1 flex-col">
-        <VideoReader video={videoData} publicMode />
+        <VideoReader video={videoData} publicMode preferredLanguage={requestedLanguage} />
       </main>
       <Footer />
     </div>

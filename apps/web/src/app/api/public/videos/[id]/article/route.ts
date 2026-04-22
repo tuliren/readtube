@@ -1,6 +1,8 @@
 import { ArticleStyle, prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 
+import { parseLanguageQuery } from '@/lib/language/prompt';
+
 const DEFAULT_STYLE: ArticleStyle = ArticleStyle.NARRATIVE;
 
 function parseStyle(raw: string | null | undefined): ArticleStyle | null {
@@ -27,8 +29,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     console.error(`[public/article/GET] Invalid style: ${styleParam}`);
     return NextResponse.json({ error: 'Invalid style' }, { status: 400 });
   }
+  const parsed = parseLanguageQuery(request.nextUrl.searchParams.get('language'));
+  const targetLanguage = parsed.kind === 'target' ? parsed.code : null;
 
-  console.info(`[public/article/GET] Fetching public article for video ${id} (style=${style})`);
+  console.info(
+    `[public/article/GET] Fetching public article for video ${id} (style=${style}, language=${targetLanguage ?? 'original'})`
+  );
 
   const video = await prisma.video.findFirst({
     where: { id },
@@ -58,13 +64,26 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: 'Not public' }, { status: 404 });
   }
 
-  // Public route always returns the Original (language IS NULL) row.
-  // Translated rows are reader-only; the public share URL renders the
-  // canonical version that matches the transcript's source language.
-  const article = await prisma.article.findFirst({
-    where: { transcript_id: transcript.id, style, language: null },
-    select: { content: true, style: true, generated_at: true },
-  });
+  // When a target is requested, look it up directly. Fall back to
+  // the Original on miss so a tampered or stale share URL renders
+  // the canonical version instead of 404'ing.
+  const fields = {
+    select: { content: true, style: true, language: true, generated_at: true },
+  } as const;
+
+  let article = null;
+  if (targetLanguage != null) {
+    article = await prisma.article.findFirst({
+      where: { transcript_id: transcript.id, style, language: targetLanguage },
+      ...fields,
+    });
+  }
+  if (article == null) {
+    article = await prisma.article.findFirst({
+      where: { transcript_id: transcript.id, style, language: null },
+      ...fields,
+    });
+  }
   if (!article) {
     console.error(`[public/article/GET] No cached article for video ${id} (style=${style})`);
     return NextResponse.json({ error: 'Not cached' }, { status: 404 });
@@ -73,6 +92,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   return NextResponse.json({
     content: article.content,
     style: article.style,
+    language: article.language,
     generatedAt: article.generated_at,
   });
 }

@@ -102,12 +102,12 @@ export default function SummaryReader({
   const [hasLatexByField, setHasLatexByField] = useState<HasLatexByField>({});
   const [regeneratingFields, setRegeneratingFields] = useState<SummaryField[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  // Picker state. In public mode there's no language switcher (the
-  // public route always returns Original), so we leave selectedLanguage
-  // pinned to null and never query with ?language=.
-  const [selectedLanguage, setSelectedLanguage] = useState<string | null>(
-    publicMode ? null : preferredLanguage
-  );
+  // Picker state. In public mode the picker UI is hidden but the
+  // `preferredLanguage` prop is still used: the public page reads the
+  // `?language=` URL param and threads it down so shared links can
+  // pin a specific translation. Authenticated mode initializes from
+  // the user's saved preference.
+  const [selectedLanguage, setSelectedLanguage] = useState<string | null>(preferredLanguage);
 
   useEffect(() => {
     let cancelled = false;
@@ -117,8 +117,8 @@ export default function SummaryReader({
     setErrorMessage(null);
     setRegeneratingFields([]);
 
-    const fragment = publicMode ? '' : languageQueryFragment(selectedLanguage);
-    const url = `${apiBase}/${videoDbId}/summary${fragment ? `?${fragment}` : ''}`;
+    const fragment = languageQueryFragment(selectedLanguage);
+    const url = `${apiBase}/${videoDbId}/summary?${fragment}`;
     fetch(url)
       .then(async (res) => {
         if (cancelled) {
@@ -157,7 +157,7 @@ export default function SummaryReader({
     return () => {
       cancelled = true;
     };
-  }, [videoDbId, onSummaryAvailable, apiBase, selectedLanguage, publicMode]);
+  }, [videoDbId, onSummaryAvailable, apiBase, selectedLanguage]);
 
   // Stream the total word count up to VideoReader so the Summary tab
   // header can render the "X min" reading-time badge. summary.short
