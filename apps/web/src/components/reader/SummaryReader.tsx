@@ -34,10 +34,11 @@ interface Props {
   /** When true, fetch from the unauthenticated public endpoint and
    *  render a read-only view — no generate / regenerate affordances. */
   publicMode?: boolean;
-  /** Initial selection for the language picker (BCP-47, or null for
-   *  Original). Public mode ignores this — the public route always
-   *  returns the Original row. */
-  preferredLanguage?: string | null;
+  /** Controlled picker selection lifted to VideoReader so Summary and
+   *  Article stay in sync and the Share link can append the same
+   *  `?language=`. null = Original. */
+  selectedLanguage: string | null;
+  onLanguageChange: (next: string | null) => void;
 }
 
 type SummaryField = 'headline' | 'short' | 'full';
@@ -94,7 +95,8 @@ export default function SummaryReader({
   onSummaryAvailable,
   onSummaryWordsChange,
   publicMode = false,
-  preferredLanguage = null,
+  selectedLanguage,
+  onLanguageChange,
 }: Props) {
   const apiBase = publicMode ? '/api/public/videos' : '/api/videos';
   const [status, setStatus] = useState<Status>('checking');
@@ -102,12 +104,6 @@ export default function SummaryReader({
   const [hasLatexByField, setHasLatexByField] = useState<HasLatexByField>({});
   const [regeneratingFields, setRegeneratingFields] = useState<SummaryField[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  // Picker state. In public mode the picker UI is hidden but the
-  // `preferredLanguage` prop is still used: the public page reads the
-  // `?language=` URL param and threads it down so shared links can
-  // pin a specific translation. Authenticated mode initializes from
-  // the user's saved preference.
-  const [selectedLanguage, setSelectedLanguage] = useState<string | null>(preferredLanguage);
 
   useEffect(() => {
     let cancelled = false;
@@ -356,7 +352,7 @@ export default function SummaryReader({
       <div className="mb-4 flex items-center justify-end">
         <LanguagePicker
           value={selectedLanguage}
-          onChange={setSelectedLanguage}
+          onChange={onLanguageChange}
           disabled={status === 'generating'}
         />
       </div>

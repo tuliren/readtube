@@ -42,8 +42,11 @@ interface Props {
   /** When true, fetch from the unauthenticated public endpoint and
    *  render a read-only view — no generate affordance. */
   publicMode?: boolean;
-  /** Initial selection for the language picker. See SummaryReader. */
-  preferredLanguage?: string | null;
+  /** Controlled picker selection lifted to VideoReader so Summary and
+   *  Article stay in sync and the Share link can append the same
+   *  `?language=`. null = Original. */
+  selectedLanguage: string | null;
+  onLanguageChange: (next: string | null) => void;
 }
 
 type Status = 'checking' | 'idle' | 'streaming' | 'done' | 'error';
@@ -57,17 +60,14 @@ export default function ArticleReader({
   onArticleAvailable,
   onArticleWordsChange,
   publicMode = false,
-  preferredLanguage = null,
+  selectedLanguage,
+  onLanguageChange,
 }: Props) {
   const apiBase = publicMode ? '/api/public/videos' : '/api/videos';
   const [status, setStatus] = useState<Status>('checking');
   const [content, setContent] = useState('');
   const [hasLatex, setHasLatex] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  // In public mode the picker UI is hidden but `preferredLanguage` is
-  // still threaded in from the page's `?language=` URL param. See
-  // SummaryReader for the longer note.
-  const [selectedLanguage, setSelectedLanguage] = useState<string | null>(preferredLanguage);
 
   useEffect(() => {
     let cancelled = false;
@@ -256,7 +256,7 @@ export default function ArticleReader({
       <div className="mb-3 flex items-center justify-end gap-3 border-b border-gray-100 pb-2">
         <LanguagePicker
           value={selectedLanguage}
-          onChange={setSelectedLanguage}
+          onChange={onLanguageChange}
           disabled={status === 'streaming'}
         />
       </div>
@@ -337,7 +337,7 @@ export default function ArticleReader({
         <div className="mb-3 flex items-center justify-end gap-3 border-b border-gray-100 pb-2">
           <LanguagePicker
             value={selectedLanguage}
-            onChange={setSelectedLanguage}
+            onChange={onLanguageChange}
             disabled={status === 'streaming'}
           />
           {showRegenerate && (

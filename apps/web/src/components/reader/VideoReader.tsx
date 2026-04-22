@@ -63,6 +63,16 @@ export default function VideoReader({
   channelFollowed = false,
   preferredLanguage = null,
 }: Props) {
+  // Picker state lives at the VideoReader level so:
+  //  - Summary and Article tabs stay in sync (changing the language on
+  //    one doesn't strand the other in a different language).
+  //  - The Share link can append `?language=...` so a recipient lands
+  //    on the same translation the sharer was looking at.
+  const [selectedLanguage, setSelectedLanguage] = useState<string | null>(preferredLanguage);
+  const shareHref =
+    selectedLanguage == null
+      ? `/p${videoHref(video)}`
+      : `/p${videoHref(video)}?language=${encodeURIComponent(selectedLanguage)}`;
   const searchParams = useSearchParams();
   // The reader URL is `/videos/<sourceId>?returnTo=<encoded-path>`.
   // `returnTo` carries the full path + query of the list the user
@@ -340,16 +350,15 @@ export default function VideoReader({
                   authenticated + subscribed) sees the same
                   stripped-down view a recipient does, and the URL
                   they paste elsewhere is the canonical share URL.
+                  Carries the picker's current language as
+                  `?language=` so the recipient lands on the same
+                  translation the sharer was looking at.
                 */}
                 <span className="inline-flex items-center gap-0.5">
-                  <Link
-                    href={`/p${videoHref(video)}`}
-                    target="_blank"
-                    className="text-blue-500 hover:underline"
-                  >
+                  <Link href={shareHref} target="_blank" className="text-blue-500 hover:underline">
                     Share ↗
                   </Link>
-                  <CopyButton value={`/p${videoHref(video)}`} label="Copy share link" />
+                  <CopyButton value={shareHref} label="Copy share link" />
                 </span>
               </>
             )}
@@ -502,7 +511,8 @@ export default function VideoReader({
                       onSummaryAvailable={handleSummaryAvailable}
                       onSummaryWordsChange={handleSummaryWordsChange}
                       publicMode={publicMode}
-                      preferredLanguage={preferredLanguage}
+                      selectedLanguage={selectedLanguage}
+                      onLanguageChange={setSelectedLanguage}
                     />
                   </div>
                 )}
@@ -515,7 +525,8 @@ export default function VideoReader({
                       onArticleAvailable={handleArticleAvailable}
                       onArticleWordsChange={handleArticleWordsChange}
                       publicMode={publicMode}
-                      preferredLanguage={preferredLanguage}
+                      selectedLanguage={selectedLanguage}
+                      onLanguageChange={setSelectedLanguage}
                     />
                   </div>
                 )}
