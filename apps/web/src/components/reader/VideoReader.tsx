@@ -395,7 +395,7 @@ export default function VideoReader({ video, publicMode = false }: Props) {
                 view, then Article (the long-form rewrite), then Transcript
                 (the raw firehose). Tabs with generated content show a
                 reading-time badge; missing content shows nothing. */}
-              <div className="mt-8 overflow-x-auto border-b border-gray-200">
+              <div className="mt-8 overflow-x-auto overflow-y-hidden border-b border-gray-200">
                 <div className="flex gap-6">
                   {TABS.filter((tab) => {
                     if (tab.key === 'transcript') {
