@@ -1,10 +1,13 @@
 import { auth } from '@clerk/nextjs/server';
-import { ArticleStyle, prisma } from '@readtube/database';
+import { ArticleStyle, Prisma, prisma } from '@readtube/database';
 import { Output, streamText } from 'ai';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { DEFAULT_AI_MODEL } from '@/constants';
+import { findOrCloneArticle } from '@/lib/language/cache';
+import { buildLanguageRule } from '@/lib/language/prompt';
+import { resolveTargetLanguage } from '@/lib/language/resolve';
 import {
   CURRENT_FRONTMATTER_VERSION,
   parseMarkdownDocument,
@@ -39,14 +42,20 @@ function parseStyle(raw: string | null | undefined): ArticleStyle | null {
   return null;
 }
 
-function buildPrompt(style: ArticleStyle, title: string, channelName: string, transcript: string) {
+function buildPrompt(
+  style: ArticleStyle,
+  target: string | null,
+  title: string,
+  channelName: string,
+  transcript: string
+) {
   const styleGuidance =
     style === ArticleStyle.DIALOG
       ? `- Format the article as a dialog or interview transcript, preserving exchanges between speakers when the video is conversational.
 - If there's only one speaker, format as a reflective monologue with paragraph breaks.`
       : `- Reformat the transcript as an article in GitHub Flavored Markdown. This is a re-formatting task, not a rewriting or summarization task.`;
 
-  return `CRITICAL LANGUAGE REQUIREMENT: Every word of your output — every heading, every paragraph, every list item — MUST be written in the exact same natural language as the transcript below. Detect the transcript's language from its content and write in THAT language. Do not translate. Do not mix languages. If the transcript is in Chinese, write entirely in Chinese. If Japanese, entirely in Japanese. If Spanish, entirely in Spanish. Apply this rule before anything else below.
+  return `${buildLanguageRule(target)}
 
 You are an expert editor turning video transcripts into clean, well-formatted articles.
 
@@ -82,9 +91,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     console.error(`[article/GET] Invalid style: ${styleParam}`);
     return NextResponse.json({ error: 'Invalid style' }, { status: 400 });
   }
+  const target = await resolveTargetLanguage(
+    prisma,
+    userId,
+    request.nextUrl.searchParams.get('language')
+  );
 
   console.info(
-    `[article/GET] Fetching cached article for video ${id} (style=${style}), user ${userId}`
+    `[article/GET] Fetching cached article for video ${id} (style=${style}, language=${target ?? 'original'}), user ${userId}`
   );
 
   // IDOR check + lookup latest transcript
@@ -117,23 +131,18 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: 'Not cached' }, { status: 404 });
   }
 
-  const article = await prisma.article.findUnique({
-    where: {
-      article_unique_transcript_style: {
-        transcript_id: transcript.id,
-        style,
-      },
-    },
-    select: { content: true, style: true, generated_at: true },
-  });
+  const article = await findOrCloneArticle(prisma, transcript.id, style, target);
   if (!article) {
-    console.error(`[article/GET] No cached article for video ${id} (style=${style})`);
+    console.error(
+      `[article/GET] No cached article for video ${id} (style=${style}, language=${target ?? 'original'})`
+    );
     return NextResponse.json({ error: 'Not cached' }, { status: 404 });
   }
 
   return NextResponse.json({
     content: article.content,
     style: article.style,
+    language: article.language,
     generatedAt: article.generated_at,
   });
 }
@@ -159,9 +168,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     console.error(`[article/POST] Invalid style: ${body.style}`);
     return NextResponse.json({ error: 'Invalid style' }, { status: 400 });
   }
+  const target = await resolveTargetLanguage(
+    prisma,
+    userId,
+    request.nextUrl.searchParams.get('language')
+  );
 
   console.info(
-    `[article/POST] Generating article for video ${id} (style=${style}), user ${userId}`
+    `[article/POST] Generating article for video ${id} (style=${style}, language=${target ?? 'original'}), user ${userId}`
   );
 
   // Look up title + channel name first; ensureTranscript will do
@@ -227,18 +241,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // Cache hit: replay the stored article as a single-event NDJSON
   // stream so the client's POST handler only has to know one wire
   // format. Skipped when `force` is set — the dev-only Regenerate
-  // button wants a fresh LLM run.
-  const cached = force
-    ? null
-    : await prisma.article.findUnique({
-        where: {
-          article_unique_transcript_style: {
-            transcript_id: transcript.id,
-            style,
-          },
-        },
-        select: { content: true },
-      });
+  // button wants a fresh LLM run. Use findOrCloneArticle so a
+  // request for a target language whose Original happens to already
+  // be in that language gets promoted (single UPDATE) instead of
+  // regenerating.
+  const cached = force ? null : await findOrCloneArticle(prisma, transcript.id, style, target);
 
   if (cached) {
     const parsed = parseMarkdownDocument(cached.content);
@@ -259,7 +266,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const result = streamText({
     model: DEFAULT_AI_MODEL,
     output: Output.object({ schema: ARTICLE_SCHEMA }),
-    prompt: buildPrompt(style, video.title, video.channel.name, transcriptText),
+    prompt: buildPrompt(style, target, video.title, video.channel.name, transcriptText),
   });
 
   // Eagerly consume the first partial so pre-flight errors (gateway
@@ -341,29 +348,56 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
               version: CURRENT_FRONTMATTER_VERSION,
               hasLatex: hasLatex === true,
             });
-            await prisma.article.upsert({
-              where: {
-                article_unique_transcript_style: {
-                  transcript_id: transcriptId,
-                  style,
-                },
-              },
-              create: {
-                transcript_id: transcriptId,
-                style,
-                prompt_version: PROMPT_VERSION,
-                model: DEFAULT_AI_MODEL,
-                content: contentForStorage,
-                usage: usage ? JSON.parse(JSON.stringify(usage)) : null,
-              },
-              update: {
-                prompt_version: PROMPT_VERSION,
-                model: DEFAULT_AI_MODEL,
-                content: contentForStorage,
-                usage: usage ? JSON.parse(JSON.stringify(usage)) : null,
-                generated_at: new Date(),
-              },
+
+            // Manual upsert keyed on (transcript_id, style, language).
+            // Prisma can't model the partial unique indexes that enforce
+            // this, so we use findFirst + create, with a P2002 retry
+            // for the rare race where another writer takes the same
+            // slot between our find and create.
+            const existing = await prisma.article.findFirst({
+              where: { transcript_id: transcriptId, style, language: target },
+              select: { id: true },
             });
+            const articleData = {
+              prompt_version: PROMPT_VERSION,
+              model: DEFAULT_AI_MODEL,
+              content: contentForStorage,
+              usage: usage ? JSON.parse(JSON.stringify(usage)) : null,
+            };
+            if (existing) {
+              await prisma.article.update({
+                where: { id: existing.id },
+                data: { ...articleData, generated_at: new Date() },
+              });
+            } else {
+              try {
+                await prisma.article.create({
+                  data: {
+                    transcript_id: transcriptId,
+                    style,
+                    language: target,
+                    ...articleData,
+                  },
+                });
+              } catch (err) {
+                if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+                  const raced = await prisma.article.findFirst({
+                    where: { transcript_id: transcriptId, style, language: target },
+                    select: { id: true },
+                  });
+                  if (raced) {
+                    await prisma.article.update({
+                      where: { id: raced.id },
+                      data: { ...articleData, generated_at: new Date() },
+                    });
+                  } else {
+                    throw err;
+                  }
+                } else {
+                  throw err;
+                }
+              }
+            }
           } catch (err) {
             console.error('[article/POST] failed to persist article:', err);
             persistError = err instanceof Error ? err.message : 'Failed to save article';

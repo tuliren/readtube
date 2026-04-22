@@ -21,17 +21,19 @@ export interface TriageRawRow {
   channel_id: string;
   channel: { name: string; source_id: string; handle: string | null };
   /**
-   * Latest Transcript row (or none) plus whether it has a Summary
-   * row attached and whether it has at least one Article row. The
-   * caller should `take: 1` on this relation; we only need to know
-   * presence, not the full payload.
+   * Latest Transcript row (or none) plus whether it has at least one
+   * Summary row and at least one Article row attached. The caller
+   * should `take: 1` on this relation; we only need to know presence,
+   * not the full payload. Summary is now 1-to-many on Transcript (one
+   * row per target language); the presence flag is "any summary
+   * exists", regardless of language.
    *
    * Shape kept structural so callers can pick the cheapest possible
-   * select clause: a single Transcript row with id, summary id, and
-   * one Article id is all we need.
+   * select clause: a single Transcript row with id, one Summary id,
+   * and one Article id is all we need.
    */
   transcripts: Array<{
-    summary: { transcript_id: string } | null;
+    summaries: Array<{ transcript_id: string }>;
     articles: Array<{ id: string }>;
   }>;
 }
@@ -119,7 +121,7 @@ export function decorateVideo(
   // created_at desc, so transcripts[0] is the latest snapshot.
   const latestTranscript = row.transcripts[0];
   const hasTranscript = latestTranscript != null;
-  const hasSummary = latestTranscript?.summary != null;
+  const hasSummary = (latestTranscript?.summaries.length ?? 0) > 0;
   const hasArticle = (latestTranscript?.articles.length ?? 0) > 0;
 
   return {

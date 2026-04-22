@@ -54,7 +54,14 @@ export async function embedVideo(videoId: string): Promise<EmbedResult> {
       channel: { select: { name: true } },
       transcripts: {
         select: {
-          summary: { select: { full: true, short: true, headline: true } },
+          // Embed against the Original (language IS NULL) summary so
+          // semantic search keys on the canonical text rather than
+          // whatever translation happened to land first.
+          summaries: {
+            where: { language: null },
+            take: 1,
+            select: { full: true, short: true, headline: true },
+          },
         },
         orderBy: { created_at: 'desc' },
         take: 1,
@@ -65,7 +72,7 @@ export async function embedVideo(videoId: string): Promise<EmbedResult> {
     return { skipped: true, reason: 'video-missing' };
   }
 
-  const summary = video.transcripts[0]?.summary;
+  const summary = video.transcripts[0]?.summaries[0];
   const summaryText = summary?.full ?? summary?.short ?? summary?.headline ?? '';
   const input = [
     `Title: ${video.title}`,

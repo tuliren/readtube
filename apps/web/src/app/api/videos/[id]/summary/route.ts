@@ -1,39 +1,33 @@
 import { auth } from '@clerk/nextjs/server';
-import { prisma } from '@readtube/database';
+import { Prisma, prisma } from '@readtube/database';
 import { Output, streamText } from 'ai';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { DEFAULT_AI_MODEL } from '@/constants';
-import { CURRENT_FRONTMATTER_VERSION, serializeMarkdownDocument } from '@/lib/markdownFrontmatter';
+import { findOrCloneSummary } from '@/lib/language/cache';
+import { buildLanguageRule } from '@/lib/language/prompt';
+import { resolveTargetLanguage } from '@/lib/language/resolve';
+import {
+  CURRENT_FRONTMATTER_VERSION,
+  parseMarkdownDocument,
+  serializeMarkdownDocument,
+} from '@/lib/markdownFrontmatter';
 import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
 
 const SUMMARY_PROMPT_VERSION = 'v7';
 
-// Leading-position language rule. Prior wording lived at the end of
-// each prompt and the model — especially on the longer full-summary
-// prompt — would revert to English for Chinese transcripts. Putting
-// the instruction first and phrasing it as a hard constraint (rather
-// than a bullet among many) fixes that.
-const LANGUAGE_RULE = `CRITICAL LANGUAGE REQUIREMENT: Every word of your output — every sentence, every bullet, every title — MUST be written in the exact same natural language as the transcript below. Detect the transcript's language from its content and write in THAT language. Do not translate. Do not mix languages. If the transcript is in Chinese, write entirely in Chinese. If Japanese, entirely in Japanese. If Spanish, entirely in Spanish. Apply this rule before anything else below.`;
-
-const PROMPTS = {
-  headline: `${LANGUAGE_RULE}
-
-Write a very short title for this video. Rules:
+const PROMPT_BODIES = {
+  headline: `Write a very short title for this video. Rules:
 - Title style, not a sentence — think newspaper headline.
 - Under 10 words. Shorter is better.
 - No markdown, no surrounding quotes, no prefix like "Title:".
 Output only the title itself, nothing else.`,
-  short: `${LANGUAGE_RULE}
-
-Write a 2-3 sentence summary of this video. Rules:
+  short: `Write a 2-3 sentence summary of this video. Rules:
 - First sentence: the essential point.
 - 1-2 more sentences: the most important supporting context.
 - Plain prose. No headings, no lists, no preamble.`,
-  full: `${LANGUAGE_RULE}
-
-Write a compact summary of this video. Rules:
+  full: `Write a compact summary of this video. Rules:
 - Focus only on the main arguments and conclusions. Cut examples, tangents, and non-essential details.
 - Favor density over completeness. A reader should get the gist in under a minute.
 - Choose the format that fits the content best:
@@ -62,11 +56,19 @@ const CONTENT_WITH_LATEX_SCHEMA = z.object({
 
 const FIELDS_WITH_FRONTMATTER: ReadonlySet<SummaryField> = new Set<SummaryField>(['short', 'full']);
 
-type SummaryField = keyof typeof PROMPTS;
+type SummaryField = keyof typeof PROMPT_BODIES;
 const SUMMARY_FIELDS: readonly SummaryField[] = ['headline', 'short', 'full'] as const;
 
-function buildPrompt(kind: SummaryField, title: string, channelName: string, transcript: string) {
-  return `${PROMPTS[kind]}
+function buildPrompt(
+  kind: SummaryField,
+  target: string | null,
+  title: string,
+  channelName: string,
+  transcript: string
+) {
+  return `${buildLanguageRule(target)}
+
+${PROMPT_BODIES[kind]}
 
 Video title: ${title}
 Channel: ${channelName}
@@ -82,7 +84,7 @@ function serializeUsage(usage: unknown) {
   return JSON.parse(JSON.stringify(usage));
 }
 
-export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { userId } = await auth();
   if (userId == null) {
     console.error('[summary/GET] Unauthorized');
@@ -90,8 +92,15 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   }
 
   const { id } = await params;
+  const target = await resolveTargetLanguage(
+    prisma,
+    userId,
+    request.nextUrl.searchParams.get('language')
+  );
 
-  console.info(`[summary/GET] Fetching cached summary for video ${id}, user ${userId}`);
+  console.info(
+    `[summary/GET] Fetching cached summary for video ${id}, user ${userId}, language ${target ?? 'original'}`
+  );
 
   const video = await prisma.video.findFirst({
     where: {
@@ -107,17 +116,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       transcripts: {
         orderBy: { created_at: 'desc' },
         take: 1,
-        select: {
-          id: true,
-          summary: {
-            select: {
-              headline: true,
-              short: true,
-              full: true,
-              generated_at: true,
-            },
-          },
-        },
+        select: { id: true },
       },
     },
   });
@@ -127,16 +126,25 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   }
 
   const transcript = video.transcripts[0];
-  if (!transcript?.summary) {
-    console.error(`[summary/GET] No cached summary for video ${id}`);
+  if (!transcript) {
+    console.error(`[summary/GET] No transcript for video ${id}`);
+    return NextResponse.json({ error: 'Not cached' }, { status: 404 });
+  }
+
+  const summary = await findOrCloneSummary(prisma, transcript.id, target);
+  if (summary == null) {
+    console.error(
+      `[summary/GET] No cached summary for video ${id} in language ${target ?? 'original'}`
+    );
     return NextResponse.json({ error: 'Not cached' }, { status: 404 });
   }
 
   return NextResponse.json({
-    headline: transcript.summary.headline,
-    short: transcript.summary.short,
-    full: transcript.summary.full,
-    generatedAt: transcript.summary.generated_at,
+    headline: summary.headline,
+    short: summary.short,
+    full: summary.full,
+    language: summary.language,
+    generatedAt: summary.generated_at,
   });
 }
 
@@ -148,8 +156,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 
   const { id } = await params;
+  const target = await resolveTargetLanguage(
+    prisma,
+    userId,
+    request.nextUrl.searchParams.get('language')
+  );
 
-  console.info(`[summary/POST] Generating summary for video ${id}, user ${userId}`);
+  console.info(
+    `[summary/POST] Generating summary for video ${id}, user ${userId}, language ${target ?? 'original'}`
+  );
 
   // Optional body: { fields?: SummaryField[] } — defaults to all three.
   let requestedFields: SummaryField[] | null = null;
@@ -224,6 +239,48 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const transcript = ensured.transcript;
   const transcriptText = transcript.segments.map((s) => s.text).join(' ');
 
+  // Cache + clone short-circuit. Mirrors the article POST cache check:
+  // if the user clicked the main "Generate" button (all 3 fields
+  // requested) and a row already exists for `(transcript, target)` —
+  // either via a direct hit or by cloning the Original when its
+  // language matches the picker target — replay that row as NDJSON
+  // instead of running the LLM. Per-field regenerate (fields ⊂ all)
+  // skips this path because that click means "fresh content for THIS
+  // field", and cloning would defeat it.
+  const isFullGenerate = fieldsToGenerate.length === SUMMARY_FIELDS.length;
+  const cached = isFullGenerate ? await findOrCloneSummary(prisma, transcript.id, target) : null;
+  if (cached != null && cached.headline != null && cached.short != null && cached.full != null) {
+    const shortDoc = parseMarkdownDocument(cached.short);
+    const fullDoc = parseMarkdownDocument(cached.full);
+    const cachedEncoder = new TextEncoder();
+    const cachedStream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const emit = (event: object) => {
+          controller.enqueue(cachedEncoder.encode(JSON.stringify(event) + '\n'));
+        };
+        emit({ field: 'headline', delta: cached.headline });
+        emit({
+          field: 'short',
+          delta: shortDoc.frontmatterPending ? cached.short : shortDoc.content,
+        });
+        emit({ field: 'short', hasLatex: shortDoc.properties.hasLatex === true });
+        emit({
+          field: 'full',
+          delta: fullDoc.frontmatterPending ? cached.full : fullDoc.content,
+        });
+        emit({ field: 'full', hasLatex: fullDoc.properties.hasLatex === true });
+        emit({ type: 'done' });
+        controller.close();
+      },
+    });
+    return new Response(cachedStream, {
+      headers: {
+        'Content-Type': 'application/x-ndjson; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+      },
+    });
+  }
+
   // Kick off streams for the requested fields in parallel. Headline
   // uses plain streamText — it's a one-line title, never math. Short
   // and full use streamText with Output.object({schema}) so the model
@@ -253,7 +310,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   type Generation = TextGen | ObjectGen;
 
   const generations: Generation[] = fieldsToGenerate.map((field): Generation => {
-    const prompt = buildPrompt(field, video.title, video.channel.name, transcriptText);
+    const prompt = buildPrompt(field, target, video.title, video.channel.name, transcriptText);
     if (FIELDS_WITH_FRONTMATTER.has(field)) {
       const result = streamText({
         model: DEFAULT_AI_MODEL,
@@ -415,9 +472,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           const usages = await Promise.all(generations.map((g) => g.result.usage));
 
           // Merge with any existing row so non-regenerated fields stay intact.
-          const existing = await prisma.summary.findUnique({
-            where: { transcript_id: transcriptId },
-            select: { headline: true, short: true, full: true, usage: true },
+          // Lookup is per-(transcript, language) — Prisma can't model the
+          // partial unique indexes that enforce this, so we use findFirst
+          // and fall back to a try/catch upsert pattern on writes.
+          const existing = await prisma.summary.findFirst({
+            where: { transcript_id: transcriptId, language: target },
+            select: { id: true, headline: true, short: true, full: true, usage: true },
           });
 
           const mergedUsageObj: Record<string, unknown> = {
@@ -455,11 +515,41 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             usage: mergedUsage,
           };
 
-          await prisma.summary.upsert({
-            where: { transcript_id: transcriptId },
-            create: { transcript_id: transcriptId, ...summaryData },
-            update: summaryData,
-          });
+          // Bump `generated_at` on UPDATE — the schema's @default(now())
+          // only fires on CREATE, so without an explicit timestamp here
+          // the row would keep its original generated_at across regens.
+          // Matches the article POST's update behavior.
+          if (existing) {
+            await prisma.summary.update({
+              where: { id: existing.id },
+              data: { ...summaryData, generated_at: new Date() },
+            });
+          } else {
+            try {
+              await prisma.summary.create({
+                data: { transcript_id: transcriptId, language: target, ...summaryData },
+              });
+            } catch (err) {
+              // P2002 = a parallel writer beat us to (transcript_id, language).
+              // Re-find and update so we still persist the latest fields.
+              if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+                const raced = await prisma.summary.findFirst({
+                  where: { transcript_id: transcriptId, language: target },
+                  select: { id: true },
+                });
+                if (raced) {
+                  await prisma.summary.update({
+                    where: { id: raced.id },
+                    data: { ...summaryData, generated_at: new Date() },
+                  });
+                } else {
+                  throw err;
+                }
+              } else {
+                throw err;
+              }
+            }
+          }
         } catch (err) {
           console.error('[summary/POST] failed to persist summary:', err);
           persistError = err instanceof Error ? err.message : 'Failed to save summary';

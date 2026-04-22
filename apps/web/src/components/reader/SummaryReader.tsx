@@ -8,6 +8,7 @@ import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { isProduction } from '@/lib/vercelEnv';
 
 import ArticleMarkdown from './ArticleMarkdown';
+import LanguagePicker, { languageQueryFragment } from './LanguagePicker';
 import type { TranscriptStatus } from './VideoReader';
 
 type HasLatexByField = Partial<Record<'short' | 'full', boolean>>;
@@ -33,6 +34,11 @@ interface Props {
   /** When true, fetch from the unauthenticated public endpoint and
    *  render a read-only view — no generate / regenerate affordances. */
   publicMode?: boolean;
+  /** Controlled picker selection lifted to VideoReader so Summary and
+   *  Article stay in sync and the Share link can append the same
+   *  `?language=`. null = Original. */
+  selectedLanguage: string | null;
+  onLanguageChange: (next: string | null) => void;
 }
 
 type SummaryField = 'headline' | 'short' | 'full';
@@ -89,6 +95,8 @@ export default function SummaryReader({
   onSummaryAvailable,
   onSummaryWordsChange,
   publicMode = false,
+  selectedLanguage,
+  onLanguageChange,
 }: Props) {
   const apiBase = publicMode ? '/api/public/videos' : '/api/videos';
   const [status, setStatus] = useState<Status>('checking');
@@ -105,7 +113,9 @@ export default function SummaryReader({
     setErrorMessage(null);
     setRegeneratingFields([]);
 
-    fetch(`${apiBase}/${videoDbId}/summary`)
+    const fragment = languageQueryFragment(selectedLanguage);
+    const url = `${apiBase}/${videoDbId}/summary?${fragment}`;
+    fetch(url)
       .then(async (res) => {
         if (cancelled) {
           return;
@@ -143,7 +153,7 @@ export default function SummaryReader({
     return () => {
       cancelled = true;
     };
-  }, [videoDbId, onSummaryAvailable, apiBase]);
+  }, [videoDbId, onSummaryAvailable, apiBase, selectedLanguage]);
 
   // Stream the total word count up to VideoReader so the Summary tab
   // header can render the "X min" reading-time badge. summary.short
@@ -190,7 +200,8 @@ export default function SummaryReader({
     });
 
     try {
-      const res = await fetch(`/api/videos/${videoDbId}/summary`, {
+      const fragment = languageQueryFragment(selectedLanguage);
+      const res = await fetch(`/api/videos/${videoDbId}/summary${fragment ? `?${fragment}` : ''}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields }),
@@ -332,6 +343,21 @@ export default function SummaryReader({
     }
   }
 
+  // Render the language picker above any actionable state (not while
+  // checking, never in public mode where the route always returns
+  // Original). Disabled during streaming so the user can't kick off a
+  // second generation mid-stream.
+  const pickerBar =
+    !publicMode && status !== 'checking' ? (
+      <div className="mb-4 flex items-center justify-end">
+        <LanguagePicker
+          value={selectedLanguage}
+          onChange={onLanguageChange}
+          disabled={status === 'generating'}
+        />
+      </div>
+    ) : null;
+
   if (status === 'checking') {
     return <SummarySkeleton />;
   }
@@ -352,16 +378,19 @@ export default function SummaryReader({
       );
     }
     return (
-      <div className="py-8 text-center">
-        <p className="mb-4 text-sm text-gray-500">
-          Generate a headline, a quick paragraph, and a compact recap of this video.
-        </p>
-        <button
-          onClick={() => handleGenerate()}
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-        >
-          Generate summary
-        </button>
+      <div>
+        {pickerBar}
+        <div className="py-8 text-center">
+          <p className="mb-4 text-sm text-gray-500">
+            Generate a headline, a quick paragraph, and a compact recap of this video.
+          </p>
+          <button
+            onClick={() => handleGenerate()}
+            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            Generate summary
+          </button>
+        </div>
       </div>
     );
   }
@@ -375,14 +404,17 @@ export default function SummaryReader({
       );
     }
     return (
-      <div className="py-8 text-center">
-        <p className="mb-4 text-sm text-gray-400">{errorMessage}</p>
-        <button
-          onClick={() => handleGenerate()}
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-        >
-          Try again
-        </button>
+      <div>
+        {pickerBar}
+        <div className="py-8 text-center">
+          <p className="mb-4 text-sm text-gray-400">{errorMessage}</p>
+          <button
+            onClick={() => handleGenerate()}
+            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            Try again
+          </button>
+        </div>
       </div>
     );
   }
@@ -417,81 +449,84 @@ export default function SummaryReader({
   const fullWords = countWords(fullContent);
 
   return (
-    <div className="space-y-8">
-      {/* Headline */}
-      <div className="flex items-start justify-between gap-4">
-        {summary.headline ? (
-          <h2 className="flex-1 text-xl leading-snug font-semibold text-gray-900">
-            {summary.headline}
-          </h2>
-        ) : isRegenerating('headline') ? (
-          <div className="h-6 flex-1 animate-pulse rounded bg-gray-200" />
-        ) : (
-          <div className="flex-1 text-sm text-gray-400 italic">No headline yet.</div>
-        )}
-        {showRegenerate && !isRegenerating('headline') && (
-          <RegenerateButton onClick={() => handleGenerate(['headline'])} disabled={isStreaming} />
-        )}
-      </div>
-
-      {/* Short */}
-      <div>
-        <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-base font-semibold text-gray-900">
-            Quick summary <WordCountLabel count={shortWords} />
-          </h3>
-          {showRegenerate && !isRegenerating('short') && (
-            <RegenerateButton onClick={() => handleGenerate(['short'])} disabled={isStreaming} />
+    <div>
+      {pickerBar}
+      <div className="space-y-8">
+        {/* Headline */}
+        <div className="flex items-start justify-between gap-4">
+          {summary.headline ? (
+            <h2 className="flex-1 text-xl leading-snug font-semibold text-gray-900">
+              {summary.headline}
+            </h2>
+          ) : isRegenerating('headline') ? (
+            <div className="h-6 flex-1 animate-pulse rounded bg-gray-200" />
+          ) : (
+            <div className="flex-1 text-sm text-gray-400 italic">No headline yet.</div>
+          )}
+          {showRegenerate && !isRegenerating('headline') && (
+            <RegenerateButton onClick={() => handleGenerate(['headline'])} disabled={isStreaming} />
           )}
         </div>
-        {shortContent.length > 0 ? (
-          <ArticleMarkdown className="text-gray-700" hasLatex={shortHasLatex}>
-            {shortContent}
-          </ArticleMarkdown>
-        ) : isRegenerating('short') ? (
-          <div className="space-y-2">
-            <div className="h-4 w-full animate-pulse rounded bg-gray-200" />
-            <div className="h-4 w-11/12 animate-pulse rounded bg-gray-200" />
-            <div className="h-4 w-10/12 animate-pulse rounded bg-gray-200" />
-          </div>
-        ) : (
-          <div className="text-sm text-gray-400 italic">No quick summary yet.</div>
-        )}
-      </div>
 
-      {/* Full */}
-      <div>
-        <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-base font-semibold text-gray-900">
-            Full summary <WordCountLabel count={fullWords} />
-          </h3>
-          {showRegenerate && !isRegenerating('full') && (
-            <RegenerateButton onClick={() => handleGenerate(['full'])} disabled={isStreaming} />
+        {/* Short */}
+        <div>
+          <div className="mb-2 flex items-center justify-between">
+            <h3 className="text-base font-semibold text-gray-900">
+              Quick summary <WordCountLabel count={shortWords} />
+            </h3>
+            {showRegenerate && !isRegenerating('short') && (
+              <RegenerateButton onClick={() => handleGenerate(['short'])} disabled={isStreaming} />
+            )}
+          </div>
+          {shortContent.length > 0 ? (
+            <ArticleMarkdown className="text-gray-700" hasLatex={shortHasLatex}>
+              {shortContent}
+            </ArticleMarkdown>
+          ) : isRegenerating('short') ? (
+            <div className="space-y-2">
+              <div className="h-4 w-full animate-pulse rounded bg-gray-200" />
+              <div className="h-4 w-11/12 animate-pulse rounded bg-gray-200" />
+              <div className="h-4 w-10/12 animate-pulse rounded bg-gray-200" />
+            </div>
+          ) : (
+            <div className="text-sm text-gray-400 italic">No quick summary yet.</div>
           )}
         </div>
-        {fullContent.length > 0 ? (
-          <ArticleMarkdown hasLatex={fullHasLatex}>{fullContent}</ArticleMarkdown>
-        ) : isRegenerating('full') ? (
-          <div className="space-y-2">
-            {[100, 95, 90, 85, 75].map((w, i) => (
-              <div
-                key={i}
-                className="h-4 animate-pulse rounded bg-gray-200"
-                style={{ width: `${w}%` }}
-              />
-            ))}
+
+        {/* Full */}
+        <div>
+          <div className="mb-2 flex items-center justify-between">
+            <h3 className="text-base font-semibold text-gray-900">
+              Full summary <WordCountLabel count={fullWords} />
+            </h3>
+            {showRegenerate && !isRegenerating('full') && (
+              <RegenerateButton onClick={() => handleGenerate(['full'])} disabled={isStreaming} />
+            )}
           </div>
-        ) : (
-          <div className="text-sm text-gray-400 italic">No full summary yet.</div>
+          {fullContent.length > 0 ? (
+            <ArticleMarkdown hasLatex={fullHasLatex}>{fullContent}</ArticleMarkdown>
+          ) : isRegenerating('full') ? (
+            <div className="space-y-2">
+              {[100, 95, 90, 85, 75].map((w, i) => (
+                <div
+                  key={i}
+                  className="h-4 animate-pulse rounded bg-gray-200"
+                  style={{ width: `${w}%` }}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="text-sm text-gray-400 italic">No full summary yet.</div>
+          )}
+        </div>
+
+        {isStreaming && (
+          <div className="flex items-center gap-2 text-xs text-gray-400">
+            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-blue-500" />
+            Generating…
+          </div>
         )}
       </div>
-
-      {isStreaming && (
-        <div className="flex items-center gap-2 text-xs text-gray-400">
-          <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-blue-500" />
-          Generating…
-        </div>
-      )}
     </div>
   );
 }

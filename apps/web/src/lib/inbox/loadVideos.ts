@@ -150,7 +150,7 @@ export async function loadInboxVideos(
         orderBy: { created_at: 'desc' },
         take: 1,
         select: {
-          summary: { select: { transcript_id: true } },
+          summaries: { take: 1, select: { transcript_id: true } },
           articles: { take: 1, select: { id: true } },
         },
       },
@@ -278,7 +278,7 @@ async function loadLibraryScope(
         orderBy: { created_at: 'desc' },
         take: 1,
         select: {
-          summary: { select: { transcript_id: true } },
+          summaries: { take: 1, select: { transcript_id: true } },
           articles: { take: 1, select: { id: true } },
         },
       },

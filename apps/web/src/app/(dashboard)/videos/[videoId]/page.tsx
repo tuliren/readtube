@@ -87,7 +87,7 @@ export default async function VideoPage({ params }: Props) {
         orderBy: { created_at: 'desc' },
         take: 1,
         select: {
-          summary: { select: { transcript_id: true } },
+          summaries: { take: 1, select: { transcript_id: true } },
           articles: { take: 1, select: { id: true } },
         },
       },
@@ -119,9 +119,23 @@ export default async function VideoPage({ params }: Props) {
   });
   const channelFollowed = subscription != null;
 
+  // Default reader language for the picker. SSR'd so the picker
+  // doesn't flicker through "Original" before rehydrating with the
+  // user's preference. Tolerant of the user row being absent (e.g.
+  // first-load races) — null falls back to "Original".
+  const userPrefs = await prisma.user.findUnique({
+    where: { source_id: userId },
+    select: { preferred_language: true },
+  });
+  const preferredLanguage = userPrefs?.preferred_language ?? null;
+
   return (
     <div className="flex flex-1 overflow-hidden">
-      <VideoReader video={videoData} channelFollowed={channelFollowed} />
+      <VideoReader
+        video={videoData}
+        channelFollowed={channelFollowed}
+        preferredLanguage={preferredLanguage}
+      />
     </div>
   );
 }

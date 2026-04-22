@@ -1,6 +1,7 @@
 'use client';
 
 import { UserButton } from '@clerk/nextjs';
+import { AdjustmentsHorizontalIcon } from '@heroicons/react/24/outline';
 import { CheckIcon } from '@heroicons/react/24/outline';
 import { Menu, PanelLeft, RefreshCw } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -155,7 +156,15 @@ function DashboardShellInner({ initialChannels, children }: Props) {
                 <div className="flex flex-1 items-center justify-between px-2">
                   <span className="text-base font-bold text-gray-900">ReadTube</span>
                   <div className="flex items-center gap-1">
-                    <UserButton />
+                    <UserButton>
+                      <UserButton.MenuItems>
+                        <UserButton.Link
+                          label="Settings"
+                          labelIcon={<AdjustmentsHorizontalIcon className="h-4 w-4" />}
+                          href="/settings"
+                        />
+                      </UserButton.MenuItems>
+                    </UserButton>
                     <button
                       type="button"
                       onClick={toggleCollapsed}
@@ -317,7 +326,15 @@ function MobileTopBar({
             <CheckIcon className="h-5 w-5" />
           </button>
         )}
-        <UserButton />
+        <UserButton>
+          <UserButton.MenuItems>
+            <UserButton.Link
+              label="Settings"
+              labelIcon={<AdjustmentsHorizontalIcon className="h-4 w-4" />}
+              href="/settings"
+            />
+          </UserButton.MenuItems>
+        </UserButton>
       </div>
     </div>
   );
