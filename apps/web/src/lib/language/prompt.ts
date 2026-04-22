@@ -12,7 +12,12 @@ import { languageNameForPrompt } from './names';
  */
 export function buildLanguageRule(target: string | null): string {
   if (target == null) {
-    return `CRITICAL LANGUAGE REQUIREMENT: Every word of your output — every sentence, every bullet, every title — MUST be written in the exact same natural language as the transcript below. Detect the transcript's language from its content and write in THAT language. Do not translate. Do not mix languages. If the transcript is in Chinese, write entirely in Chinese. If Japanese, entirely in Japanese. If Spanish, entirely in Spanish. Apply this rule before anything else below.`;
+    // Don't enumerate specific languages here — earlier wording listed
+    // Chinese / Japanese / Spanish as examples and the model would
+    // sometimes latch onto one of those names instead of detecting from
+    // the transcript text. Pure detection instruction, no example
+    // anchors.
+    return `CRITICAL LANGUAGE REQUIREMENT: Every word of your output — every sentence, every bullet, every title — MUST be written in the exact same natural language as the transcript below. Detect the transcript's language from its content and write in THAT language. Do not translate. Do not mix languages. Apply this rule before anything else below.`;
   }
   const name = languageNameForPrompt(target);
   return `CRITICAL LANGUAGE REQUIREMENT: Every word of your output — every sentence, every bullet, every title — MUST be written in ${name}, regardless of the transcript's source language. Translate as needed. Do not mix languages. Do not output any text in the transcript's original language. Apply this rule before anything else below.`;

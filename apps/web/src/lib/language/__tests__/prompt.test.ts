@@ -7,6 +7,16 @@ describe('buildLanguageRule', () => {
     expect(rule).toMatch(/CRITICAL LANGUAGE REQUIREMENT/);
   });
 
+  it.each([['Chinese'], ['Japanese'], ['Spanish'], ['English'], ['French'], ['German']])(
+    'does not enumerate %s in the Original-target rule',
+    (langName) => {
+      // Earlier wording listed Chinese/Japanese/Spanish as examples and
+      // the model would sometimes latch onto one of those names instead
+      // of detecting from the transcript. Lock the regression out.
+      expect(buildLanguageRule(null)).not.toContain(langName);
+    }
+  );
+
   it.each([
     { target: 'en', expectedName: 'English' },
     { target: 'zh', expectedName: 'Chinese' },
