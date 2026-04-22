@@ -71,7 +71,12 @@ export default function LanguagePicker({ value, onChange, disabled = false }: Pr
               <HelpCircle className="h-3.5 w-3.5" />
             </Link>
           </TooltipTrigger>
-          <TooltipContent side="bottom" className="max-w-xs text-center">
+          <TooltipContent
+            side="bottom"
+            align="end"
+            sideOffset={10}
+            className="max-w-[180px] text-left"
+          >
             Set your default reader language in Settings. The picker only changes the current video.
           </TooltipContent>
         </Tooltip>
