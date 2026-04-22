@@ -74,7 +74,7 @@ export default function RemoveChannelDialog({ target, onClose }: Props) {
               <>
                 <strong className="font-medium text-gray-900">{target.name}</strong>
                 {
-                  ' will be removed from your subscribed channels. All your data associated with this channel and its videos will be permanently deleted, including read history, stars, saved items, archives, notes, highlights, and tags. You can re-add the channel at any time, but your data cannot be recovered.'
+                  ' will be removed from your subscribed channels. All your data associated with this channel and its videos will be permanently deleted. You can re-add the channel at any time, but your data cannot be recovered.'
                 }
               </>
             ) : null}
