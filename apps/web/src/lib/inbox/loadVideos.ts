@@ -233,16 +233,11 @@ async function loadLibraryScope(
     });
     orderedVideoIds = rows.map((r) => r.video_id);
   } else {
-    // standalone: StandaloneVideo rows that AREN'T members of any
-    // playlist the user owns. PlaylistVideo is a global junction
-    // table, so the `none` clause has to be scoped to this user's
-    // playlists — otherwise another user filing the same video into
-    // their playlist would kick it out of our Standalone bucket.
+    // standalone: every StandaloneVideo row for this user. A video
+    // may also live in one of the user's playlists — the two buckets
+    // are independent and both should reflect the explicit add.
     const rows = await prisma.standaloneVideo.findMany({
-      where: {
-        user_id: userId,
-        video: { playlist_items: { none: { playlist: { user_id: userId } } } },
-      },
+      where: { user_id: userId },
       select: { video_id: true },
       orderBy: { created_at: 'desc' },
     });
