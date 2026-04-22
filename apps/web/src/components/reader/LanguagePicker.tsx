@@ -60,16 +60,16 @@ export default function LanguagePicker({ value, onChange, disabled = false }: Pr
       <TooltipProvider delayDuration={200}>
         <Tooltip>
           <TooltipTrigger asChild>
-            {/* Wrapping in a span keeps the trigger small and gives the
-                tooltip a stable focusable target — Link works for click
-                + keyboard navigation, the icon is just decoration. */}
-            <Link
-              href="/settings"
-              aria-label="Change default reader language"
+            {/* Pure trigger — clicking does nothing; the tooltip's
+                inline link is the actionable target. type=button so it
+                doesn't accidentally submit a form. */}
+            <button
+              type="button"
+              aria-label="What does the language picker do?"
               className="rounded p-0.5 text-gray-400 hover:text-gray-600 focus:text-gray-600 focus:outline-none"
             >
               <HelpCircle className="h-3.5 w-3.5" />
-            </Link>
+            </button>
           </TooltipTrigger>
           <TooltipContent
             side="bottom"
@@ -77,7 +77,11 @@ export default function LanguagePicker({ value, onChange, disabled = false }: Pr
             sideOffset={10}
             className="max-w-[180px] text-left"
           >
-            Set your default reader language in Settings. The picker only changes the current video.
+            Set your default reader language in{' '}
+            <Link href="/settings" className="underline underline-offset-2 hover:text-white">
+              Settings
+            </Link>
+            . The picker only changes the current video.
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
