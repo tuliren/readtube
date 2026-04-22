@@ -109,9 +109,19 @@ export default async function VideoPage({ params }: Props) {
   const readerTriage = await loadTriageContext(prisma, userId, [video.id]);
   const videoData: VideoData = decorateVideo(video, readerTriage, existingReadAt ?? new Date());
 
+  // Separate lookup for channel subscription: the access-control query
+  // above matches via standalone/playlist membership too, so it doesn't
+  // answer "is the user subscribed?" on its own. Drives the plus-icon
+  // "Follow channel" button in the reader header.
+  const subscription = await prisma.userSubscription.findFirst({
+    where: { user_id: userId, channel_id: video.channel_id },
+    select: { id: true },
+  });
+  const channelFollowed = subscription != null;
+
   return (
     <div className="flex flex-1 overflow-hidden">
-      <VideoReader video={videoData} />
+      <VideoReader video={videoData} channelFollowed={channelFollowed} />
     </div>
   );
 }
