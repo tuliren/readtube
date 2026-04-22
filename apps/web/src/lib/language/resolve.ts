@@ -1,5 +1,6 @@
 import { prisma } from '@readtube/database';
 
+import { findTargetLanguage } from './names';
 import { parseLanguageQuery } from './prompt';
 
 /**
@@ -7,7 +8,11 @@ import { parseLanguageQuery } from './prompt';
  *
  * Resolution order:
  *  1. Query string (`?language=...`):
- *     - `target` → use the code as-is.
+ *     - `target` → validate against the curated TARGET_LANGUAGES list.
+ *       Unknown codes silently fall through to the next step instead
+ *       of being passed straight to the prompt builder + DB column
+ *       (defense in depth — the picker only ever sends curated codes,
+ *       but the route is reachable directly).
  *     - `original` → null (skip user preference).
  *     - `unspecified` → fall through to user preference.
  *  2. The user's `preferred_language` setting.
@@ -22,7 +27,7 @@ export async function resolveTargetLanguage(
   rawQueryLanguage: string | null | undefined
 ): Promise<string | null> {
   const parsed = parseLanguageQuery(rawQueryLanguage);
-  if (parsed.kind === 'target') {
+  if (parsed.kind === 'target' && findTargetLanguage(parsed.code) != null) {
     return parsed.code;
   }
   if (parsed.kind === 'original') {

@@ -1,6 +1,7 @@
 import { ArticleStyle, prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 
+import { findTargetLanguage } from '@/lib/language/names';
 import { parseLanguageQuery } from '@/lib/language/prompt';
 
 const DEFAULT_STYLE: ArticleStyle = ArticleStyle.NARRATIVE;
@@ -30,7 +31,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: 'Invalid style' }, { status: 400 });
   }
   const parsed = parseLanguageQuery(request.nextUrl.searchParams.get('language'));
-  const targetLanguage = parsed.kind === 'target' ? parsed.code : null;
+  // Validate against the curated picker list — see public summary
+  // route for the rationale.
+  const targetLanguage =
+    parsed.kind === 'target' && findTargetLanguage(parsed.code) != null ? parsed.code : null;
 
   console.info(
     `[public/article/GET] Fetching public article for video ${id} (style=${style}, language=${targetLanguage ?? 'original'})`
@@ -45,7 +49,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         take: 1,
         select: {
           id: true,
-          summaries: { take: 1, select: { transcript_id: true } },
+          // Match the public summary route: the artifact gate keys on
+          // the Original (language IS NULL) row's existence. Today
+          // translated rows only ever derive from an Original (via the
+          // clone-on-match path or fresh generation), so this is mostly
+          // belt-and-suspenders, but it stays consistent if that
+          // invariant ever loosens.
+          summaries: { where: { language: null }, take: 1, select: { transcript_id: true } },
           articles: { take: 1, select: { id: true } },
         },
       },

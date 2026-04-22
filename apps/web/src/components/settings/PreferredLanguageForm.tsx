@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { TARGET_LANGUAGES } from '@/lib/language/names';
@@ -19,6 +19,12 @@ const ORIGINAL_VALUE = '__original__';
 export default function PreferredLanguageForm({ initialValue }: Props) {
   const [value, setValue] = useState<string | null>(initialValue);
   const [saving, setSaving] = useState(false);
+  // Track the last successfully persisted value so an error rollback
+  // returns to "what's actually in the DB" rather than the stale SSR
+  // prop. Without this, picking en→fr→de where the third save fails
+  // would roll back to en (the SSR value) instead of fr (the last
+  // good save).
+  const lastSavedRef = useRef<string | null>(initialValue);
 
   async function handleChange(next: string | null) {
     setValue(next);
@@ -33,13 +39,11 @@ export default function PreferredLanguageForm({ initialValue }: Props) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body?.error ?? `Request failed (${res.status})`);
       }
+      lastSavedRef.current = next;
       toast.success('Saved');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to save');
-      // Roll back the optimistic update so the dropdown reflects the
-      // server's last known good value rather than a value that didn't
-      // actually persist.
-      setValue(initialValue);
+      setValue(lastSavedRef.current);
     } finally {
       setSaving(false);
     }

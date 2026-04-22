@@ -1,6 +1,7 @@
 import { prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 
+import { findTargetLanguage } from '@/lib/language/names';
 import { parseLanguageQuery } from '@/lib/language/prompt';
 
 /**
@@ -19,7 +20,11 @@ import { parseLanguageQuery } from '@/lib/language/prompt';
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const parsed = parseLanguageQuery(request.nextUrl.searchParams.get('language'));
-  const targetLanguage = parsed.kind === 'target' ? parsed.code : null;
+  // Validate against the curated picker list. Unknown codes silently
+  // fall back to Original — a tampered URL should still render
+  // something useful instead of leaking the raw code into a query.
+  const targetLanguage =
+    parsed.kind === 'target' && findTargetLanguage(parsed.code) != null ? parsed.code : null;
 
   console.info(
     `[public/summary/GET] Fetching public summary for video ${id} (language=${targetLanguage ?? 'original'})`
