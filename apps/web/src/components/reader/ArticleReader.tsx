@@ -8,6 +8,7 @@ import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { isProduction } from '@/lib/vercelEnv';
 
 import ArticleMarkdown from './ArticleMarkdown';
+import LanguagePicker, { languageQueryFragment } from './LanguagePicker';
 import type { TranscriptStatus } from './VideoReader';
 
 function RegenerateButton({ onClick, disabled }: { onClick: () => void; disabled?: boolean }) {
@@ -41,6 +42,8 @@ interface Props {
   /** When true, fetch from the unauthenticated public endpoint and
    *  render a read-only view — no generate affordance. */
   publicMode?: boolean;
+  /** Initial selection for the language picker. See SummaryReader. */
+  preferredLanguage?: string | null;
 }
 
 type Status = 'checking' | 'idle' | 'streaming' | 'done' | 'error';
@@ -54,12 +57,16 @@ export default function ArticleReader({
   onArticleAvailable,
   onArticleWordsChange,
   publicMode = false,
+  preferredLanguage = null,
 }: Props) {
   const apiBase = publicMode ? '/api/public/videos' : '/api/videos';
   const [status, setStatus] = useState<Status>('checking');
   const [content, setContent] = useState('');
   const [hasLatex, setHasLatex] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [selectedLanguage, setSelectedLanguage] = useState<string | null>(
+    publicMode ? null : preferredLanguage
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -68,7 +75,11 @@ export default function ArticleReader({
     setHasLatex(false);
     setErrorMessage(null);
 
-    fetch(`${apiBase}/${videoDbId}/article?style=${STYLE}`)
+    const langFragment = publicMode ? '' : languageQueryFragment(selectedLanguage);
+    const url = `${apiBase}/${videoDbId}/article?style=${STYLE}${
+      langFragment ? `&${langFragment}` : ''
+    }`;
+    fetch(url)
       .then(async (res) => {
         if (cancelled) {
           return;
@@ -100,7 +111,7 @@ export default function ArticleReader({
     return () => {
       cancelled = true;
     };
-  }, [videoDbId, onArticleAvailable, apiBase]);
+  }, [videoDbId, onArticleAvailable, apiBase, selectedLanguage, publicMode]);
 
   // Stream the article word count up to VideoReader so the Article
   // tab header can render the reading-time badge. Fires on every
@@ -116,11 +127,15 @@ export default function ArticleReader({
     setErrorMessage(null);
 
     try {
-      const res = await fetch(`/api/videos/${videoDbId}/article`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ style: STYLE, force: opts.force === true }),
-      });
+      const langFragment = languageQueryFragment(selectedLanguage);
+      const res = await fetch(
+        `/api/videos/${videoDbId}/article${langFragment ? `?${langFragment}` : ''}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ style: STYLE, force: opts.force === true }),
+        }
+      );
 
       if (!res.ok) {
         // 410 from the server means ensureTranscript flagged this
@@ -234,6 +249,20 @@ export default function ArticleReader({
     }
   }
 
+  // Picker bar is rendered above any actionable state (skipped while
+  // checking, never in public mode where the route always returns
+  // Original). Disabled during streaming.
+  const pickerBar =
+    !publicMode && status !== 'checking' ? (
+      <div className="mb-3 flex items-center justify-end gap-3 border-b border-gray-100 pb-2">
+        <LanguagePicker
+          value={selectedLanguage}
+          onChange={setSelectedLanguage}
+          disabled={status === 'streaming'}
+        />
+      </div>
+    ) : null;
+
   if (status === 'checking') {
     return (
       <div className="animate-pulse space-y-4 py-4">
@@ -256,16 +285,19 @@ export default function ArticleReader({
       );
     }
     return (
-      <div className="py-8 text-center">
-        <p className="mb-4 text-sm text-gray-500">
-          Generate a clean, readable article from the transcript.
-        </p>
-        <button
-          onClick={() => handleGenerate()}
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-        >
-          Generate article
-        </button>
+      <div>
+        {pickerBar}
+        <div className="py-8 text-center">
+          <p className="mb-4 text-sm text-gray-500">
+            Generate a clean, readable article from the transcript.
+          </p>
+          <button
+            onClick={() => handleGenerate()}
+            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            Generate article
+          </button>
+        </div>
       </div>
     );
   }
@@ -279,14 +311,17 @@ export default function ArticleReader({
       );
     }
     return (
-      <div className="py-8 text-center">
-        <p className="mb-4 text-sm text-gray-400">{errorMessage}</p>
-        <button
-          onClick={() => handleGenerate()}
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-        >
-          Try again
-        </button>
+      <div>
+        {pickerBar}
+        <div className="py-8 text-center">
+          <p className="mb-4 text-sm text-gray-400">{errorMessage}</p>
+          <button
+            onClick={() => handleGenerate()}
+            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            Try again
+          </button>
+        </div>
       </div>
     );
   }
@@ -299,13 +334,29 @@ export default function ArticleReader({
 
   return (
     <div>
-      {showRegenerate && (
-        <div className="mb-3 flex items-center justify-end border-b border-gray-100 pb-2">
-          <RegenerateButton
-            onClick={() => handleGenerate({ force: true })}
+      {pickerBar != null ? (
+        <div className="mb-3 flex items-center justify-end gap-3 border-b border-gray-100 pb-2">
+          <LanguagePicker
+            value={selectedLanguage}
+            onChange={setSelectedLanguage}
             disabled={status === 'streaming'}
           />
+          {showRegenerate && (
+            <RegenerateButton
+              onClick={() => handleGenerate({ force: true })}
+              disabled={status === 'streaming'}
+            />
+          )}
         </div>
+      ) : (
+        showRegenerate && (
+          <div className="mb-3 flex items-center justify-end border-b border-gray-100 pb-2">
+            <RegenerateButton
+              onClick={() => handleGenerate({ force: true })}
+              disabled={status === 'streaming'}
+            />
+          </div>
+        )
       )}
       <ArticleMarkdown hasLatex={hasLatex}>{content}</ArticleMarkdown>
       {status === 'streaming' && (

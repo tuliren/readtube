@@ -34,6 +34,11 @@ interface Props {
    *  "Follow channel" plus-icon button next to the channel name. When
    *  true (or in public mode) the button is hidden. */
   channelFollowed?: boolean;
+  /** User's default reader language (BCP-47), or null = "Original".
+   *  Pre-selects the language picker in the Summary/Article tabs. Not
+   *  meaningful in public mode (those views always render the Original
+   *  row regardless of any visitor preference). */
+  preferredLanguage?: string | null;
 }
 
 type Tab = 'summary' | 'article' | 'transcript';
@@ -52,7 +57,12 @@ function relativeDate(dateStr: string): string {
   });
 }
 
-export default function VideoReader({ video, publicMode = false, channelFollowed = false }: Props) {
+export default function VideoReader({
+  video,
+  publicMode = false,
+  channelFollowed = false,
+  preferredLanguage = null,
+}: Props) {
   const searchParams = useSearchParams();
   // The reader URL is `/videos/<sourceId>?returnTo=<encoded-path>`.
   // `returnTo` carries the full path + query of the list the user
@@ -492,6 +502,7 @@ export default function VideoReader({ video, publicMode = false, channelFollowed
                       onSummaryAvailable={handleSummaryAvailable}
                       onSummaryWordsChange={handleSummaryWordsChange}
                       publicMode={publicMode}
+                      preferredLanguage={preferredLanguage}
                     />
                   </div>
                 )}
@@ -504,6 +515,7 @@ export default function VideoReader({ video, publicMode = false, channelFollowed
                       onArticleAvailable={handleArticleAvailable}
                       onArticleWordsChange={handleArticleWordsChange}
                       publicMode={publicMode}
+                      preferredLanguage={preferredLanguage}
                     />
                   </div>
                 )}
