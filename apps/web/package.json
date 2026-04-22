@@ -41,7 +41,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
-    "fast-xml-parser": "^5.5.10",
+    "fast-xml-parser": "^5.7.0",
     "franc": "^6.2.0",
     "iso-639-3": "^3.0.1",
     "katex": "^0.16",
