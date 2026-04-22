@@ -170,7 +170,10 @@ export default function VideoReader({ video, publicMode = false }: Props) {
   // Measure whether the description overflows its 4-line clamp so the
   // "Show more" toggle only renders when there is actually more to
   // reveal. Re-measures on resize so a narrower viewport that clips
-  // previously-fitting text still gets a toggle.
+  // previously-fitting text still gets a toggle. video.id is in the
+  // deps so that navigating between videos with identical descriptions
+  // still re-measures (the reset effect above clears clampable to
+  // false, and a same-size ResizeObserver won't fire on its own).
   useEffect(() => {
     const el = descriptionRef.current;
     if (el == null) {
@@ -189,7 +192,7 @@ export default function VideoReader({ video, publicMode = false }: Props) {
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [video.description, descriptionExpanded]);
+  }, [video.id, video.description, descriptionExpanded]);
 
   // Notes panel state — auto-open when arriving with ?openNotes=1
   const [notesOpen, setNotesOpen] = useState(() => searchParams.get('openNotes') === '1');
@@ -329,7 +332,15 @@ export default function VideoReader({ video, publicMode = false }: Props) {
             renders standalone; when there's no thumbnail the
             description spans the full width. */}
           {(video.thumbnailUrl != null || video.description != null) && (
-            <div className="mt-5 flex items-start gap-4">
+            <div
+              className={`mt-5 items-start gap-4 ${
+                // Thumbnail-only videos collapse to an empty row on
+                // narrow screens (the thumbnail is hidden), so hide
+                // the whole row below the sidebar breakpoint in that
+                // case to avoid a stray 20px gap.
+                video.description == null ? 'hidden sidebar:flex' : 'flex'
+              }`}
+            >
               {video.thumbnailUrl != null && (
                 <img
                   // Bilibili's hdslb CDN 403s when the Referer points
