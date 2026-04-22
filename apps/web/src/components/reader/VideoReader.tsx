@@ -254,7 +254,21 @@ export default function VideoReader({ video, publicMode = false }: Props) {
         {/* Article */}
         <article className="mx-auto w-full max-w-3xl px-6 py-8">
           {/* Meta: video title */}
-          <h1 className="text-2xl font-bold leading-tight text-gray-900">{video.title}</h1>
+          <h1 className="text-2xl font-bold leading-tight text-gray-900">
+            {video.thumbnailUrl != null && (
+              <img
+                src={video.thumbnailUrl}
+                alt=""
+                aria-hidden
+                referrerPolicy="no-referrer"
+                // Inline thumbnail sized to the title's line-height.
+                // Only shown on narrow screens, where the full
+                // thumbnail row is hidden.
+                className="mr-1.5 inline-block h-[1.25em] w-auto rounded align-middle sidebar:hidden"
+              />
+            )}
+            {video.title}
+          </h1>
 
           {/* Meta line */}
           <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-gray-400">
