@@ -16,6 +16,7 @@ import { videoHref } from '@/lib/urls/videoHref';
 import { buildChannelLink, buildWatchLink } from '@/lib/urls/watchUrl';
 
 import ArticleReader from './ArticleReader';
+import FollowChannelDialogButton from './FollowChannelDialogButton';
 import NotesPanel from './NotesPanel';
 import ReadingTimeBadge from './ReadingTimeBadge';
 import SummaryReader from './SummaryReader';
@@ -28,6 +29,11 @@ interface Props {
    *  triage actions, back link) and swaps the tab readers to the
    *  public, read-only API routes. */
   publicMode?: boolean;
+  /** Whether the current user is subscribed to the video's channel.
+   *  Only meaningful in authenticated (non-public) mode — drives the
+   *  "Follow channel" plus-icon button next to the channel name. When
+   *  true (or in public mode) the button is hidden. */
+  channelFollowed?: boolean;
 }
 
 type Tab = 'summary' | 'article' | 'transcript';
@@ -46,7 +52,7 @@ function relativeDate(dateStr: string): string {
   });
 }
 
-export default function VideoReader({ video, publicMode = false }: Props) {
+export default function VideoReader({ video, publicMode = false, channelFollowed = false }: Props) {
   const searchParams = useSearchParams();
   // The reader URL is `/videos/<sourceId>?returnTo=<encoded-path>`.
   // `returnTo` carries the full path + query of the list the user
@@ -278,6 +284,12 @@ export default function VideoReader({ video, publicMode = false }: Props) {
             <span className="inline-flex items-center gap-0.5">
               <span>{video.channelName}</span>
               <ExternalLinkActions url={channelUrl} label={`Open channel on ${platformName}`} />
+              {!publicMode && !channelFollowed && (
+                <FollowChannelDialogButton
+                  channelName={video.channelName}
+                  channelUrl={channelUrl}
+                />
+              )}
             </span>
             {video.publishedAt != null && (
               <>
