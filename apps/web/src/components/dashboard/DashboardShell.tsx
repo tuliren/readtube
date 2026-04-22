@@ -1,7 +1,7 @@
 'use client';
 
 import { UserButton } from '@clerk/nextjs';
-import { Cog6ToothIcon } from '@heroicons/react/24/outline';
+import { AdjustmentsHorizontalIcon } from '@heroicons/react/24/outline';
 import { CheckIcon } from '@heroicons/react/24/outline';
 import { Menu, PanelLeft, RefreshCw } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -160,7 +160,7 @@ function DashboardShellInner({ initialChannels, children }: Props) {
                       <UserButton.MenuItems>
                         <UserButton.Link
                           label="Settings"
-                          labelIcon={<Cog6ToothIcon className="h-4 w-4" />}
+                          labelIcon={<AdjustmentsHorizontalIcon className="h-4 w-4" />}
                           href="/settings"
                         />
                       </UserButton.MenuItems>
@@ -330,7 +330,7 @@ function MobileTopBar({
           <UserButton.MenuItems>
             <UserButton.Link
               label="Settings"
-              labelIcon={<Cog6ToothIcon className="h-4 w-4" />}
+              labelIcon={<AdjustmentsHorizontalIcon className="h-4 w-4" />}
               href="/settings"
             />
           </UserButton.MenuItems>
