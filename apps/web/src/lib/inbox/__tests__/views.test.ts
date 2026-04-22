@@ -20,11 +20,6 @@ describe('resolveInboxView', () => {
       desc: 'a channel narrow has no matching named view',
     },
     {
-      query: { tagIds: ['t1'] },
-      expectedKey: null,
-      desc: 'a tag filter has no matching named view',
-    },
-    {
       query: { unread: true },
       expectedKey: null,
       desc: 'unread chip has no matching named view',

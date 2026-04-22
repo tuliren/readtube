@@ -199,7 +199,7 @@ export async function loadInboxVideos(
  * and paginates an ordered id list in JS so we preserve playlist
  * sort_order and standalone insertion order — neither of which maps
  * onto `ORDER BY published_at`. Filter chips (archived / starred /
- * saved / unread / tagIds / date range) are intentionally ignored
+ * saved / unread / date range) are intentionally ignored
  * here; the library header doesn't render them, and wiring them
  * would require re-counting against a filtered subset.
  */

@@ -12,7 +12,7 @@ interface Props {
   // Wide Next.js shape — we forward the whole bag through
   // searchParamsToInboxQuery / parseInboxQuery so SSR honors every
   // filter the client codec knows about (starred, saved, snoozed,
-  // archived, unread, q, from, to, tagIds, sort, …).
+  // archived, unread, q, from, to, sort, …).
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
