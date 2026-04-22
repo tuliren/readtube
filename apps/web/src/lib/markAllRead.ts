@@ -43,20 +43,17 @@ export async function markPlaylistRead(
 }
 
 /**
- * Mark every standalone video (not in any playlist) as read by
- * creating UserVideoConsumption rows. Returns the number of
- * standalone rows considered — not the number of consumption rows
- * inserted, which may be smaller due to `skipDuplicates`.
+ * Mark every standalone video as read by creating UserVideoConsumption
+ * rows. Returns the number of standalone rows considered — not the
+ * number of consumption rows inserted, which may be smaller due to
+ * `skipDuplicates`.
  */
 export async function markStandaloneRead(
   prisma: PrismaClient,
   userId: string
 ): Promise<{ count: number }> {
   const standaloneRows = await prisma.standaloneVideo.findMany({
-    where: {
-      user_id: userId,
-      video: { playlist_items: { none: { playlist: { user_id: userId } } } },
-    },
+    where: { user_id: userId },
     select: { video_id: true },
   });
   if (standaloneRows.length > 0) {

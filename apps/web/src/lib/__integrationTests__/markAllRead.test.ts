@@ -204,10 +204,11 @@ describe('markPlaylistRead', () => {
 });
 
 describe('markStandaloneRead', () => {
-  it('creates a UserVideoConsumption row for every standalone video not already in a playlist', async () => {
+  it('creates a UserVideoConsumption row for every standalone video, including ones also in a playlist', async () => {
     const v1 = await createVideo({ channelSourceId: 'ms_ch', videoSourceId: 'ms_v1' });
     const v2 = await createVideo({ channelSourceId: 'ms_ch', videoSourceId: 'ms_v2' });
-    // v3 is BOTH in standalone and in a playlist; standaloneOnly should skip it.
+    // v3 is BOTH in standalone and in a playlist. The two buckets are
+    // independent and both should be marked read.
     const v3 = await createVideo({ channelSourceId: 'ms_ch', videoSourceId: 'ms_v3' });
 
     await global.testPrisma.standaloneVideo.createMany({
@@ -229,16 +230,13 @@ describe('markStandaloneRead', () => {
     expect(await countUnreadStandalone(USER_A)).toBe(3);
 
     const result = await markStandaloneRead(global.testPrisma, USER_A);
-    expect(result).toEqual({ count: 2 });
+    expect(result).toEqual({ count: 3 });
 
-    // v1 + v2 got consumption rows; v3 did not because it's also in a playlist.
     const consumptions = await global.testPrisma.userVideoConsumption.findMany({
       where: { user_id: USER_A },
       select: { video_id: true },
-      orderBy: { video_id: 'asc' },
     });
-    expect(consumptions.map((c) => c.video_id).sort()).toEqual([v1.id, v2.id].sort());
-    expect(consumptions.map((c) => c.video_id)).not.toContain(v3.id);
+    expect(consumptions.map((c) => c.video_id).sort()).toEqual([v1.id, v2.id, v3.id].sort());
   });
 
   it('does not touch another user’s standalone videos', async () => {
