@@ -286,6 +286,13 @@ export default function VideoReader({ video, publicMode = false, channelFollowed
               <ExternalLinkActions url={channelUrl} label={`Open channel on ${platformName}`} />
               {!publicMode && !channelFollowed && (
                 <FollowChannelDialogButton
+                  // Soft navigation between videos reuses this tree
+                  // position, so the button's internal `followed`
+                  // flag would otherwise persist across channels and
+                  // hide itself for every subsequent unfollowed
+                  // channel. Keying on channelSourceId forces a
+                  // remount when the channel identity changes.
+                  key={video.channelSourceId}
                   channelName={video.channelName}
                   channelUrl={channelUrl}
                 />
