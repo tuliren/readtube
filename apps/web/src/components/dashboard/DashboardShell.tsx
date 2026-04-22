@@ -21,6 +21,7 @@ import {
   useSidebar,
 } from '@/components/inbox/SidebarContext';
 import { useFolders } from '@/components/inbox/useFolders';
+import ThemeSelector from '@/components/settings/ThemeSelector';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Toaster } from '@/components/ui/sonner';
 import { extractInboxSearchParams, parseInboxQuery } from '@/lib/inbox/filter';
@@ -155,31 +156,41 @@ function DashboardShellInner({ initialChannels, children }: Props) {
               ) : (
                 <div className="flex flex-1 items-center justify-between px-2">
                   <span className="text-base font-bold text-gray-900">ReadTube</span>
-                  <div className="flex items-center gap-1">
-                    <UserButton>
-                      <UserButton.MenuItems>
-                        <UserButton.Link
-                          label="Settings"
-                          labelIcon={<AdjustmentsHorizontalIcon className="h-4 w-4" />}
-                          href="/settings"
-                        />
-                      </UserButton.MenuItems>
-                    </UserButton>
-                    <button
-                      type="button"
-                      onClick={toggleCollapsed}
-                      className="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-                      aria-label="Collapse sidebar"
-                      title="Collapse sidebar"
-                    >
-                      <PanelLeft className="h-4 w-4" />
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={toggleCollapsed}
+                    className="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                    aria-label="Collapse sidebar"
+                    title="Collapse sidebar"
+                  >
+                    <PanelLeft className="h-4 w-4" />
+                  </button>
                 </div>
               )}
             </div>
 
             {renderSidebarContent(collapsed)}
+
+            {/* Pinned bottom row: user profile on the left, theme selector on
+                the right when expanded. When collapsed (56px rail) there's no
+                room for the selector — it stays reachable via /settings. */}
+            <div
+              className={`mt-auto flex h-14 shrink-0 items-center border-t border-gray-200 ${
+                collapsed ? 'justify-center px-0' : 'justify-between px-4'
+              }`}
+            >
+              <UserButton>
+                <UserButton.MenuItems>
+                  <UserButton.Link
+                    label="Settings"
+                    labelIcon={<AdjustmentsHorizontalIcon className="h-4 w-4" />}
+                    href="/settings"
+                  />
+                </UserButton.MenuItems>
+              </UserButton>
+              {!collapsed && <ThemeSelector variant="segmented" />}
+            </div>
+
             {!collapsed && <SidebarResizeHandle />}
           </aside>
         )}
@@ -326,6 +337,7 @@ function MobileTopBar({
             <CheckIcon className="h-5 w-5" />
           </button>
         )}
+        <ThemeSelector variant="compact" />
         <UserButton>
           <UserButton.MenuItems>
             <UserButton.Link
