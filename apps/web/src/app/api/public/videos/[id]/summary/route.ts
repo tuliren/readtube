@@ -39,7 +39,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         take: 1,
         select: {
           id: true,
-          summaries: { take: 1, select: { transcript_id: true } },
+          // Gate on the Original (language IS NULL) row's existence so
+          // it stays consistent with the public article route's gate.
+          // Translated rows are derivative — without an Original there
+          // is no canonical "this video has a summary worth sharing"
+          // signal.
+          summaries: { where: { language: null }, take: 1, select: { transcript_id: true } },
           articles: { take: 1, select: { id: true } },
         },
       },
