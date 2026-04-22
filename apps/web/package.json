@@ -3,6 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
+    "backfill:language": "scripts/runScriptWithEnv.sh development scripts/backfillLanguage.ts",
     "build": "next build",
     "build-storybook": "storybook build --webpack-stats-json",
     "dev": "next dev",
