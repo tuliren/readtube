@@ -4,7 +4,6 @@ import { UserButton } from '@clerk/nextjs';
 import { Cog6ToothIcon } from '@heroicons/react/24/outline';
 import { CheckIcon } from '@heroicons/react/24/outline';
 import { Menu, PanelLeft, RefreshCw } from 'lucide-react';
-import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
@@ -157,15 +156,15 @@ function DashboardShellInner({ initialChannels, children }: Props) {
                 <div className="flex flex-1 items-center justify-between px-2">
                   <span className="text-base font-bold text-gray-900">ReadTube</span>
                   <div className="flex items-center gap-1">
-                    <Link
-                      href="/settings"
-                      aria-label="Settings"
-                      title="Settings"
-                      className="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-                    >
-                      <Cog6ToothIcon className="h-4 w-4" />
-                    </Link>
-                    <UserButton />
+                    <UserButton>
+                      <UserButton.MenuItems>
+                        <UserButton.Link
+                          label="Settings"
+                          labelIcon={<Cog6ToothIcon className="h-4 w-4" />}
+                          href="/settings"
+                        />
+                      </UserButton.MenuItems>
+                    </UserButton>
                     <button
                       type="button"
                       onClick={toggleCollapsed}
@@ -327,15 +326,15 @@ function MobileTopBar({
             <CheckIcon className="h-5 w-5" />
           </button>
         )}
-        <Link
-          href="/settings"
-          aria-label="Settings"
-          title="Settings"
-          className="rounded p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
-        >
-          <Cog6ToothIcon className="h-5 w-5" />
-        </Link>
-        <UserButton />
+        <UserButton>
+          <UserButton.MenuItems>
+            <UserButton.Link
+              label="Settings"
+              labelIcon={<Cog6ToothIcon className="h-4 w-4" />}
+              href="/settings"
+            />
+          </UserButton.MenuItems>
+        </UserButton>
       </div>
     </div>
   );
