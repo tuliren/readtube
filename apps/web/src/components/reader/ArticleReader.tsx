@@ -250,10 +250,12 @@ export default function ArticleReader({
 
   // Picker bar is rendered above any actionable state (skipped while
   // checking, never in public mode where the route always returns
-  // Original). Disabled during streaming.
+  // Original). Disabled during streaming. Styling matches
+  // SummaryReader's pickerBar so the empty / loaded state of both tabs
+  // looks identical.
   const pickerBar =
     !publicMode && status !== 'checking' ? (
-      <div className="mb-3 flex items-center justify-end gap-3 border-b border-gray-100 pb-2">
+      <div className="mb-4 flex items-center justify-end">
         <LanguagePicker
           value={selectedLanguage}
           onChange={onLanguageChange}
@@ -334,7 +336,7 @@ export default function ArticleReader({
   return (
     <div>
       {pickerBar != null ? (
-        <div className="mb-3 flex items-center justify-end gap-3 border-b border-gray-100 pb-2">
+        <div className="mb-4 flex items-center justify-end gap-3">
           <LanguagePicker
             value={selectedLanguage}
             onChange={onLanguageChange}
@@ -349,7 +351,7 @@ export default function ArticleReader({
         </div>
       ) : (
         showRegenerate && (
-          <div className="mb-3 flex items-center justify-end border-b border-gray-100 pb-2">
+          <div className="mb-4 flex items-center justify-end">
             <RegenerateButton
               onClick={() => handleGenerate({ force: true })}
               disabled={status === 'streaming'}
