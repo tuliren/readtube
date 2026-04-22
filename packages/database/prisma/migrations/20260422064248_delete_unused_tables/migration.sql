@@ -34,16 +34,6 @@ ALTER TABLE "VideoTag"
 ALTER TABLE "VideoTag"
     DROP CONSTRAINT "VideoTag_video_id_fkey";
 
--- DropIndex
-DROP INDEX "video_search_tsv_idx";
-
--- DropIndex
-DROP INDEX "video_embedding_hnsw_idx";
-
--- AlterTable
-ALTER TABLE "Video"
-    ALTER COLUMN "search_tsv" DROP DEFAULT;
-
 -- DropTable
 DROP TABLE "DigestRun";
 

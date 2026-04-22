@@ -1,17 +1,8 @@
--- CreateExtension
-CREATE EXTENSION IF NOT EXISTS "plpgsql" WITH SCHEMA "pg_catalog" VERSION "1.0";
-
 -- CreateEnum
 CREATE TYPE "HighlightSource" AS ENUM ('TRANSCRIPT', 'SUMMARY', 'ARTICLE');
 
 -- CreateEnum
 CREATE TYPE "VideoTagSource" AS ENUM ('MANUAL', 'AUTO_RULE', 'AUTO_AI');
-
--- AlterTable
-ALTER TABLE "Video"
-    ALTER COLUMN "search_tsv" SET DEFAULT (
-        setweight(to_tsvector('english'::regconfig, COALESCE(title, ''::text)), 'A'::"char") ||
-        setweight(to_tsvector('english'::regconfig, COALESCE(description, ''::text)), 'B'::"char"));
 
 -- CreateTable
 CREATE TABLE "DigestRun"
@@ -122,12 +113,6 @@ CREATE INDEX "video_tag_index_on_tag_id" ON "VideoTag" ("tag_id" ASC);
 
 -- CreateIndex
 CREATE INDEX "video_tag_index_on_video_id" ON "VideoTag" ("video_id" ASC);
-
--- CreateIndex
-CREATE INDEX "video_search_tsv_idx" ON "Video" USING GIN ("search_tsv" tsvector_ops ASC);
-
--- CreateIndex
-CREATE INDEX "video_embedding_hnsw_idx" ON "VideoEmbedding" ("embedding" ASC);
 
 -- AddForeignKey
 ALTER TABLE "DigestRun"
