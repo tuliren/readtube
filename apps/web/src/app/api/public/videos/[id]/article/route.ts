@@ -39,7 +39,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         take: 1,
         select: {
           id: true,
-          summary: { select: { transcript_id: true } },
+          summaries: { take: 1, select: { transcript_id: true } },
           articles: { take: 1, select: { id: true } },
         },
       },
@@ -52,19 +52,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   const transcript = video.transcripts[0];
   const hasAnyPublicArtifact =
-    transcript != null && (transcript.summary != null || transcript.articles.length > 0);
+    transcript != null && (transcript.summaries.length > 0 || transcript.articles.length > 0);
   if (!hasAnyPublicArtifact) {
     console.error(`[public/article/GET] Video ${id} has no public artifact`);
     return NextResponse.json({ error: 'Not public' }, { status: 404 });
   }
 
-  const article = await prisma.article.findUnique({
-    where: {
-      article_unique_transcript_style: {
-        transcript_id: transcript.id,
-        style,
-      },
-    },
+  // Public route always returns the Original (language IS NULL) row.
+  // Translated rows are reader-only; the public share URL renders the
+  // canonical version that matches the transcript's source language.
+  const article = await prisma.article.findFirst({
+    where: { transcript_id: transcript.id, style, language: null },
     select: { content: true, style: true, generated_at: true },
   });
   if (!article) {

@@ -87,7 +87,7 @@ export default async function VideoPage({ params }: Props) {
         orderBy: { created_at: 'desc' },
         take: 1,
         select: {
-          summary: { select: { transcript_id: true } },
+          summaries: { take: 1, select: { transcript_id: true } },
           articles: { take: 1, select: { id: true } },
         },
       },

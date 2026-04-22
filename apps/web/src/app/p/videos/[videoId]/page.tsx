@@ -64,7 +64,7 @@ export default async function PublicVideoPage({ params }: Props) {
         orderBy: { created_at: 'desc' },
         take: 1,
         select: {
-          summary: { select: { transcript_id: true } },
+          summaries: { take: 1, select: { transcript_id: true } },
           articles: { take: 1, select: { id: true } },
         },
       },
@@ -75,7 +75,7 @@ export default async function PublicVideoPage({ params }: Props) {
   }
 
   const latest = video.transcripts[0];
-  const hasSummary = latest?.summary != null;
+  const hasSummary = (latest?.summaries.length ?? 0) > 0;
   const hasArticle = (latest?.articles.length ?? 0) > 0;
   if (!hasSummary && !hasArticle) {
     notFound();

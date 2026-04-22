@@ -21,7 +21,13 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         take: 1,
         select: {
           id: true,
-          summary: {
+          // Public route always returns the Original (language IS NULL)
+          // row. Translated rows are reader-only — the public share URL
+          // renders the canonical version that matches the transcript's
+          // source language.
+          summaries: {
+            where: { language: null },
+            take: 1,
             select: {
               headline: true,
               short: true,
@@ -40,21 +46,22 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   }
 
   const transcript = video.transcripts[0];
+  const summary = transcript?.summaries[0] ?? null;
   const hasAnyPublicArtifact =
-    transcript != null && (transcript.summary != null || transcript.articles.length > 0);
+    transcript != null && (summary != null || transcript.articles.length > 0);
   if (!hasAnyPublicArtifact) {
     console.error(`[public/summary/GET] Video ${id} has no public artifact`);
     return NextResponse.json({ error: 'Not public' }, { status: 404 });
   }
-  if (!transcript.summary) {
+  if (!summary) {
     console.error(`[public/summary/GET] No cached summary for video ${id}`);
     return NextResponse.json({ error: 'Not cached' }, { status: 404 });
   }
 
   return NextResponse.json({
-    headline: transcript.summary.headline,
-    short: transcript.summary.short,
-    full: transcript.summary.full,
-    generatedAt: transcript.summary.generated_at,
+    headline: summary.headline,
+    short: summary.short,
+    full: summary.full,
+    generatedAt: summary.generated_at,
   });
 }
