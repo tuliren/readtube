@@ -36,6 +36,9 @@ jest.mock('iso-639-3', () => ({
   iso6393To1: { eng: 'en', cmn: 'zh', jpn: 'ja' },
 }));
 
+const ZH_HANS = 'zh-Hans';
+const ZH_HANT = 'zh-Hant';
+
 const ENGLISH_TEXT =
   'The quick brown fox jumps over the lazy dog. This sentence is in English and franc should detect it as eng.';
 const CHINESE_TEXT = '今天天气真不错,我们一起去公园散步吧。这是一段中文文本。';
@@ -300,6 +303,50 @@ describe('findOrCloneSummary', () => {
   it('returns null when target is non-null and no Original exists to clone from', async () => {
     const { transcriptId } = await seed(ENGLISH_TEXT, 'en');
     expect(await findOrCloneSummary(global.testPrisma, transcriptId, 'en')).toBeNull();
+  });
+
+  it.each([
+    { label: 'Simplified script tag', stored: 'zh-Hans', target: ZH_HANS },
+    { label: 'Mainland region (resolves to Simplified)', stored: 'zh-CN', target: ZH_HANS },
+    { label: 'Singapore region (resolves to Simplified)', stored: 'zh-SG', target: ZH_HANS },
+    { label: 'Traditional script tag', stored: 'zh-Hant', target: ZH_HANT },
+    { label: 'Taiwan region (resolves to Traditional)', stored: 'zh-TW', target: ZH_HANT },
+    { label: 'Hong Kong region (resolves to Traditional)', stored: 'zh-HK', target: ZH_HANT },
+  ])(
+    'clones when transcript.language $label ($stored) matches picker target $target',
+    async ({ stored, target }) => {
+      const { transcriptId } = await seed(CHINESE_TEXT, stored);
+      const original = await seedSummary(transcriptId, null, 'Original Chinese');
+
+      const result = await findOrCloneSummary(global.testPrisma, transcriptId, target);
+
+      expect(result).not.toBeNull();
+      expect(result?.language).toBe(target);
+      expect(result?.id).not.toBe(original.id);
+    }
+  );
+
+  it('does not cross-clone Simplified vs Traditional when both scripts are explicit', async () => {
+    const { transcriptId } = await seed(CHINESE_TEXT, 'zh-Hans');
+    await seedSummary(transcriptId, null, 'Simplified Original');
+
+    // Picker target is Traditional but the stored content is Simplified
+    // — the cache should NOT clone, the caller should generate fresh
+    // Traditional content.
+    expect(await findOrCloneSummary(global.testPrisma, transcriptId, ZH_HANT)).toBeNull();
+  });
+
+  it('clones for either Chinese script when transcript.language is ambiguous "zh"', async () => {
+    // Bare "zh" carries no script signal — accept either picker target.
+    // This is the legacy case for old transcripts and for franc results
+    // (cmn → zh) where script can't be inferred from text alone.
+    const a = await seed(CHINESE_TEXT, 'zh');
+    await seedSummary(a.transcriptId, null, 'Ambiguous Chinese');
+    expect(await findOrCloneSummary(global.testPrisma, a.transcriptId, ZH_HANS)).not.toBeNull();
+
+    const b = await seed(CHINESE_TEXT, 'zh');
+    await seedSummary(b.transcriptId, null, 'Ambiguous Chinese');
+    expect(await findOrCloneSummary(global.testPrisma, b.transcriptId, ZH_HANT)).not.toBeNull();
   });
 });
 

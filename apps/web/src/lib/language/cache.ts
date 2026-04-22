@@ -2,6 +2,7 @@ import type { Article, ArticleStyle, PrismaClient, Summary } from '@readtube/dat
 import { Prisma } from '@readtube/database';
 
 import { detectLanguage } from './detect';
+import { languageTagsMatch } from './names';
 
 function isUniqueViolation(err: unknown): boolean {
   return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
@@ -93,7 +94,13 @@ export async function findOrCloneSummary(
   }
 
   const sourceLanguage = await resolveTranscriptLanguage(prisma, transcriptId);
-  if (sourceLanguage !== target) {
+  // languageTagsMatch handles cross-form comparison: YouTube transcripts
+  // come tagged as BCP-47 region/script forms (`zh-Hans`, `zh-CN`,
+  // `fr-CA`), franc returns ISO 639-3 (`cmn`, `eng`), and the picker
+  // sends curated codes (`zh-Hans`, `zh-Hant`, `en`). It also handles
+  // ambiguous Chinese (a `zh` tag with no script signal matches either
+  // Simplified or Traditional).
+  if (sourceLanguage == null || !languageTagsMatch(sourceLanguage, target)) {
     return null;
   }
 
@@ -150,7 +157,13 @@ export async function findOrCloneArticle(
   }
 
   const sourceLanguage = await resolveTranscriptLanguage(prisma, transcriptId);
-  if (sourceLanguage !== target) {
+  // languageTagsMatch handles cross-form comparison: YouTube transcripts
+  // come tagged as BCP-47 region/script forms (`zh-Hans`, `zh-CN`,
+  // `fr-CA`), franc returns ISO 639-3 (`cmn`, `eng`), and the picker
+  // sends curated codes (`zh-Hans`, `zh-Hant`, `en`). It also handles
+  // ambiguous Chinese (a `zh` tag with no script signal matches either
+  // Simplified or Traditional).
+  if (sourceLanguage == null || !languageTagsMatch(sourceLanguage, target)) {
     return null;
   }
 
