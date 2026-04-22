@@ -2,6 +2,7 @@
 
 import { Plus } from 'lucide-react';
 import { useState } from 'react';
+import { useSWRConfig } from 'swr';
 
 import {
   AlertDialog,
@@ -24,6 +25,7 @@ export default function FollowChannelDialogButton({ channelName, channelUrl }: P
   const [busy, setBusy] = useState(false);
   const [followed, setFollowed] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { mutate } = useSWRConfig();
 
   if (followed) {
     return null;
@@ -47,6 +49,9 @@ export default function FollowChannelDialogButton({ channelName, channelUrl }: P
       if (res.status === 201 || res.status === 409) {
         setFollowed(true);
         setOpen(false);
+        // Refresh the sidebar's subscribed-channels list so the newly
+        // followed channel shows up without a page reload.
+        void mutate('/api/channels');
         return;
       }
       const data = (await res.json().catch(() => ({}))) as { error?: string };
