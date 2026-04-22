@@ -4,7 +4,7 @@ import { ArrowLeftIcon, ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/
 import { NotebookPen } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import useSWR from 'swr';
 
 import CopyButton from '@/components/CopyButton';
@@ -155,11 +155,41 @@ export default function VideoReader({ video, publicMode = false }: Props) {
 
   // Description collapse state — collapsed by default to keep the header compact.
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
+  // Whether the description actually overflows the 4-line clamp. Short
+  // descriptions render no "Show more" toggle because there is nothing
+  // to reveal.
+  const [isDescriptionClampable, setIsDescriptionClampable] = useState(false);
+  const descriptionRef = useRef<HTMLQuoteElement>(null);
 
   // Reset description collapse when navigating to a different video.
   useEffect(() => {
     setDescriptionExpanded(false);
+    setIsDescriptionClampable(false);
   }, [video.id]);
+
+  // Measure whether the description overflows its 4-line clamp so the
+  // "Show more" toggle only renders when there is actually more to
+  // reveal. Re-measures on resize so a narrower viewport that clips
+  // previously-fitting text still gets a toggle.
+  useEffect(() => {
+    const el = descriptionRef.current;
+    if (el == null) {
+      return;
+    }
+    const measure = () => {
+      // scrollHeight > clientHeight is only meaningful while the clamp
+      // is applied. Once expanded, keep the existing value — if it
+      // was clampable before, it still is.
+      if (descriptionExpanded) {
+        return;
+      }
+      setIsDescriptionClampable(el.scrollHeight > el.clientHeight + 1);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [video.description, descriptionExpanded]);
 
   // Notes panel state — auto-open when arriving with ?openNotes=1
   const [notesOpen, setNotesOpen] = useState(() => searchParams.get('openNotes') === '1');
@@ -183,7 +213,7 @@ export default function VideoReader({ video, publicMode = false }: Props) {
 
   return (
     <div className="flex flex-1 overflow-hidden">
-      <div className="flex flex-1 flex-col overflow-y-auto">
+      <div className="flex min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
         {/*
         Back nav + triage actions + notes toggle. The header bar
         deliberately bypasses the article's `mx-auto max-w-3xl` indent
@@ -297,7 +327,9 @@ export default function VideoReader({ video, publicMode = false }: Props) {
                   // protocol works.
                   src={video.thumbnailUrl}
                   alt={video.title}
-                  className="w-40 shrink-0 rounded-lg object-cover"
+                  // Hidden below the sidebar breakpoint so the
+                  // description gets full width on narrow screens.
+                  className="hidden w-40 shrink-0 rounded-lg object-cover sidebar:block"
                   loading="eager"
                   referrerPolicy="no-referrer"
                 />
@@ -305,26 +337,29 @@ export default function VideoReader({ video, publicMode = false }: Props) {
               {video.description != null && (
                 <div className="min-w-0 flex-1">
                   <blockquote
+                    ref={descriptionRef}
                     className={`whitespace-pre-line border-l-2 border-gray-200 pl-4 text-sm leading-relaxed text-gray-500 italic ${
                       descriptionExpanded ? '' : 'line-clamp-4'
                     }`}
                   >
                     {video.description}
                   </blockquote>
-                  <button
-                    onClick={() => setDescriptionExpanded((prev) => !prev)}
-                    className="mt-1 flex items-center gap-0.5 text-xs text-gray-400 hover:text-gray-600"
-                  >
-                    {descriptionExpanded ? (
-                      <>
-                        Show less <ChevronUpIcon className="h-3 w-3" />
-                      </>
-                    ) : (
-                      <>
-                        Show more <ChevronDownIcon className="h-3 w-3" />
-                      </>
-                    )}
-                  </button>
+                  {isDescriptionClampable && (
+                    <button
+                      onClick={() => setDescriptionExpanded((prev) => !prev)}
+                      className="mt-1 flex items-center gap-0.5 text-xs text-gray-400 hover:text-gray-600"
+                    >
+                      {descriptionExpanded ? (
+                        <>
+                          Show less <ChevronUpIcon className="h-3 w-3" />
+                        </>
+                      ) : (
+                        <>
+                          Show more <ChevronDownIcon className="h-3 w-3" />
+                        </>
+                      )}
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -360,7 +395,7 @@ export default function VideoReader({ video, publicMode = false }: Props) {
                 view, then Article (the long-form rewrite), then Transcript
                 (the raw firehose). Tabs with generated content show a
                 reading-time badge; missing content shows nothing. */}
-              <div className="mt-8 border-b border-gray-200">
+              <div className="mt-8 overflow-x-auto border-b border-gray-200">
                 <div className="flex gap-6">
                   {TABS.filter((tab) => {
                     if (tab.key === 'transcript') {
@@ -388,7 +423,7 @@ export default function VideoReader({ video, publicMode = false }: Props) {
                       <button
                         key={tab.key}
                         onClick={() => setActiveTab(tab.key)}
-                        className={`-mb-px inline-flex items-center gap-1.5 border-b-2 px-1 py-3 text-sm font-medium transition-colors ${
+                        className={`-mb-px inline-flex shrink-0 items-center gap-1.5 border-b-2 px-1 py-3 text-sm font-medium whitespace-nowrap transition-colors ${
                           activeTab === tab.key
                             ? 'border-gray-900 text-gray-900'
                             : 'border-transparent text-gray-500 hover:text-gray-700'

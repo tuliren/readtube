@@ -12,7 +12,7 @@ export default function ReadingTimeBadge({ wordCount, className }: Props) {
   }
   return (
     <span
-      className={`inline-flex items-center rounded-full border border-gray-300 px-2 py-0.5 text-xs font-medium text-gray-500 ${className ?? ''}`}
+      className={`inline-flex items-center rounded-full border border-gray-300 px-2 py-0.5 text-xs font-medium whitespace-nowrap text-gray-500 ${className ?? ''}`}
     >
       {label}
     </span>
