@@ -41,6 +41,8 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "fast-xml-parser": "^5.5.10",
+    "franc": "^6.2.0",
+    "iso-639-3": "^3.0.1",
     "katex": "^0.16",
     "lucide-react": "^1.8.0",
     "minimatch": "^10.2.3",

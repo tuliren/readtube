@@ -5249,6 +5249,8 @@ __metadata:
     eslint-plugin-jest: "npm:^28.11.0"
     eslint-plugin-storybook: "npm:^10.1.2"
     fast-xml-parser: "npm:^5.5.10"
+    franc: "npm:^6.2.0"
+    iso-639-3: "npm:^3.0.1"
     jest: "npm:^29.7.0"
     jest-environment-jsdom: "npm:^29.7.0"
     katex: "npm:^0.16"
@@ -10583,6 +10585,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"collapse-white-space@npm:^2.0.0":
+  version: 2.1.0
+  resolution: "collapse-white-space@npm:2.1.0"
+  checksum: 10c0/b2e2800f4ab261e62eb27a1fbe853378296e3a726d6695117ed033e82d61fb6abeae4ffc1465d5454499e237005de9cfc52c9562dc7ca4ac759b9a222ef14453
+  languageName: node
+  linkType: hard
+
 "collect-v8-coverage@npm:^1.0.0, collect-v8-coverage@npm:^1.0.2":
   version: 1.0.3
   resolution: "collect-v8-coverage@npm:1.0.3"
@@ -13759,6 +13768,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"franc@npm:^6.2.0":
+  version: 6.2.0
+  resolution: "franc@npm:6.2.0"
+  dependencies:
+    trigram-utils: "npm:^2.0.0"
+  checksum: 10c0/136a08d6e4632f17eae6f0ae93b224b0bf2233dc1d5dbd0b23e479960f6c71c0847bef834d3b6b7c9cefb4f905d5e08fc82b0738bb3ed4a6c83faffcf9fa2a11
+  languageName: node
+  linkType: hard
+
 "fresh@npm:~0.5.2":
   version: 0.5.2
   resolution: "fresh@npm:0.5.2"
@@ -15611,6 +15629,13 @@ __metadata:
   version: 3.1.1
   resolution: "isexe@npm:3.1.1"
   checksum: 10c0/9ec257654093443eb0a528a9c8cbba9c0ca7616ccb40abd6dde7202734d96bb86e4ac0d764f0f8cd965856aacbff2f4ce23e730dc19dfb41e3b0d865ca6fdcc7
+  languageName: node
+  linkType: hard
+
+"iso-639-3@npm:^3.0.1":
+  version: 3.0.1
+  resolution: "iso-639-3@npm:3.0.1"
+  checksum: 10c0/ecc2974a574817656e32fc471cb4b0a5ec27ec74c74b5cabec31dab582f55f11812e60b8b7c94bad3f170a14d560bb298aed6ec45270653875e87e02107ee8d3
   languageName: node
   linkType: hard
 
@@ -18549,6 +18574,13 @@ __metadata:
   version: 0.0.8
   resolution: "mute-stream@npm:0.0.8"
   checksum: 10c0/18d06d92e5d6d45e2b63c0e1b8f25376af71748ac36f53c059baa8b76ffac31c5ab225480494e7d35d30215ecdb18fed26ec23cafcd2f7733f2f14406bcd19e2
+  languageName: node
+  linkType: hard
+
+"n-gram@npm:^2.0.0":
+  version: 2.0.2
+  resolution: "n-gram@npm:2.0.2"
+  checksum: 10c0/72e2cdc8c37c9253b556a0deb9cd26d5ac59a5d7a38b2d2928927e3959bc7d3cb591d766e30309a4c685dbc51330025cb30c5c6518ee516caf3318aed2635f1b
   languageName: node
   linkType: hard
 
@@ -22881,6 +22913,16 @@ __metadata:
   bin:
     tree-kill: cli.js
   checksum: 10c0/7b1b7c7f17608a8f8d20a162e7957ac1ef6cd1636db1aba92f4e072dc31818c2ff0efac1e3d91064ede67ed5dc57c565420531a8134090a12ac10cf792ab14d2
+  languageName: node
+  linkType: hard
+
+"trigram-utils@npm:^2.0.0":
+  version: 2.0.1
+  resolution: "trigram-utils@npm:2.0.1"
+  dependencies:
+    collapse-white-space: "npm:^2.0.0"
+    n-gram: "npm:^2.0.0"
+  checksum: 10c0/d024dc91a9c0310e75fa68422185e3a32814831971b9e86a2925e74bd1932a30501aa2ac214768f0a545f3db63610ee14b4748ac31532e1bc46c791941d71c6d
   languageName: node
   linkType: hard
 
