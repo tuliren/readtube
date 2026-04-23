@@ -20,6 +20,15 @@ interface Props {
   variant: 'headings' | 'timestamps';
 }
 
+/** Pixel gap required between the article's right edge and the scroll
+ *  container's right edge before the TOC is willing to render. Covers
+ *  the ladder's worst-case width (the w-6 active bar ≈ 24px) plus the
+ *  `right-8` offset (32px) plus a small breathing buffer so the bars
+ *  don't press against the article text. If the reader's column is
+ *  narrower than this — e.g. a side sheet opened, the window got
+ *  pulled in — we hide the TOC instead of overlapping the content. */
+const TOC_MIN_GUTTER_PX = 80;
+
 /** Walks up the DOM from a tracked element until it finds an ancestor
  *  whose computed `overflow-y` declares it scrollable. Deliberately
  *  does NOT compare `scrollHeight > clientHeight` — that test is
@@ -62,6 +71,7 @@ function findScrollableAncestor(el: HTMLElement): HTMLElement | null {
  */
 export default function FloatingToc({ items, variant }: Props) {
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [hasRoom, setHasRoom] = useState(true);
   const scrollerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -108,15 +118,60 @@ export default function FloatingToc({ items, variant }: Props) {
     // Locate the reader's scroll container by walking up from one of
     // the known-good TOC targets and cache it on a ref so the Top /
     // Bottom handlers can reuse it without another DOM walk.
-    scrollerRef.current = findScrollableAncestor(targets[0]);
+    const scroller = findScrollableAncestor(targets[0]);
+    scrollerRef.current = scroller;
+
+    // Watch the gutter between the article and the scroll container's
+    // right edge. When the reader's column narrows (narrow viewport,
+    // side sheet opened, etc.) the TOC hides itself rather than
+    // floating on top of the paragraph text. Uses a ResizeObserver so
+    // we track *element* size changes, which also covers window
+    // resizes without a separate listener.
+    const probe = targets[0];
+    let measureHandle: number | null = null;
+    const measure = () => {
+      measureHandle = null;
+      if (scroller == null) {
+        setHasRoom(true);
+        return;
+      }
+      const probeRight = probe.getBoundingClientRect().right;
+      const scrollerRight = scroller.getBoundingClientRect().right;
+      setHasRoom(scrollerRight - probeRight >= TOC_MIN_GUTTER_PX);
+    };
+    // ResizeObserver can fire mid-layout — defer the measurement to
+    // the next frame so `getBoundingClientRect` reads consistent
+    // numbers for both elements in the same tick.
+    const scheduleMeasure = () => {
+      if (measureHandle != null) {
+        return;
+      }
+      measureHandle = window.requestAnimationFrame(measure);
+    };
+    measure();
+    const resizeObserver = scroller != null ? new ResizeObserver(scheduleMeasure) : null;
+    resizeObserver?.observe(probe);
+    if (scroller != null) {
+      resizeObserver?.observe(scroller);
+    }
 
     return () => {
       observer.disconnect();
+      resizeObserver?.disconnect();
+      if (measureHandle != null) {
+        window.cancelAnimationFrame(measureHandle);
+      }
     };
   }, [items]);
 
   // A single-item TOC is noise — nothing to navigate to.
   if (items.length < 2) {
+    return null;
+  }
+
+  // No horizontal room next to the article — hiding the TOC is better
+  // than letting the bars sit on top of the paragraph text.
+  if (!hasRoom) {
     return null;
   }
 
