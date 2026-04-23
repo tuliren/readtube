@@ -10,7 +10,7 @@ export default function PreviewFrame({ children, className }: PreviewFrameProps)
   return (
     <div
       className={clsx(
-        'relative aspect-[4/3] w-full overflow-hidden rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200',
+        'relative aspect-[4/3] w-full overflow-hidden rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700',
         className
       )}
     >

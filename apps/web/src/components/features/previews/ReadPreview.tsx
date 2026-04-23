@@ -19,23 +19,25 @@ export default function ReadPreview() {
   return (
     <PreviewFrame>
       <div className="flex h-full flex-col gap-3">
-        <div className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-wider text-slate-400">
+        <div className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">
           <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
           Transcript
         </div>
-        <div className="flex-1 space-y-1 overflow-hidden text-[10px] leading-relaxed text-slate-600">
+        <div className="flex-1 space-y-1 overflow-hidden text-[10px] leading-relaxed text-slate-600 dark:text-slate-300">
           {TRANSCRIPT_LINES.map((line) => (
             <p key={line.time}>
-              <span className="mr-1.5 font-mono text-[9px] text-slate-400">[{line.time}]</span>
+              <span className="mr-1.5 font-mono text-[9px] text-slate-400 dark:text-slate-500">
+                [{line.time}]
+              </span>
               {line.text}
             </p>
           ))}
         </div>
-        <div className="rounded-lg bg-slate-50 p-2.5 ring-1 ring-indigo-100">
-          <div className="text-[9px] font-semibold uppercase tracking-wider text-indigo-600">
+        <div className="rounded-lg bg-slate-50 p-2.5 ring-1 ring-indigo-100 dark:bg-slate-800 dark:ring-indigo-900/60">
+          <div className="text-[9px] font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-300">
             Summary
           </div>
-          <p className="mt-1 text-[10px] leading-relaxed text-slate-700">
+          <p className="mt-1 text-[10px] leading-relaxed text-slate-700 dark:text-slate-200">
             Time&apos;s arrow is statistical, not fundamental. Entropy is why yesterday feels
             different from tomorrow.
           </p>
