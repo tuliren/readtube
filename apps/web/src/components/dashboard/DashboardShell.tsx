@@ -172,13 +172,16 @@ function DashboardShellInner({ initialChannels, children }: Props) {
             {renderSidebarContent(collapsed)}
 
             {/* Pinned bottom row: user profile on the left, theme selector on
-                the right when expanded. When collapsed (56px rail) there's no
-                room for the selector — it stays reachable via /settings. */}
+                the right when expanded. When collapsed (56px rail) we stack a
+                compact theme dropdown above the user button instead. */}
             <div
-              className={`mt-auto flex h-14 shrink-0 items-center border-t border-border ${
-                collapsed ? 'justify-center px-0' : 'justify-between px-4'
+              className={`mt-auto shrink-0 border-t border-border ${
+                collapsed
+                  ? 'flex flex-col items-center gap-1.5 py-2'
+                  : 'flex h-14 items-center justify-between px-4'
               }`}
             >
+              {collapsed && <ThemeSelector variant="dropdown" />}
               <UserButton>
                 <UserButton.MenuItems>
                   <UserButton.Link

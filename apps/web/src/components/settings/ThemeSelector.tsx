@@ -4,6 +4,12 @@ import { Monitor, Moon, Sun } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useEffect, useState } from 'react';
 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 
 type ThemeChoice = 'system' | 'light' | 'dark';
@@ -15,7 +21,7 @@ const CHOICES: { value: ThemeChoice; label: string; Icon: typeof Sun }[] = [
 ];
 
 interface Props {
-  variant?: 'segmented' | 'compact';
+  variant?: 'segmented' | 'compact' | 'dropdown';
   className?: string;
 }
 
@@ -28,6 +34,40 @@ export default function ThemeSelector({ variant = 'segmented', className }: Prop
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  if (variant === 'dropdown') {
+    const current: ThemeChoice = mounted
+      ? ((theme as ThemeChoice | undefined) ?? 'system')
+      : 'system';
+    const TriggerIcon =
+      current === 'system' ? Monitor : mounted && resolvedTheme === 'dark' ? Moon : Sun;
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          className={cn(
+            'rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground focus:outline-none',
+            className
+          )}
+          aria-label="Theme"
+          title="Theme"
+        >
+          <TriggerIcon className="h-4 w-4" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="right" align="end" sideOffset={8}>
+          {CHOICES.map(({ value, label, Icon }) => (
+            <DropdownMenuItem
+              key={value}
+              onClick={() => setTheme(value)}
+              className={cn('gap-2', current === value && 'font-medium text-foreground')}
+            >
+              <Icon className="h-4 w-4" />
+              {label}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  }
 
   if (variant === 'compact') {
     const current: ThemeChoice = mounted

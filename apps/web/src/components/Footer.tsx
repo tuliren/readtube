@@ -9,7 +9,7 @@ export default function Footer() {
   return (
     <footer className="bg-transparent">
       <Container>
-        <div className="flex flex-col justify-between border-t border-slate-400/10 py-10 text-sm text-slate-500 sm:flex-row">
+        <div className="flex flex-col justify-between border-t border-slate-400/10 py-10 text-sm text-slate-500 sm:flex-row dark:border-slate-700 dark:text-slate-400">
           <p className="mt-6 break-words sm:mt-0">
             Copyright &copy; {new Date().getFullYear()} Starfish Software LLC. All rights reserved.
           </p>

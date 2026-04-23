@@ -11,7 +11,7 @@ interface CustomMarkdownProps {
 
 const CustomMarkdown: FC<CustomMarkdownProps> = ({ markdown }) => {
   return (
-    <div className="prose mx-auto">
+    <div className="prose mx-auto dark:prose-invert">
       <ReactMarkdown
         rehypePlugins={[
           remarkGfm,
