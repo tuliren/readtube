@@ -8,4 +8,6 @@ export const DOMAIN = 'read.tube';
 export const DOMAIN_URL = `https://${DOMAIN}`;
 export const CONTACT_EMAIL = `contact@${DOMAIN}`;
 
+// https://ai.google.dev/gemini-api/docs/pricing
+// $0.25 / $1.5
 export const DEFAULT_AI_MODEL = 'google/gemini-3.1-flash-lite-preview';
