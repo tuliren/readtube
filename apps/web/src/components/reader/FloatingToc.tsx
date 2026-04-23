@@ -116,7 +116,7 @@ export default function FloatingToc({ items, variant }: Props) {
       {/* Popup (hover). Pointer-events flip from none → auto on hover
           so clicks land, and so the popup doesn't eat hits over the
           article when idle. */}
-      <div className="pointer-events-none absolute top-1/2 right-0 w-64 -translate-y-1/2 rounded-xl border border-border bg-background p-2 opacity-0 shadow-lg transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
+      <div className="pointer-events-none absolute top-0 right-0 w-64 rounded-xl border border-border bg-background p-2 opacity-0 shadow-lg transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
         <ul className="flex max-h-[70vh] flex-col gap-0.5 overflow-y-auto text-sm">
           {items.map((it) => {
             const isActive = activeId === it.id;
