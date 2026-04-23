@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { ArrowUpIcon } from '@heroicons/react/24/outline';
+import { useEffect, useRef, useState } from 'react';
 
 export interface TocItem {
   /** DOM id of the target anchor. */
@@ -32,8 +33,36 @@ interface Props {
  * breakpoint that swaps the reader into its small-screen layout —
  * there's room for the ladder on every wider viewport.
  */
+/** Scroll distance (px) past which the back-to-top affordance appears.
+ *  Small enough that a short nudge away from the top already surfaces
+ *  the button; large enough that an accidental wheel tick doesn't
+ *  flicker it in and back out. */
+const BACK_TO_TOP_THRESHOLD_PX = 200;
+
+/** Walks up the DOM from a tracked element until it finds an ancestor
+ *  with a vertical overflow scrollbar. The reader's scroll container
+ *  is a flex child, not `window` or `document.scrollingElement`, so
+ *  sniffing for the first overflow ancestor is the reliable way to
+ *  discover it from a component that only sees its targets' ids. */
+function findScrollableAncestor(el: HTMLElement): HTMLElement | null {
+  let current = el.parentElement;
+  while (current != null) {
+    const { overflowY } = window.getComputedStyle(current);
+    if (
+      (overflowY === 'auto' || overflowY === 'scroll') &&
+      current.scrollHeight > current.clientHeight
+    ) {
+      return current;
+    }
+    current = current.parentElement;
+  }
+  return null;
+}
+
 export default function FloatingToc({ items, variant }: Props) {
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [showBackToTop, setShowBackToTop] = useState(false);
+  const scrollerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (items.length === 0) {
@@ -75,7 +104,26 @@ export default function FloatingToc({ items, variant }: Props) {
     for (const t of targets) {
       observer.observe(t);
     }
-    return () => observer.disconnect();
+
+    // Locate the reader's scroll container by walking up from one of
+    // the known-good TOC targets and cache it on a ref so the click
+    // handler can reuse it without another DOM walk.
+    const scroller = findScrollableAncestor(targets[0]);
+    scrollerRef.current = scroller;
+
+    const updateScrolled = () => {
+      if (scroller == null) {
+        return;
+      }
+      setShowBackToTop(scroller.scrollTop > BACK_TO_TOP_THRESHOLD_PX);
+    };
+    updateScrolled();
+    scroller?.addEventListener('scroll', updateScrolled, { passive: true });
+
+    return () => {
+      observer.disconnect();
+      scroller?.removeEventListener('scroll', updateScrolled);
+    };
   }, [items]);
 
   // A single-item TOC is noise — nothing to navigate to.
@@ -89,6 +137,10 @@ export default function FloatingToc({ items, variant }: Props) {
       return;
     }
     el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const handleBackToTop = () => {
+    scrollerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   return (
@@ -112,6 +164,17 @@ export default function FloatingToc({ items, variant }: Props) {
             }`}
           />
         ))}
+        {showBackToTop && (
+          <button
+            type="button"
+            onClick={handleBackToTop}
+            aria-label="Back to top"
+            title="Back to top"
+            className="mt-2 rounded-full p-1 text-foreground/40 transition-colors hover:bg-foreground/5 hover:text-foreground"
+          >
+            <ArrowUpIcon className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
       {/* Popup (hover). Pointer-events flip from none → auto on hover
           so clicks land, and so the popup doesn't eat hits over the
