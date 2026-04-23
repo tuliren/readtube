@@ -7,6 +7,13 @@ import { formatTimestamp } from '@/lib/platforms/youtube/transcript';
  *  timestamps that defeats the "scan the video" purpose. */
 export const MAX_TRANSCRIPT_TOC_ITEMS = 15;
 
+/** Upper bound on how much of a paragraph we ship to the popup preview.
+ *  The popup visually truncates with an ellipsis based on width, so
+ *  this only caps the payload — enough words that the ellipsis always
+ *  has something to hide behind, few enough that CJK paragraphs don't
+ *  balloon the client-side item list. */
+const PREVIEW_WORD_LIMIT = 50;
+
 /** Stable DOM id for the Nth transcript paragraph. The paragraph list
  *  is the anchor surface; TOC entries reference a subset of these. */
 export function transcriptParagraphId(index: number): string {
@@ -32,15 +39,50 @@ export function buildTranscriptToc(paragraphs: TranscriptParagraph[]): TocItem[]
   for (let i = 0; i < count; i++) {
     const idx = Math.floor(i * bucketSize);
     const para = paragraphs[idx];
-    // Advance by code points so multi-byte characters (emoji, CJK
-    // ideographs) count as a single character each. Array.from works
-    // on the downlevel es5 target where `[...string]` doesn't compile.
-    const chars = Array.from(para.text.trim());
     items.push({
       id: transcriptParagraphId(idx),
       label: formatTimestamp(para.startMs),
-      secondaryLabel: chars.slice(0, 3).join(''),
+      secondaryLabel: takeFirstWords(para.text, PREVIEW_WORD_LIMIT),
     });
   }
   return items;
+}
+
+/**
+ * Returns the original text truncated to the first `maxWords` word-like
+ * tokens. Uses `Intl.Segmenter` when available so CJK languages (which
+ * lack whitespace boundaries) yield something sensible — one word per
+ * ideograph-segment — instead of the entire paragraph or a single
+ * useless "word". Falls back to a whitespace split otherwise.
+ *
+ * Preserves the punctuation and spacing around the words it keeps so
+ * the preview reads naturally: "Hello, world" stays "Hello, world", not
+ * "Hello world".
+ */
+function takeFirstWords(text: string, maxWords: number): string {
+  const trimmed = text.trim();
+  if (trimmed.length === 0) {
+    return '';
+  }
+  if (typeof Intl === 'undefined' || typeof Intl.Segmenter !== 'function') {
+    return trimmed
+      .split(/\s+/)
+      .filter((token) => token.length > 0)
+      .slice(0, maxWords)
+      .join(' ');
+  }
+  const segmenter = new Intl.Segmenter(undefined, { granularity: 'word' });
+  let wordCount = 0;
+  let endIndex = 0;
+  const segments = Array.from(segmenter.segment(trimmed));
+  for (const segment of segments) {
+    if (segment.isWordLike) {
+      if (wordCount >= maxWords) {
+        break;
+      }
+      wordCount += 1;
+    }
+    endIndex = segment.index + segment.segment.length;
+  }
+  return trimmed.slice(0, endIndex).trimEnd();
 }

@@ -57,16 +57,37 @@ describe('buildTranscriptToc', () => {
     expect(second.label).toBe('1:05');
   });
 
-  it('uses the first three characters of the paragraph as secondaryLabel', () => {
-    const paragraphs = [para('Hello world', 0, 1000), para('你好世界吗', 2000, 4000)];
-    const [first, second] = buildTranscriptToc(paragraphs);
-    expect(first.secondaryLabel).toBe('Hel');
-    expect(second.secondaryLabel).toBe('你好世');
+  it('returns the full paragraph when it fits in the preview cap', () => {
+    const paragraphs = [para('Hello world', 0, 1000)];
+    const [first] = buildTranscriptToc(paragraphs);
+    expect(first.secondaryLabel).toBe('Hello world');
+  });
+
+  it('caps the preview at 50 words and preserves inline punctuation', () => {
+    const words = Array.from({ length: 80 }, (_, i) => `word${i}`);
+    const paragraphs = [para(`${words.join(', ')}.`, 0, 1000)];
+    const [first] = buildTranscriptToc(paragraphs);
+    const preview = first.secondaryLabel ?? '';
+    // The split-on-word-char count is 50 — one "word" per wordN token.
+    expect(preview.match(/word\d+/g)).toHaveLength(50);
+    // Punctuation between the kept words comes along for the ride.
+    expect(preview).toContain('word0, word1');
+    // The trailing non-word characters from the dropped tail must not
+    // leak into the preview.
+    expect(preview.endsWith('.')).toBe(false);
+  });
+
+  it('uses Intl.Segmenter-style word boundaries for CJK text', () => {
+    // 10 ideographs — well under the 50-word cap, so the entire
+    // paragraph rides through unchanged.
+    const paragraphs = [para('你好世界这是一段话呀', 0, 1000)];
+    const [first] = buildTranscriptToc(paragraphs);
+    expect(first.secondaryLabel).toBe('你好世界这是一段话呀');
   });
 
   it('trims leading whitespace before picking the preview', () => {
     const paragraphs = [para('   Hi there everyone', 0, 1000)];
     const [first] = buildTranscriptToc(paragraphs);
-    expect(first.secondaryLabel).toBe('Hi ');
+    expect(first.secondaryLabel).toBe('Hi there everyone');
   });
 });
