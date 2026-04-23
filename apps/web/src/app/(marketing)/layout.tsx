@@ -8,7 +8,7 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
   // of the user's theme choice — the landing design is hand-tuned for
   // white and mixing in dark-body bleedthrough looked broken.
   return (
-    <div className="force-light-theme flex min-h-full flex-col bg-white text-foreground">
+    <div className="force-light-theme min-h-full bg-white text-foreground">
       <Header />
       {children}
       <Footer />
