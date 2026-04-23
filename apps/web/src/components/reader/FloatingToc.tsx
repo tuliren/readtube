@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowUpIcon } from '@heroicons/react/24/outline';
+import { ArrowDownIcon, ArrowUpIcon } from '@heroicons/react/24/outline';
 import { useEffect, useRef, useState } from 'react';
 
 export interface TocItem {
@@ -19,25 +19,6 @@ interface Props {
   items: TocItem[];
   variant: 'headings' | 'timestamps';
 }
-
-/**
- * Notion-style floating table of contents. Two visual states:
- *   - Idle: a vertical ladder of short bars, one per TOC item, with the
- *     currently-viewed bar drawn longer and darker.
- *   - Hover: a popup panel with the full label list (heading text for
- *     articles, timestamp + first three characters for transcript).
- *
- * Active-item tracking uses IntersectionObserver against the viewport —
- * the reader's scroll container fills the viewport, so visible elements
- * are what the user is actually looking at. Hidden below the compact
- * breakpoint that swaps the reader into its small-screen layout —
- * there's room for the ladder on every wider viewport.
- */
-/** Scroll distance (px) past which the back-to-top affordance appears.
- *  Kept small — "not at the top" should really mean "not at the top",
- *  not "somewhere in the middle". A few tens of pixels of slack
- *  avoids flickering the button during elastic-scroll bounce. */
-const BACK_TO_TOP_THRESHOLD_PX = 40;
 
 /** Walks up the DOM from a tracked element until it finds an ancestor
  *  whose computed `overflow-y` declares it scrollable. Deliberately
@@ -59,9 +40,28 @@ function findScrollableAncestor(el: HTMLElement): HTMLElement | null {
   return null;
 }
 
+/**
+ * Notion-style floating table of contents. Two visual states:
+ *   - Idle: a vertical ladder of short bars, one per TOC item, with the
+ *     currently-viewed bar drawn longer and darker.
+ *   - Hover: a popup panel with the full label list (heading text for
+ *     articles, timestamp + first three characters for transcript),
+ *     bracketed by "Top" and "Bottom" shortcuts that snap the reader
+ *     to either end of the scroll container.
+ *
+ * The Top/Bottom entries live in the popup rather than the ladder so
+ * they never get eaten by the ladder's fade-out on hover — clicks on
+ * them land cleanly even though the popup visually replaces the
+ * ladder.
+ *
+ * Active-item tracking uses IntersectionObserver against the viewport —
+ * the reader's scroll container fills the viewport, so visible elements
+ * are what the user is actually looking at. Hidden below the compact
+ * breakpoint that swaps the reader into its small-screen layout —
+ * there's room for the ladder on every wider viewport.
+ */
 export default function FloatingToc({ items, variant }: Props) {
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [showBackToTop, setShowBackToTop] = useState(false);
   const scrollerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -106,23 +106,12 @@ export default function FloatingToc({ items, variant }: Props) {
     }
 
     // Locate the reader's scroll container by walking up from one of
-    // the known-good TOC targets and cache it on a ref so the click
-    // handler can reuse it without another DOM walk.
-    const scroller = findScrollableAncestor(targets[0]);
-    scrollerRef.current = scroller;
-
-    const updateScrolled = () => {
-      if (scroller == null) {
-        return;
-      }
-      setShowBackToTop(scroller.scrollTop > BACK_TO_TOP_THRESHOLD_PX);
-    };
-    updateScrolled();
-    scroller?.addEventListener('scroll', updateScrolled, { passive: true });
+    // the known-good TOC targets and cache it on a ref so the Top /
+    // Bottom handlers can reuse it without another DOM walk.
+    scrollerRef.current = findScrollableAncestor(targets[0]);
 
     return () => {
       observer.disconnect();
-      scroller?.removeEventListener('scroll', updateScrolled);
     };
   }, [items]);
 
@@ -131,7 +120,7 @@ export default function FloatingToc({ items, variant }: Props) {
     return null;
   }
 
-  const handleClick = (id: string) => {
+  const handleItemClick = (id: string) => {
     const el = document.getElementById(id);
     if (el == null) {
       return;
@@ -139,8 +128,16 @@ export default function FloatingToc({ items, variant }: Props) {
     el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  const handleBackToTop = () => {
+  const handleScrollToTop = () => {
     scrollerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleScrollToBottom = () => {
+    const scroller = scrollerRef.current;
+    if (scroller == null) {
+      return;
+    }
+    scroller.scrollTo({ top: scroller.scrollHeight, behavior: 'smooth' });
   };
 
   return (
@@ -155,7 +152,7 @@ export default function FloatingToc({ items, variant }: Props) {
           <button
             key={it.id}
             type="button"
-            onClick={() => handleClick(it.id)}
+            onClick={() => handleItemClick(it.id)}
             aria-label={`Jump to ${it.label}`}
             className={`h-[2px] transition-all ${
               activeId === it.id
@@ -164,23 +161,22 @@ export default function FloatingToc({ items, variant }: Props) {
             }`}
           />
         ))}
-        {showBackToTop && (
-          <button
-            type="button"
-            onClick={handleBackToTop}
-            aria-label="Back to top"
-            title="Back to top"
-            className="mt-2 rounded-full p-1 text-foreground/40 transition-colors hover:bg-foreground/5 hover:text-foreground"
-          >
-            <ArrowUpIcon className="h-3.5 w-3.5" />
-          </button>
-        )}
       </div>
       {/* Popup (hover). Pointer-events flip from none → auto on hover
           so clicks land, and so the popup doesn't eat hits over the
           article when idle. */}
       <div className="pointer-events-none absolute top-0 right-0 w-64 rounded-xl border border-border bg-background p-2 opacity-0 shadow-lg transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
         <ul className="flex max-h-[70vh] flex-col gap-0.5 overflow-y-auto text-sm">
+          <li>
+            <button
+              type="button"
+              onClick={handleScrollToTop}
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground dark:hover:bg-foreground/10"
+            >
+              <ArrowUpIcon className="h-3.5 w-3.5 shrink-0" />
+              <span>Top</span>
+            </button>
+          </li>
           {items.map((it) => {
             const isActive = activeId === it.id;
             const indent = it.level === 3 ? 'ml-3' : '';
@@ -188,7 +184,7 @@ export default function FloatingToc({ items, variant }: Props) {
               <li key={it.id} className={indent}>
                 <button
                   type="button"
-                  onClick={() => handleClick(it.id)}
+                  onClick={() => handleItemClick(it.id)}
                   className={`w-full rounded-md px-3 py-2 text-left transition-colors hover:bg-foreground/5 dark:hover:bg-foreground/10 ${
                     isActive ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-foreground'
                   }`}
@@ -213,6 +209,16 @@ export default function FloatingToc({ items, variant }: Props) {
               </li>
             );
           })}
+          <li>
+            <button
+              type="button"
+              onClick={handleScrollToBottom}
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground dark:hover:bg-foreground/10"
+            >
+              <ArrowDownIcon className="h-3.5 w-3.5 shrink-0" />
+              <span>Bottom</span>
+            </button>
+          </li>
         </ul>
       </div>
     </div>
