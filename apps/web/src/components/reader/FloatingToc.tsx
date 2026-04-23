@@ -28,8 +28,9 @@ interface Props {
  *
  * Active-item tracking uses IntersectionObserver against the viewport —
  * the reader's scroll container fills the viewport, so visible elements
- * are what the user is actually looking at. Hidden below the xl
- * breakpoint where there isn't room next to the max-w-3xl article.
+ * are what the user is actually looking at. Hidden below the compact
+ * breakpoint that swaps the reader into its small-screen layout —
+ * there's room for the ladder on every wider viewport.
  */
 export default function FloatingToc({ items, variant }: Props) {
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -92,7 +93,7 @@ export default function FloatingToc({ items, variant }: Props) {
 
   return (
     <div
-      className="group fixed top-1/2 right-4 z-20 hidden -translate-y-1/2 xl:block"
+      className="group fixed top-1/2 right-8 z-20 hidden -translate-y-1/2 sidebar:block"
       aria-label="Table of contents"
     >
       {/* Ladder (idle). Fades out on hover so the popup visually
