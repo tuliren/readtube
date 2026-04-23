@@ -34,24 +34,24 @@ interface Props {
  * there's room for the ladder on every wider viewport.
  */
 /** Scroll distance (px) past which the back-to-top affordance appears.
- *  Small enough that a short nudge away from the top already surfaces
- *  the button; large enough that an accidental wheel tick doesn't
- *  flicker it in and back out. */
-const BACK_TO_TOP_THRESHOLD_PX = 200;
+ *  Kept small — "not at the top" should really mean "not at the top",
+ *  not "somewhere in the middle". A few tens of pixels of slack
+ *  avoids flickering the button during elastic-scroll bounce. */
+const BACK_TO_TOP_THRESHOLD_PX = 40;
 
 /** Walks up the DOM from a tracked element until it finds an ancestor
- *  with a vertical overflow scrollbar. The reader's scroll container
- *  is a flex child, not `window` or `document.scrollingElement`, so
- *  sniffing for the first overflow ancestor is the reliable way to
- *  discover it from a component that only sees its targets' ids. */
+ *  whose computed `overflow-y` declares it scrollable. Deliberately
+ *  does NOT compare `scrollHeight > clientHeight` — that test is
+ *  racy during streaming content updates, and any `overflow: auto`
+ *  container that becomes scrollable later will start firing scroll
+ *  events we already care about. The reader's scroll container is a
+ *  flex child, not `window` or `document.scrollingElement`, so this
+ *  sniff is how we discover it from here. */
 function findScrollableAncestor(el: HTMLElement): HTMLElement | null {
   let current = el.parentElement;
   while (current != null) {
     const { overflowY } = window.getComputedStyle(current);
-    if (
-      (overflowY === 'auto' || overflowY === 'scroll') &&
-      current.scrollHeight > current.clientHeight
-    ) {
+    if (overflowY === 'auto' || overflowY === 'scroll') {
       return current;
     }
     current = current.parentElement;
