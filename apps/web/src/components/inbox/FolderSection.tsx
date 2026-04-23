@@ -149,7 +149,7 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
             <button
               type="button"
               onClick={onAddChannel}
-              className="flex items-center justify-center rounded-md p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+              className="flex items-center justify-center rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-foreground"
               aria-label="Add channel"
             >
               <Plus className="h-4 w-4" />
@@ -157,7 +157,7 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
           </TooltipTrigger>
           <TooltipContent side="right">Add channel</TooltipContent>
         </Tooltip>
-        <div className="my-1 h-px w-6 bg-gray-200" />
+        <div className="my-1 h-px w-6 bg-border" />
         {channels.map((channel) => {
           const active = selectedChannelId === channel.id;
           return (
@@ -166,13 +166,15 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
                 <Link
                   href={channelHref(channel)}
                   className={`flex items-center justify-center rounded-md p-1.5 ${
-                    active ? 'bg-blue-50 ring-2 ring-blue-200' : 'hover:bg-gray-100'
+                    active
+                      ? 'bg-blue-50 ring-2 ring-blue-200 dark:bg-blue-500/15 dark:ring-blue-500/30'
+                      : 'hover:bg-accent'
                   }`}
                 >
                   {channel.logoUrl != null ? (
                     <ChannelAvatar url={channel.logoUrl} size={40} cssSize="h-6 w-6" />
                   ) : (
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 text-[10px] font-semibold text-gray-600">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">
                       {channel.name.charAt(0).toUpperCase()}
                     </span>
                   )}
@@ -237,17 +239,17 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
           aria-label={channelsCollapsed ? 'Expand channels' : 'Collapse channels'}
         >
           {channelsCollapsed ? (
-            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-gray-500" />
+            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           ) : (
-            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-gray-500" />
+            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           )}
-          <span className="text-base font-semibold text-gray-900">Channels</span>
+          <span className="text-base font-semibold text-foreground">Channels</span>
         </button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 data-[state=open]:bg-gray-100 data-[state=open]:text-gray-600"
+              className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground data-[state=open]:bg-accent data-[state=open]:text-foreground"
               aria-label="Add channel or folder"
               title="Add channel or folder"
             >
@@ -256,11 +258,11 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-44">
             <DropdownMenuItem onSelect={onAddChannel}>
-              <Radio className="mr-2 h-4 w-4 text-gray-500" />
+              <Radio className="mr-2 h-4 w-4 text-muted-foreground" />
               Add channel
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => setNewFolderOpen(true)}>
-              <FolderPlus className="mr-2 h-4 w-4 text-gray-500" />
+              <FolderPlus className="mr-2 h-4 w-4 text-muted-foreground" />
               Create folder
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -272,7 +274,7 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
           {/* Root (unfoldered) channels */}
           <RootDropZone>
             {rootChannels.length === 0 ? (
-              <p className="px-3 py-1 text-xs text-gray-500">
+              <p className="px-3 py-1 text-xs text-muted-foreground">
                 Drop channels here to move channels out of folders
               </p>
             ) : (
@@ -333,7 +335,7 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
       */}
       <DragOverlay dropAnimation={null}>
         {activeChannel != null ? (
-          <div className="flex cursor-grabbing items-center justify-between gap-2 rounded-md border border-blue-300 bg-white px-3 py-1.5 text-sm font-medium text-blue-700 shadow-lg ring-2 ring-blue-200">
+          <div className="flex cursor-grabbing items-center justify-between gap-2 rounded-md border border-blue-300 bg-card px-3 py-1.5 text-sm font-medium text-blue-700 shadow-lg ring-2 ring-blue-200">
             <span className="truncate">{displayChannelName(activeChannel.name)}</span>
             {activeChannel.unreadCount > 0 && (
               <span className="ml-auto shrink-0 rounded-full bg-blue-600 px-1.5 py-0.5 text-xs font-medium text-white">
@@ -362,7 +364,10 @@ function RootDropZone({ children }: { children: React.ReactNode }) {
   // only horizontal padding would come from sidebarRowClass's own
   // px-3, while views/folders get px-3 + px-3.
   return (
-    <div ref={setNodeRef} className={`mt-1 px-3 ${isOver ? 'bg-blue-50/60' : ''}`}>
+    <div
+      ref={setNodeRef}
+      className={`mt-1 px-3 ${isOver ? 'bg-blue-50/60 dark:bg-blue-500/10' : ''}`}
+    >
       {children}
     </div>
   );

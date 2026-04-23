@@ -11,11 +11,12 @@ const FAQS: { question: string; answer: ReactNode }[] = [
         <p>ReadTube pulls transcripts from public videos on:</p>
         <ul className="list-disc space-y-1 pl-5">
           <li>
-            <span className="font-medium text-slate-700">YouTube</span>: videos, channels, and
-            playlists
+            <span className="font-medium text-slate-700 dark:text-slate-200">YouTube</span>: videos,
+            channels, and playlists
           </li>
           <li>
-            <span className="font-medium text-slate-700">Bilibili</span>: videos and channels
+            <span className="font-medium text-slate-700 dark:text-slate-200">Bilibili</span>: videos
+            and channels
           </li>
         </ul>
         <p>
@@ -32,18 +33,22 @@ const FAQS: { question: string; answer: ReactNode }[] = [
         <p>A few kinds of videos don&apos;t fit ReadTube&apos;s reading-first model:</p>
         <ul className="list-disc space-y-1 pl-5">
           <li>
-            <span className="font-medium text-slate-700">Short videos</span>. YouTube Shorts and
-            other sub-minute clips are skipped. They&apos;re designed for quick visual viewing, and
-            a transcript rarely adds much on top.
+            <span className="font-medium text-slate-700 dark:text-slate-200">Short videos</span>.
+            YouTube Shorts and other sub-minute clips are skipped. They&apos;re designed for quick
+            visual viewing, and a transcript rarely adds much on top.
           </li>
           <li>
-            <span className="font-medium text-slate-700">Videos without captions</span>. Music
-            videos, silent footage, and anything the platform can&apos;t auto-caption have no
-            transcript for us to read from.
+            <span className="font-medium text-slate-700 dark:text-slate-200">
+              Videos without captions
+            </span>
+            . Music videos, silent footage, and anything the platform can&apos;t auto-caption have
+            no transcript for us to read from.
           </li>
           <li>
-            <span className="font-medium text-slate-700">Private or age-restricted videos</span>. We
-            only fetch what&apos;s publicly accessible.
+            <span className="font-medium text-slate-700 dark:text-slate-200">
+              Private or age-restricted videos
+            </span>
+            . We only fetch what&apos;s publicly accessible.
           </li>
         </ul>
       </>
@@ -120,30 +125,30 @@ export default function Faq() {
     <section
       id="faq"
       aria-label="Frequently asked questions"
-      className="bg-slate-50 py-24 sm:py-32"
+      className="bg-slate-50 py-24 sm:py-32 dark:bg-slate-950"
     >
       <Container>
         <div className="mx-auto max-w-2xl text-center">
-          <h2 className="font-display text-4xl font-medium tracking-tight text-slate-700 sm:text-5xl">
+          <h2 className="font-display text-4xl font-medium tracking-tight text-slate-700 sm:text-5xl dark:text-slate-100">
             Frequently asked questions
           </h2>
         </div>
 
-        <ul className="mx-auto mt-16 max-w-3xl divide-y divide-slate-200 rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <ul className="mx-auto mt-16 max-w-3xl divide-y divide-slate-200 rounded-2xl border border-slate-200 bg-white shadow-sm dark:divide-slate-800 dark:border-slate-800 dark:bg-background">
           {FAQS.map((faq) => (
             <li key={faq.question}>
               <details className="group px-6 py-5 open:pb-6 sm:px-8">
-                <summary className="flex cursor-pointer list-none items-start justify-between gap-6 text-left font-display text-lg font-medium text-slate-700 marker:hidden [&::-webkit-details-marker]:hidden">
+                <summary className="flex cursor-pointer list-none items-start justify-between gap-6 text-left font-display text-lg font-medium text-slate-700 marker:hidden [&::-webkit-details-marker]:hidden dark:text-slate-100">
                   <span>{faq.question}</span>
                   <span
                     aria-hidden
-                    className="mt-1 flex h-6 w-6 flex-none items-center justify-center rounded-full text-slate-500 transition group-hover:text-slate-700"
+                    className="mt-1 flex h-6 w-6 flex-none items-center justify-center rounded-full text-slate-500 transition group-hover:text-slate-700 dark:text-slate-400 dark:group-hover:text-slate-200"
                   >
                     <Plus className="h-4 w-4 group-open:hidden" />
                     <Minus className="hidden h-4 w-4 group-open:block" />
                   </span>
                 </summary>
-                <div className="flex flex-col gap-2.5 mt-4 text-base leading-relaxed text-slate-500">
+                <div className="flex flex-col gap-2.5 mt-4 text-base leading-relaxed text-slate-500 dark:text-slate-400">
                   {faq.answer}
                 </div>
               </details>

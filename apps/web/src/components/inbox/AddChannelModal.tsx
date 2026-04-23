@@ -92,18 +92,18 @@ export default function AddChannelModal({ isOpen, onClose, onChannelAdded }: Pro
         <DialogHeader>
           <DialogTitle>Add channel</DialogTitle>
           <DialogDescription>Paste a channel URL from YouTube or Bilibili.</DialogDescription>
-          <ul className="mt-2 space-y-1 text-sm text-gray-600">
+          <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
             <li className="flex gap-2">
               <span aria-hidden>•</span>
-              <code className="rounded bg-gray-100 px-1">youtube.com/@handle</code>
+              <code className="rounded bg-muted px-1">youtube.com/@handle</code>
             </li>
             <li className="flex gap-2">
               <span aria-hidden>•</span>
-              <code className="rounded bg-gray-100 px-1">youtube.com/channel/UCxxxxx</code>
+              <code className="rounded bg-muted px-1">youtube.com/channel/UCxxxxx</code>
             </li>
             <li className="flex gap-2">
               <span aria-hidden>•</span>
-              <code className="rounded bg-gray-100 px-1">space.bilibili.com/&lt;mid&gt;</code>
+              <code className="rounded bg-muted px-1">space.bilibili.com/&lt;mid&gt;</code>
             </li>
           </ul>
         </DialogHeader>

@@ -72,7 +72,7 @@ export default function RemoveChannelDialog({ target, onClose }: Props) {
           <AlertDialogDescription>
             {target != null ? (
               <>
-                <strong className="font-medium text-gray-900">{target.name}</strong>
+                <strong className="font-medium text-foreground">{target.name}</strong>
                 {
                   ' will be removed from your subscribed channels. All your data associated with this channel and its videos will be permanently deleted. You can re-add the channel at any time, but your data cannot be recovered.'
                 }

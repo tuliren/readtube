@@ -37,14 +37,14 @@ interface Props {
  */
 function VideoListSkeleton() {
   return (
-    <ul className="divide-y divide-gray-100" aria-busy="true" aria-live="polite">
+    <ul className="divide-y divide-border" aria-busy="true" aria-live="polite">
       {Array.from({ length: 6 }).map((_, i) => (
         <li key={i} className="px-4 py-3">
           <div className="flex items-start gap-3">
-            <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-gray-200" />
+            <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-muted" />
             <div className="min-w-0 flex-1 space-y-2">
-              <div className="h-4 w-4/5 animate-pulse rounded bg-gray-200" />
-              <div className="h-3 w-1/3 animate-pulse rounded bg-gray-200" />
+              <div className="h-4 w-4/5 animate-pulse rounded bg-muted" />
+              <div className="h-3 w-1/3 animate-pulse rounded bg-muted" />
             </div>
           </div>
         </li>
@@ -191,7 +191,7 @@ export default function VideoList({
     // no-channels-at-all path is handled in InboxShell's
     // showEmptyState branch with its own prominent button.
     return (
-      <div className="flex flex-1 items-center justify-center p-8 text-center text-sm text-gray-500">
+      <div className="flex flex-1 items-center justify-center p-8 text-center text-sm text-muted-foreground">
         {emptyMessage}
       </div>
     );
@@ -206,7 +206,7 @@ export default function VideoList({
         onClear={clearSelection}
         showRemoveFromLibrary={showRemoveFromLibrary}
       />
-      <ul className="divide-y divide-gray-100">
+      <ul className="divide-y divide-border">
         {videos.map((video) => {
           const isSelected = selectedVideoId === video.id;
           const href = `/videos/${encodeURIComponent(video.sourceId)}?returnTo=${encodeURIComponent(returnTo)}`;

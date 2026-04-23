@@ -113,17 +113,17 @@ export default function VideosSection() {
             aria-label={sectionCollapsed ? 'Expand videos' : 'Collapse videos'}
           >
             {sectionCollapsed ? (
-              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-gray-500" />
+              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
             ) : (
-              <ChevronDown className="h-3.5 w-3.5 shrink-0 text-gray-500" />
+              <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
             )}
-            <span className="text-base font-semibold text-gray-900">Videos</span>
+            <span className="text-base font-semibold text-foreground">Videos</span>
           </button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 data-[state=open]:bg-gray-100 data-[state=open]:text-gray-600"
+                className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground data-[state=open]:bg-accent data-[state=open]:text-foreground"
                 aria-label="Add video or playlist"
                 title="Add video or playlist"
               >
@@ -132,11 +132,11 @@ export default function VideosSection() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44">
               <DropdownMenuItem onSelect={() => setAddVideoOpen(true)}>
-                <Video className="mr-2 h-4 w-4 text-gray-500" />
+                <Video className="mr-2 h-4 w-4 text-muted-foreground" />
                 Add video
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => setAddPlaylistOpen(true)}>
-                <ListMusic className="mr-2 h-4 w-4 text-gray-500" />
+                <ListMusic className="mr-2 h-4 w-4 text-muted-foreground" />
                 Add playlist
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -211,7 +211,9 @@ function PlaylistEntry({
             <Link
               href={href}
               className={`flex items-center justify-center rounded-md p-2 ${
-                active ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
+                active
+                  ? 'bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300'
+                  : 'text-foreground hover:bg-accent'
               }`}
             >
               {playlist.thumbnailUrl != null ? (
@@ -255,7 +257,7 @@ function PlaylistEntry({
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="ml-0.5 rounded p-1 text-gray-400 opacity-0 hover:bg-gray-100 hover:text-gray-600 group-hover:opacity-100 data-[state=open]:opacity-100"
+            className="ml-0.5 rounded p-1 text-muted-foreground opacity-0 hover:bg-accent hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
             aria-label="Playlist actions"
             title="Playlist actions"
           >
@@ -264,7 +266,7 @@ function PlaylistEntry({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">
           <DropdownMenuItem onSelect={onRequestRename}>
-            <Pencil className="mr-2 h-3.5 w-3.5 text-gray-500" />
+            <Pencil className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
             Rename
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={onRequestDelete} className="text-red-600 focus:text-red-600">
@@ -304,7 +306,9 @@ function VideoEntry({
             <Link
               href={href}
               className={`flex items-center justify-center rounded-md p-2 ${
-                active ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
+                active
+                  ? 'bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300'
+                  : 'text-foreground hover:bg-accent'
               }`}
             >
               {thumbnailUrl != null ? (

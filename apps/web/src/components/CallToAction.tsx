@@ -10,9 +10,9 @@ const themeStyles: Record<
   { section: string; heading: string; body: string; buttonColor: 'slate' | 'white' }
 > = {
   light: {
-    section: 'bg-white',
-    heading: 'text-slate-700',
-    body: 'text-slate-500',
+    section: 'bg-white dark:bg-background',
+    heading: 'text-slate-700 dark:text-slate-100',
+    body: 'text-slate-500 dark:text-slate-400',
     buttonColor: 'slate',
   },
   dark: {

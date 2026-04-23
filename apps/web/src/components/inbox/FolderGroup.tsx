@@ -71,7 +71,10 @@ export default function FolderGroup({
     // the New-folder button up in the Channels header. Without this
     // the folder-children channel rows would extend to 0px because
     // their <ul> has no horizontal padding.
-    <div className={`mt-2 px-3 ${isOver ? 'bg-blue-50/60' : ''}`} ref={setNodeRef}>
+    <div
+      className={`mt-2 px-3 ${isOver ? 'bg-blue-50/60 dark:bg-blue-500/10' : ''}`}
+      ref={setNodeRef}
+    >
       {/*
         The `group` class here is what activates `group-hover:opacity-100`
         on the folder menu button below — without it the ⋯ button stays
@@ -88,8 +91,8 @@ export default function FolderGroup({
           ) : (
             <ChevronDown className="-ml-1 h-3.5 w-3.5 shrink-0" />
           )}
-          <FolderIcon className="h-4 w-4 shrink-0 text-gray-400" />
-          <span className="flex-1 truncate font-semibold text-gray-900">{folder.name}</span>
+          <FolderIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <span className="flex-1 truncate font-semibold text-foreground">{folder.name}</span>
           <SidebarBadge count={unread} />
         </button>
 
@@ -97,7 +100,7 @@ export default function FolderGroup({
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="ml-0.5 rounded p-1 text-gray-400 opacity-0 hover:bg-gray-100 hover:text-gray-600 group-hover:opacity-100 data-[state=open]:opacity-100"
+              className="ml-0.5 rounded p-1 text-muted-foreground opacity-0 hover:bg-accent hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
               aria-label="Folder menu"
               title="Folder actions"
             >
@@ -119,7 +122,7 @@ export default function FolderGroup({
       </div>
 
       {!isCollapsed && channels.length > 0 && (
-        <ul className="ml-5 mt-1 space-y-0.5 border-l border-gray-200 pl-2">
+        <ul className="ml-5 mt-1 space-y-0.5 border-l border-border pl-2">
           {channels.map((channel) => (
             <DraggableChannelLink
               key={channel.id}
@@ -133,7 +136,7 @@ export default function FolderGroup({
         </ul>
       )}
       {!isCollapsed && channels.length === 0 && (
-        <p className="ml-6 mt-1 px-3 py-1 text-xs text-gray-500">
+        <p className="ml-6 mt-1 px-3 py-1 text-xs text-muted-foreground">
           This folder has no channel yet. Drag any channel here to add to this folder.
         </p>
       )}

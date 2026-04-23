@@ -74,16 +74,16 @@ export default function NotesPanel({ videoId, subtitle, onClose }: Props) {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-white">
-      <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+    <div className="flex min-h-0 flex-1 flex-col bg-background">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
           <NotebookPen className="h-4 w-4 text-amber-500" />
-          <h3 className="text-sm font-semibold text-gray-900">Notes</h3>
+          <h3 className="text-sm font-semibold text-foreground">Notes</h3>
         </div>
         <button
           type="button"
           onClick={onClose}
-          className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+          className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
           aria-label="Close notes panel"
         >
           <X className="h-4 w-4" />
@@ -91,8 +91,8 @@ export default function NotesPanel({ videoId, subtitle, onClose }: Props) {
       </div>
 
       {subtitle != null && (
-        <div className="border-b border-gray-100 px-4 py-2">
-          <p className="truncate text-xs text-gray-500">{subtitle}</p>
+        <div className="border-b border-border px-4 py-2">
+          <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
         </div>
       )}
 
@@ -107,7 +107,7 @@ export default function NotesPanel({ videoId, subtitle, onClose }: Props) {
             }
           }}
           placeholder="Write a note… (⌘↵ to save)"
-          className="h-20 resize-none rounded border border-gray-200 p-2 text-sm focus:border-blue-500 focus:outline-none"
+          className="h-20 resize-none rounded border border-border bg-background p-2 text-sm text-foreground focus:border-blue-500 focus:outline-none"
         />
         <div className="flex justify-end">
           <Button
@@ -122,22 +122,22 @@ export default function NotesPanel({ videoId, subtitle, onClose }: Props) {
 
       <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-4 pb-4">
         {notes.length === 0 ? (
-          <p className="text-sm text-gray-400">No notes yet.</p>
+          <p className="text-sm text-muted-foreground">No notes yet.</p>
         ) : (
           notes.map((note) => (
-            <div key={note.id} className="rounded border border-gray-100 bg-gray-50 p-2">
+            <div key={note.id} className="rounded border border-border bg-muted p-2">
               <div className="flex items-start justify-between gap-2">
-                <p className="whitespace-pre-wrap text-sm text-gray-700">{note.body}</p>
+                <p className="whitespace-pre-wrap text-sm text-foreground">{note.body}</p>
                 <button
                   type="button"
                   onClick={() => void remove(note.id)}
-                  className="text-gray-400 hover:text-red-500"
+                  className="text-muted-foreground hover:text-red-500"
                   aria-label="Delete note"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
-              <p className="mt-1 text-xs text-gray-400">
+              <p className="mt-1 text-xs text-muted-foreground">
                 {new Date(note.updatedAt).toLocaleString()}
               </p>
             </div>

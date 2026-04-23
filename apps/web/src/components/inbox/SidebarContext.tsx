@@ -136,7 +136,7 @@ export function SidebarResizeHandle() {
       role="separator"
       aria-label="Resize sidebar"
     >
-      <div className="h-8 w-0.5 rounded-full bg-gray-300 opacity-0 transition-opacity group-hover:opacity-100 group-active:opacity-100" />
+      <div className="h-8 w-0.5 rounded-full bg-border opacity-0 transition-opacity group-hover:opacity-100 group-active:opacity-100" />
     </div>
   );
 }

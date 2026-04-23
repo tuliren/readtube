@@ -73,7 +73,7 @@ export default function FollowChannelDialogButton({ channelName, channelUrl }: P
         }}
         title={`Follow ${channelName}`}
         aria-label={`Follow ${channelName}`}
-        className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+        className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
       >
         <Plus className="h-3.5 w-3.5" />
       </button>
@@ -90,7 +90,7 @@ export default function FollowChannelDialogButton({ channelName, channelUrl }: P
           <AlertDialogHeader>
             <AlertDialogTitle>Follow this channel?</AlertDialogTitle>
             <AlertDialogDescription>
-              Add <strong className="font-medium text-gray-900">{channelName}</strong> to your
+              Add <strong className="font-medium text-foreground">{channelName}</strong> to your
               subscriptions. New videos from this channel will show up in your inbox.
             </AlertDialogDescription>
           </AlertDialogHeader>

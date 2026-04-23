@@ -17,7 +17,7 @@ function RegenerateButton({ onClick, disabled }: { onClick: () => void; disabled
       onClick={onClick}
       disabled={disabled}
       title="Regenerate article"
-      className="inline-flex shrink-0 items-center gap-1 text-xs text-gray-400 hover:text-gray-700 disabled:opacity-50 disabled:hover:text-gray-400"
+      className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50 disabled:hover:text-muted-foreground"
     >
       <ArrowPathIcon className="h-3.5 w-3.5" />
       Regenerate
@@ -268,7 +268,7 @@ export default function ArticleReader({
     return (
       <div className="animate-pulse space-y-4 py-4">
         {[100, 80, 95, 70, 85].map((w, i) => (
-          <div key={i} className="h-4 rounded bg-gray-200" style={{ width: `${w}%` }} />
+          <div key={i} className="h-4 rounded bg-muted" style={{ width: `${w}%` }} />
         ))}
       </div>
     );
@@ -276,11 +276,13 @@ export default function ArticleReader({
 
   if (status === 'idle') {
     if (publicMode) {
-      return <div className="py-8 text-center text-sm text-gray-500">No article available.</div>;
+      return (
+        <div className="py-8 text-center text-sm text-muted-foreground">No article available.</div>
+      );
     }
     if (transcriptStatus === 'unavailable') {
       return (
-        <div className="py-8 text-center text-sm text-gray-500">
+        <div className="py-8 text-center text-sm text-muted-foreground">
           No transcript is available for this video, so an article can&rsquo;t be generated.
         </div>
       );
@@ -289,7 +291,7 @@ export default function ArticleReader({
       <div>
         {pickerBar}
         <div className="py-8 text-center">
-          <p className="mb-4 text-sm text-gray-500">
+          <p className="mb-4 text-sm text-muted-foreground">
             Generate a clean, readable article from the transcript.
           </p>
           <button
@@ -306,7 +308,7 @@ export default function ArticleReader({
   if (status === 'error') {
     if (publicMode) {
       return (
-        <div className="py-8 text-center text-sm text-gray-400">
+        <div className="py-8 text-center text-sm text-muted-foreground">
           {errorMessage ?? 'Article is not available.'}
         </div>
       );
@@ -315,7 +317,7 @@ export default function ArticleReader({
       <div>
         {pickerBar}
         <div className="py-8 text-center">
-          <p className="mb-4 text-sm text-gray-400">{errorMessage}</p>
+          <p className="mb-4 text-sm text-muted-foreground">{errorMessage}</p>
           <button
             onClick={() => handleGenerate()}
             className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
@@ -361,7 +363,7 @@ export default function ArticleReader({
       )}
       <ArticleMarkdown hasLatex={hasLatex}>{content}</ArticleMarkdown>
       {status === 'streaming' && (
-        <div className="mt-4 flex items-center gap-2 text-xs text-gray-400">
+        <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
           <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-blue-500" />
           Generating…
         </div>

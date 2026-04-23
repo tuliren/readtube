@@ -89,8 +89,8 @@ export default function RenamePlaylistDialog({ target, onClose }: Props) {
           <DialogTitle>Rename playlist</DialogTitle>
           <DialogDescription>
             Change the display name. The original playlist title (
-            <span className="font-medium text-gray-900">{target?.name ?? ''}</span>) stays unchanged
-            and is shown in parentheses. Leave blank to clear the custom name.
+            <span className="font-medium text-foreground">{target?.name ?? ''}</span>) stays
+            unchanged and is shown in parentheses. Leave blank to clear the custom name.
           </DialogDescription>
         </DialogHeader>
 

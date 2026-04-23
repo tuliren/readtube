@@ -57,7 +57,7 @@ function SummarySkeleton() {
   return (
     <div className="animate-pulse space-y-4 py-4">
       {[100, 80, 95, 70, 85].map((w, i) => (
-        <div key={i} className="h-4 rounded bg-gray-200" style={{ width: `${w}%` }} />
+        <div key={i} className="h-4 rounded bg-muted" style={{ width: `${w}%` }} />
       ))}
     </div>
   );
@@ -68,7 +68,7 @@ function WordCountLabel({ count }: { count: number }) {
     return null;
   }
   return (
-    <span className="text-xs font-normal text-gray-400">
+    <span className="text-xs font-normal text-muted-foreground">
       ({count} {count === 1 ? 'word' : 'words'})
     </span>
   );
@@ -80,7 +80,7 @@ function RegenerateButton({ onClick, disabled }: { onClick: () => void; disabled
       onClick={onClick}
       disabled={disabled}
       title="Regenerate"
-      className="inline-flex shrink-0 items-center gap-1 text-xs text-gray-400 hover:text-gray-700 disabled:opacity-50 disabled:hover:text-gray-400"
+      className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50 disabled:hover:text-muted-foreground"
     >
       <ArrowPathIcon className="h-3.5 w-3.5" />
       Regenerate
@@ -364,7 +364,9 @@ export default function SummaryReader({
 
   if (status === 'idle') {
     if (publicMode) {
-      return <div className="py-8 text-center text-sm text-gray-500">No summary available.</div>;
+      return (
+        <div className="py-8 text-center text-sm text-muted-foreground">No summary available.</div>
+      );
     }
     // Sticky-unavailable: hide the Generate affordance entirely so the
     // user isn't tempted to click into a guaranteed-failure state. The
@@ -372,7 +374,7 @@ export default function SummaryReader({
     // button is the kinder UX.
     if (transcriptStatus === 'unavailable') {
       return (
-        <div className="py-8 text-center text-sm text-gray-500">
+        <div className="py-8 text-center text-sm text-muted-foreground">
           No transcript is available for this video, so a summary can&rsquo;t be generated.
         </div>
       );
@@ -381,7 +383,7 @@ export default function SummaryReader({
       <div>
         {pickerBar}
         <div className="py-8 text-center">
-          <p className="mb-4 text-sm text-gray-500">
+          <p className="mb-4 text-sm text-muted-foreground">
             Generate a headline, a quick paragraph, and a compact recap of this video.
           </p>
           <button
@@ -398,7 +400,7 @@ export default function SummaryReader({
   if (status === 'error') {
     if (publicMode) {
       return (
-        <div className="py-8 text-center text-sm text-gray-400">
+        <div className="py-8 text-center text-sm text-muted-foreground">
           {errorMessage ?? 'Summary is not available.'}
         </div>
       );
@@ -407,7 +409,7 @@ export default function SummaryReader({
       <div>
         {pickerBar}
         <div className="py-8 text-center">
-          <p className="mb-4 text-sm text-gray-400">{errorMessage}</p>
+          <p className="mb-4 text-sm text-muted-foreground">{errorMessage}</p>
           <button
             onClick={() => handleGenerate()}
             className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
@@ -455,13 +457,13 @@ export default function SummaryReader({
         {/* Headline */}
         <div className="flex items-start justify-between gap-4">
           {summary.headline ? (
-            <h2 className="flex-1 text-xl leading-snug font-semibold text-gray-900">
+            <h2 className="flex-1 text-xl leading-snug font-semibold text-foreground">
               {summary.headline}
             </h2>
           ) : isRegenerating('headline') ? (
-            <div className="h-6 flex-1 animate-pulse rounded bg-gray-200" />
+            <div className="h-6 flex-1 animate-pulse rounded bg-muted" />
           ) : (
-            <div className="flex-1 text-sm text-gray-400 italic">No headline yet.</div>
+            <div className="flex-1 text-sm text-muted-foreground italic">No headline yet.</div>
           )}
           {showRegenerate && !isRegenerating('headline') && (
             <RegenerateButton onClick={() => handleGenerate(['headline'])} disabled={isStreaming} />
@@ -471,7 +473,7 @@ export default function SummaryReader({
         {/* Short */}
         <div>
           <div className="mb-2 flex items-center justify-between">
-            <h3 className="text-base font-semibold text-gray-900">
+            <h3 className="text-base font-semibold text-foreground">
               Quick summary <WordCountLabel count={shortWords} />
             </h3>
             {showRegenerate && !isRegenerating('short') && (
@@ -479,24 +481,22 @@ export default function SummaryReader({
             )}
           </div>
           {shortContent.length > 0 ? (
-            <ArticleMarkdown className="text-gray-700" hasLatex={shortHasLatex}>
-              {shortContent}
-            </ArticleMarkdown>
+            <ArticleMarkdown hasLatex={shortHasLatex}>{shortContent}</ArticleMarkdown>
           ) : isRegenerating('short') ? (
             <div className="space-y-2">
-              <div className="h-4 w-full animate-pulse rounded bg-gray-200" />
-              <div className="h-4 w-11/12 animate-pulse rounded bg-gray-200" />
-              <div className="h-4 w-10/12 animate-pulse rounded bg-gray-200" />
+              <div className="h-4 w-full animate-pulse rounded bg-muted" />
+              <div className="h-4 w-11/12 animate-pulse rounded bg-muted" />
+              <div className="h-4 w-10/12 animate-pulse rounded bg-muted" />
             </div>
           ) : (
-            <div className="text-sm text-gray-400 italic">No quick summary yet.</div>
+            <div className="text-sm text-muted-foreground italic">No quick summary yet.</div>
           )}
         </div>
 
         {/* Full */}
         <div>
           <div className="mb-2 flex items-center justify-between">
-            <h3 className="text-base font-semibold text-gray-900">
+            <h3 className="text-base font-semibold text-foreground">
               Full summary <WordCountLabel count={fullWords} />
             </h3>
             {showRegenerate && !isRegenerating('full') && (
@@ -510,18 +510,18 @@ export default function SummaryReader({
               {[100, 95, 90, 85, 75].map((w, i) => (
                 <div
                   key={i}
-                  className="h-4 animate-pulse rounded bg-gray-200"
+                  className="h-4 animate-pulse rounded bg-muted"
                   style={{ width: `${w}%` }}
                 />
               ))}
             </div>
           ) : (
-            <div className="text-sm text-gray-400 italic">No full summary yet.</div>
+            <div className="text-sm text-muted-foreground italic">No full summary yet.</div>
           )}
         </div>
 
         {isStreaming && (
-          <div className="flex items-center gap-2 text-xs text-gray-400">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-blue-500" />
             Generating…
           </div>

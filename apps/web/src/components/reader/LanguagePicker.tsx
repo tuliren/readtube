@@ -33,7 +33,7 @@ export default function LanguagePicker({ value, onChange, disabled = false }: Pr
       <div className="relative inline-flex items-center">
         <Languages
           aria-hidden="true"
-          className="pointer-events-none absolute left-2 h-3.5 w-3.5 text-gray-400"
+          className="pointer-events-none absolute left-2 h-3.5 w-3.5 text-muted-foreground"
         />
         <select
           aria-label="Language"
@@ -43,7 +43,7 @@ export default function LanguagePicker({ value, onChange, disabled = false }: Pr
             const next = e.target.value;
             onChange(next === ORIGINAL_VALUE ? null : next);
           }}
-          className="appearance-none rounded-md border border-gray-200 bg-white py-1.5 pr-7 pl-7 text-xs leading-none text-gray-600 hover:border-gray-300 focus:border-gray-400 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+          className="appearance-none rounded-md border border-border bg-background py-1.5 pr-7 pl-7 text-xs leading-none text-foreground hover:border-ring focus:border-ring focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
         >
           <option value={ORIGINAL_VALUE}>Original</option>
           {TARGET_LANGUAGES.map((lang) => (
@@ -54,7 +54,7 @@ export default function LanguagePicker({ value, onChange, disabled = false }: Pr
         </select>
         <ChevronDown
           aria-hidden="true"
-          className="pointer-events-none absolute right-2 h-3.5 w-3.5 text-gray-400"
+          className="pointer-events-none absolute right-2 h-3.5 w-3.5 text-muted-foreground"
         />
       </div>
       <TooltipProvider delayDuration={200}>
@@ -66,7 +66,7 @@ export default function LanguagePicker({ value, onChange, disabled = false }: Pr
             <button
               type="button"
               aria-label="What does the language picker do?"
-              className="rounded p-0.5 text-gray-400 hover:text-gray-600 focus:text-gray-600 focus:outline-none"
+              className="rounded p-0.5 text-muted-foreground hover:text-foreground focus:text-foreground focus:outline-none"
             >
               <HelpCircle className="h-3.5 w-3.5" />
             </button>

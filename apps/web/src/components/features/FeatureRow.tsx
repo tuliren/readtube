@@ -25,11 +25,15 @@ export default function FeatureRow({
       )}
     >
       <div className="flex-1">
-        <div className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-white/10 text-white ring-1 ring-white/20">
+        <div className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-white/10 text-white ring-1 ring-white/20 dark:bg-white/5 dark:ring-white/10">
           <Icon className="h-5 w-5" />
         </div>
-        <h3 className="mt-6 font-display text-2xl font-medium text-white sm:text-3xl">{title}</h3>
-        <p className="mt-4 text-lg leading-relaxed text-indigo-100">{description}</p>
+        <h3 className="mt-6 font-display text-2xl font-medium text-white sm:text-3xl dark:text-slate-100">
+          {title}
+        </h3>
+        <p className="mt-4 text-lg leading-relaxed text-indigo-100 dark:text-indigo-200/80">
+          {description}
+        </p>
       </div>
       <div className="w-full flex-1">{preview}</div>
     </div>

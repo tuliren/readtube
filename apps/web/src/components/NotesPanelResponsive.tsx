@@ -40,7 +40,7 @@ export default function NotesPanelResponsive({ videoId, subtitle, isMobile, onCl
   }
 
   return (
-    <div className="flex w-80 shrink-0 flex-col border-l border-gray-200">
+    <div className="flex w-80 shrink-0 flex-col border-l border-border">
       <NotesPanel videoId={videoId} subtitle={subtitle} onClose={onClose} />
     </div>
   );

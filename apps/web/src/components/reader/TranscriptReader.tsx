@@ -37,8 +37,8 @@ function TranscriptSkeleton() {
     <div className="animate-pulse space-y-4">
       {[100, 80, 95, 70, 85, 90, 75].map((w, i) => (
         <div key={i} className="space-y-2">
-          <div className="h-4 rounded bg-gray-200" style={{ width: `${w}%` }} />
-          <div className="h-4 rounded bg-gray-200" style={{ width: `${Math.max(w - 20, 40)}%` }} />
+          <div className="h-4 rounded bg-muted" style={{ width: `${w}%` }} />
+          <div className="h-4 rounded bg-muted" style={{ width: `${Math.max(w - 20, 40)}%` }} />
         </div>
       ))}
     </div>
@@ -48,7 +48,7 @@ function TranscriptSkeleton() {
 function UnavailableMessage({ platform, sourceId }: { platform: VideoPlatform; sourceId: string }) {
   const { url, platformName } = buildWatchLink(platform, sourceId);
   return (
-    <div className="py-8 text-center text-sm text-gray-500">
+    <div className="py-8 text-center text-sm text-muted-foreground">
       No transcript is available for this video.{' '}
       <a
         href={url}
@@ -232,7 +232,7 @@ export default function TranscriptReader({
     // Here the next click is likely to succeed, so offer one.
     const { url: watchUrl, platformName } = buildWatchLink(platform, sourceId);
     return (
-      <div className="flex flex-col items-center gap-3 py-8 text-center text-sm text-gray-500">
+      <div className="flex flex-col items-center gap-3 py-8 text-center text-sm text-muted-foreground">
         <p>Could not fetch the transcript right now.</p>
         <button
           onClick={handleFetch}
@@ -270,12 +270,12 @@ export default function TranscriptReader({
               href={paragraphUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="w-10 shrink-0 pt-1 font-mono text-xs text-gray-400 hover:text-blue-400"
+              className="w-10 shrink-0 pt-1 font-mono text-xs text-muted-foreground hover:text-blue-400"
               title={`Watch at ${formatTimestamp(para.startMs)}`}
             >
               {formatTimestamp(para.startMs)}
             </a>
-            <p className="font-sans text-[17px] leading-[1.8] text-gray-800">{para.text}</p>
+            <p className="font-sans text-[17px] leading-[1.8] text-foreground">{para.text}</p>
           </div>
         );
       })}

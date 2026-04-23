@@ -77,8 +77,9 @@ function ArtifactDot({
   present: boolean;
   title: string;
 }) {
-  const presentClasses = 'border-blue-200 bg-blue-50 text-blue-700';
-  const absentClasses = 'border-gray-200 bg-white text-gray-300';
+  const presentClasses =
+    'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/15 dark:text-blue-300';
+  const absentClasses = 'border-border bg-background text-muted-foreground/70';
   return (
     <span
       title={`${title}: ${present ? 'generated' : 'not generated yet'}`}
@@ -358,12 +359,12 @@ export default function VideoRow({
       <div className="min-w-0 flex-1">
         <p
           className={`truncate text-sm leading-snug ${
-            isUnread ? 'font-semibold text-gray-900' : 'font-normal text-gray-600'
+            isUnread ? 'font-semibold text-foreground' : 'font-normal text-muted-foreground'
           }`}
         >
           {video.title}
         </p>
-        <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-gray-400">
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
           <span>
             {video.channelName}
             {video.publishedAt != null ? ` · ${relativeTime(video.publishedAt, now)}` : null}
@@ -375,7 +376,7 @@ export default function VideoRow({
           <ArtifactBadges video={video} />
         </div>
         {video.description != null && (
-          <p className="mt-1 line-clamp-1 text-xs text-gray-400">{video.description}</p>
+          <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{video.description}</p>
         )}
       </div>
     </>
@@ -385,7 +386,11 @@ export default function VideoRow({
     <li className="group">
       <div
         className={`flex items-start gap-2 px-4 py-3 transition-colors ${
-          isSelected ? 'bg-blue-50' : isChecked ? 'bg-blue-50/50' : 'hover:bg-gray-50'
+          isSelected
+            ? 'bg-blue-50 dark:bg-blue-500/15'
+            : isChecked
+              ? 'bg-blue-50/50 dark:bg-blue-500/10'
+              : 'hover:bg-muted'
         } ${inSelectionMode ? 'select-none' : ''}`}
       >
         <div
@@ -440,7 +445,7 @@ export default function VideoRow({
                   <button
                     type="button"
                     onClick={(e) => e.stopPropagation()}
-                    className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                    className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
                     aria-label="Actions"
                   >
                     {pendingSummary || pendingArticle ? (
@@ -485,7 +490,7 @@ export default function VideoRow({
                     onSelect={() => void triage.toggleStar(video.id, video.isStarred)}
                   >
                     <Star
-                      className={`mr-2 h-4 w-4 ${video.isStarred ? 'fill-yellow-400 text-yellow-500' : 'text-gray-400'}`}
+                      className={`mr-2 h-4 w-4 ${video.isStarred ? 'fill-yellow-400 text-yellow-500' : 'text-muted-foreground'}`}
                     />
                     {video.isStarred ? 'Unstar' : 'Star'}
                   </DropdownMenuItem>
@@ -495,12 +500,12 @@ export default function VideoRow({
                     {video.isSaved ? (
                       <BookmarkCheck className="mr-2 h-4 w-4 text-blue-500" />
                     ) : (
-                      <Bookmark className="mr-2 h-4 w-4 text-gray-400" />
+                      <Bookmark className="mr-2 h-4 w-4 text-muted-foreground" />
                     )}
                     {video.isSaved ? 'Unsave' : 'Read Later'}
                   </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => void triage.archive(video.id)}>
-                    <Archive className="mr-2 h-4 w-4 text-gray-400" />
+                    <Archive className="mr-2 h-4 w-4 text-muted-foreground" />
                     Archive
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
@@ -530,7 +535,7 @@ export default function VideoRow({
                   disabled={pendingSummary}
                   title={pendingSummary ? 'Generating summary…' : 'Generate summary'}
                   aria-label={pendingSummary ? 'Generating summary' : 'Generate summary'}
-                  className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-blue-500 disabled:opacity-70"
+                  className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-blue-500 disabled:opacity-70"
                 >
                   {pendingSummary ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -549,7 +554,7 @@ export default function VideoRow({
                   disabled={pendingArticle}
                   title={pendingArticle ? 'Generating article…' : 'Generate article'}
                   aria-label={pendingArticle ? 'Generating article' : 'Generate article'}
-                  className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-blue-500 disabled:opacity-70"
+                  className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-blue-500 disabled:opacity-70"
                 >
                   {pendingArticle ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -570,8 +575,8 @@ export default function VideoRow({
                     ? `${video.noteCount} note${video.noteCount === 1 ? '' : 's'} — open`
                     : 'Add note'
                 }
-                className={`flex items-center gap-0.5 rounded p-1 hover:bg-gray-100 hover:text-amber-500 ${
-                  video.noteCount > 0 ? 'text-amber-500' : 'text-gray-400'
+                className={`flex items-center gap-0.5 rounded p-1 hover:bg-accent hover:text-amber-500 ${
+                  video.noteCount > 0 ? 'text-amber-500' : 'text-muted-foreground'
                 }`}
                 aria-label={
                   video.noteCount > 0
@@ -591,7 +596,7 @@ export default function VideoRow({
                   void triage.toggleStar(video.id, video.isStarred);
                 }}
                 title={video.isStarred ? 'Unstar' : 'Star'}
-                className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-yellow-500"
+                className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-yellow-500"
               >
                 <Star
                   className={`h-4 w-4 ${video.isStarred ? 'fill-yellow-400 text-yellow-500' : ''}`}
@@ -604,7 +609,7 @@ export default function VideoRow({
                   void triage.toggleSave(video.id, video.isSaved);
                 }}
                 title={video.isSaved ? 'Remove from Read Later' : 'Read Later'}
-                className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-blue-500"
+                className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-blue-500"
               >
                 {video.isSaved ? (
                   <BookmarkCheck className="h-4 w-4 text-blue-500" />
@@ -619,7 +624,7 @@ export default function VideoRow({
                   void triage.archive(video.id);
                 }}
                 title="Archive"
-                className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-red-500"
+                className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-red-500"
               >
                 <Archive className="h-4 w-4" />
               </button>
@@ -630,7 +635,7 @@ export default function VideoRow({
                     onClick={stop}
                     title="More actions"
                     aria-label="More actions"
-                    className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                    className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
                   >
                     <MoreHorizontal className="h-4 w-4" />
                   </button>
