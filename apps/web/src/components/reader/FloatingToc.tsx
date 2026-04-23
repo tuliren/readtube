@@ -93,7 +93,7 @@ export default function FloatingToc({ items, variant }: Props) {
 
   return (
     <div
-      className="group fixed top-1/3 right-8 z-20 hidden -translate-y-1/2 sidebar:block"
+      className="group fixed top-40 right-8 z-20 hidden sidebar:block"
       aria-label="Table of contents"
     >
       {/* Ladder (idle). Fades out on hover so the popup visually
