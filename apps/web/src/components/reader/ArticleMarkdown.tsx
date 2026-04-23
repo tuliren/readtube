@@ -19,6 +19,14 @@ interface Props {
    *  entirely — every dollar sign stays literal, which is the correct
    *  behaviour for plain prose containing money amounts etc. */
   hasLatex?: boolean;
+  /** When true, tag `##` / `###` headings with line-based DOM ids so
+   *  `FloatingToc` can jump to them. Off by default: the Summary and
+   *  Article tabs share this renderer but sit in the DOM at the same
+   *  time (toggled via CSS `hidden`, not unmounted), so if every
+   *  instance stamped ids a `toc-h2-1` in the Summary tab would shadow
+   *  `toc-h2-1` in the Article tab and `document.getElementById` would
+   *  return a hidden heading. Only the Article tab opts in. */
+  enableHeadingIds?: boolean;
 }
 
 const BASE_CLASS =
@@ -70,7 +78,12 @@ const HEADING_COMPONENTS: Components = {
  * `<script>alert(1)</script>` in the source becomes a text node,
  * never an element. No sanitizer needed.
  */
-export default function ArticleMarkdown({ children, className, hasLatex }: Props) {
+export default function ArticleMarkdown({
+  children,
+  className,
+  hasLatex,
+  enableHeadingIds,
+}: Props) {
   const mathPlugin: PluggableList[number] = hasLatex
     ? remarkMath
     : [remarkMath, { singleDollarTextMath: false }];
@@ -81,7 +94,7 @@ export default function ArticleMarkdown({ children, className, hasLatex }: Props
       <ReactMarkdown
         remarkPlugins={remarkPlugins}
         rehypePlugins={rehypePlugins}
-        components={HEADING_COMPONENTS}
+        components={enableHeadingIds === true ? HEADING_COMPONENTS : undefined}
       >
         {children}
       </ReactMarkdown>

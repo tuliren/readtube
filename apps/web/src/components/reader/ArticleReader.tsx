@@ -369,7 +369,9 @@ export default function ArticleReader({
           </div>
         )
       )}
-      <ArticleMarkdown hasLatex={hasLatex}>{content}</ArticleMarkdown>
+      <ArticleMarkdown hasLatex={hasLatex} enableHeadingIds>
+        {content}
+      </ArticleMarkdown>
       {status === 'streaming' && (
         <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
           <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-blue-500" />
