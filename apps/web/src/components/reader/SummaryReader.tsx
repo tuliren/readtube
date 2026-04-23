@@ -481,9 +481,7 @@ export default function SummaryReader({
             )}
           </div>
           {shortContent.length > 0 ? (
-            <ArticleMarkdown className="text-foreground" hasLatex={shortHasLatex}>
-              {shortContent}
-            </ArticleMarkdown>
+            <ArticleMarkdown hasLatex={shortHasLatex}>{shortContent}</ArticleMarkdown>
           ) : isRegenerating('short') ? (
             <div className="space-y-2">
               <div className="h-4 w-full animate-pulse rounded bg-muted" />
