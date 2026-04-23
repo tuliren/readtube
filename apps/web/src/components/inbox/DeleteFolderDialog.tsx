@@ -89,7 +89,7 @@ export default function DeleteFolderDialog({ target, onClose }: Props) {
           <AlertDialogDescription>
             {target != null ? (
               <>
-                <strong className="font-medium text-gray-900">{target.name}</strong>
+                <strong className="font-medium text-foreground">{target.name}</strong>
                 {' will be removed from the sidebar. Channels inside it will move back '}
                 to the root Inbox — they won&rsquo;t be unsubscribed.
               </>

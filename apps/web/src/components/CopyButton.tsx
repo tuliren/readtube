@@ -57,7 +57,7 @@ export default function CopyButton({ value, label = 'Copy link', className }: Pr
       onClick={handleClick}
       aria-label={copied ? 'Copied' : label}
       title={copied ? 'Copied' : label}
-      className={`inline-flex items-center justify-center rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 ${className ?? ''}`}
+      className={`inline-flex items-center justify-center rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground ${className ?? ''}`}
     >
       {copied ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
     </button>

@@ -19,7 +19,8 @@ interface Props {
   hasLatex?: boolean;
 }
 
-const BASE_CLASS = 'prose prose-gray max-w-none font-sans text-[17px] leading-[1.8]';
+const BASE_CLASS =
+  'prose prose-gray dark:prose-invert max-w-none font-sans text-[17px] leading-[1.8]';
 const EXTERNAL_LINKS_PLUGIN: PluggableList[number] = [
   rehypeExternalLinks,
   { target: '_blank', rel: ['noopener', 'noreferrer'] },

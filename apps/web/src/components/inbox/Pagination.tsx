@@ -57,7 +57,7 @@ export default function Pagination({ total }: Props) {
   }
 
   return (
-    <div className="flex items-center gap-2 text-xs text-gray-500">
+    <div className="flex items-center gap-2 text-xs text-muted-foreground">
       <span className="tabular-nums">
         {hasMultiplePages
           ? `${firstRow}–${lastRow} of ${total}`
@@ -71,7 +71,7 @@ export default function Pagination({ total }: Props) {
             disabled={isFirst}
             aria-label="Previous page"
             title="Previous page"
-            className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-gray-500"
+            className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
@@ -84,7 +84,7 @@ export default function Pagination({ total }: Props) {
             disabled={isLast}
             aria-label="Next page"
             title="Next page"
-            className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-gray-500"
+            className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
           >
             <ChevronRight className="h-4 w-4" />
           </button>

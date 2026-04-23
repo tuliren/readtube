@@ -25,8 +25,9 @@
 import type { LucideIcon } from 'lucide-react';
 
 const BASE_ROW_CLASS = 'flex min-w-0 items-center gap-2 rounded-md px-3 py-1.5 text-sm';
-const ACTIVE_ROW_CLASS = 'bg-blue-50 font-medium text-blue-700';
-const INACTIVE_ROW_CLASS = 'text-gray-700 hover:bg-gray-100';
+const ACTIVE_ROW_CLASS =
+  'bg-blue-50 font-medium text-blue-700 dark:bg-blue-500/15 dark:text-blue-300';
+const INACTIVE_ROW_CLASS = 'text-foreground hover:bg-accent';
 
 export function sidebarRowClass(active: boolean): string {
   return `${BASE_ROW_CLASS} ${active ? ACTIVE_ROW_CLASS : INACTIVE_ROW_CLASS}`;

@@ -80,7 +80,7 @@ export default function DeletePlaylistDialog({ target, onClose }: Props) {
           <AlertDialogDescription>
             {target != null ? (
               <>
-                <strong className="font-medium text-gray-900">{target.name}</strong>
+                <strong className="font-medium text-foreground">{target.name}</strong>
                 {
                   ' will be deleted. The playlist itself and its grouping of videos will be removed, but the underlying videos stay in your library. This cannot be undone.'
                 }

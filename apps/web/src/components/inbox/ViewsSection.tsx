@@ -86,11 +86,11 @@ export default function ViewsSection({ inboxUnread }: Props) {
           aria-label={sectionCollapsed ? 'Expand views' : 'Collapse views'}
         >
           {sectionCollapsed ? (
-            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-gray-500" />
+            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           ) : (
-            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-gray-500" />
+            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           )}
-          <span className="text-base font-semibold text-gray-900">Views</span>
+          <span className="text-base font-semibold text-foreground">Views</span>
         </button>
       )}
       {sectionCollapsed ? null : (
@@ -118,7 +118,9 @@ export default function ViewsSection({ inboxUnread }: Props) {
                       <Link
                         href={href}
                         className={`flex items-center justify-center rounded-md p-2 ${
-                          active ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
+                          active
+                            ? 'bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300'
+                            : 'text-foreground hover:bg-accent'
                         }`}
                       >
                         <Icon className="h-4 w-4" />

@@ -68,7 +68,7 @@ export default function SearchInput() {
 
   return (
     <form onSubmit={handleSubmit} className="relative flex items-center">
-      <Search className="absolute left-2 h-3.5 w-3.5 text-gray-400" />
+      <Search className="absolute left-2 h-3.5 w-3.5 text-muted-foreground" />
       <Input
         ref={inputRef}
         value={local}
@@ -96,7 +96,7 @@ export default function SearchInput() {
         as instruction-noise on an empty input.
       */}
       {isDirty && (
-        <span className="pointer-events-none absolute right-8 flex items-center text-[10px] font-medium uppercase tracking-wider text-gray-400">
+        <span className="pointer-events-none absolute right-8 flex items-center text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
           <CornerDownLeft className="mr-0.5 h-3 w-3" />
           enter
         </span>
@@ -105,7 +105,7 @@ export default function SearchInput() {
         <button
           type="button"
           onClick={handleClear}
-          className="absolute right-2 text-gray-400 hover:text-gray-600"
+          className="absolute right-2 text-muted-foreground hover:text-foreground"
           aria-label="Clear search"
         >
           <X className="h-3.5 w-3.5" />

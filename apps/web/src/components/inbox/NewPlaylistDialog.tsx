@@ -94,9 +94,9 @@ export default function NewPlaylistDialog({ open, onOpenChange, onCreated }: Pro
           <DialogTitle>Add playlist</DialogTitle>
           <DialogDescription>
             Paste a YouTube playlist URL:{' '}
-            <code className="rounded bg-gray-100 px-1">youtube.com/playlist?list=PL…</code>,{' '}
-            <code className="rounded bg-gray-100 px-1">youtube.com/watch?v=…&list=PL…</code>, or a
-            bare playlist ID.
+            <code className="rounded bg-muted px-1">youtube.com/playlist?list=PL…</code>,{' '}
+            <code className="rounded bg-muted px-1">youtube.com/watch?v=…&list=PL…</code>, or a bare
+            playlist ID.
           </DialogDescription>
         </DialogHeader>
 

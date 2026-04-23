@@ -127,7 +127,7 @@ export default function InboxHeader({
   }
 
   return (
-    <div className="flex h-auto shrink-0 flex-col border-b border-gray-100 bg-white">
+    <div className="flex h-auto shrink-0 flex-col border-b border-border bg-background">
       {/* Title row — action buttons sit next to the title/badge,
           search stays on the right edge. This keeps the actions
           contextually close to the thing they act on. */}
@@ -138,7 +138,7 @@ export default function InboxHeader({
               <ChannelAvatar url={channelLogoUrl} size={40} cssSize="h-6 w-6" />
             </div>
           )}
-          <h1 className="hidden min-w-0 truncate text-sm font-semibold text-gray-900 sidebar:block">
+          <h1 className="hidden min-w-0 truncate text-sm font-semibold text-foreground sidebar:block">
             {channelName}
           </h1>
           {channelSourceId != null && channelPlatform != null && (
@@ -157,7 +157,7 @@ export default function InboxHeader({
             <button
               onClick={handleRefreshChannel}
               disabled={refreshing}
-              className="hidden shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50 disabled:hover:bg-transparent sidebar:inline-flex"
+              className="hidden shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50 disabled:hover:bg-transparent sidebar:inline-flex"
               title="Pull latest videos + metadata for this channel"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
@@ -170,7 +170,7 @@ export default function InboxHeader({
             <button
               onClick={handleMarkAllRead}
               disabled={marking}
-              className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50 disabled:hover:bg-transparent"
+              className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50 disabled:hover:bg-transparent"
               title="Mark all as read"
             >
               <CheckIcon className="h-4 w-4" />

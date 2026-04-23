@@ -33,7 +33,7 @@ export default function ExternalLinkActions({ url, label }: Props) {
         target="_blank"
         rel="noopener noreferrer"
         title={label ?? 'Open on YouTube'}
-        className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+        className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
       >
         <ExternalLink className="h-3.5 w-3.5" />
       </a>
@@ -41,7 +41,7 @@ export default function ExternalLinkActions({ url, label }: Props) {
         type="button"
         onClick={handleCopy}
         title={copied ? 'Copied!' : 'Copy URL'}
-        className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+        className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
       >
         {copied ? (
           <Check className="h-3.5 w-3.5 text-green-500" />

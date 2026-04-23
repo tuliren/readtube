@@ -110,15 +110,15 @@ export default function AskInboxChat() {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex items-center gap-2 border-b border-gray-100 bg-white px-6 py-3">
+      <div className="flex items-center gap-2 border-b border-border bg-background px-6 py-3">
         <Sparkles className="h-4 w-4 text-purple-500" />
-        <h1 className="text-sm font-semibold text-gray-900">Ask your inbox</h1>
+        <h1 className="text-sm font-semibold text-foreground">Ask your inbox</h1>
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-6">
         <div className="mx-auto flex max-w-2xl flex-col gap-6">
           {turns.length === 0 && (
-            <div className="rounded-md border border-dashed border-gray-200 p-6 text-center text-sm text-gray-400">
+            <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
               Ask a question about the videos in your inbox. Answers are grounded on the top-6
               semantically similar videos.
               <br />
@@ -134,15 +134,15 @@ export default function AskInboxChat() {
                   {turn.question}
                 </div>
               </div>
-              <div className="rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-800">
+              <div className="rounded-lg border border-border bg-card p-3 text-sm text-foreground">
                 {turn.answer.length === 0 && turn.loading ? (
-                  <span className="text-gray-400">Thinking…</span>
+                  <span className="text-muted-foreground">Thinking…</span>
                 ) : (
                   <p className="whitespace-pre-wrap">{turn.answer}</p>
                 )}
                 {turn.citations.length > 0 && (
-                  <div className="mt-3 flex flex-col gap-1 border-t border-gray-100 pt-2">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+                  <div className="mt-3 flex flex-col gap-1 border-t border-border pt-2">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       Sources
                     </p>
                     <ol className="flex flex-col gap-1 text-xs">
@@ -154,7 +154,7 @@ export default function AskInboxChat() {
                           >
                             [{i + 1}] {c.title}
                           </Link>
-                          <span className="text-gray-400"> · {c.channelName}</span>
+                          <span className="text-muted-foreground"> · {c.channelName}</span>
                         </li>
                       ))}
                     </ol>
@@ -166,7 +166,7 @@ export default function AskInboxChat() {
         </div>
       </div>
 
-      <form onSubmit={submit} className="border-t border-gray-100 bg-white px-6 py-3">
+      <form onSubmit={submit} className="border-t border-border bg-background px-6 py-3">
         <div className="mx-auto flex max-w-2xl items-center gap-2">
           <input
             value={input}
@@ -175,7 +175,7 @@ export default function AskInboxChat() {
               streaming ? 'Waiting for the previous answer…' : 'Ask anything about your inbox…'
             }
             disabled={streaming}
-            className="flex-1 rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400"
+            className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
           />
           <Button type="submit" size="sm" disabled={streaming || input.trim().length === 0}>
             <Send className="h-4 w-4" />

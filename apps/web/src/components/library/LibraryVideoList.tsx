@@ -22,8 +22,8 @@ export default function LibraryEmptyState({ emptyMessage }: Props) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
       <div>
-        <p className="text-lg font-semibold text-gray-700">No videos yet</p>
-        <p className="mt-1 text-sm text-gray-500">{emptyMessage}</p>
+        <p className="text-lg font-semibold text-foreground">No videos yet</p>
+        <p className="mt-1 text-sm text-muted-foreground">{emptyMessage}</p>
       </div>
       <div className="flex gap-3">
         <button
@@ -35,7 +35,7 @@ export default function LibraryEmptyState({ emptyMessage }: Props) {
         </button>
         <button
           onClick={() => setAddPlaylistOpen(true)}
-          className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
         >
           <ListMusic className="h-4 w-4" />
           Add playlist

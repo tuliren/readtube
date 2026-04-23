@@ -127,8 +127,8 @@ function DashboardShellInner({ initialChannels, children }: Props) {
               aria-describedby={undefined}
             >
               <SidebarExpandedOverride>
-                <div className="flex h-14 shrink-0 items-center border-b border-gray-200 px-5">
-                  <SheetTitle className="text-base font-bold text-gray-900">ReadTube</SheetTitle>
+                <div className="flex h-14 shrink-0 items-center border-b border-border px-5">
+                  <SheetTitle className="text-base font-bold text-foreground">ReadTube</SheetTitle>
                 </div>
                 {renderSidebarContent(false)}
               </SidebarExpandedOverride>
@@ -139,15 +139,15 @@ function DashboardShellInner({ initialChannels, children }: Props) {
         {/* Desktop sidebar */}
         {!isMobile && (
           <aside
-            className="relative flex shrink-0 flex-col border-r border-gray-200 bg-gray-50"
+            className="relative flex shrink-0 flex-col border-r border-border bg-sidebar"
             style={{ width: collapsed ? 56 : width }}
           >
-            <div className="flex h-14 shrink-0 items-center border-b border-gray-200 px-3">
+            <div className="flex h-14 shrink-0 items-center border-b border-border px-3">
               {collapsed ? (
                 <button
                   type="button"
                   onClick={toggleCollapsed}
-                  className="mx-auto rounded p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                  className="mx-auto rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
                   aria-label="Expand sidebar"
                   title="Expand sidebar"
                 >
@@ -155,11 +155,11 @@ function DashboardShellInner({ initialChannels, children }: Props) {
                 </button>
               ) : (
                 <div className="flex flex-1 items-center justify-between px-2">
-                  <span className="text-base font-bold text-gray-900">ReadTube</span>
+                  <span className="text-base font-bold text-foreground">ReadTube</span>
                   <button
                     type="button"
                     onClick={toggleCollapsed}
-                    className="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                    className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
                     aria-label="Collapse sidebar"
                     title="Collapse sidebar"
                   >
@@ -175,7 +175,7 @@ function DashboardShellInner({ initialChannels, children }: Props) {
                 the right when expanded. When collapsed (56px rail) there's no
                 room for the selector — it stays reachable via /settings. */}
             <div
-              className={`mt-auto flex h-14 shrink-0 items-center border-t border-gray-200 ${
+              className={`mt-auto flex h-14 shrink-0 items-center border-t border-border ${
                 collapsed ? 'justify-center px-0' : 'justify-between px-4'
               }`}
             >
@@ -288,18 +288,18 @@ function MobileTopBar({
   }
 
   return (
-    <div className="flex h-14 shrink-0 items-center gap-2 border-b border-gray-200 px-4">
+    <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-4">
       <button
         type="button"
         onClick={onOpenSidebar}
-        className="shrink-0 rounded p-1.5 text-gray-500 hover:bg-gray-100"
+        className="shrink-0 rounded p-1.5 text-muted-foreground hover:bg-accent"
         aria-label="Open sidebar"
       >
         <Menu className="h-5 w-5" />
       </button>
       {selectedChannel == null && libraryTitle != null && (
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          <span className="truncate text-base font-semibold text-gray-900">{libraryTitle}</span>
+          <span className="truncate text-base font-semibold text-foreground">{libraryTitle}</span>
         </div>
       )}
       {selectedChannel != null && (
@@ -307,7 +307,7 @@ function MobileTopBar({
           {selectedChannel.logoUrl != null && (
             <ChannelAvatar url={selectedChannel.logoUrl} size={40} cssSize="h-6 w-6" />
           )}
-          <span className="truncate text-base font-semibold text-gray-900">
+          <span className="truncate text-base font-semibold text-foreground">
             {selectedChannel.name}
           </span>
           {showRefresh && (
@@ -315,7 +315,7 @@ function MobileTopBar({
               type="button"
               onClick={handleRefreshChannel}
               disabled={refreshing}
-              className="shrink-0 rounded p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50 disabled:hover:bg-transparent"
+              className="shrink-0 rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50 disabled:hover:bg-transparent"
               aria-label="Refresh channel"
               title="Pull latest videos + metadata for this channel"
             >
@@ -330,7 +330,7 @@ function MobileTopBar({
             type="button"
             onClick={handleMarkAllRead}
             disabled={marking}
-            className="rounded p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50 disabled:hover:bg-transparent"
+            className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50 disabled:hover:bg-transparent"
             aria-label="Mark all as read"
             title="Mark all as read"
           >

@@ -78,7 +78,7 @@ export default function DraggableChannelLink({
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="ml-0.5 rounded p-1 text-gray-400 opacity-0 hover:bg-gray-100 hover:text-gray-600 group-hover:opacity-100 data-[state=open]:opacity-100"
+              className="ml-0.5 rounded p-1 text-muted-foreground opacity-0 hover:bg-accent hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
               aria-label="Channel actions"
               title="Channel actions"
             >
@@ -93,7 +93,7 @@ export default function DraggableChannelLink({
             */}
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
-                <FolderInput className="mr-2 h-3.5 w-3.5 text-gray-500" />
+                <FolderInput className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
                 Move to folder
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="w-52">
@@ -104,7 +104,7 @@ export default function DraggableChannelLink({
                   {channel.folderId == null ? (
                     <Check className="mr-2 h-3.5 w-3.5 text-blue-600" />
                   ) : (
-                    <CircleDashed className="mr-2 h-3.5 w-3.5 text-gray-400" />
+                    <CircleDashed className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
                   )}
                   (No folder)
                 </DropdownMenuItem>
@@ -119,7 +119,7 @@ export default function DraggableChannelLink({
                       {isCurrent ? (
                         <Check className="mr-2 h-3.5 w-3.5 text-blue-600" />
                       ) : (
-                        <FolderIcon className="mr-2 h-3.5 w-3.5 text-gray-400" />
+                        <FolderIcon className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
                       )}
                       <span className="truncate">{folder.name}</span>
                     </DropdownMenuItem>

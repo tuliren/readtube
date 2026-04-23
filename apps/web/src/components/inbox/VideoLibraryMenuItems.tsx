@@ -55,13 +55,13 @@ export default function VideoLibraryMenuItems({
     <>
       <DropdownMenuSub>
         <DropdownMenuSubTrigger>
-          <ListMusic className="mr-2 h-4 w-4 text-gray-400" />
+          <ListMusic className="mr-2 h-4 w-4 text-muted-foreground" />
           Add to playlist…
         </DropdownMenuSubTrigger>
         <DropdownMenuSubContent className="w-56">
           {playlists.length === 0 ? (
             <DropdownMenuItem disabled>
-              <span className="text-xs text-gray-500">No playlists yet</span>
+              <span className="text-xs text-muted-foreground">No playlists yet</span>
             </DropdownMenuItem>
           ) : (
             playlists.map((p) => (
@@ -69,7 +69,7 @@ export default function VideoLibraryMenuItems({
                 key={p.id}
                 onSelect={() => void triage.addToPlaylist(video.id, p.id)}
               >
-                <Plus className="mr-2 h-4 w-4 text-gray-400" />
+                <Plus className="mr-2 h-4 w-4 text-muted-foreground" />
                 <span className="truncate">{p.name}</span>
               </DropdownMenuItem>
             ))

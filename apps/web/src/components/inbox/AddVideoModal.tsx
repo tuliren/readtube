@@ -89,8 +89,8 @@ export default function AddVideoModal({ open, onOpenChange }: Props) {
           <DialogTitle>Add video</DialogTitle>
           <DialogDescription>
             Paste a YouTube video URL or id:{' '}
-            <code className="rounded bg-gray-100 px-1">youtube.com/watch?v=…</code>,{' '}
-            <code className="rounded bg-gray-100 px-1">youtu.be/…</code>, or a bare 11-char id.
+            <code className="rounded bg-muted px-1">youtube.com/watch?v=…</code>,{' '}
+            <code className="rounded bg-muted px-1">youtu.be/…</code>, or a bare 11-char id.
           </DialogDescription>
         </DialogHeader>
 
