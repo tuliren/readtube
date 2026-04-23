@@ -2,8 +2,7 @@ import { prisma } from '@readtube/database';
 import { embed, streamText } from 'ai';
 import { NextRequest, NextResponse } from 'next/server';
 
-import { DEFAULT_AI_MODEL } from '@/constants';
-import { EMBEDDING_MODEL } from '@/lib/ai/embed';
+import { DEFAULT_AI_MODEL, DEFAULT_EMBEDDING_MODEL } from '@/constants';
 import { requireUserId } from '@/lib/auth';
 import { headerSafeJson } from '@/lib/http/headerSafeJson';
 
@@ -52,7 +51,7 @@ export async function POST(request: NextRequest) {
   // Embed the question through the same model used for video embeddings
   // so the vector space lines up.
   const { embedding } = await embed({
-    model: EMBEDDING_MODEL,
+    model: DEFAULT_EMBEDDING_MODEL,
     value: question,
   });
   const vectorLiteral = `[${embedding.join(',')}]`;
