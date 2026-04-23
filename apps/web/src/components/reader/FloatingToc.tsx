@@ -93,7 +93,7 @@ export default function FloatingToc({ items, variant }: Props) {
 
   return (
     <div
-      className="group fixed top-1/2 right-8 z-20 hidden -translate-y-1/2 sidebar:block"
+      className="group fixed top-1/3 right-8 z-20 hidden -translate-y-1/2 sidebar:block"
       aria-label="Table of contents"
     >
       {/* Ladder (idle). Fades out on hover so the popup visually
@@ -116,20 +116,18 @@ export default function FloatingToc({ items, variant }: Props) {
       {/* Popup (hover). Pointer-events flip from none → auto on hover
           so clicks land, and so the popup doesn't eat hits over the
           article when idle. */}
-      <div className="pointer-events-none absolute top-1/2 right-0 w-64 -translate-y-1/2 rounded-xl border border-border bg-background p-5 opacity-0 shadow-lg transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
-        <ul className="flex max-h-[70vh] flex-col gap-3 overflow-y-auto text-sm">
+      <div className="pointer-events-none absolute top-1/2 right-0 w-64 -translate-y-1/2 rounded-xl border border-border bg-background p-2 opacity-0 shadow-lg transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
+        <ul className="flex max-h-[70vh] flex-col gap-0.5 overflow-y-auto text-sm">
           {items.map((it) => {
             const isActive = activeId === it.id;
-            const indent = it.level === 3 ? 'pl-3' : '';
+            const indent = it.level === 3 ? 'ml-3' : '';
             return (
               <li key={it.id} className={indent}>
                 <button
                   type="button"
                   onClick={() => handleClick(it.id)}
-                  className={`w-full text-left transition-colors ${
-                    isActive
-                      ? 'font-medium text-blue-600 dark:text-blue-400'
-                      : 'text-foreground hover:text-blue-600 dark:hover:text-blue-400'
+                  className={`w-full rounded-md px-3 py-2 text-left transition-colors hover:bg-foreground/5 dark:hover:bg-foreground/10 ${
+                    isActive ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-foreground'
                   }`}
                 >
                   {variant === 'timestamps' ? (
@@ -137,7 +135,13 @@ export default function FloatingToc({ items, variant }: Props) {
                       <span className="shrink-0 font-mono text-xs text-muted-foreground">
                         {it.label}
                       </span>
-                      <span className="truncate">{it.secondaryLabel}</span>
+                      {/* min-w-0 is what actually lets `truncate` take
+                          effect inside a flex row — otherwise the span
+                          keeps its content width and nothing gets
+                          clipped. The secondaryLabel can carry up to
+                          50 words; the ellipsis cuts it to whatever
+                          fits the popup width. */}
+                      <span className="min-w-0 flex-1 truncate">{it.secondaryLabel}</span>
                     </span>
                   ) : (
                     <span className="line-clamp-2">{it.label}</span>
