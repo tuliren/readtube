@@ -65,7 +65,7 @@ export default function PreferredLanguageForm({ initialValue }: Props) {
           const next = e.target.value;
           handleChange(next === ORIGINAL_VALUE ? null : next);
         }}
-        className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground hover:border-border focus:border-border focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+        className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground hover:border-ring focus:border-ring focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
       >
         <option value={ORIGINAL_VALUE}>Original (source language)</option>
         {TARGET_LANGUAGES.map((lang) => (

@@ -43,7 +43,7 @@ export default function LanguagePicker({ value, onChange, disabled = false }: Pr
             const next = e.target.value;
             onChange(next === ORIGINAL_VALUE ? null : next);
           }}
-          className="appearance-none rounded-md border border-border bg-background py-1.5 pr-7 pl-7 text-xs leading-none text-foreground hover:border-border focus:border-border focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+          className="appearance-none rounded-md border border-border bg-background py-1.5 pr-7 pl-7 text-xs leading-none text-foreground hover:border-ring focus:border-ring focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
         >
           <option value={ORIGINAL_VALUE}>Original</option>
           {TARGET_LANGUAGES.map((lang) => (
