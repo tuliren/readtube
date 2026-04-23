@@ -1,13 +1,15 @@
 'use client';
 
 import { ArrowPathIcon } from '@heroicons/react/24/outline';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { countWords } from '@/lib/format/wordCount';
 import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
+import { extractArticleHeadings } from '@/lib/reader/extractArticleHeadings';
 import { isProduction } from '@/lib/vercelEnv';
 
 import ArticleMarkdown from './ArticleMarkdown';
+import FloatingToc from './FloatingToc';
 import LanguagePicker, { languageQueryFragment } from './LanguagePicker';
 import type { TranscriptStatus } from './VideoReader';
 
@@ -118,6 +120,12 @@ export default function ArticleReader({
   useEffect(() => {
     onArticleWordsChange(countWords(content));
   }, [content, onArticleWordsChange]);
+
+  // Recomputed on every content change so the TOC keeps up while the
+  // article streams in. Cheap — one regex pass per line. Declared up
+  // here with the other hooks so it stays above the status-specific
+  // early returns below; moving it lower would trip rules-of-hooks.
+  const tocItems = useMemo(() => extractArticleHeadings(content), [content]);
 
   async function handleGenerate(opts: { force?: boolean } = {}) {
     setStatus('streaming');
@@ -361,13 +369,16 @@ export default function ArticleReader({
           </div>
         )
       )}
-      <ArticleMarkdown hasLatex={hasLatex}>{content}</ArticleMarkdown>
+      <ArticleMarkdown hasLatex={hasLatex} enableHeadingIds>
+        {content}
+      </ArticleMarkdown>
       {status === 'streaming' && (
         <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
           <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-blue-500" />
           Generating…
         </div>
       )}
+      <FloatingToc items={tocItems} variant="headings" />
     </div>
   );
 }

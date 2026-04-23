@@ -1,11 +1,13 @@
 'use client';
 
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { type Components } from 'react-markdown';
 import rehypeExternalLinks from 'rehype-external-links';
 import rehypeKatex from 'rehype-katex';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import type { PluggableList } from 'unified';
+
+import { headingDomId } from '@/lib/reader/extractArticleHeadings';
 
 interface Props {
   children: string;
@@ -17,6 +19,14 @@ interface Props {
    *  entirely — every dollar sign stays literal, which is the correct
    *  behaviour for plain prose containing money amounts etc. */
   hasLatex?: boolean;
+  /** When true, tag `##` / `###` headings with line-based DOM ids so
+   *  `FloatingToc` can jump to them. Off by default: the Summary and
+   *  Article tabs share this renderer but sit in the DOM at the same
+   *  time (toggled via CSS `hidden`, not unmounted), so if every
+   *  instance stamped ids a `toc-h2-1` in the Summary tab would shadow
+   *  `toc-h2-1` in the Article tab and `document.getElementById` would
+   *  return a hidden heading. Only the Article tab opts in. */
+  enableHeadingIds?: boolean;
 }
 
 const BASE_CLASS =
@@ -25,6 +35,30 @@ const EXTERNAL_LINKS_PLUGIN: PluggableList[number] = [
   rehypeExternalLinks,
   { target: '_blank', rel: ['noopener', 'noreferrer'] },
 ];
+
+// Heading components tag each `##` / `###` with a stable DOM id derived
+// from its source line number. `FloatingToc` scrolls to these ids when
+// the reader clicks a TOC entry, and uses the same ids as its
+// IntersectionObserver targets. `scroll-mt-20` keeps the target from
+// disappearing behind the sticky reader header on smooth scroll.
+const HEADING_COMPONENTS: Components = {
+  h2: ({ node, children, ...props }) => {
+    const line = node?.position?.start?.line ?? 0;
+    return (
+      <h2 id={headingDomId(2, line)} className="scroll-mt-20" {...props}>
+        {children}
+      </h2>
+    );
+  },
+  h3: ({ node, children, ...props }) => {
+    const line = node?.position?.start?.line ?? 0;
+    return (
+      <h3 id={headingDomId(3, line)} className="scroll-mt-20" {...props}>
+        {children}
+      </h3>
+    );
+  },
+};
 
 /**
  * Shared Markdown renderer for AI-generated reader content (summaries,
@@ -44,7 +78,12 @@ const EXTERNAL_LINKS_PLUGIN: PluggableList[number] = [
  * `<script>alert(1)</script>` in the source becomes a text node,
  * never an element. No sanitizer needed.
  */
-export default function ArticleMarkdown({ children, className, hasLatex }: Props) {
+export default function ArticleMarkdown({
+  children,
+  className,
+  hasLatex,
+  enableHeadingIds,
+}: Props) {
   const mathPlugin: PluggableList[number] = hasLatex
     ? remarkMath
     : [remarkMath, { singleDollarTextMath: false }];
@@ -52,7 +91,11 @@ export default function ArticleMarkdown({ children, className, hasLatex }: Props
   const rehypePlugins: PluggableList = [rehypeKatex, EXTERNAL_LINKS_PLUGIN];
   return (
     <article className={className != null ? `${BASE_CLASS} ${className}` : BASE_CLASS}>
-      <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins}>
+      <ReactMarkdown
+        remarkPlugins={remarkPlugins}
+        rehypePlugins={rehypePlugins}
+        components={enableHeadingIds === true ? HEADING_COMPONENTS : undefined}
+      >
         {children}
       </ReactMarkdown>
     </article>

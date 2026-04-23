@@ -1,13 +1,15 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { countWords } from '@/lib/format/wordCount';
 import type { TranscriptSegment } from '@/lib/platforms/types';
 import { formatTimestamp, groupTranscriptSegments } from '@/lib/platforms/youtube/transcript';
+import { buildTranscriptToc, transcriptParagraphId } from '@/lib/reader/buildTranscriptToc';
 import type { VideoPlatform } from '@/lib/types';
 import { buildWatchLink } from '@/lib/urls/watchUrl';
 
+import FloatingToc from './FloatingToc';
 import type { TranscriptStatus } from './VideoReader';
 
 interface Props {
@@ -252,7 +254,20 @@ export default function TranscriptReader({
     );
   }
 
-  const paragraphs = segments ? groupTranscriptSegments(segments) : [];
+  return <TranscriptContent segments={segments} platform={platform} sourceId={sourceId} />;
+}
+
+function TranscriptContent({
+  segments,
+  platform,
+  sourceId,
+}: {
+  segments: TranscriptSegment[] | null;
+  platform: VideoPlatform;
+  sourceId: string;
+}) {
+  const paragraphs = useMemo(() => (segments ? groupTranscriptSegments(segments) : []), [segments]);
+  const tocItems = useMemo(() => buildTranscriptToc(paragraphs), [paragraphs]);
 
   if (paragraphs.length === 0) {
     return <UnavailableMessage platform={platform} sourceId={sourceId} />;
@@ -265,7 +280,7 @@ export default function TranscriptReader({
         const { url: paragraphUrl } = buildWatchLink(platform, sourceId, startSeconds);
 
         return (
-          <div key={i} className="flex gap-4">
+          <div key={i} id={transcriptParagraphId(i)} className="flex scroll-mt-20 gap-4">
             <a
               href={paragraphUrl}
               target="_blank"
@@ -279,6 +294,7 @@ export default function TranscriptReader({
           </div>
         );
       })}
+      <FloatingToc items={tocItems} variant="timestamps" />
     </div>
   );
 }
