@@ -270,7 +270,7 @@ export default function VideoReader({
                 <NotebookPen className="h-4 w-4" />
                 <span className="hidden sidebar:inline">Notes</span>
                 {noteCount > 0 && (
-                  <span className="rounded-full bg-amber-100 px-1.5 text-[10px] font-semibold text-amber-700">
+                  <span className="rounded-full bg-amber-100 px-1.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
                     {noteCount}
                   </span>
                 )}
@@ -434,11 +434,11 @@ export default function VideoReader({
             // and render a single "no transcript" notice with a YouTube
             // link, so the user has one obvious next step instead of
             // three tabs that all show the same message.
-            <div className="mt-8 rounded-md border border-amber-200 bg-amber-50 px-4 py-6 text-center">
-              <p className="text-base font-medium text-amber-800">
+            <div className="mt-8 rounded-md border border-amber-200 bg-amber-50 px-4 py-6 text-center dark:border-amber-500/30 dark:bg-amber-500/10">
+              <p className="text-base font-medium text-amber-800 dark:text-amber-200">
                 No transcript is available for this video
               </p>
-              <p className="mt-2 text-sm text-amber-700">
+              <p className="mt-2 text-sm text-amber-700 dark:text-amber-300">
                 For now, ReadTube can only generate a summary or article when {platformName}{' '}
                 provides a native transcript for the video. Support for videos without captions is
                 on the roadmap.

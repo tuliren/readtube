@@ -364,7 +364,10 @@ function RootDropZone({ children }: { children: React.ReactNode }) {
   // only horizontal padding would come from sidebarRowClass's own
   // px-3, while views/folders get px-3 + px-3.
   return (
-    <div ref={setNodeRef} className={`mt-1 px-3 ${isOver ? 'bg-blue-50/60' : ''}`}>
+    <div
+      ref={setNodeRef}
+      className={`mt-1 px-3 ${isOver ? 'bg-blue-50/60 dark:bg-blue-500/10' : ''}`}
+    >
       {children}
     </div>
   );

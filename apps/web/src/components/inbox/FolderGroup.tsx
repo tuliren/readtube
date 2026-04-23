@@ -71,7 +71,10 @@ export default function FolderGroup({
     // the New-folder button up in the Channels header. Without this
     // the folder-children channel rows would extend to 0px because
     // their <ul> has no horizontal padding.
-    <div className={`mt-2 px-3 ${isOver ? 'bg-blue-50/60' : ''}`} ref={setNodeRef}>
+    <div
+      className={`mt-2 px-3 ${isOver ? 'bg-blue-50/60 dark:bg-blue-500/10' : ''}`}
+      ref={setNodeRef}
+    >
       {/*
         The `group` class here is what activates `group-hover:opacity-100`
         on the folder menu button below — without it the ⋯ button stays

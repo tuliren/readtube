@@ -41,18 +41,18 @@ export default function BulkActionBar({ selectedIds, onClear, showRemoveFromLibr
       <button
         type="button"
         onClick={onClear}
-        className="rounded p-1 text-gray-500 hover:bg-white"
+        className="rounded p-1 text-muted-foreground hover:bg-accent"
         aria-label="Clear selection"
       >
         <X className="h-4 w-4" />
       </button>
-      <span className="text-sm font-medium text-gray-700">{selectedIds.length} selected</span>
+      <span className="text-sm font-medium text-foreground">{selectedIds.length} selected</span>
       <div className="flex-1" />
       <button
         type="button"
         onClick={() => void run({ type: 'mark_read' }, 'marked read')}
         title="Mark read"
-        className="flex items-center gap-1 rounded px-2 py-1 text-sm text-gray-700 hover:bg-white"
+        className="flex items-center gap-1 rounded px-2 py-1 text-sm text-foreground hover:bg-accent"
       >
         <Check className="h-4 w-4" />
         <span className="hidden sidebar:inline">Mark read</span>
@@ -61,7 +61,7 @@ export default function BulkActionBar({ selectedIds, onClear, showRemoveFromLibr
         type="button"
         onClick={() => void run({ type: 'star' }, 'starred')}
         title="Star"
-        className="flex items-center gap-1 rounded px-2 py-1 text-sm text-gray-700 hover:bg-white"
+        className="flex items-center gap-1 rounded px-2 py-1 text-sm text-foreground hover:bg-accent"
       >
         <Star className="h-4 w-4" />
         <span className="hidden sidebar:inline">Star</span>
@@ -70,7 +70,7 @@ export default function BulkActionBar({ selectedIds, onClear, showRemoveFromLibr
         type="button"
         onClick={() => void run({ type: 'save' }, 'saved')}
         title="Save"
-        className="flex items-center gap-1 rounded px-2 py-1 text-sm text-gray-700 hover:bg-white"
+        className="flex items-center gap-1 rounded px-2 py-1 text-sm text-foreground hover:bg-accent"
       >
         <Bookmark className="h-4 w-4" />
         <span className="hidden sidebar:inline">Save</span>
@@ -79,7 +79,7 @@ export default function BulkActionBar({ selectedIds, onClear, showRemoveFromLibr
         type="button"
         onClick={() => void run({ type: 'archive' }, 'archived')}
         title="Archive"
-        className="flex items-center gap-1 rounded px-2 py-1 text-sm text-gray-700 hover:bg-white"
+        className="flex items-center gap-1 rounded px-2 py-1 text-sm text-foreground hover:bg-accent"
       >
         <Archive className="h-4 w-4" />
         <span className="hidden sidebar:inline">Archive</span>
@@ -89,7 +89,7 @@ export default function BulkActionBar({ selectedIds, onClear, showRemoveFromLibr
           type="button"
           onClick={() => void run({ type: 'remove_from_library' }, 'removed')}
           title="Remove from library"
-          className="flex items-center gap-1 rounded px-2 py-1 text-sm text-red-600 hover:bg-white"
+          className="flex items-center gap-1 rounded px-2 py-1 text-sm text-red-600 hover:bg-accent dark:text-red-400"
         >
           <Trash2 className="h-4 w-4" />
           <span className="hidden sidebar:inline">Remove</span>
