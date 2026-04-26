@@ -48,10 +48,10 @@ export default function Header() {
               Sign in
             </Link>
           )}
-          <ThemeSelector variant="segmented" />
+          <ThemeSelector />
         </div>
         <div className="flex items-center gap-3 lg:hidden">
-          <ThemeSelector variant="compact" />
+          <ThemeSelector />
           <button
             type="button"
             onClick={() => setMobileMenuOpen(true)}
