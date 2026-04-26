@@ -24,6 +24,7 @@ import { useFolders } from '@/components/inbox/useFolders';
 import ThemeSelector from '@/components/settings/ThemeSelector';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Toaster } from '@/components/ui/sonner';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { MANUAL_REFRESH_DAYS, canManuallyRefresh } from '@/lib/channels/staleness';
 import { extractInboxSearchParams, parseInboxQuery } from '@/lib/inbox/filter';
 import { resolveInboxView } from '@/lib/inbox/views';
@@ -321,16 +322,27 @@ function MobileTopBar({
             {selectedChannel.name}
           </span>
           {showRefresh && (
-            <button
-              type="button"
-              onClick={handleRefreshChannel}
-              disabled={refreshDisabled}
-              className="shrink-0 rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50 disabled:hover:bg-transparent"
-              aria-label="Refresh channel"
-              title={refreshTooltip}
-            >
-              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-            </button>
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                {/* Span wrapper keeps the tooltip hoverable while the
+                    button is disabled — disabled buttons drop pointer
+                    events that Radix needs for hover detection. */}
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <button
+                      type="button"
+                      onClick={handleRefreshChannel}
+                      disabled={refreshDisabled}
+                      className="shrink-0 rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50 disabled:hover:bg-transparent"
+                      aria-label="Refresh channel"
+                    >
+                      <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                    </button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">{refreshTooltip}</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )}
         </div>
       )}

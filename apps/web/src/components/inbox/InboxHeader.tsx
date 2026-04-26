@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { useSWRConfig } from 'swr';
 
 import ExternalLinkActions from '@/components/ExternalLinkActions';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { MANUAL_REFRESH_DAYS, canManuallyRefresh } from '@/lib/channels/staleness';
 import type { VideoPlatform } from '@/lib/types';
 import { buildChannelLink } from '@/lib/urls/watchUrl';
@@ -166,17 +167,30 @@ export default function InboxHeader({
             </span>
           )}
           {showRefresh && (
-            <button
-              onClick={handleRefreshChannel}
-              disabled={refreshDisabled}
-              className="hidden shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50 disabled:hover:bg-transparent sidebar:inline-flex"
-              title={refreshTooltip}
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-              <span className="hidden sidebar:inline">
-                {refreshing ? 'Refreshing…' : 'Refresh'}
-              </span>
-            </button>
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                {/* The disabled state strips pointer events from the
+                    button, which would also strip the Radix tooltip's
+                    hover detection. Wrap in a span so the trigger still
+                    receives mouseenter while the inner button stays
+                    semantically disabled. */}
+                <TooltipTrigger asChild>
+                  <span className="hidden sidebar:inline-flex">
+                    <button
+                      onClick={handleRefreshChannel}
+                      disabled={refreshDisabled}
+                      className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50 disabled:hover:bg-transparent"
+                    >
+                      <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+                      <span className="hidden sidebar:inline">
+                        {refreshing ? 'Refreshing…' : 'Refresh'}
+                      </span>
+                    </button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">{refreshTooltip}</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )}
           {unreadCount > 0 && (
             <button
