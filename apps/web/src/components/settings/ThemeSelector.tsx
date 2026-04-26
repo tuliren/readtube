@@ -10,6 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { MAIN_COLOR } from '@/constants';
 import { cn } from '@/lib/utils';
 
 type ThemeChoice = 'system' | 'light' | 'dark';
@@ -61,19 +62,20 @@ export default function ThemeSelector({
         <TriggerIcon className="h-4 w-4" />
       </DropdownMenuTrigger>
       <DropdownMenuContent side={side} align={align} sideOffset={sideOffset}>
-        {CHOICES.map(({ value, label, Icon }) => (
-          <DropdownMenuItem
-            key={value}
-            onClick={() => setTheme(value)}
-            className={cn(
-              'gap-2',
-              current === value && 'bg-accent font-medium text-foreground focus:bg-accent'
-            )}
-          >
-            <Icon className="h-4 w-4" />
-            {label}
-          </DropdownMenuItem>
-        ))}
+        {CHOICES.map(({ value, label, Icon }) => {
+          const active = current === value;
+          return (
+            <DropdownMenuItem
+              key={value}
+              onClick={() => setTheme(value)}
+              className={cn('gap-2', active && 'font-medium text-white focus:text-white')}
+              style={active ? { backgroundColor: MAIN_COLOR } : undefined}
+            >
+              <Icon className="h-4 w-4" />
+              {label}
+            </DropdownMenuItem>
+          );
+        })}
       </DropdownMenuContent>
     </DropdownMenu>
   );
