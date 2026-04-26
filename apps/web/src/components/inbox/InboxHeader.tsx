@@ -8,9 +8,9 @@ import { toast } from 'sonner';
 import { useSWRConfig } from 'swr';
 
 import ExternalLinkActions from '@/components/ExternalLinkActions';
+import { MANUAL_REFRESH_DAYS, canManuallyRefresh } from '@/lib/channels/staleness';
 import type { VideoPlatform } from '@/lib/types';
 import { buildChannelLink } from '@/lib/urls/watchUrl';
-import { isProduction } from '@/lib/vercelEnv';
 
 import ChannelAvatar from './ChannelAvatar';
 import Pagination from './Pagination';
@@ -29,6 +29,11 @@ interface Props {
    *  that has a logo persisted from the scraper. Null for the
    *  Inbox/Starred/etc. aggregate views. */
   channelLogoUrl: string | null;
+  /** Last successful snapshot time for the active channel — drives
+   *  the manual refresh button's enabled state. ISO string, or null
+   *  for shadow channels that have never been refreshed. Ignored
+   *  when channelId is null. */
+  channelCheckedAt: string | null;
   unreadCount: number;
   /** Total videos that match the current filter (across all pages).
    *  Drives the Page X of Y control on the right side of the header. */
@@ -51,6 +56,7 @@ export default function InboxHeader({
   channelPlatform,
   channelName,
   channelLogoUrl,
+  channelCheckedAt,
   unreadCount,
   totalVideos,
   trailing,
@@ -62,10 +68,16 @@ export default function InboxHeader({
   const pathname = usePathname();
   const [marking, setMarking] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const showRefresh = !isProduction() && channelId != null;
+  const showRefresh = channelId != null;
+  const checkedAtDate = channelCheckedAt != null ? new Date(channelCheckedAt) : null;
+  const refreshAllowed = canManuallyRefresh(checkedAtDate);
+  const refreshDisabled = refreshing || !refreshAllowed;
+  const refreshTooltip = refreshAllowed
+    ? 'Pull latest videos + metadata for this channel'
+    : `Refreshed recently. Try again after ${MANUAL_REFRESH_DAYS} day${MANUAL_REFRESH_DAYS === 1 ? '' : 's'} since the last refresh.`;
 
   async function handleRefreshChannel() {
-    if (channelId == null || refreshing) {
+    if (channelId == null || refreshing || !refreshAllowed) {
       return;
     }
     setRefreshing(true);
@@ -156,9 +168,9 @@ export default function InboxHeader({
           {showRefresh && (
             <button
               onClick={handleRefreshChannel}
-              disabled={refreshing}
+              disabled={refreshDisabled}
               className="hidden shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50 disabled:hover:bg-transparent sidebar:inline-flex"
-              title="Pull latest videos + metadata for this channel"
+              title={refreshTooltip}
             >
               <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
               <span className="hidden sidebar:inline">

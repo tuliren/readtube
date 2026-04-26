@@ -44,6 +44,7 @@ export async function GET() {
       rssUrl: row.rss_url,
       logoUrl: row.logo_url ?? null,
       createdAt: row.created_at,
+      checkedAt: row.checked_at,
       unreadCount: row.unread_count,
       folderId: row.folder_id,
       priority: row.priority,
@@ -231,6 +232,7 @@ async function finishSubscribe(userId: string, channelId: string) {
       rss_url: true,
       logo_url: true,
       created_at: true,
+      checked_at: true,
     },
   });
   const unreadCount = await countUnreadVideos(prisma, userId, channelId, initialReadAt);
@@ -245,6 +247,7 @@ async function finishSubscribe(userId: string, channelId: string) {
       rssUrl: channelRow.rss_url,
       logoUrl: channelRow.logo_url,
       createdAt: channelRow.created_at,
+      checkedAt: channelRow.checked_at,
       unreadCount,
       folderId: null,
       priority: 0,

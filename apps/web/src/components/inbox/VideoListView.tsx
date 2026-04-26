@@ -203,6 +203,7 @@ export default function VideoListView({
   let headerChannelId: string | null;
   let headerChannelSourceId: string | null;
   let headerChannelPlatform: VideoPlatform | null;
+  let headerChannelCheckedAt: string | null;
   let headerMarkAllReadBody: Record<string, unknown> | undefined;
   let headerTrailing: React.ReactNode | undefined;
 
@@ -214,6 +215,7 @@ export default function VideoListView({
     headerChannelId = null;
     headerChannelSourceId = null;
     headerChannelPlatform = null;
+    headerChannelCheckedAt = null;
     headerMarkAllReadBody = library.markAllReadBody;
     headerTrailing = library.trailing;
   } else {
@@ -227,6 +229,7 @@ export default function VideoListView({
     headerChannelId = selectedChannelId;
     headerChannelSourceId = selectedChannel?.sourceId ?? null;
     headerChannelPlatform = selectedChannel?.platform ?? null;
+    headerChannelCheckedAt = selectedChannel?.checkedAt ?? null;
     headerMarkAllReadBody = undefined;
     headerTrailing = undefined;
   }
@@ -293,6 +296,7 @@ export default function VideoListView({
           channelPlatform={headerChannelPlatform}
           channelName={headerName}
           channelLogoUrl={headerLogoUrl}
+          channelCheckedAt={headerChannelCheckedAt}
           unreadCount={headerUnread}
           totalVideos={totalVideos}
           trailing={headerTrailing}
