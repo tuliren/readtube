@@ -5,8 +5,6 @@ import { STALE_DAYS } from '@/lib/channels/staleness';
 import { getPlatformByType } from '@/lib/platforms';
 import { isEmptyString } from '@/lib/string';
 
-export { STALE_DAYS };
-
 /** Maximum number of channels to refresh per workflow run. */
 export const BATCH_SIZE = 10;
 
