@@ -10,9 +10,7 @@ export const STALE_DAYS = 5;
 /**
  * Minimum gap between user-triggered manual refreshes for a channel.
  * The header refresh button is disabled until at least this many days
- * have elapsed since `checked_at` — short enough that a power user can
- * still nudge a stale-feeling channel, long enough that hammering the
- * button doesn't churn the upstream scrape path.
+ * have elapsed since `checked_at`.
  */
 export const MANUAL_REFRESH_DAYS = 1;
 
