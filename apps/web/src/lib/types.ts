@@ -21,6 +21,10 @@ export interface ChannelData {
    *  metadata enrichment failed. */
   logoUrl: string | null;
   createdAt: string;
+  /** Timestamp of the most recent successful channel snapshot — drives
+   *  the manual refresh button's enabled state. Null when the row has
+   *  never been refreshed (shadow rows from the add-video flow). */
+  checkedAt: string | null;
   unreadCount: number;
   folderId: string | null;
   priority: number;

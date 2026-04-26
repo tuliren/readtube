@@ -123,6 +123,7 @@ export interface SubscribedChannelWithUnread {
   rss_url: string | null;
   logo_url: string | null;
   created_at: Date;
+  checked_at: Date | null;
   unread_count: number;
 }
 
@@ -155,6 +156,7 @@ export async function getSubscribedChannelsWithUnread(
       rss_url: string | null;
       logo_url: string | null;
       created_at: Date;
+      checked_at: Date | null;
       unread_count: bigint;
     }>
   >`
@@ -171,6 +173,7 @@ export async function getSubscribedChannelsWithUnread(
       c."rss_url"      AS rss_url,
       c."logo_url"     AS logo_url,
       c."created_at"   AS created_at,
+      c."checked_at"   AS checked_at,
       COUNT(v."id")    AS unread_count
     FROM "UserSubscription" us
     JOIN "Channel" c ON c."id" = us."channel_id"
@@ -187,7 +190,7 @@ export async function getSubscribedChannelsWithUnread(
     WHERE us."user_id" = ${userId}
     GROUP BY
       us."channel_id", us."read_at", us."folder_id", us."priority", us."mute_until",
-      c."source_type", c."source_id", c."name", c."handle", c."rss_url", c."logo_url", c."created_at"
+      c."source_type", c."source_id", c."name", c."handle", c."rss_url", c."logo_url", c."created_at", c."checked_at"
     ORDER BY LOWER(c."name") ASC
   `;
 
@@ -204,6 +207,7 @@ export async function getSubscribedChannelsWithUnread(
     rss_url: row.rss_url,
     logo_url: row.logo_url,
     created_at: row.created_at,
+    checked_at: row.checked_at,
     unread_count: Number(row.unread_count),
   }));
 }

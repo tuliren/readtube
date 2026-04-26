@@ -24,10 +24,11 @@ import { useFolders } from '@/components/inbox/useFolders';
 import ThemeSelector from '@/components/settings/ThemeSelector';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Toaster } from '@/components/ui/sonner';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { MANUAL_REFRESH_DAYS, canManuallyRefresh } from '@/lib/channels/staleness';
 import { extractInboxSearchParams, parseInboxQuery } from '@/lib/inbox/filter';
 import { resolveInboxView } from '@/lib/inbox/views';
 import type { ChannelData } from '@/lib/types';
-import { isProduction } from '@/lib/vercelEnv';
 
 import { CollapseStateProvider, useCollapseState } from './CollapseStateContext';
 import { DashboardCtx, type DashboardState } from './DashboardContext';
@@ -239,12 +240,19 @@ function MobileTopBar({
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
   const [marking, setMarking] = useState(false);
-  const showRefresh = !isProduction() && selectedChannel != null;
+  const showRefresh = selectedChannel != null;
+  const checkedAtDate =
+    selectedChannel?.checkedAt != null ? new Date(selectedChannel.checkedAt) : null;
+  const refreshAllowed = canManuallyRefresh(checkedAtDate);
+  const refreshDisabled = refreshing || !refreshAllowed;
+  const refreshTooltip = refreshAllowed
+    ? 'Pull latest videos + metadata for this channel'
+    : `Refreshed recently. Try again after ${MANUAL_REFRESH_DAYS} day${MANUAL_REFRESH_DAYS === 1 ? '' : 's'} since the last refresh.`;
   const unreadCount = selectedChannel != null ? selectedChannel.unreadCount : totalUnread;
   const showMarkAll = unreadCount > 0;
 
   async function handleRefreshChannel() {
-    if (selectedChannel == null || refreshing) {
+    if (selectedChannel == null || refreshing || !refreshAllowed) {
       return;
     }
     setRefreshing(true);
@@ -314,16 +322,27 @@ function MobileTopBar({
             {selectedChannel.name}
           </span>
           {showRefresh && (
-            <button
-              type="button"
-              onClick={handleRefreshChannel}
-              disabled={refreshing}
-              className="shrink-0 rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50 disabled:hover:bg-transparent"
-              aria-label="Refresh channel"
-              title="Pull latest videos + metadata for this channel"
-            >
-              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-            </button>
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                {/* Span wrapper keeps the tooltip hoverable while the
+                    button is disabled — disabled buttons drop pointer
+                    events that Radix needs for hover detection. */}
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <button
+                      type="button"
+                      onClick={handleRefreshChannel}
+                      disabled={refreshDisabled}
+                      className="shrink-0 rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50 disabled:hover:bg-transparent"
+                      aria-label="Refresh channel"
+                    >
+                      <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                    </button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">{refreshTooltip}</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )}
         </div>
       )}

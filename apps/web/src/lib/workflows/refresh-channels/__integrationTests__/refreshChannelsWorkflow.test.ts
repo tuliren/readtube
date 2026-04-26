@@ -1,6 +1,7 @@
 import { VideoPlatformType } from '@readtube/database';
 import '@tests/integration-tests';
 
+import { STALE_DAYS } from '@/lib/channels/staleness';
 import type { RssChannel } from '@/lib/platforms/youtube/channelRss';
 import type { ScrapedChannel } from '@/lib/platforms/youtube/channelScrape';
 import { refreshChannelsWorkflow } from '@/lib/workflows/refresh-channels';
@@ -8,7 +9,6 @@ import type { StaleChannel } from '@/lib/workflows/refresh-channels/steps';
 // ─── Imports (after mocks) ───────────────────────────────────────
 import {
   BATCH_SIZE,
-  STALE_DAYS,
   fetchStaleChannels,
   refreshChannel,
 } from '@/lib/workflows/refresh-channels/steps';

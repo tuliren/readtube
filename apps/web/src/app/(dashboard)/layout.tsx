@@ -38,6 +38,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     rssUrl: row.rss_url,
     logoUrl: row.logo_url ?? null,
     createdAt: row.created_at.toISOString(),
+    checkedAt: row.checked_at != null ? row.checked_at.toISOString() : null,
     unreadCount: row.unread_count,
     folderId: row.folder_id,
     priority: row.priority,

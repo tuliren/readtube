@@ -3,26 +3,22 @@ import { prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 import { start } from 'workflow/api';
 
-import { VercelEnv, getVercelEnv } from '@/lib/vercelEnv';
+import { MANUAL_REFRESH_DAYS, canManuallyRefresh } from '@/lib/channels/staleness';
 import { refreshSingleChannelWorkflow } from '@/lib/workflows/refresh-channels';
 
 /**
  * POST /api/channels/[id]/refresh
  *
- * Dev-only single-channel refresh. Kicks off the same workflow the
- * cron uses (scoped to one channel), waits for it to finish, then
+ * User-triggered single-channel refresh. Kicks off the same workflow
+ * the cron uses (scoped to one channel), waits for it to finish, then
  * returns the result so the client can reload and pull the updated
  * data from the DB.
  *
- * Gated on both server-side env check (rejects in production) and
- * client-side UI hiding (the Refresh button uses `isProduction()`).
+ * Throttled by `canManuallyRefresh` — the same cooldown the header
+ * button uses for its disabled state, repeated here so a direct API
+ * call can't bypass the UI gate and hammer the upstream scrape.
  */
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (getVercelEnv(process.env.VERCEL_ENV) === VercelEnv.PRODUCTION) {
-    console.error('[channels/refresh] Attempted refresh in production');
-    return NextResponse.json({ error: 'Not available in production' }, { status: 403 });
-  }
-
   const { userId } = await auth();
   if (userId == null) {
     console.error('[channels/refresh] Unauthorized');
@@ -33,14 +29,24 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
 
   console.info(`[channels/refresh] Refreshing channel ${channelId} for user ${userId}`);
 
-  // IDOR check: the user must be subscribed to this channel.
+  // IDOR check + cooldown read: a single query covers both the
+  // subscription guard and the `checked_at` we need for the throttle.
   const sub = await prisma.userSubscription.findFirst({
     where: { user_id: userId, channel_id: channelId },
-    select: { channel_id: true },
+    select: { channel: { select: { checked_at: true } } },
   });
   if (sub == null) {
     console.error(`[channels/refresh] Channel ${channelId} not subscribed by user ${userId}`);
     return NextResponse.json({ error: 'Channel not found' }, { status: 404 });
+  }
+  if (!canManuallyRefresh(sub.channel.checked_at)) {
+    console.error(`[channels/refresh] Channel ${channelId} refreshed too recently`);
+    return NextResponse.json(
+      {
+        error: `Refreshed recently. Try again after ${MANUAL_REFRESH_DAYS} day${MANUAL_REFRESH_DAYS === 1 ? '' : 's'}.`,
+      },
+      { status: 429 }
+    );
   }
 
   try {
