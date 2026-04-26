@@ -42,7 +42,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
   if (!canManuallyRefresh(sub.channel.checked_at)) {
     console.error(`[channels/refresh] Channel ${channelId} refreshed too recently`);
     return NextResponse.json(
-      { error: `Refreshed recently. Try again after ${MANUAL_REFRESH_DAYS} day.` },
+      { error: `Refreshed recently. Try again after ${MANUAL_REFRESH_DAYS} day${MANUAL_REFRESH_DAYS === 1 ? '' : 's'}.` },
       { status: 429 }
     );
   }
