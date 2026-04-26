@@ -173,8 +173,8 @@ function DashboardShellInner({ initialChannels, children }: Props) {
             {renderSidebarContent(collapsed)}
 
             {/* Pinned bottom row: user profile on the left, theme selector on
-                the right when expanded. When collapsed (56px rail) we stack a
-                compact theme dropdown above the user button instead. */}
+                the right when expanded. When collapsed (56px rail) we stack the
+                theme dropdown above the user button instead. */}
             <div
               className={`mt-auto shrink-0 border-t border-border ${
                 collapsed
@@ -182,7 +182,7 @@ function DashboardShellInner({ initialChannels, children }: Props) {
                   : 'flex h-14 items-center justify-between px-4'
               }`}
             >
-              {collapsed && <ThemeSelector variant="dropdown" />}
+              {collapsed && <ThemeSelector side="right" />}
               <UserButton>
                 <UserButton.MenuItems>
                   <UserButton.Link
@@ -192,7 +192,7 @@ function DashboardShellInner({ initialChannels, children }: Props) {
                   />
                 </UserButton.MenuItems>
               </UserButton>
-              {!collapsed && <ThemeSelector variant="segmented" />}
+              {!collapsed && <ThemeSelector side="top" />}
             </div>
 
             {!collapsed && <SidebarResizeHandle />}
@@ -359,7 +359,7 @@ function MobileTopBar({
             <CheckIcon className="h-5 w-5" />
           </button>
         )}
-        <ThemeSelector variant="compact" />
+        <ThemeSelector />
         <UserButton>
           <UserButton.MenuItems>
             <UserButton.Link

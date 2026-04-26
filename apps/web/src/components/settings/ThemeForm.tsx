@@ -15,7 +15,7 @@ export default function ThemeForm() {
         &ldquo;System&rdquo; follows your operating system or browser setting. Light and Dark
         override it.
       </p>
-      <ThemeSelector variant="segmented" />
+      <ThemeSelector />
     </div>
   );
 }
