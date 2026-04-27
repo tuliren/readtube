@@ -4,6 +4,7 @@ import { Check, Copy, Download } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { filenameSlug } from '@/lib/format/filenameSlug';
 
 interface Props {
   /** Returns the markdown payload at click time so the caller doesn't
@@ -13,24 +14,6 @@ interface Props {
   filename: string;
   /** Disables both buttons — used while content is empty or still streaming. */
   disabled?: boolean;
-}
-
-// Built via `new RegExp` because the `u` flag in a regex literal
-// requires an es6+ tsconfig target and this project still compiles to
-// es5. \p{L}/\p{N} preserve Unicode letters/numbers so non-Latin titles
-// (CJK, Cyrillic, Arabic, etc.) survive the slug instead of collapsing
-// to the suffix.
-const SLUG_DROP_RE = new RegExp('[^\\p{L}\\p{N}\\s_-]', 'gu');
-
-function slugify(input: string): string {
-  const slug = input
-    .toLowerCase()
-    .trim()
-    .replace(SLUG_DROP_RE, '')
-    .replace(/[\s_]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 80);
-  return slug.length > 0 ? slug : 'export';
 }
 
 export default function ExportMarkdownButtons({ getContent, filename, disabled }: Props) {
@@ -73,7 +56,7 @@ export default function ExportMarkdownButtons({ getContent, filename, disabled }
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${slugify(filename)}.md`;
+    a.download = `${filenameSlug(filename)}.md`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
