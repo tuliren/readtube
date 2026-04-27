@@ -506,6 +506,7 @@ export default function VideoReader({
                   <div className={activeTab === 'summary' ? '' : 'hidden'}>
                     <SummaryReader
                       videoDbId={video.id}
+                      videoTitle={video.title}
                       transcriptStatus={transcriptStatus}
                       onTranscriptStatusChange={setTranscriptStatus}
                       onSummaryAvailable={handleSummaryAvailable}
@@ -520,6 +521,7 @@ export default function VideoReader({
                   <div className={activeTab === 'article' ? '' : 'hidden'}>
                     <ArticleReader
                       videoDbId={video.id}
+                      videoTitle={video.title}
                       transcriptStatus={transcriptStatus}
                       onTranscriptStatusChange={setTranscriptStatus}
                       onArticleAvailable={handleArticleAvailable}

@@ -8,6 +8,7 @@ import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { isProduction } from '@/lib/vercelEnv';
 
 import ArticleMarkdown from './ArticleMarkdown';
+import ExportMarkdownButtons from './ExportMarkdownButtons';
 import LanguagePicker, { languageQueryFragment } from './LanguagePicker';
 import type { TranscriptStatus } from './VideoReader';
 
@@ -15,6 +16,8 @@ type HasLatexByField = Partial<Record<'short' | 'full', boolean>>;
 
 interface Props {
   videoDbId: string;
+  /** Used as the slug for the exported markdown file's name. */
+  videoTitle: string;
   /** Shared transcript availability lifted from VideoReader. The
    *  three reader tabs share one source of truth so that auto-
    *  fetch results in the Summary tab also disable Generate in
@@ -90,6 +93,7 @@ function RegenerateButton({ onClick, disabled }: { onClick: () => void; disabled
 
 export default function SummaryReader({
   videoDbId,
+  videoTitle,
   transcriptStatus,
   onTranscriptStatusChange,
   onSummaryAvailable,
@@ -450,9 +454,40 @@ export default function SummaryReader({
   const shortWords = countWords(shortContent);
   const fullWords = countWords(fullContent);
 
+  const buildExportMarkdown = () => {
+    const parts: string[] = [];
+    if (summary.headline != null && summary.headline.trim().length > 0) {
+      parts.push(`# ${summary.headline.trim()}`);
+    }
+    if (shortContent.length > 0) {
+      parts.push(`## Short summary\n\n${shortContent}`);
+    }
+    if (fullContent.length > 0) {
+      parts.push(`## Full summary\n\n${fullContent}`);
+    }
+    return parts.join('\n\n');
+  };
+  const hasExportableContent =
+    (summary.headline != null && summary.headline.trim().length > 0) ||
+    shortContent.length > 0 ||
+    fullContent.length > 0;
+
   return (
     <div>
-      {pickerBar}
+      <div className="mb-4 flex items-center justify-end gap-3">
+        {!publicMode && (
+          <LanguagePicker
+            value={selectedLanguage}
+            onChange={onLanguageChange}
+            disabled={status === 'generating'}
+          />
+        )}
+        <ExportMarkdownButtons
+          getContent={buildExportMarkdown}
+          filename={`${videoTitle}-summary`}
+          disabled={!hasExportableContent || isStreaming}
+        />
+      </div>
       <div className="space-y-8">
         {/* Headline */}
         <div className="flex items-start justify-between gap-4">
