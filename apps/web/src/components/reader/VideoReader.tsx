@@ -115,17 +115,20 @@ export default function VideoReader({
   const { url: watchUrl, platformName } = buildWatchLink(video.platform, video.sourceId);
   const { url: channelUrl } = buildChannelLink(video.platform, video.channelSourceId);
 
-  // Default to Summary in both modes because that's the cheapest
-  // scannable view. `?tab=` in the URL overrides the default so
-  // refresh and link-share preserve the chosen tab. Public mode
-  // hides the Transcript tab — drop a URL value pointing there so
-  // the viewer doesn't land on an empty pane.
+  // Default to Summary because that's the cheapest scannable view.
+  // `?tab=` in the URL overrides the default so refresh and
+  // link-share preserve the chosen tab. Public mode hides the
+  // Transcript tab — drop a URL value pointing there so the viewer
+  // doesn't land on an empty pane. Public-mode also conditionally
+  // hides the Summary tab when the shared video has no summary, so
+  // fall back to Article in that one case to avoid the same empty-
+  // pane outcome.
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     const fromUrl = searchParams.get('tab');
     if (isValidTab(fromUrl) && !(publicMode && fromUrl === 'transcript')) {
       return fromUrl;
     }
-    return 'summary';
+    return publicMode && !video.hasSummary && video.hasArticle ? 'article' : 'summary';
   });
   const durationLabel = formatDurationSeconds(video.durationSeconds);
 
@@ -191,9 +194,11 @@ export default function VideoReader({
     setTranscriptWords(0);
     // Re-pick the default tab for the new video. A stale activeTab
     // from the previous video (e.g. 'transcript' on the way into a
-    // public-mode video that hides it) would otherwise leave the
-    // viewer staring at an empty pane.
-    setActiveTab('summary');
+    // public-mode video that hides it, or 'summary' on the way into
+    // a public-mode article-only video where the Summary tab is
+    // filtered out) would otherwise leave the viewer staring at an
+    // empty pane.
+    setActiveTab(publicMode && !video.hasSummary && video.hasArticle ? 'article' : 'summary');
   }, [
     video.id,
     video.transcriptUnavailable,
