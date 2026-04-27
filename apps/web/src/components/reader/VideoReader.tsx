@@ -11,6 +11,7 @@ import CopyButton from '@/components/CopyButton';
 import ExternalLinkActions from '@/components/ExternalLinkActions';
 import { Button } from '@/components/ui/button';
 import { formatDurationSeconds } from '@/lib/format/duration';
+import { findTargetLanguage } from '@/lib/language/names';
 import type { VideoData } from '@/lib/types';
 import { channelHref } from '@/lib/urls/channelHref';
 import { videoHref } from '@/lib/urls/videoHref';
@@ -50,6 +51,10 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'transcript', label: 'Transcript' },
 ];
 
+function isValidTab(value: string | null): value is Tab {
+  return value === 'summary' || value === 'article' || value === 'transcript';
+}
+
 function relativeDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString(undefined, {
     year: 'numeric',
@@ -64,17 +69,31 @@ export default function VideoReader({
   channelFollowed = false,
   preferredLanguage = null,
 }: Props) {
+  const searchParams = useSearchParams();
+
   // Picker state lives at the VideoReader level so:
   //  - Summary and Article tabs stay in sync (changing the language on
   //    one doesn't strand the other in a different language).
   //  - The Share link can append `?language=...` so a recipient lands
   //    on the same translation the sharer was looking at.
-  const [selectedLanguage, setSelectedLanguage] = useState<string | null>(preferredLanguage);
+  // In private mode the URL's `?language=` param seeds the picker so
+  // refresh and link-share preserve the chosen translation. Public
+  // mode gets its language injected via the `preferredLanguage` prop
+  // (parsed server-side in /p/videos/[videoId]/page.tsx), so reading
+  // here would just duplicate that.
+  const [selectedLanguage, setSelectedLanguage] = useState<string | null>(() => {
+    if (!publicMode) {
+      const fromUrl = searchParams.get('language');
+      if (fromUrl != null && fromUrl.length > 0 && findTargetLanguage(fromUrl) != null) {
+        return fromUrl;
+      }
+    }
+    return preferredLanguage;
+  });
   const shareHref =
     selectedLanguage == null
       ? `/p${videoHref(video)}`
       : `/p${videoHref(video)}?language=${encodeURIComponent(selectedLanguage)}`;
-  const searchParams = useSearchParams();
   // The reader URL is `/videos/<sourceId>?returnTo=<encoded-path>`.
   // `returnTo` carries the full path + query of the list the user
   // came from (e.g. `/inbox?starred=1` or `/channels/@mkbhd`). Falls
@@ -100,9 +119,17 @@ export default function VideoReader({
   // the previous default of Transcript meant every reader open
   // landed on the densest, longest content first. In public mode
   // fall back to Article if the shared video has only an article.
-  const [activeTab, setActiveTab] = useState<Tab>(
-    publicMode && !video.hasSummary && video.hasArticle ? 'article' : 'summary'
-  );
+  // In private mode `?tab=` overrides the default so refresh and
+  // link-share preserve the chosen tab.
+  const [activeTab, setActiveTab] = useState<Tab>(() => {
+    if (!publicMode) {
+      const fromUrl = searchParams.get('tab');
+      if (isValidTab(fromUrl)) {
+        return fromUrl;
+      }
+    }
+    return publicMode && !video.hasSummary && video.hasArticle ? 'article' : 'summary';
+  });
   const durationLabel = formatDurationSeconds(video.durationSeconds);
 
   // Shared transcript availability state across all three tabs.
@@ -146,7 +173,17 @@ export default function VideoReader({
   // video had a generated summary the new video's Summary tab dot
   // would falsely be blue. Resync everything on every video identity
   // change.
+  //
+  // Skip the very first run via prevVideoIdRef — on initial mount the
+  // useState initializers above already seeded the right values
+  // (including URL-derived activeTab), and we don't want this effect
+  // to clobber them back to the unconditional default.
+  const prevVideoIdRef = useRef(video.id);
   useEffect(() => {
+    if (prevVideoIdRef.current === video.id) {
+      return;
+    }
+    prevVideoIdRef.current = video.id;
     setTranscriptStatus(
       video.transcriptUnavailable ? 'unavailable' : video.hasTranscript ? 'present' : 'unknown'
     );
@@ -168,6 +205,39 @@ export default function VideoReader({
     video.hasArticle,
     publicMode,
   ]);
+
+  // Mirror the active tab + selected language into the URL as
+  // `?tab=...&language=...` so refresh, browser-back, and link-share
+  // preserve the view. Private mode only — public mode receives its
+  // language from the SSR'd page and has no transcript tab to track.
+  // window.history.replaceState avoids the re-render / data-refetch
+  // overhead of router.replace; we're just decorating the URL bar.
+  useEffect(() => {
+    if (publicMode) {
+      return;
+    }
+    const params = new URLSearchParams(window.location.search);
+    let changed = false;
+    if (params.get('tab') !== activeTab) {
+      params.set('tab', activeTab);
+      changed = true;
+    }
+    const currentLang = params.get('language');
+    if (selectedLanguage != null) {
+      if (currentLang !== selectedLanguage) {
+        params.set('language', selectedLanguage);
+        changed = true;
+      }
+    } else if (currentLang != null) {
+      params.delete('language');
+      changed = true;
+    }
+    if (changed) {
+      const qs = params.toString();
+      const newUrl = `${window.location.pathname}${qs.length > 0 ? `?${qs}` : ''}`;
+      window.history.replaceState(null, '', newUrl);
+    }
+  }, [activeTab, selectedLanguage, publicMode]);
 
   // Stable callbacks the children pass into their effect dep arrays.
   // useState's setters are already stable, but wrapping the
