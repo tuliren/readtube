@@ -265,7 +265,13 @@ export default function VideoReader({
       const newUrl = `${window.location.pathname}${qs.length > 0 ? `?${qs}` : ''}`;
       window.history.replaceState(null, '', newUrl);
     }
-  }, [activeTab, selectedLanguage, publicMode, video.hasSummary, video.hasArticle]);
+    // video.id is in the dep array so soft-navigation between
+    // videos re-decorates the new URL. Without it, navigating from
+    // video A (?language=zh) to video B (no params) wouldn't re-run
+    // the effect when the active tab and language match across the
+    // two videos — the in-session language override would silently
+    // disappear from the URL and be lost on the next refresh.
+  }, [activeTab, selectedLanguage, publicMode, video.id, video.hasSummary, video.hasArticle]);
 
   // Stable callbacks the children pass into their effect dep arrays.
   // useState's setters are already stable, but wrapping the
