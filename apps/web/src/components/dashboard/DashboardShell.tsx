@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import useSWR, { useSWRConfig } from 'swr';
 
 import AddChannelModal from '@/components/inbox/AddChannelModal';
+import AddVideoModal from '@/components/inbox/AddVideoModal';
 import ChannelAvatar from '@/components/inbox/ChannelAvatar';
 import ChannelSection from '@/components/inbox/ChannelSection';
 import { CommandPaletteProvider } from '@/components/inbox/CommandPalette';
@@ -28,10 +29,11 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { MANUAL_REFRESH_DAYS, canManuallyRefresh } from '@/lib/channels/staleness';
 import { extractInboxSearchParams, parseInboxQuery } from '@/lib/inbox/filter';
 import { resolveInboxView } from '@/lib/inbox/views';
-import type { ChannelData } from '@/lib/types';
+import type { ChannelData, FolderData } from '@/lib/types';
 
 import { CollapseStateProvider, useCollapseState } from './CollapseStateContext';
 import { DashboardCtx, type DashboardState } from './DashboardContext';
+import { SidebarDataProvider, useSidebarData } from './SidebarDataContext';
 
 const fetcher = (url: string) =>
   fetch(url).then((r) => {
@@ -43,16 +45,19 @@ const fetcher = (url: string) =>
 
 interface Props {
   initialChannels: ChannelData[];
+  initialFolders: FolderData[];
   children: React.ReactNode;
 }
 
-export default function DashboardShell({ initialChannels, children }: Props) {
+export default function DashboardShell({ initialChannels, initialFolders, children }: Props) {
   return (
     <SidebarProvider>
       <KeyboardShortcutsProvider>
         <CommandPaletteProvider>
           <CollapseStateProvider>
-            <DashboardShellInner initialChannels={initialChannels}>{children}</DashboardShellInner>
+            <SidebarDataProvider initialChannels={initialChannels} initialFolders={initialFolders}>
+              <DashboardShellInner>{children}</DashboardShellInner>
+            </SidebarDataProvider>
           </CollapseStateProvider>
         </CommandPaletteProvider>
       </KeyboardShortcutsProvider>
@@ -60,13 +65,15 @@ export default function DashboardShell({ initialChannels, children }: Props) {
   );
 }
 
-function DashboardShellInner({ initialChannels, children }: Props) {
-  const [modalOpen, setModalOpen] = useState(false);
-  const { data: channels = initialChannels, mutate: mutateChannels } = useSWR<ChannelData[]>(
-    '/api/channels',
-    fetcher,
-    { fallbackData: initialChannels }
+function DashboardShellInner({ children }: { children: React.ReactNode }) {
+  const { channels, mutateChannels, revalidateUnreadCounts } = useSidebarData();
+  // Pre-select a folder/playlist when the modal is opened from a
+  // folder's "Add channel" item or a playlist's "Add video" item, so
+  // the new entity lands in the right bucket without an extra step.
+  const [addChannelTarget, setAddChannelTarget] = useState<{ folderId: string | null } | null>(
+    null
   );
+  const [addVideoTarget, setAddVideoTarget] = useState<{ playlistId: string | null } | null>(null);
 
   const totalUnread = channels.reduce((sum, c) => sum + c.unreadCount, 0);
 
@@ -74,11 +81,18 @@ function DashboardShellInner({ initialChannels, children }: Props) {
     void mutateChannels([...channels, channel].sort((a, b) => a.name.localeCompare(b.name)));
   }
 
+  // The reader page server-renders a UserVideoConsumption upsert, so
+  // the channel/playlist/library unread caches are stale by the time
+  // the client renders. Revalidate every unread badge endpoint when
+  // the URL points at a video reader so the sidebar counts refresh
+  // without a manual reload.
+  useReaderUnreadSync(revalidateUnreadCounts);
+
   const dashboardValue = useMemo<DashboardState>(
     () => ({
       channels,
       totalUnread,
-      openAddChannel: () => setModalOpen(true),
+      openAddChannel: () => setAddChannelTarget({ folderId: null }),
       mutateChannels,
     }),
     [channels, totalUnread, mutateChannels]
@@ -110,7 +124,8 @@ function DashboardShellInner({ initialChannels, children }: Props) {
         channels={channels}
         selectedChannelId={selectedChannelId}
         totalUnread={totalUnread}
-        onAddChannel={() => setModalOpen(true)}
+        onAddChannel={(folderId) => setAddChannelTarget({ folderId: folderId ?? null })}
+        onAddVideo={(playlistId) => setAddVideoTarget({ playlistId: playlistId ?? null })}
       />
     </div>
   );
@@ -213,9 +228,19 @@ function DashboardShellInner({ initialChannels, children }: Props) {
         </div>
 
         <AddChannelModal
-          isOpen={modalOpen}
-          onClose={() => setModalOpen(false)}
+          isOpen={addChannelTarget != null}
+          targetFolderId={addChannelTarget?.folderId ?? null}
+          onClose={() => setAddChannelTarget(null)}
           onChannelAdded={handleChannelAdded}
+        />
+        <AddVideoModal
+          open={addVideoTarget != null}
+          targetPlaylistId={addVideoTarget?.playlistId ?? null}
+          onOpenChange={(open) => {
+            if (!open) {
+              setAddVideoTarget(null);
+            }
+          }}
         />
         <Toaster />
       </div>
@@ -372,6 +397,39 @@ function MobileTopBar({
       </div>
     </div>
   );
+}
+
+/**
+ * The authenticated reader at /videos/[videoId] runs a server-side
+ * upsert into UserVideoConsumption on every page render. The sidebar's
+ * unread caches (channels / playlists / library-counts) don't see that
+ * write until the next focus event or manual reload, so the badges
+ * lag behind reality — which is what the original "unread count
+ * doesn't update without a refresh" bug was about. This effect fires
+ * a single revalidation pass when the URL transitions onto a video
+ * reader path. The sourceId narrowing avoids re-firing for sibling
+ * paths (/videos, /videos/standalone, /videos/playlists/*) that
+ * already keep their caches in sync via useTriage.
+ */
+function useReaderUnreadSync(revalidate: () => void) {
+  const pathname = usePathname();
+  const readerVideoId = useMemo(() => {
+    if (pathname == null || !pathname.startsWith('/videos/')) {
+      return null;
+    }
+    const rest = pathname.slice('/videos/'.length).split('/')[0];
+    if (rest === 'standalone' || rest === 'playlists' || rest.length === 0) {
+      return null;
+    }
+    return rest;
+  }, [pathname]);
+
+  useEffect(() => {
+    if (readerVideoId == null) {
+      return;
+    }
+    revalidate();
+  }, [readerVideoId, revalidate]);
 }
 
 /**

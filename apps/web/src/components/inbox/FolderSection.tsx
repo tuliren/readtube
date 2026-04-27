@@ -40,10 +40,12 @@ import { useFolders } from './useFolders';
 interface Props {
   channels: ChannelData[];
   selectedChannelId: string | null;
-  /** Opens the AddChannelModal owned by InboxShell. Lives here (rather
-   *  than in ChannelSection) so the entry point sits right under the
-   *  Channels category header — next to the thing it adds to. */
-  onAddChannel: () => void;
+  /** Opens the AddChannelModal owned by DashboardShell. Lives here
+   *  (rather than in ChannelSection) so the entry point sits right
+   *  under the Channels category header — next to the thing it adds
+   *  to. The optional folderId pre-selects a destination folder when
+   *  the menu is invoked from a per-folder dropdown. */
+  onAddChannel: (folderId?: string | null) => void;
 }
 
 /**
@@ -148,7 +150,7 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
           <TooltipTrigger asChild>
             <button
               type="button"
-              onClick={onAddChannel}
+              onClick={() => onAddChannel(null)}
               className="flex items-center justify-center rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-foreground"
               aria-label="Add channel"
             >
@@ -257,7 +259,7 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-44">
-            <DropdownMenuItem onSelect={onAddChannel}>
+            <DropdownMenuItem onSelect={() => onAddChannel(null)}>
               <Radio className="mr-2 h-4 w-4 text-muted-foreground" />
               Add channel
             </DropdownMenuItem>
@@ -310,6 +312,7 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
                 onToggle={() => toggleFolder(folder.id)}
                 onRename={() => setPendingRename({ id: folder.id, name: folder.name })}
                 onDelete={() => setPendingDelete({ id: folder.id, name: folder.name })}
+                onAddChannel={() => onAddChannel(folder.id)}
                 folders={folders}
                 onMoveTo={moveTo}
                 onRemoveChannel={setPendingRemoveChannel}

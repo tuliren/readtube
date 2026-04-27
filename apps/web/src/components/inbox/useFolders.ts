@@ -1,30 +1,21 @@
 'use client';
 
 import { toast } from 'sonner';
-import useSWR, { useSWRConfig } from 'swr';
 
+import { useSidebarData } from '@/components/dashboard/SidebarDataContext';
 import type { FolderData } from '@/lib/types';
 
-const fetcher = (url: string) =>
-  fetch(url).then((r) => {
-    if (!r.ok) {
-      throw new Error(`Request failed (${r.status})`);
-    }
-    return r.json() as Promise<FolderData[]>;
-  });
-
 /**
- * SWR hook for the current user's folders plus mutation helpers.
- * Every mutation invalidates BOTH /api/folders and /api/channels so the
- * sidebar re-renders with fresh folder contents and channel unread counts.
+ * Folder data + mutation helpers. Folders themselves come from the
+ * shared `SidebarDataContext` — that way every sidebar row reads from
+ * one SWR subscription seeded by SSR fallback data, and consumers
+ * (FolderSection, the auto-uncollapse hook, etc.) get a synchronous
+ * initial value instead of a beat of empty state. The mutation
+ * helpers continue to invalidate /api/folders + /api/channels here
+ * via the context's revalidation hooks.
  */
 export function useFolders() {
-  const { data: folders = [], mutate } = useSWR<FolderData[]>('/api/folders', fetcher);
-  const { mutate: mutateGlobal } = useSWRConfig();
-
-  function invalidateChannels() {
-    void mutateGlobal('/api/channels', undefined, { revalidate: true });
-  }
+  const { folders, mutateFolders, invalidateFoldersAndChannels } = useSidebarData();
 
   return {
     folders,
@@ -41,7 +32,7 @@ export function useFolders() {
           throw new Error(body?.error ?? `Failed (${res.status})`);
         }
         const folder = (await res.json()) as FolderData;
-        void mutate();
+        void mutateFolders();
         toast.success(`Folder "${folder.name}" created`);
         return folder;
       } catch (err) {
@@ -60,7 +51,7 @@ export function useFolders() {
         if (!res.ok) {
           throw new Error(`Failed (${res.status})`);
         }
-        void mutate();
+        void mutateFolders();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Failed to rename folder');
       }
@@ -79,8 +70,7 @@ export function useFolders() {
         if (!res.ok) {
           throw new Error(`Failed (${res.status})`);
         }
-        void mutate();
-        invalidateChannels();
+        invalidateFoldersAndChannels();
         toast.success('Folder deleted');
         return true;
       } catch (err) {
@@ -99,7 +89,7 @@ export function useFolders() {
         if (!res.ok) {
           throw new Error(`Failed (${res.status})`);
         }
-        invalidateChannels();
+        invalidateFoldersAndChannels();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Failed to move channel');
       }

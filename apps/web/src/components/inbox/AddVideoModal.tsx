@@ -19,6 +19,10 @@ import { Input } from '@/components/ui/input';
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** When set, the newly added video is also added to this playlist.
+   *  Used by the playlist dropdown's "Add video" entry so a user can
+   *  drop a URL straight into a playlist row. */
+  targetPlaylistId?: string | null;
 }
 
 /**
@@ -27,7 +31,7 @@ interface Props {
  * a StandaloneVideo row; the backing Channel/Video rows are upserted
  * transparently.
  */
-export default function AddVideoModal({ open, onOpenChange }: Props) {
+export default function AddVideoModal({ open, onOpenChange, targetPlaylistId = null }: Props) {
   const [url, setUrl] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -56,7 +60,32 @@ export default function AddVideoModal({ open, onOpenChange }: Props) {
         body: JSON.stringify({ url }),
       });
       if (res.ok) {
-        const data = (await res.json()) as { sourceId: string };
+        const data = (await res.json()) as { sourceId: string; videoId: string };
+        // When invoked from a playlist's "Add video" entry, also add
+        // the new video to that playlist. Best-effort — a failure
+        // here logs but doesn't block the flow; the video is already
+        // in the user's library and can be added manually.
+        if (targetPlaylistId != null) {
+          try {
+            // fetch() resolves on 4xx/5xx, so the catch below only
+            // covers network errors — log non-2xx explicitly so a
+            // 404 on a deleted playlist (or a 500) doesn't get
+            // hidden behind the "Video added" toast.
+            const addRes = await fetch(`/api/playlists/${targetPlaylistId}/videos`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ videoId: data.videoId }),
+            });
+            if (!addRes.ok) {
+              console.error(
+                `[AddVideoModal] add to playlist failed (${addRes.status})`,
+                await addRes.text().catch(() => '')
+              );
+            }
+          } catch (addErr) {
+            console.error('[AddVideoModal] add to playlist failed', addErr);
+          }
+        }
         toast.success('Video added');
         void mutate(
           (key) =>

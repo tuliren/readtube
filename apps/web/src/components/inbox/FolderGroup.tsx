@@ -7,6 +7,7 @@ import {
   FolderIcon,
   MoreHorizontal,
   Pencil,
+  Plus,
   Trash2,
 } from 'lucide-react';
 
@@ -31,6 +32,8 @@ interface Props {
   onToggle: () => void;
   onRename: () => void;
   onDelete: () => void;
+  /** Open the AddChannelModal pre-targeted at this folder. */
+  onAddChannel: () => void;
   folders: FolderData[];
   onMoveTo: (channelId: string, folderId: string | null) => void;
   onRemoveChannel: (channel: { id: string; name: string }) => void;
@@ -58,6 +61,7 @@ export default function FolderGroup({
   onToggle,
   onRename,
   onDelete,
+  onAddChannel,
   folders,
   onMoveTo,
   onRemoveChannel,
@@ -108,6 +112,10 @@ export default function FolderGroup({
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={onAddChannel}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add channel
+            </DropdownMenuItem>
             <DropdownMenuItem onSelect={onRename}>
               <Pencil className="mr-2 h-4 w-4" />
               Rename folder
