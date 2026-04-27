@@ -67,11 +67,21 @@ export default function AddVideoModal({ open, onOpenChange, targetPlaylistId = n
         // in the user's library and can be added manually.
         if (targetPlaylistId != null) {
           try {
-            await fetch(`/api/playlists/${targetPlaylistId}/videos`, {
+            // fetch() resolves on 4xx/5xx, so the catch below only
+            // covers network errors — log non-2xx explicitly so a
+            // 404 on a deleted playlist (or a 500) doesn't get
+            // hidden behind the "Video added" toast.
+            const addRes = await fetch(`/api/playlists/${targetPlaylistId}/videos`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ videoId: data.videoId }),
             });
+            if (!addRes.ok) {
+              console.error(
+                `[AddVideoModal] add to playlist failed (${addRes.status})`,
+                await addRes.text().catch(() => '')
+              );
+            }
           } catch (addErr) {
             console.error('[AddVideoModal] add to playlist failed', addErr);
           }
