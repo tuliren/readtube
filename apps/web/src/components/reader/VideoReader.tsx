@@ -12,6 +12,7 @@ import ExternalLinkActions from '@/components/ExternalLinkActions';
 import { Button } from '@/components/ui/button';
 import { formatDurationSeconds } from '@/lib/format/duration';
 import type { VideoData } from '@/lib/types';
+import { channelHref } from '@/lib/urls/channelHref';
 import { videoHref } from '@/lib/urls/videoHref';
 import { buildChannelLink, buildWatchLink } from '@/lib/urls/watchUrl';
 
@@ -302,7 +303,26 @@ export default function VideoReader({
           {/* Meta line */}
           <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
             <span className="inline-flex items-center gap-0.5">
-              <span>{video.channelName}</span>
+              {!publicMode && channelFollowed ? (
+                // Subscribed users get an in-app link to the channel's
+                // inbox view. Distinct from the small external-link
+                // glyph next to it, which still opens the upstream
+                // channel page on YouTube/Bilibili. Public viewers
+                // (and unsubscribed reader visits) keep the plain
+                // text label since they have no channel page to
+                // route to.
+                <Link
+                  href={channelHref({
+                    handle: video.channelHandle,
+                    sourceId: video.channelSourceId,
+                  })}
+                  className="hover:text-foreground hover:underline"
+                >
+                  {video.channelName}
+                </Link>
+              ) : (
+                <span>{video.channelName}</span>
+              )}
               <ExternalLinkActions url={channelUrl} label={`Open channel on ${platformName}`} />
               {!publicMode && !channelFollowed && (
                 <FollowChannelDialogButton
