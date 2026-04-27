@@ -43,8 +43,9 @@ export default function ExportMarkdownButtons({ getContent, filename, disabled }
     if (content.length === 0) {
       return;
     }
+    const payload = content.endsWith('\n') ? content : `${content}\n`;
     try {
-      await navigator.clipboard.writeText(content);
+      await navigator.clipboard.writeText(payload);
     } catch {
       return;
     }
@@ -60,7 +61,8 @@ export default function ExportMarkdownButtons({ getContent, filename, disabled }
     if (content.length === 0) {
       return;
     }
-    const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+    const payload = content.endsWith('\n') ? content : `${content}\n`;
+    const blob = new Blob([payload], { type: 'text/markdown;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
