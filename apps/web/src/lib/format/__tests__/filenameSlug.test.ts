@@ -46,6 +46,11 @@ describe('filenameSlug', () => {
       desc: 'truncates to the 80-character cap',
     },
     {
+      input: Array.from({ length: 42 }, (_, i) => String.fromCharCode(97 + (i % 26))).join('-'),
+      expected: Array.from({ length: 40 }, (_, i) => String.fromCharCode(97 + (i % 26))).join('-'),
+      desc: 'strips the trailing hyphen left behind by the 80-char cap',
+    },
+    {
       input: 'snake_case_title',
       expected: 'snake-case-title',
       desc: 'underscores become hyphens',

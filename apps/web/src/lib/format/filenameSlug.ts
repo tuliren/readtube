@@ -18,6 +18,7 @@ export function filenameSlug(input: string): string {
     .replace(DROP_RE, '')
     .replace(/[\s_]+/g, '-')
     .replace(/^-+|-+$/g, '')
-    .slice(0, MAX_LENGTH);
+    .slice(0, MAX_LENGTH)
+    .replace(/-+$/g, '');
   return slug.length > 0 ? slug : FALLBACK;
 }
