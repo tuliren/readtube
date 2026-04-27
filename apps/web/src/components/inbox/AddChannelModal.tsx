@@ -20,6 +20,11 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   onChannelAdded: (channel: ChannelData) => void;
+  /** When set, the newly subscribed channel is moved into this folder
+   *  before `onChannelAdded` fires. Used by the folder dropdown's "Add
+   *  channel" entry so a user can subscribe straight into a folder
+   *  without an extra drag-and-drop step. */
+  targetFolderId?: string | null;
 }
 
 /**
@@ -31,7 +36,12 @@ interface Props {
  * DialogHeader, body with Input + helper copy, DialogFooter with
  * Cancel + Action buttons.
  */
-export default function AddChannelModal({ isOpen, onClose, onChannelAdded }: Props) {
+export default function AddChannelModal({
+  isOpen,
+  onClose,
+  onChannelAdded,
+  targetFolderId = null,
+}: Props) {
   const [url, setUrl] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -58,6 +68,23 @@ export default function AddChannelModal({ isOpen, onClose, onChannelAdded }: Pro
       });
       if (res.status === 201) {
         const channel = (await res.json()) as ChannelData;
+        // Best-effort folder assignment when the modal was opened from
+        // a folder's "Add channel" entry. A failure here is logged but
+        // not surfaced to the user — the channel is already
+        // subscribed, and the user can still drag it into a folder
+        // afterward.
+        if (targetFolderId != null) {
+          try {
+            await fetch(`/api/subscriptions/${channel.id}/folder`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ folderId: targetFolderId }),
+            });
+            channel.folderId = targetFolderId;
+          } catch (moveErr) {
+            console.error('[AddChannelModal] move into folder failed', moveErr);
+          }
+        }
         onChannelAdded(channel);
         reset();
         onClose();
