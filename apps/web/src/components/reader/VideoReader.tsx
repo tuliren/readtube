@@ -117,16 +117,25 @@ export default function VideoReader({
 
   // Default to Summary because that's the cheapest scannable view.
   // `?tab=` in the URL overrides the default so refresh and
-  // link-share preserve the chosen tab. Public mode hides the
-  // Transcript tab — drop a URL value pointing there so the viewer
-  // doesn't land on an empty pane. Public-mode also conditionally
-  // hides the Summary tab when the shared video has no summary, so
-  // fall back to Article in that one case to avoid the same empty-
-  // pane outcome.
+  // link-share preserve the chosen tab. In public mode the
+  // Transcript tab is always hidden and Summary/Article are hidden
+  // when their content doesn't exist — reject any URL value that
+  // would resolve to a hidden tab so the viewer doesn't land on an
+  // empty pane (e.g. shared `?tab=summary` URL whose summary was
+  // since deleted, or a manually crafted URL). Falls through to the
+  // mode-aware default below in that case.
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     const fromUrl = searchParams.get('tab');
-    if (isValidTab(fromUrl) && !(publicMode && fromUrl === 'transcript')) {
-      return fromUrl;
+    if (isValidTab(fromUrl)) {
+      if (!publicMode) {
+        return fromUrl;
+      }
+      if (fromUrl === 'summary' && video.hasSummary) {
+        return fromUrl;
+      }
+      if (fromUrl === 'article' && video.hasArticle) {
+        return fromUrl;
+      }
     }
     return publicMode && !video.hasSummary && video.hasArticle ? 'article' : 'summary';
   });
@@ -213,13 +222,29 @@ export default function VideoReader({
   // browser-back, and link-share preserve the view. Public mode
   // skips the language write because that param is already SSR'd by
   // /p/videos/[videoId]/page.tsx and rewriting it would round-trip
-  // through the server on every refresh. window.history.replaceState
-  // avoids the re-render / data-refetch overhead of router.replace —
-  // we're just decorating the URL bar.
+  // through the server on every refresh.
+  //
+  // Only write `?tab=` when the active tab differs from the mode-
+  // aware default. This (a) keeps shared URLs clean when the user
+  // hasn't moved off the default, and (b) drops an unreachable URL
+  // value entirely instead of rewriting it — e.g. a shared
+  // `?tab=summary` URL whose summary was later deleted falls back
+  // to Article and gets the now-meaningless `?tab=` stripped, rather
+  // than being rewritten to `?tab=article` and pinning the view.
+  //
+  // window.history.replaceState avoids the re-render / data-refetch
+  // overhead of router.replace — we're just decorating the URL bar.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     let changed = false;
-    if (params.get('tab') !== activeTab) {
+    const defaultTab: Tab =
+      publicMode && !video.hasSummary && video.hasArticle ? 'article' : 'summary';
+    if (activeTab === defaultTab) {
+      if (params.has('tab')) {
+        params.delete('tab');
+        changed = true;
+      }
+    } else if (params.get('tab') !== activeTab) {
       params.set('tab', activeTab);
       changed = true;
     }
@@ -240,7 +265,7 @@ export default function VideoReader({
       const newUrl = `${window.location.pathname}${qs.length > 0 ? `?${qs}` : ''}`;
       window.history.replaceState(null, '', newUrl);
     }
-  }, [activeTab, selectedLanguage, publicMode]);
+  }, [activeTab, selectedLanguage, publicMode, video.hasSummary, video.hasArticle]);
 
   // Stable callbacks the children pass into their effect dep arrays.
   // useState's setters are already stable, but wrapping the
