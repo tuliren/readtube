@@ -11,7 +11,13 @@ interface Props {
   channels: ChannelData[];
   selectedChannelId: string | null;
   totalUnread: number;
-  onAddChannel: () => void;
+  /** Open the AddChannelModal owned by DashboardShell. The optional
+   *  folderId pre-selects a destination folder so a "+" entry on a
+   *  folder row drops the new channel straight into that folder. */
+  onAddChannel: (folderId?: string | null) => void;
+  /** Open the AddVideoModal owned by DashboardShell. The optional
+   *  playlistId pre-selects a destination playlist for the new video. */
+  onAddVideo: (playlistId?: string | null) => void;
 }
 
 /**
@@ -31,12 +37,13 @@ export default function ChannelSection({
   selectedChannelId,
   totalUnread,
   onAddChannel,
+  onAddVideo,
 }: Props) {
   return (
     <TooltipProvider delayDuration={300}>
       <nav className="flex min-w-0 flex-col overflow-x-hidden overflow-y-auto">
         <ViewsSection inboxUnread={totalUnread} />
-        <VideosSection />
+        <VideosSection onAddVideo={onAddVideo} />
         <FolderSection
           channels={channels}
           selectedChannelId={selectedChannelId}

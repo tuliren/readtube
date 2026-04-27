@@ -14,9 +14,9 @@ import {
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
-import useSWR from 'swr';
 
 import { useCollapseState } from '@/components/dashboard/CollapseStateContext';
+import { type PlaylistRow, useSidebarData } from '@/components/dashboard/SidebarDataContext';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,22 +25,11 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
-import AddVideoModal from './AddVideoModal';
 import DeletePlaylistDialog from './DeletePlaylistDialog';
 import NewPlaylistDialog from './NewPlaylistDialog';
 import RenamePlaylistDialog from './RenamePlaylistDialog';
 import { useSidebar } from './SidebarContext';
 import { SidebarBadge, SidebarRowContent, sidebarRowClass } from './SidebarRow';
-
-interface PlaylistRow {
-  id: string;
-  name: string;
-  customName: string | null;
-  sortOrder: number;
-  videoCount: number;
-  unreadCount: number;
-  thumbnailUrl: string | null;
-}
 
 /**
  * User-facing display label for a playlist. When the user has set a
@@ -54,13 +43,11 @@ function playlistDisplayName(p: { name: string; customName: string | null }): st
   return p.name;
 }
 
-const fetcher = (url: string) =>
-  fetch(url).then((r) => {
-    if (!r.ok) {
-      throw new Error(`Fetch error: ${r.status}`);
-    }
-    return r.json();
-  });
+interface Props {
+  /** Open the AddVideoModal. The optional playlistId pre-selects a
+   *  destination playlist when invoked from a per-playlist dropdown. */
+  onAddVideo: (playlistId?: string | null) => void;
+}
 
 /**
  * Sidebar "Videos" section — entry points to the user's personal video
@@ -75,11 +62,11 @@ const fetcher = (url: string) =>
  * The "+" dropdown next to the section header (matching the Channels
  * section pattern) contains "Add video" and "Add playlist".
  */
-export default function VideosSection() {
+export default function VideosSection({ onAddVideo }: Props) {
   const pathname = usePathname();
   const { collapsed } = useSidebar();
   const { videosCollapsed, toggleVideos } = useCollapseState();
-  const [addVideoOpen, setAddVideoOpen] = useState(false);
+  const { playlists, mutatePlaylists, libraryCounts: libCounts } = useSidebarData();
   const [addPlaylistOpen, setAddPlaylistOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [renameTarget, setRenameTarget] = useState<{
@@ -87,12 +74,6 @@ export default function VideosSection() {
     name: string;
     customName: string | null;
   } | null>(null);
-
-  const { data: playlists = [], mutate } = useSWR<PlaylistRow[]>('/api/playlists', fetcher);
-  const { data: libCounts } = useSWR<{ standaloneUnread: number }>(
-    '/api/videos/library-counts',
-    fetcher
-  );
 
   const sectionCollapsed = !collapsed && videosCollapsed;
 
@@ -131,7 +112,7 @@ export default function VideosSection() {
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuItem onSelect={() => setAddVideoOpen(true)}>
+              <DropdownMenuItem onSelect={() => onAddVideo(null)}>
                 <Video className="mr-2 h-4 w-4 text-muted-foreground" />
                 Add video
               </DropdownMenuItem>
@@ -159,6 +140,7 @@ export default function VideosSection() {
               playlist={p}
               active={activePlaylistId === p.id}
               sidebarCollapsed={collapsed}
+              onRequestAddVideo={() => onAddVideo(p.id)}
               onRequestRename={() =>
                 setRenameTarget({ id: p.id, name: p.name, customName: p.customName })
               }
@@ -168,11 +150,10 @@ export default function VideosSection() {
         </ul>
       )}
 
-      <AddVideoModal open={addVideoOpen} onOpenChange={setAddVideoOpen} />
       <NewPlaylistDialog
         open={addPlaylistOpen}
         onOpenChange={setAddPlaylistOpen}
-        onCreated={() => void mutate()}
+        onCreated={() => void mutatePlaylists()}
       />
       <RenamePlaylistDialog target={renameTarget} onClose={() => setRenameTarget(null)} />
       <DeletePlaylistDialog target={deleteTarget} onClose={() => setDeleteTarget(null)} />
@@ -184,6 +165,7 @@ interface PlaylistEntryProps {
   playlist: PlaylistRow;
   active: boolean;
   sidebarCollapsed: boolean;
+  onRequestAddVideo: () => void;
   onRequestRename: () => void;
   onRequestDelete: () => void;
 }
@@ -198,6 +180,7 @@ function PlaylistEntry({
   playlist,
   active,
   sidebarCollapsed,
+  onRequestAddVideo,
   onRequestRename,
   onRequestDelete,
 }: PlaylistEntryProps) {
@@ -265,6 +248,10 @@ function PlaylistEntry({
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuItem onSelect={onRequestAddVideo}>
+            <Plus className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
+            Add video
+          </DropdownMenuItem>
           <DropdownMenuItem onSelect={onRequestRename}>
             <Pencil className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
             Rename

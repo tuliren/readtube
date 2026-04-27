@@ -6,7 +6,7 @@ import { ReactNode } from 'react';
 import DashboardShell from '@/components/dashboard/DashboardShell';
 import { ensureUserExists } from '@/lib/db/user';
 import { getSubscribedChannelsWithUnread } from '@/lib/subscriptions';
-import type { ChannelData } from '@/lib/types';
+import type { ChannelData, FolderData } from '@/lib/types';
 
 /**
  * Shared sidebar + providers for every authenticated page:
@@ -28,7 +28,14 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
   await ensureUserExists(userId);
 
-  const subscriptionRows = await getSubscribedChannelsWithUnread(prisma, userId);
+  const [subscriptionRows, folderRows] = await Promise.all([
+    getSubscribedChannelsWithUnread(prisma, userId),
+    prisma.folder.findMany({
+      where: { user_id: userId },
+      orderBy: [{ sort_order: 'asc' }, { name: 'asc' }],
+      select: { id: true, name: true, sort_order: true },
+    }),
+  ]);
   const channels: ChannelData[] = subscriptionRows.map((row) => ({
     id: row.channel_id,
     sourceId: row.source_id,
@@ -44,10 +51,17 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     priority: row.priority,
     muteUntil: row.mute_until != null ? row.mute_until.toISOString() : null,
   }));
+  const folders: FolderData[] = folderRows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    sortOrder: row.sort_order,
+  }));
 
   return (
     <div className="h-screen overflow-hidden">
-      <DashboardShell initialChannels={channels}>{children}</DashboardShell>
+      <DashboardShell initialChannels={channels} initialFolders={folders}>
+        {children}
+      </DashboardShell>
     </div>
   );
 }
