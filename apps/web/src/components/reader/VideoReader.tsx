@@ -115,20 +115,17 @@ export default function VideoReader({
   const { url: watchUrl, platformName } = buildWatchLink(video.platform, video.sourceId);
   const { url: channelUrl } = buildChannelLink(video.platform, video.channelSourceId);
 
-  // Default to Summary because that's the cheapest scannable view —
-  // the previous default of Transcript meant every reader open
-  // landed on the densest, longest content first. In public mode
-  // fall back to Article if the shared video has only an article.
-  // In private mode `?tab=` overrides the default so refresh and
-  // link-share preserve the chosen tab.
+  // Default to Summary in both modes because that's the cheapest
+  // scannable view. `?tab=` in the URL overrides the default so
+  // refresh and link-share preserve the chosen tab. Public mode
+  // hides the Transcript tab — drop a URL value pointing there so
+  // the viewer doesn't land on an empty pane.
   const [activeTab, setActiveTab] = useState<Tab>(() => {
-    if (!publicMode) {
-      const fromUrl = searchParams.get('tab');
-      if (isValidTab(fromUrl)) {
-        return fromUrl;
-      }
+    const fromUrl = searchParams.get('tab');
+    if (isValidTab(fromUrl) && !(publicMode && fromUrl === 'transcript')) {
+      return fromUrl;
     }
-    return publicMode && !video.hasSummary && video.hasArticle ? 'article' : 'summary';
+    return 'summary';
   });
   const durationLabel = formatDurationSeconds(video.durationSeconds);
 
@@ -192,11 +189,11 @@ export default function VideoReader({
     setSummaryWords(0);
     setArticleWords(0);
     setTranscriptWords(0);
-    // Re-pick the default tab for the new video. In public mode tabs
-    // are conditionally rendered, so a stale activeTab from the
-    // previous video can leave the viewer staring at an empty pane
-    // when the new video lacks that tab's content.
-    setActiveTab(publicMode && !video.hasSummary && video.hasArticle ? 'article' : 'summary');
+    // Re-pick the default tab for the new video. A stale activeTab
+    // from the previous video (e.g. 'transcript' on the way into a
+    // public-mode video that hides it) would otherwise leave the
+    // viewer staring at an empty pane.
+    setActiveTab('summary');
   }, [
     video.id,
     video.transcriptUnavailable,
@@ -206,31 +203,32 @@ export default function VideoReader({
     publicMode,
   ]);
 
-  // Mirror the active tab + selected language into the URL as
-  // `?tab=...&language=...` so refresh, browser-back, and link-share
-  // preserve the view. Private mode only — public mode receives its
-  // language from the SSR'd page and has no transcript tab to track.
-  // window.history.replaceState avoids the re-render / data-refetch
-  // overhead of router.replace; we're just decorating the URL bar.
+  // Mirror the active tab into the URL as `?tab=...` (and, in private
+  // mode, the selected language as `?language=...`) so refresh,
+  // browser-back, and link-share preserve the view. Public mode
+  // skips the language write because that param is already SSR'd by
+  // /p/videos/[videoId]/page.tsx and rewriting it would round-trip
+  // through the server on every refresh. window.history.replaceState
+  // avoids the re-render / data-refetch overhead of router.replace —
+  // we're just decorating the URL bar.
   useEffect(() => {
-    if (publicMode) {
-      return;
-    }
     const params = new URLSearchParams(window.location.search);
     let changed = false;
     if (params.get('tab') !== activeTab) {
       params.set('tab', activeTab);
       changed = true;
     }
-    const currentLang = params.get('language');
-    if (selectedLanguage != null) {
-      if (currentLang !== selectedLanguage) {
-        params.set('language', selectedLanguage);
+    if (!publicMode) {
+      const currentLang = params.get('language');
+      if (selectedLanguage != null) {
+        if (currentLang !== selectedLanguage) {
+          params.set('language', selectedLanguage);
+          changed = true;
+        }
+      } else if (currentLang != null) {
+        params.delete('language');
         changed = true;
       }
-    } else if (currentLang != null) {
-      params.delete('language');
-      changed = true;
     }
     if (changed) {
       const qs = params.toString();
