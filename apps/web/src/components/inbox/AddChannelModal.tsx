@@ -75,12 +75,24 @@ export default function AddChannelModal({
         // afterward.
         if (targetFolderId != null) {
           try {
-            await fetch(`/api/subscriptions/${channel.id}/folder`, {
+            const moveRes = await fetch(`/api/subscriptions/${channel.id}/folder`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ folderId: targetFolderId }),
             });
-            channel.folderId = targetFolderId;
+            // Only mirror the move into the optimistic SWR payload
+            // when the server actually accepted it. A non-2xx (404 on
+            // a deleted folder, 500 on a write error) leaves the
+            // channel at root, and the sidebar should reflect that
+            // until the next /api/channels revalidation.
+            if (moveRes.ok) {
+              channel.folderId = targetFolderId;
+            } else {
+              console.error(
+                `[AddChannelModal] move into folder failed (${moveRes.status})`,
+                await moveRes.text().catch(() => '')
+              );
+            }
           } catch (moveErr) {
             console.error('[AddChannelModal] move into folder failed', moveErr);
           }
