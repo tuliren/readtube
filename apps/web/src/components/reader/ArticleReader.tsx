@@ -9,6 +9,7 @@ import { extractArticleHeadings } from '@/lib/reader/extractArticleHeadings';
 import { isProduction } from '@/lib/vercelEnv';
 
 import ArticleMarkdown from './ArticleMarkdown';
+import ExportMarkdownButtons from './ExportMarkdownButtons';
 import FloatingToc from './FloatingToc';
 import LanguagePicker, { languageQueryFragment } from './LanguagePicker';
 import type { TranscriptStatus } from './VideoReader';
@@ -29,6 +30,8 @@ function RegenerateButton({ onClick, disabled }: { onClick: () => void; disabled
 
 interface Props {
   videoDbId: string;
+  /** Used as the slug for the exported markdown file's name. */
+  videoTitle: string;
   /** Shared transcript availability lifted from VideoReader. See the
    *  matching prop on SummaryReader for the longer explanation. */
   transcriptStatus: TranscriptStatus;
@@ -57,6 +60,7 @@ const STYLE = 'NARRATIVE';
 
 export default function ArticleReader({
   videoDbId,
+  videoTitle,
   transcriptStatus,
   onTranscriptStatusChange,
   onArticleAvailable,
@@ -343,32 +347,32 @@ export default function ArticleReader({
   // deploys or public-share pages.
   const showRegenerate = !isProduction() && !publicMode;
 
+  const trimmedContent = content.trim();
+  const hasExportableContent = trimmedContent.length > 0;
+  const isStreaming = status === 'streaming';
+
   return (
     <div>
-      {pickerBar != null ? (
-        <div className="mb-4 flex items-center justify-end gap-3">
+      <div className="mb-4 flex items-center justify-end gap-3">
+        {!publicMode && (
           <LanguagePicker
             value={selectedLanguage}
             onChange={onLanguageChange}
-            disabled={status === 'streaming'}
+            disabled={isStreaming}
           />
-          {showRegenerate && (
-            <RegenerateButton
-              onClick={() => handleGenerate({ force: true })}
-              disabled={status === 'streaming'}
-            />
-          )}
-        </div>
-      ) : (
-        showRegenerate && (
-          <div className="mb-4 flex items-center justify-end">
-            <RegenerateButton
-              onClick={() => handleGenerate({ force: true })}
-              disabled={status === 'streaming'}
-            />
-          </div>
-        )
-      )}
+        )}
+        {showRegenerate && (
+          <RegenerateButton
+            onClick={() => handleGenerate({ force: true })}
+            disabled={isStreaming}
+          />
+        )}
+        <ExportMarkdownButtons
+          getContent={() => trimmedContent}
+          filename={`${videoTitle}-article`}
+          disabled={!hasExportableContent || isStreaming}
+        />
+      </div>
       <ArticleMarkdown hasLatex={hasLatex} enableHeadingIds>
         {content}
       </ArticleMarkdown>
