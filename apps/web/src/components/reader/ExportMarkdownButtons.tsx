@@ -15,11 +15,18 @@ interface Props {
   disabled?: boolean;
 }
 
+// Built via `new RegExp` because the `u` flag in a regex literal
+// requires an es6+ tsconfig target and this project still compiles to
+// es5. \p{L}/\p{N} preserve Unicode letters/numbers so non-Latin titles
+// (CJK, Cyrillic, Arabic, etc.) survive the slug instead of collapsing
+// to the suffix.
+const SLUG_DROP_RE = new RegExp('[^\\p{L}\\p{N}\\s_-]', 'gu');
+
 function slugify(input: string): string {
   const slug = input
     .toLowerCase()
     .trim()
-    .replace(/[^\w\s-]/g, '')
+    .replace(SLUG_DROP_RE, '')
     .replace(/[\s_]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 80);
