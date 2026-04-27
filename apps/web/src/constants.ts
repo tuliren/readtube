@@ -8,9 +8,13 @@ export const DOMAIN = 'read.tube';
 export const DOMAIN_URL = `https://${DOMAIN}`;
 export const CONTACT_EMAIL = `contact@${DOMAIN}`;
 
-// https://ai.google.dev/gemini-api/docs/pricing
-// $0.25 / $1.5
-export const DEFAULT_AI_MODEL = 'google/gemini-3.1-flash-lite-preview';
+// https://vercel.com/liren/~/ai-gateway/models
+// google/gemini-3.1-flash-lite-preview: $0.25 / $1.5 - tend to summarize for article too
+// openai/gpt-5.4-nano: $0.20 / $1.25 - not much formatting for article
+// openai/gpt-5.4-mini: $0.74 / $4.5
+// openai/gpt-5.4: $2.5 / $15 - too expensive
+// anthropic/claude-haiku-4.5: $1 / $5 - slow
+export const DEFAULT_AI_MODEL = 'openai/gpt-5.4-mini';
 
 /**
  * Model for semantic embeddings. 1536 native dims matches the pgvector
