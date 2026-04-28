@@ -293,7 +293,11 @@ export default function VideoReader({
     if (changed) {
       const qs = params.toString();
       const newUrl = `${window.location.pathname}${qs.length > 0 ? `?${qs}` : ''}`;
-      window.history.replaceState(null, '', newUrl);
+      // Preserve `window.history.state` rather than overwriting it
+      // with `null` — the Next.js App Router stores its own routing
+      // metadata (tree keys, scroll position, etc.) in history.state,
+      // and clobbering it can break soft back/forward navigation.
+      window.history.replaceState(window.history.state, '', newUrl);
     }
     // video.id is in the dep array so soft-navigation between
     // videos re-decorates the new URL. Without it, navigating from
