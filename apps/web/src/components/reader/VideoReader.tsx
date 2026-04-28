@@ -94,6 +94,9 @@ export default function VideoReader({
     selectedLanguage == null
       ? `/p${videoHref(video)}`
       : `/p${videoHref(video)}?language=${encodeURIComponent(selectedLanguage)}`;
+  // Sentinel key for the `language=null` (Original) row so per-
+  // language records can use a uniform Record<string, boolean>.
+  const selectedLanguageKey = selectedLanguage ?? '__original__';
   // The reader URL is `/videos/<sourceId>?returnTo=<encoded-path>`.
   // `returnTo` carries the full path + query of the list the user
   // came from (e.g. `/inbox?starred=1` or `/channels/@mkbhd`). Falls
@@ -164,6 +167,27 @@ export default function VideoReader({
   const [hasSummary, setHasSummary] = useState<boolean>(video.hasSummary);
   const [hasArticle, setHasArticle] = useState<boolean>(video.hasArticle);
 
+  // Per-language availability records, populated as Summary and
+  // Article readers' fetches resolve. Drives the Share button's
+  // visibility — Share appears only when the *currently selected*
+  // language has at least one of summary/article. SSR's aggregate
+  // flags can't answer this since "any language has content" isn't
+  // the same as "this language has content". The sentinel
+  // `__original__` keys the `language=null` (Original) row so it
+  // can share the same Record<string, boolean> shape.
+  const [summaryByLanguage, setSummaryByLanguage] = useState<Record<string, boolean>>({});
+  const [articleByLanguage, setArticleByLanguage] = useState<Record<string, boolean>>({});
+
+  // Gate the Share link — there's no point offering a `?language=`
+  // URL whose target lands the recipient on an empty tab. A `false`
+  // entry means the reader has fetched and confirmed the language
+  // is empty; `undefined` means the fetch is still in flight, in
+  // which case we hide too (brief hide-then-reveal is preferable to
+  // teasing a 404).
+  const currentLanguageHasContent =
+    summaryByLanguage[selectedLanguageKey] === true ||
+    articleByLanguage[selectedLanguageKey] === true;
+
   // Word counts streamed up from each reader so the tab header can
   // render a live "X min" reading-time badge. 0 means either "content
   // not loaded yet" or "not generated" — the tab header falls back to
@@ -198,6 +222,12 @@ export default function VideoReader({
     );
     setHasSummary(video.hasSummary);
     setHasArticle(video.hasArticle);
+    // Drop the previous video's per-language availability so the
+    // Share button starts hidden until the new video's readers
+    // re-report. Otherwise a stale `{ __original__: true }` from
+    // video A could briefly show Share on video B.
+    setSummaryByLanguage({});
+    setArticleByLanguage({});
     setSummaryWords(0);
     setArticleWords(0);
     setTranscriptWords(0);
@@ -278,8 +308,30 @@ export default function VideoReader({
   // single-update closures in useCallback gives a clean reference
   // that satisfies react-hooks/exhaustive-deps without triggering
   // an effect re-run on every parent render.
-  const handleSummaryAvailable = useCallback(() => setHasSummary(true), []);
-  const handleArticleAvailable = useCallback(() => setHasArticle(true), []);
+  // Combined per-language availability handler: updates the per-
+  // language map (drives Share gating) and, on the affirmative
+  // signal, also flips the aggregate boolean (drives the tab dot
+  // and public-mode tab filtering). Aggregate stays monotonic — a
+  // language reporting `false` doesn't flip the dot back to red,
+  // because some other language may still have content.
+  const handleSummaryAvailability = useCallback((language: string | null, available: boolean) => {
+    const key = language ?? '__original__';
+    setSummaryByLanguage((prev) =>
+      prev[key] === available ? prev : { ...prev, [key]: available }
+    );
+    if (available) {
+      setHasSummary(true);
+    }
+  }, []);
+  const handleArticleAvailability = useCallback((language: string | null, available: boolean) => {
+    const key = language ?? '__original__';
+    setArticleByLanguage((prev) =>
+      prev[key] === available ? prev : { ...prev, [key]: available }
+    );
+    if (available) {
+      setHasArticle(true);
+    }
+  }, []);
   const handleSummaryWordsChange = useCallback((words: number) => setSummaryWords(words), []);
   const handleArticleWordsChange = useCallback((words: number) => setArticleWords(words), []);
   const handleTranscriptWordsChange = useCallback((words: number) => setTranscriptWords(words), []);
@@ -466,7 +518,7 @@ export default function VideoReader({
               </a>
               <CopyButton value={watchUrl} label={`Copy ${platformName} link`} />
             </span>
-            {!publicMode && (hasSummary || hasArticle) && (
+            {!publicMode && currentLanguageHasContent && (
               <>
                 <span>·</span>
                 {/*
@@ -633,7 +685,7 @@ export default function VideoReader({
                       videoTitle={video.title}
                       transcriptStatus={transcriptStatus}
                       onTranscriptStatusChange={setTranscriptStatus}
-                      onSummaryAvailable={handleSummaryAvailable}
+                      onSummaryAvailability={handleSummaryAvailability}
                       onSummaryWordsChange={handleSummaryWordsChange}
                       publicMode={publicMode}
                       selectedLanguage={selectedLanguage}
@@ -648,7 +700,7 @@ export default function VideoReader({
                       videoTitle={video.title}
                       transcriptStatus={transcriptStatus}
                       onTranscriptStatusChange={setTranscriptStatus}
-                      onArticleAvailable={handleArticleAvailable}
+                      onArticleAvailability={handleArticleAvailability}
                       onArticleWordsChange={handleArticleWordsChange}
                       publicMode={publicMode}
                       selectedLanguage={selectedLanguage}

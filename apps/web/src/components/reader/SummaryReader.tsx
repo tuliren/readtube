@@ -25,10 +25,14 @@ interface Props {
    *  state without an extra round-trip. */
   transcriptStatus: TranscriptStatus;
   onTranscriptStatusChange: (next: TranscriptStatus) => void;
-  /** Tells VideoReader that a Summary now exists for this video so
-   *  the Summary tab dot can flip from red → blue. Fired on the
-   *  initial GET cache hit AND after a successful generation. */
-  onSummaryAvailable: () => void;
+  /** Reports per-language summary availability up to VideoReader.
+   *  Fires once per fetch resolution: `available=true` on the GET
+   *  cache hit and after a successful generation, `available=false`
+   *  on the 404 / fetch-error path. VideoReader uses this both to
+   *  flip the Summary tab dot blue (any language available) and to
+   *  gate the Share link on whether the *currently selected*
+   *  language has content. */
+  onSummaryAvailability: (language: string | null, available: boolean) => void;
   /** Reports the total word count (headline + short + full) up to
    *  VideoReader so the Summary tab header can render the reading
    *  time badge. Fires on every summary state change, so the badge
@@ -96,7 +100,7 @@ export default function SummaryReader({
   videoTitle,
   transcriptStatus,
   onTranscriptStatusChange,
-  onSummaryAvailable,
+  onSummaryAvailability,
   onSummaryWordsChange,
   publicMode = false,
   selectedLanguage,
@@ -126,6 +130,7 @@ export default function SummaryReader({
         }
         if (res.status === 404 || !res.ok) {
           setStatus('idle');
+          onSummaryAvailability(selectedLanguage, false);
           return;
         }
         const data = (await res.json()) as SummaryData;
@@ -145,19 +150,21 @@ export default function SummaryReader({
         setStatus('done');
         // Cache hit — flip the parent's Summary tab dot to blue
         // immediately, regardless of whether the user is currently
-        // looking at this tab.
-        onSummaryAvailable();
+        // looking at this tab. Also marks this language as available
+        // so VideoReader can show the Share button.
+        onSummaryAvailability(selectedLanguage, true);
       })
       .catch(() => {
         if (!cancelled) {
           setStatus('idle');
+          onSummaryAvailability(selectedLanguage, false);
         }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [videoDbId, onSummaryAvailable, apiBase, selectedLanguage]);
+  }, [videoDbId, onSummaryAvailability, apiBase, selectedLanguage]);
 
   // Stream the total word count up to VideoReader so the Summary tab
   // header can render the "X min" reading-time badge. summary.short
@@ -336,9 +343,11 @@ export default function SummaryReader({
 
       setStatus('done');
       setRegeneratingFields([]);
-      // Tell the parent the Summary tab now has content so its tab
-      // dot can flip from red → blue without waiting for a refresh.
-      onSummaryAvailable();
+      // Tell the parent the Summary tab now has content for the
+      // current language so its tab dot can flip from red → blue
+      // and the Share button can appear, without waiting for a
+      // refresh.
+      onSummaryAvailability(selectedLanguage, true);
     } catch (err) {
       console.error('[SummaryReader] generate error:', err);
       setErrorMessage(err instanceof Error ? err.message : 'Failed to generate summary.');
