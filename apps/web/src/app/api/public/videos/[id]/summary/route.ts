@@ -39,12 +39,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         take: 1,
         select: {
           id: true,
-          // Gate on the Original (language IS NULL) row's existence so
-          // it stays consistent with the public article route's gate.
-          // Translated rows are derivative — without an Original there
-          // is no canonical "this video has a summary worth sharing"
-          // signal.
-          summaries: { where: { language: null }, take: 1, select: { transcript_id: true } },
+          // Gate on the existence of ANY summary or article row,
+          // matching the public page's gate (see /p/videos/[videoId]
+          // page.tsx). Keying on `language IS NULL` would 404 when the
+          // user has only generated translated rows — translations
+          // don't always derive from a pre-existing Original (the
+          // user can pick a target language as their first
+          // generation), so a missing Original isn't the same thing
+          // as "no public artifact."
+          summaries: { take: 1, select: { transcript_id: true } },
           articles: { take: 1, select: { id: true } },
         },
       },
