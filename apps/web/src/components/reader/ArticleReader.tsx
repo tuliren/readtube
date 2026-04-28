@@ -36,10 +36,14 @@ interface Props {
    *  matching prop on SummaryReader for the longer explanation. */
   transcriptStatus: TranscriptStatus;
   onTranscriptStatusChange: (next: TranscriptStatus) => void;
-  /** Tells VideoReader that an Article now exists for this video so
-   *  the Article tab dot can flip from red → blue. Fired on the
-   *  initial GET cache hit AND after a successful generation. */
-  onArticleAvailable: () => void;
+  /** Reports per-language article availability up to VideoReader.
+   *  Fires once per fetch resolution: `available=true` on the GET
+   *  cache hit and after a successful generation, `available=false`
+   *  on the 404 / fetch-error path. VideoReader uses this both to
+   *  flip the Article tab dot blue (any language available) and to
+   *  gate the Share link on whether the *currently selected*
+   *  language has content. */
+  onArticleAvailability: (language: string | null, available: boolean) => void;
   /** Reports the article word count up to VideoReader so the Article
    *  tab header can render the reading time badge. Fires on every
    *  markdown change, so the badge updates live as content streams. */
@@ -63,7 +67,7 @@ export default function ArticleReader({
   videoTitle,
   transcriptStatus,
   onTranscriptStatusChange,
-  onArticleAvailable,
+  onArticleAvailability,
   onArticleWordsChange,
   publicMode = false,
   selectedLanguage,
@@ -91,6 +95,7 @@ export default function ArticleReader({
         }
         if (res.status === 404 || !res.ok) {
           setStatus('idle');
+          onArticleAvailability(selectedLanguage, false);
           return;
         }
         const data = (await res.json()) as { content: string };
@@ -104,19 +109,22 @@ export default function ArticleReader({
         setHasLatex(parsed.properties.hasLatex === true);
         setStatus('done');
         // Cache hit — flip the parent's Article tab dot to blue
-        // immediately, regardless of which tab the user is on.
-        onArticleAvailable();
+        // immediately, regardless of which tab the user is on. Also
+        // marks this language as available so VideoReader can show
+        // the Share button.
+        onArticleAvailability(selectedLanguage, true);
       })
       .catch(() => {
         if (!cancelled) {
           setStatus('idle');
+          onArticleAvailability(selectedLanguage, false);
         }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [videoDbId, onArticleAvailable, apiBase, selectedLanguage]);
+  }, [videoDbId, onArticleAvailability, apiBase, selectedLanguage]);
 
   // Stream the article word count up to VideoReader so the Article
   // tab header can render the reading-time badge. Fires on every
@@ -250,9 +258,11 @@ export default function ArticleReader({
       }
 
       setStatus('done');
-      // Tell the parent the Article tab now has content so its tab
-      // dot can flip from red → blue without waiting for a refresh.
-      onArticleAvailable();
+      // Tell the parent the Article tab now has content for the
+      // current language so its tab dot can flip from red → blue
+      // and the Share button can appear, without waiting for a
+      // refresh.
+      onArticleAvailability(selectedLanguage, true);
     } catch (err) {
       console.error('[ArticleReader] stream error:', err);
       setErrorMessage(err instanceof Error ? err.message : 'Failed to generate article.');

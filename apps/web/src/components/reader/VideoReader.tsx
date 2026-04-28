@@ -11,6 +11,7 @@ import CopyButton from '@/components/CopyButton';
 import ExternalLinkActions from '@/components/ExternalLinkActions';
 import { Button } from '@/components/ui/button';
 import { formatDurationSeconds } from '@/lib/format/duration';
+import { findTargetLanguage } from '@/lib/language/names';
 import type { VideoData } from '@/lib/types';
 import { channelHref } from '@/lib/urls/channelHref';
 import { videoHref } from '@/lib/urls/videoHref';
@@ -50,6 +51,10 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'transcript', label: 'Transcript' },
 ];
 
+function isValidTab(value: string | null): value is Tab {
+  return value === 'summary' || value === 'article' || value === 'transcript';
+}
+
 function relativeDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString(undefined, {
     year: 'numeric',
@@ -64,17 +69,34 @@ export default function VideoReader({
   channelFollowed = false,
   preferredLanguage = null,
 }: Props) {
+  const searchParams = useSearchParams();
+
   // Picker state lives at the VideoReader level so:
   //  - Summary and Article tabs stay in sync (changing the language on
   //    one doesn't strand the other in a different language).
   //  - The Share link can append `?language=...` so a recipient lands
   //    on the same translation the sharer was looking at.
-  const [selectedLanguage, setSelectedLanguage] = useState<string | null>(preferredLanguage);
+  // In private mode the URL's `?language=` param seeds the picker so
+  // refresh and link-share preserve the chosen translation. Public
+  // mode gets its language injected via the `preferredLanguage` prop
+  // (parsed server-side in /p/videos/[videoId]/page.tsx), so reading
+  // here would just duplicate that.
+  const [selectedLanguage, setSelectedLanguage] = useState<string | null>(() => {
+    if (!publicMode) {
+      const fromUrl = searchParams.get('language');
+      if (fromUrl != null && fromUrl.length > 0 && findTargetLanguage(fromUrl) != null) {
+        return fromUrl;
+      }
+    }
+    return preferredLanguage;
+  });
   const shareHref =
     selectedLanguage == null
       ? `/p${videoHref(video)}`
       : `/p${videoHref(video)}?language=${encodeURIComponent(selectedLanguage)}`;
-  const searchParams = useSearchParams();
+  // Sentinel key for the `language=null` (Original) row so per-
+  // language records can use a uniform Record<string, boolean>.
+  const selectedLanguageKey = selectedLanguage ?? '__original__';
   // The reader URL is `/videos/<sourceId>?returnTo=<encoded-path>`.
   // `returnTo` carries the full path + query of the list the user
   // came from (e.g. `/inbox?starred=1` or `/channels/@mkbhd`). Falls
@@ -96,13 +118,30 @@ export default function VideoReader({
   const { url: watchUrl, platformName } = buildWatchLink(video.platform, video.sourceId);
   const { url: channelUrl } = buildChannelLink(video.platform, video.channelSourceId);
 
-  // Default to Summary because that's the cheapest scannable view —
-  // the previous default of Transcript meant every reader open
-  // landed on the densest, longest content first. In public mode
-  // fall back to Article if the shared video has only an article.
-  const [activeTab, setActiveTab] = useState<Tab>(
-    publicMode && !video.hasSummary && video.hasArticle ? 'article' : 'summary'
-  );
+  // Default to Summary because that's the cheapest scannable view.
+  // `?tab=` in the URL overrides the default so refresh and
+  // link-share preserve the chosen tab. In public mode the
+  // Transcript tab is always hidden and Summary/Article are hidden
+  // when their content doesn't exist — reject any URL value that
+  // would resolve to a hidden tab so the viewer doesn't land on an
+  // empty pane (e.g. shared `?tab=summary` URL whose summary was
+  // since deleted, or a manually crafted URL). Falls through to the
+  // mode-aware default below in that case.
+  const [activeTab, setActiveTab] = useState<Tab>(() => {
+    const fromUrl = searchParams.get('tab');
+    if (isValidTab(fromUrl)) {
+      if (!publicMode) {
+        return fromUrl;
+      }
+      if (fromUrl === 'summary' && video.hasSummary) {
+        return fromUrl;
+      }
+      if (fromUrl === 'article' && video.hasArticle) {
+        return fromUrl;
+      }
+    }
+    return publicMode && !video.hasSummary && video.hasArticle ? 'article' : 'summary';
+  });
   const durationLabel = formatDurationSeconds(video.durationSeconds);
 
   // Shared transcript availability state across all three tabs.
@@ -128,6 +167,27 @@ export default function VideoReader({
   const [hasSummary, setHasSummary] = useState<boolean>(video.hasSummary);
   const [hasArticle, setHasArticle] = useState<boolean>(video.hasArticle);
 
+  // Per-language availability records, populated as Summary and
+  // Article readers' fetches resolve. Drives the Share button's
+  // visibility — Share appears only when the *currently selected*
+  // language has at least one of summary/article. SSR's aggregate
+  // flags can't answer this since "any language has content" isn't
+  // the same as "this language has content". The sentinel
+  // `__original__` keys the `language=null` (Original) row so it
+  // can share the same Record<string, boolean> shape.
+  const [summaryByLanguage, setSummaryByLanguage] = useState<Record<string, boolean>>({});
+  const [articleByLanguage, setArticleByLanguage] = useState<Record<string, boolean>>({});
+
+  // Gate the Share link — there's no point offering a `?language=`
+  // URL whose target lands the recipient on an empty tab. A `false`
+  // entry means the reader has fetched and confirmed the language
+  // is empty; `undefined` means the fetch is still in flight, in
+  // which case we hide too (brief hide-then-reveal is preferable to
+  // teasing a 404).
+  const currentLanguageHasContent =
+    summaryByLanguage[selectedLanguageKey] === true ||
+    articleByLanguage[selectedLanguageKey] === true;
+
   // Word counts streamed up from each reader so the tab header can
   // render a live "X min" reading-time badge. 0 means either "content
   // not loaded yet" or "not generated" — the tab header falls back to
@@ -146,19 +206,37 @@ export default function VideoReader({
   // video had a generated summary the new video's Summary tab dot
   // would falsely be blue. Resync everything on every video identity
   // change.
+  //
+  // Skip the very first run via prevVideoIdRef — on initial mount the
+  // useState initializers above already seeded the right values
+  // (including URL-derived activeTab), and we don't want this effect
+  // to clobber them back to the unconditional default.
+  const prevVideoIdRef = useRef(video.id);
   useEffect(() => {
+    if (prevVideoIdRef.current === video.id) {
+      return;
+    }
+    prevVideoIdRef.current = video.id;
     setTranscriptStatus(
       video.transcriptUnavailable ? 'unavailable' : video.hasTranscript ? 'present' : 'unknown'
     );
     setHasSummary(video.hasSummary);
     setHasArticle(video.hasArticle);
+    // Drop the previous video's per-language availability so the
+    // Share button starts hidden until the new video's readers
+    // re-report. Otherwise a stale `{ __original__: true }` from
+    // video A could briefly show Share on video B.
+    setSummaryByLanguage({});
+    setArticleByLanguage({});
     setSummaryWords(0);
     setArticleWords(0);
     setTranscriptWords(0);
-    // Re-pick the default tab for the new video. In public mode tabs
-    // are conditionally rendered, so a stale activeTab from the
-    // previous video can leave the viewer staring at an empty pane
-    // when the new video lacks that tab's content.
+    // Re-pick the default tab for the new video. A stale activeTab
+    // from the previous video (e.g. 'transcript' on the way into a
+    // public-mode video that hides it, or 'summary' on the way into
+    // a public-mode article-only video where the Summary tab is
+    // filtered out) would otherwise leave the viewer staring at an
+    // empty pane.
     setActiveTab(publicMode && !video.hasSummary && video.hasArticle ? 'article' : 'summary');
   }, [
     video.id,
@@ -169,13 +247,95 @@ export default function VideoReader({
     publicMode,
   ]);
 
+  // Mirror the active tab into the URL as `?tab=...` (and, in private
+  // mode, the selected language as `?language=...`) so refresh,
+  // browser-back, and link-share preserve the view. Public mode
+  // skips the language write because that param is already SSR'd by
+  // /p/videos/[videoId]/page.tsx and rewriting it would round-trip
+  // through the server on every refresh.
+  //
+  // Only write `?tab=` when the active tab differs from the mode-
+  // aware default. This (a) keeps shared URLs clean when the user
+  // hasn't moved off the default, and (b) drops an unreachable URL
+  // value entirely instead of rewriting it — e.g. a shared
+  // `?tab=summary` URL whose summary was later deleted falls back
+  // to Article and gets the now-meaningless `?tab=` stripped, rather
+  // than being rewritten to `?tab=article` and pinning the view.
+  //
+  // window.history.replaceState avoids the re-render / data-refetch
+  // overhead of router.replace — we're just decorating the URL bar.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    let changed = false;
+    const defaultTab: Tab =
+      publicMode && !video.hasSummary && video.hasArticle ? 'article' : 'summary';
+    if (activeTab === defaultTab) {
+      if (params.has('tab')) {
+        params.delete('tab');
+        changed = true;
+      }
+    } else if (params.get('tab') !== activeTab) {
+      params.set('tab', activeTab);
+      changed = true;
+    }
+    if (!publicMode) {
+      const currentLang = params.get('language');
+      if (selectedLanguage != null) {
+        if (currentLang !== selectedLanguage) {
+          params.set('language', selectedLanguage);
+          changed = true;
+        }
+      } else if (currentLang != null) {
+        params.delete('language');
+        changed = true;
+      }
+    }
+    if (changed) {
+      const qs = params.toString();
+      const newUrl = `${window.location.pathname}${qs.length > 0 ? `?${qs}` : ''}`;
+      // Preserve `window.history.state` rather than overwriting it
+      // with `null` — the Next.js App Router stores its own routing
+      // metadata (tree keys, scroll position, etc.) in history.state,
+      // and clobbering it can break soft back/forward navigation.
+      window.history.replaceState(window.history.state, '', newUrl);
+    }
+    // video.id is in the dep array so soft-navigation between
+    // videos re-decorates the new URL. Without it, navigating from
+    // video A (?language=zh) to video B (no params) wouldn't re-run
+    // the effect when the active tab and language match across the
+    // two videos — the in-session language override would silently
+    // disappear from the URL and be lost on the next refresh.
+  }, [activeTab, selectedLanguage, publicMode, video.id, video.hasSummary, video.hasArticle]);
+
   // Stable callbacks the children pass into their effect dep arrays.
   // useState's setters are already stable, but wrapping the
   // single-update closures in useCallback gives a clean reference
   // that satisfies react-hooks/exhaustive-deps without triggering
   // an effect re-run on every parent render.
-  const handleSummaryAvailable = useCallback(() => setHasSummary(true), []);
-  const handleArticleAvailable = useCallback(() => setHasArticle(true), []);
+  // Combined per-language availability handler: updates the per-
+  // language map (drives Share gating) and, on the affirmative
+  // signal, also flips the aggregate boolean (drives the tab dot
+  // and public-mode tab filtering). Aggregate stays monotonic — a
+  // language reporting `false` doesn't flip the dot back to red,
+  // because some other language may still have content.
+  const handleSummaryAvailability = useCallback((language: string | null, available: boolean) => {
+    const key = language ?? '__original__';
+    setSummaryByLanguage((prev) =>
+      prev[key] === available ? prev : { ...prev, [key]: available }
+    );
+    if (available) {
+      setHasSummary(true);
+    }
+  }, []);
+  const handleArticleAvailability = useCallback((language: string | null, available: boolean) => {
+    const key = language ?? '__original__';
+    setArticleByLanguage((prev) =>
+      prev[key] === available ? prev : { ...prev, [key]: available }
+    );
+    if (available) {
+      setHasArticle(true);
+    }
+  }, []);
   const handleSummaryWordsChange = useCallback((words: number) => setSummaryWords(words), []);
   const handleArticleWordsChange = useCallback((words: number) => setArticleWords(words), []);
   const handleTranscriptWordsChange = useCallback((words: number) => setTranscriptWords(words), []);
@@ -362,7 +522,7 @@ export default function VideoReader({
               </a>
               <CopyButton value={watchUrl} label={`Copy ${platformName} link`} />
             </span>
-            {!publicMode && (hasSummary || hasArticle) && (
+            {!publicMode && currentLanguageHasContent && (
               <>
                 <span>·</span>
                 {/*
@@ -529,7 +689,7 @@ export default function VideoReader({
                       videoTitle={video.title}
                       transcriptStatus={transcriptStatus}
                       onTranscriptStatusChange={setTranscriptStatus}
-                      onSummaryAvailable={handleSummaryAvailable}
+                      onSummaryAvailability={handleSummaryAvailability}
                       onSummaryWordsChange={handleSummaryWordsChange}
                       publicMode={publicMode}
                       selectedLanguage={selectedLanguage}
@@ -544,7 +704,7 @@ export default function VideoReader({
                       videoTitle={video.title}
                       transcriptStatus={transcriptStatus}
                       onTranscriptStatusChange={setTranscriptStatus}
-                      onArticleAvailable={handleArticleAvailable}
+                      onArticleAvailability={handleArticleAvailability}
                       onArticleWordsChange={handleArticleWordsChange}
                       publicMode={publicMode}
                       selectedLanguage={selectedLanguage}

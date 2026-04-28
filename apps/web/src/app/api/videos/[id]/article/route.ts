@@ -15,7 +15,7 @@ import {
 } from '@/lib/markdownFrontmatter';
 import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
 
-const PROMPT_VERSION = 'v6';
+const PROMPT_VERSION = 'v8';
 const DEFAULT_STYLE: ArticleStyle = ArticleStyle.NARRATIVE;
 
 // Structured-output schema: content first (so the model writes the
@@ -63,12 +63,13 @@ CRITICAL FIDELITY REQUIREMENT: Do NOT summarize, condense, abstract, paraphrase 
 
 Instructions:
 ${styleGuidance}
-- Use whatever Markdown features best suit the content. You are not limited to headings, subheadings, lists, and blockquotes — also use tables (for comparisons / specs / enumerations), fenced code blocks (for code, commands, file paths, or configuration), inline code for short technical tokens, bold and italic emphasis, horizontal rules to separate unrelated sections, and links where the speaker references them. Pick the feature that best represents each chunk of content.
+- Structure the article with \`##\` section headings (and \`###\` subheadings where helpful) at every natural topic shift, so the reader can scan and navigate. Aim for a heading roughly every few hundred words; long unbroken prose with no sectioning is a failure mode to avoid. Write descriptive headings that summarize their section, not generic ones like "Introduction" or "Part 1". Skip headings only when the entire article is a single short topic.
+- Use whatever Markdown features best suit the content. Beyond headings and subheadings, also use lists, blockquotes, tables (for comparisons / specs / enumerations), fenced code blocks (for code, commands, file paths, or configuration), inline code for short technical tokens, bold and italic emphasis, horizontal rules to separate unrelated sections, and links where the speaker references them. Pick the feature that best represents each chunk of content.
 - Remove only filler words ("um", "uh", "like", "you know"), false starts, repeated words, and verbal tics. Do not remove substantive content.
 - Preserve the speaker's voice, phrasing, and stylistic quirks. Keep concrete details, numbers, and examples verbatim.
 - Do not invent facts, claims, or details that aren't in the transcript.
 - Do not include the video title as a top-level heading — it will be shown separately.
-- Start directly with the article content. No preamble like "Here is the article".
+- Start directly with the article content. No preamble of any kind, in any language. Do NOT prefix the article with framing sentences such as "Here is the article", "Below is the article", "The following is...", "以下是...", "下面是...", "이하는...", "次のように...", or any equivalent. The very first character of the output must be the first character of the article body itself (a heading, the opening of the first paragraph, etc.).
 
 Video title: ${title}
 Channel: ${channelName}
