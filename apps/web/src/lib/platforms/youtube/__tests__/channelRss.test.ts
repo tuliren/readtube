@@ -86,6 +86,52 @@ describe('fetchRssFeed', () => {
     expect(video.thumbnailUrl).toBe(`https://i4.ytimg.com/vi/${videoId}/hqdefault.jpg`);
   });
 
+  it('skips entries whose published date is in the future', async () => {
+    const futurePublished = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const FUTURE_RSS = `<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" xmlns:media="http://search.yahoo.com/mrss/" xmlns="http://www.w3.org/2005/Atom">
+ <id>yt:channel:UC_test</id>
+ <yt:channelId>UC_test</yt:channelId>
+ <title>Sample Channel</title>
+ <link rel="alternate" href="https://www.youtube.com/channel/UC_test"/>
+ <entry>
+  <id>yt:video:past1</id>
+  <yt:videoId>past1</yt:videoId>
+  <title>Already aired</title>
+  <link rel="alternate" href="https://www.youtube.com/watch?v=past1"/>
+  <published>2026-04-01T00:00:00+00:00</published>
+  <media:group>
+   <media:title>Already aired</media:title>
+   <media:thumbnail url="https://i.ytimg.com/vi/past1/hqdefault.jpg"/>
+   <media:description></media:description>
+  </media:group>
+ </entry>
+ <entry>
+  <id>yt:video:future1</id>
+  <yt:videoId>future1</yt:videoId>
+  <title>Scheduled live</title>
+  <link rel="alternate" href="https://www.youtube.com/watch?v=future1"/>
+  <published>${futurePublished}</published>
+  <media:group>
+   <media:title>Scheduled live</media:title>
+   <media:thumbnail url="https://i.ytimg.com/vi/future1/hqdefault.jpg"/>
+   <media:description></media:description>
+  </media:group>
+ </entry>
+</feed>`;
+    globalThis.fetch = jest.fn(
+      async () =>
+        ({
+          ok: true,
+          text: async () => FUTURE_RSS,
+        }) as Response
+    );
+
+    const feed = await fetchRssFeed('https://example.com/rss.xml');
+
+    expect(feed.videos.map((v) => v.videoId)).toEqual(['past1']);
+  });
+
   it('throws on non-ok response', async () => {
     globalThis.fetch = jest.fn(
       async () =>
