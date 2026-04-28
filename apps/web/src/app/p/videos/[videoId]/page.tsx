@@ -105,10 +105,19 @@ export default async function PublicVideoPage({ params, searchParams }: Props) {
     null
   );
 
+  // Fixed-viewport layout (matches the dashboard's `h-screen
+  // overflow-hidden` shell) so VideoReader's internal `overflow-y-auto`
+  // pane is the actual scroll container. Without the height bound the
+  // page would scroll on `window` instead, breaking the floating TOC's
+  // Top / Bottom shortcuts which target the cached scroll ancestor.
+  // `min-h-0` on `<main>` is what lets the flex child shrink below its
+  // content's intrinsic height — without it, `flex-1` would overflow
+  // the viewport and the inner pane would never establish a scroll
+  // container.
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex h-screen flex-col overflow-hidden">
       <Header />
-      <main className="flex flex-1 flex-col">
+      <main className="flex min-h-0 flex-1 flex-col">
         <VideoReader video={videoData} publicMode preferredLanguage={requestedLanguage} />
       </main>
       <Footer />
