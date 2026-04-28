@@ -15,7 +15,7 @@ import {
 } from '@/lib/markdownFrontmatter';
 import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
 
-const PROMPT_VERSION = 'v7';
+const PROMPT_VERSION = 'v8';
 const DEFAULT_STYLE: ArticleStyle = ArticleStyle.NARRATIVE;
 
 // Structured-output schema: content first (so the model writes the
@@ -69,7 +69,7 @@ ${styleGuidance}
 - Preserve the speaker's voice, phrasing, and stylistic quirks. Keep concrete details, numbers, and examples verbatim.
 - Do not invent facts, claims, or details that aren't in the transcript.
 - Do not include the video title as a top-level heading — it will be shown separately.
-- Start directly with the article content. No preamble like "Here is the article".
+- Start directly with the article content. No preamble of any kind, in any language. Do NOT prefix the article with framing sentences such as "Here is the article", "Below is the article", "The following is...", "以下是...", "下面是...", "이하는...", "次のように...", or any equivalent. The very first character of the output must be the first character of the article body itself (a heading, the opening of the first paragraph, etc.).
 
 Video title: ${title}
 Channel: ${channelName}
