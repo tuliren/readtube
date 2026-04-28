@@ -128,6 +128,48 @@ describe('fetchChannelLatest', () => {
     expect(result.videos).toEqual([]);
   });
 
+  it('skips entries whose published date is in the future', async () => {
+    const futurePublished = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        channel: { channelId: 'UC_abc', title: 'Test', author: '', url: '', published: '' },
+        results: [
+          {
+            videoId: 'past_video',
+            title: 'Aired',
+            channelId: 'UC_abc',
+            author: 'Test',
+            published: '2026-01-01T00:00:00Z',
+            updated: '',
+            link: 'https://youtube.com/watch?v=past_video',
+            description: '',
+            thumbnail: { url: '', width: '', height: '' },
+            viewCount: '0',
+            starRating: { count: '0', average: '0', min: '1', max: '5' },
+          },
+          {
+            videoId: 'upcoming_stream',
+            title: 'Scheduled live',
+            channelId: 'UC_abc',
+            author: 'Test',
+            published: futurePublished,
+            updated: '',
+            link: 'https://youtube.com/watch?v=upcoming_stream',
+            description: '',
+            thumbnail: { url: '', width: '', height: '' },
+            viewCount: '0',
+            starRating: { count: '0', average: '0', min: '1', max: '5' },
+          },
+        ],
+      }),
+    });
+
+    const result = await fetchChannelLatest('UC_abc');
+
+    expect(result.videos.map((v) => v.videoId)).toEqual(['past_video']);
+  });
+
   it('handles missing thumbnail gracefully', async () => {
     (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,

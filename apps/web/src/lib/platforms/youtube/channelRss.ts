@@ -118,6 +118,16 @@ export async function fetchRssFeed(rssUrl: string): Promise<RssChannel> {
         return null;
       }
 
+      // Scheduled livestreams and premieres show up in the channel's
+      // RSS feed before they air, with `<published>` set to the
+      // scheduled start time. Their transcripts don't exist yet — if
+      // we ingest them, the transcript fetch returns a permanent 404
+      // and we'd flag the row as `transcript_unavailable`, blocking
+      // the real transcript later. Drop future-dated entries.
+      if (publishedAt.getTime() > Date.now()) {
+        return null;
+      }
+
       // Per-entry channel — for playlist RSS feeds, each entry's
       // author is the actual uploader rather than the playlist owner.
       const entryChannelId = (entry['yt:channelId'] as string | undefined)?.trim() ?? null;

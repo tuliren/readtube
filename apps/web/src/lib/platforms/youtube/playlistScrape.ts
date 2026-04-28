@@ -155,6 +155,13 @@ export async function scrapePlaylist(playlistId: string): Promise<ScrapedPlaylis
       continue;
     }
 
+    // Skip scheduled livestreams / unaired premieres — see
+    // channelScrape.ts for the rationale (transcript fetch will
+    // 404 and stickily mark the row as transcript-unavailable).
+    if (renderer.upcomingEventData != null) {
+      continue;
+    }
+
     // Duration from lengthText (e.g. "12:34")
     const lengthText = renderer.lengthText?.simpleText as string | undefined;
     let durationSeconds: number | null = null;

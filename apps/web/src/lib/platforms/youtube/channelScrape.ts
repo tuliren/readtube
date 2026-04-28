@@ -238,6 +238,15 @@ function extractVideosFromInitialData(data: YtData): ScrapedVideo[] {
       continue;
     }
 
+    // Scheduled livestreams and unaired premieres carry an
+    // `upcomingEventData` block with a future `startTime`. Pulling
+    // them in would only burn a transcript fetch that's guaranteed
+    // to 404 — and worse, the sticky `transcript_unavailable` flag
+    // would then block re-fetching after the stream actually airs.
+    if (v.upcomingEventData != null) {
+      continue;
+    }
+
     const videoId = v.videoId as string;
 
     const titleRuns = (v.title as YtData)?.runs as YtData[] | undefined;

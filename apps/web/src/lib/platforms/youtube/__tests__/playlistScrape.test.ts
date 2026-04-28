@@ -118,6 +118,59 @@ describe('scrapePlaylist', () => {
     });
   });
 
+  it('skips scheduled livestream entries with upcomingEventData', async () => {
+    const data = {
+      metadata: { playlistMetadataRenderer: { title: 'Playlist Title' } },
+      sidebar: { playlistSidebarRenderer: { items: [{}, {}] } },
+      contents: {
+        twoColumnBrowseResultsRenderer: {
+          tabs: [
+            {
+              tabRenderer: {
+                content: {
+                  sectionListRenderer: {
+                    contents: [
+                      {
+                        itemSectionRenderer: {
+                          contents: [
+                            {
+                              playlistVideoListRenderer: {
+                                contents: [
+                                  {
+                                    playlistVideoRenderer: {
+                                      videoId: 'aired_video',
+                                      title: { runs: [{ text: 'Aired' }] },
+                                    },
+                                  },
+                                  {
+                                    playlistVideoRenderer: {
+                                      videoId: 'upcoming_video',
+                                      title: { runs: [{ text: 'Upcoming Stream' }] },
+                                      upcomingEventData: {
+                                        startTime: '9999999999',
+                                      },
+                                    },
+                                  },
+                                ],
+                              },
+                            },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          ],
+        },
+      },
+    };
+    mockFetch.mockResolvedValueOnce(new Response(buildHtml(data)));
+    const result = await scrapePlaylist('PL_test');
+    expect(result.videos.map((v) => v.videoId)).toEqual(['aired_video']);
+  });
+
   it('throws PrivatePlaylistError when an ERROR alert appears alongside an INFO alert', async () => {
     const data = buildPlaylistData({
       alerts: [

@@ -115,14 +115,20 @@ export async function fetchChannelLatest(
 
   const data: ChannelLatestResponse = await res.json();
 
-  const videos: ChannelVideoMeta[] = (data.results ?? []).map((v) => ({
-    videoId: v.videoId,
-    title: v.title,
-    description: v.description ?? '',
-    publishedAt: new Date(v.published),
-    thumbnailUrl: v.thumbnail?.url || null,
-    link: v.link,
-  }));
+  // Same RSS-backed source as the YouTube feed, so it can return
+  // scheduled livestreams whose `published` is the scheduled start
+  // time in the future. Drop those — see channelRss.ts for the why.
+  const now = Date.now();
+  const videos: ChannelVideoMeta[] = (data.results ?? [])
+    .map((v) => ({
+      videoId: v.videoId,
+      title: v.title,
+      description: v.description ?? '',
+      publishedAt: new Date(v.published),
+      thumbnailUrl: v.thumbnail?.url || null,
+      link: v.link,
+    }))
+    .filter((v) => !Number.isNaN(v.publishedAt.getTime()) && v.publishedAt.getTime() <= now);
 
   return {
     channel: {
