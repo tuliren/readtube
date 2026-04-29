@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { countWords } from '@/lib/format/wordCount';
 import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { extractArticleHeadings } from '@/lib/reader/extractArticleHeadings';
+import { useFollowBottom } from '@/lib/reader/useFollowBottom';
 import { isProduction } from '@/lib/vercelEnv';
 
 import ArticleMarkdown from './ArticleMarkdown';
@@ -78,6 +79,11 @@ export default function ArticleReader({
   const [content, setContent] = useState('');
   const [hasLatex, setHasLatex] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Auto-scroll the reader to the bottom while content streams in,
+  // unless the user has scrolled away — the hook tracks that on its
+  // own and resumes following if the user scrolls back near the end.
+  const followBottomRef = useFollowBottom(status === 'streaming', [content]);
 
   useEffect(() => {
     let cancelled = false;
@@ -362,7 +368,7 @@ export default function ArticleReader({
   const isStreaming = status === 'streaming';
 
   return (
-    <div>
+    <div ref={followBottomRef}>
       <div className="mb-4 flex items-center justify-end gap-3">
         {!publicMode && (
           <LanguagePicker

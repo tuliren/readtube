@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 
 import { countWords } from '@/lib/format/wordCount';
 import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
+import { useFollowBottom } from '@/lib/reader/useFollowBottom';
 import { isProduction } from '@/lib/vercelEnv';
 
 import ArticleMarkdown from './ArticleMarkdown';
@@ -112,6 +113,15 @@ export default function SummaryReader({
   const [hasLatexByField, setHasLatexByField] = useState<HasLatexByField>({});
   const [regeneratingFields, setRegeneratingFields] = useState<SummaryField[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Auto-scroll the reader to the bottom while summary fields stream
+  // in, unless the user has scrolled away. See ArticleReader for the
+  // longer note.
+  const followBottomRef = useFollowBottom(status === 'generating', [
+    summary?.headline,
+    summary?.short,
+    summary?.full,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -487,7 +497,7 @@ export default function SummaryReader({
     fullContent.length > 0;
 
   return (
-    <div>
+    <div ref={followBottomRef}>
       <div className="mb-4 flex items-center justify-end gap-3">
         {!publicMode && (
           <LanguagePicker
