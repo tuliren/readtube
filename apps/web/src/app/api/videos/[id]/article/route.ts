@@ -1,36 +1,16 @@
 import { auth } from '@clerk/nextjs/server';
-import { ArticleStyle, Prisma, prisma } from '@readtube/database';
-import { Output, streamText } from 'ai';
+import { ArticleStyle, prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import { start } from 'workflow/api';
 
-import { DEFAULT_AI_MODEL } from '@/constants';
 import { findOrCloneArticle } from '@/lib/language/cache';
 import { buildLanguageRule } from '@/lib/language/prompt';
 import { resolveTargetLanguage } from '@/lib/language/resolve';
-import {
-  CURRENT_FRONTMATTER_VERSION,
-  parseMarkdownDocument,
-  serializeMarkdownDocument,
-} from '@/lib/markdownFrontmatter';
+import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
+import { type ArticleStreamEvent, articleWorkflow } from '@/lib/workflows/article';
 
-const PROMPT_VERSION = 'v8';
 const DEFAULT_STYLE: ArticleStyle = ArticleStyle.NARRATIVE;
-
-// Structured-output schema: content first (so the model writes the
-// body before deciding hasLatex), hasLatex second (so the flag
-// reflects what the model actually produced).
-const ARTICLE_SCHEMA = z.object({
-  content: z
-    .string()
-    .describe('The markdown body of the article. Do not include any YAML frontmatter.'),
-  hasLatex: z
-    .boolean()
-    .describe(
-      'True if the content field above contains at least one LaTeX math formula wrapped in single or double dollar signs (e.g. $E = mc^2$ or $$\\int_0^1 x\\,dx$$). False otherwise. Dollar amounts like "$5 million" are not math and must not set this flag to true.'
-    ),
-});
 
 function parseStyle(raw: string | null | undefined): ArticleStyle | null {
   if (raw == null) {
@@ -264,164 +244,30 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const transcriptText = transcript.segments.map((s) => s.text).join(' ');
 
-  const result = streamText({
-    model: DEFAULT_AI_MODEL,
-    output: Output.object({ schema: ARTICLE_SCHEMA }),
-    prompt: buildPrompt(style, target, video.title, video.channel.name, transcriptText),
-  });
-
-  // Eagerly consume the first partial so pre-flight errors (gateway
-  // auth, invalid model, etc.) surface as a proper HTTP error before
-  // the stream opens.
-  const iterator = result.partialOutputStream[Symbol.asyncIterator]();
-  let firstChunk: IteratorResult<Partial<z.infer<typeof ARTICLE_SCHEMA>>>;
-  try {
-    firstChunk = await iterator.next();
-  } catch (err) {
-    console.error('[article/POST] streamText output pre-flight error:', err);
-    const message = err instanceof Error ? err.message : 'Failed to generate article.';
-    return NextResponse.json({ error: message }, { status: 500 });
-  }
-
-  const transcriptId = transcript.id;
-
-  const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      let accumulated = '';
-      let hasLatex: boolean | null = null;
-      let emittedHasLatex = false;
-
-      const applyPartial = (partial: Partial<z.infer<typeof ARTICLE_SCHEMA>> | undefined) => {
-        if (partial == null) {
-          return;
-        }
-        if (typeof partial.content === 'string' && partial.content.length > accumulated.length) {
-          const delta = partial.content.slice(accumulated.length);
-          accumulated = partial.content;
-          emitLine(controller, { delta });
-        }
-        if (!emittedHasLatex && typeof partial.hasLatex === 'boolean') {
-          emittedHasLatex = true;
-          hasLatex = partial.hasLatex;
-          emitLine(controller, { hasLatex });
-        }
-      };
-
-      try {
-        if (!firstChunk.done) {
-          applyPartial(firstChunk.value);
-        }
-        while (true) {
-          const next = await iterator.next();
-          if (next.done) {
-            break;
-          }
-          applyPartial(next.value);
-        }
-        if (!emittedHasLatex) {
-          try {
-            const settled = await result.output;
-            hasLatex = settled.hasLatex;
-            emittedHasLatex = true;
-            emitLine(controller, { hasLatex });
-          } catch {
-            // Swallow — we already streamed the body.
-          }
-        }
-        // Persist BEFORE emitting `done` + closing the stream, so a
-        // client that drains until `done` can trust the row to be
-        // committed by the time its follow-up SWR refetch runs. The
-        // earlier order (close first, persist after) raced the
-        // upsert against `invalidateLists()` and left the UI with a
-        // stuck spinner when the refetch landed first.
-        let persistError: string | null = null;
-        if (accumulated.trim().length === 0) {
-          // Stream said `done` but the LLM produced nothing — treat
-          // as a failure so the row's pending flag resets. Without
-          // this the client drains cleanly, returns true, and the
-          // spinner stays pinned forever since `hasArticle` never
-          // flips.
-          persistError = 'Generation produced no content';
-        } else {
-          try {
-            const usage = await result.usage;
-            const contentForStorage = serializeMarkdownDocument(accumulated.trim(), {
-              version: CURRENT_FRONTMATTER_VERSION,
-              hasLatex: hasLatex === true,
-            });
-
-            // Manual upsert keyed on (transcript_id, style, language).
-            // Prisma can't model the partial unique indexes that enforce
-            // this, so we use findFirst + create, with a P2002 retry
-            // for the rare race where another writer takes the same
-            // slot between our find and create.
-            const existing = await prisma.article.findFirst({
-              where: { transcript_id: transcriptId, style, language: target },
-              select: { id: true },
-            });
-            const articleData = {
-              prompt_version: PROMPT_VERSION,
-              model: DEFAULT_AI_MODEL,
-              content: contentForStorage,
-              usage: usage ? JSON.parse(JSON.stringify(usage)) : null,
-            };
-            if (existing) {
-              await prisma.article.update({
-                where: { id: existing.id },
-                data: { ...articleData, generated_at: new Date() },
-              });
-            } else {
-              try {
-                await prisma.article.create({
-                  data: {
-                    transcript_id: transcriptId,
-                    style,
-                    language: target,
-                    ...articleData,
-                  },
-                });
-              } catch (err) {
-                if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-                  const raced = await prisma.article.findFirst({
-                    where: { transcript_id: transcriptId, style, language: target },
-                    select: { id: true },
-                  });
-                  if (raced) {
-                    await prisma.article.update({
-                      where: { id: raced.id },
-                      data: { ...articleData, generated_at: new Date() },
-                    });
-                  } else {
-                    throw err;
-                  }
-                } else {
-                  throw err;
-                }
-              }
-            }
-          } catch (err) {
-            console.error('[article/POST] failed to persist article:', err);
-            persistError = err instanceof Error ? err.message : 'Failed to save article';
-          }
-        }
-
-        // See the summary route for the rationale — emitting `error`
-        // instead of `done` on persist failure lets the client's
-        // stream drain throw and reset the row's pending flag.
-        if (persistError != null) {
-          emitLine(controller, { error: persistError });
-        } else {
-          emitLine(controller, { type: 'done' });
-        }
-        controller.close();
-      } catch (err) {
-        console.error('[article/POST] streamText output mid-stream error:', err);
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        emitLine(controller, { error: message });
-        controller.close();
-      }
+  // Run generation as a Vercel Workflow so it survives the request
+  // lifecycle: even if the client closes the tab mid-stream, the
+  // workflow keeps running, persists the row on completion, and the
+  // user picks it up via the existing-article GET on next visit.
+  // Persistence is all-or-nothing — only the final persist step
+  // touches the DB, so a half-streamed article never lands.
+  const run = await start(articleWorkflow, [
+    {
+      prompt: buildPrompt(style, target, video.title, video.channel.name, transcriptText),
+      transcriptId: transcript.id,
+      style,
+      language: target,
     },
-  });
+  ]);
 
-  return new Response(stream, { headers: ndjsonHeaders });
+  // The workflow's typed readable yields ArticleStreamEvent objects;
+  // re-encode as NDJSON so the client wire format is unchanged.
+  const ndjsonStream = (run.readable as ReadableStream<ArticleStreamEvent>).pipeThrough(
+    new TransformStream<ArticleStreamEvent, Uint8Array>({
+      transform(event, controller) {
+        controller.enqueue(encoder.encode(JSON.stringify(event) + '\n'));
+      },
+    })
+  );
+
+  return new Response(ndjsonStream, { headers: ndjsonHeaders });
 }

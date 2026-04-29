@@ -1,21 +1,19 @@
 import { auth } from '@clerk/nextjs/server';
-import { Prisma, prisma } from '@readtube/database';
-import { Output, streamText } from 'ai';
+import { prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import { start } from 'workflow/api';
 
-import { DEFAULT_AI_MODEL } from '@/constants';
 import { findOrCloneSummary } from '@/lib/language/cache';
 import { buildLanguageRule } from '@/lib/language/prompt';
 import { resolveTargetLanguage } from '@/lib/language/resolve';
-import {
-  CURRENT_FRONTMATTER_VERSION,
-  parseMarkdownDocument,
-  serializeMarkdownDocument,
-} from '@/lib/markdownFrontmatter';
+import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
-
-const SUMMARY_PROMPT_VERSION = 'v7';
+import {
+  SUMMARY_FIELDS,
+  type SummaryField,
+  type SummaryStreamEvent,
+  summaryWorkflow,
+} from '@/lib/workflows/summary';
 
 const PROMPT_BODIES = {
   headline: `Write a very short title for this video. Rules:
@@ -38,27 +36,6 @@ Output only the title itself, nothing else.`,
 - Never use headings (no #, ##, etc.). Do not bold or italicize.`,
 } as const;
 
-// Structured-output schema for short/full. Keep `content` before
-// `hasLatex` so the model commits to the body text first, then
-// classifies what it wrote. Asking for hasLatex up front produces
-// garbage (the model defaults to false because it's guessing before
-// writing).
-const CONTENT_WITH_LATEX_SCHEMA = z.object({
-  content: z
-    .string()
-    .describe('The markdown body of the summary. Do not include any YAML frontmatter.'),
-  hasLatex: z
-    .boolean()
-    .describe(
-      'True if the content field above contains at least one LaTeX math formula wrapped in single or double dollar signs (e.g. $E = mc^2$ or $$\\int_0^1 x\\,dx$$). False otherwise. Dollar amounts like "$5 million" are not math and must not set this flag to true.'
-    ),
-});
-
-const FIELDS_WITH_FRONTMATTER: ReadonlySet<SummaryField> = new Set<SummaryField>(['short', 'full']);
-
-type SummaryField = keyof typeof PROMPT_BODIES;
-const SUMMARY_FIELDS: readonly SummaryField[] = ['headline', 'short', 'full'] as const;
-
 function buildPrompt(
   kind: SummaryField,
   target: string | null,
@@ -75,13 +52,6 @@ Channel: ${channelName}
 
 Transcript:
 ${transcript}`;
-}
-
-function serializeUsage(usage: unknown) {
-  if (usage == null) {
-    return null;
-  }
-  return JSON.parse(JSON.stringify(usage));
 }
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -281,295 +251,29 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     });
   }
 
-  // Kick off streams for the requested fields in parallel. Headline
-  // uses plain streamText — it's a one-line title, never math. Short
-  // and full use streamText with Output.object({schema}) so the model
-  // emits {content, hasLatex} as a single structured response;
-  // hasLatex lands after content is written, so the classification
-  // reflects what the model actually produced rather than a forward
-  // guess.
-  //
-  // The full StreamTextResult<TOOLS, OUTPUT> type is painful to name
-  // inline, so these interfaces capture only the surface area the
-  // pump logic actually uses. Inference at the call sites keeps the
-  // concrete result types precise.
-  type StructuredOutput = z.infer<typeof CONTENT_WITH_LATEX_SCHEMA>;
-  type UsageProducer = { usage: PromiseLike<unknown> };
-  interface TextGen {
-    kind: 'text';
-    field: SummaryField;
-    result: UsageProducer;
-    iterator: AsyncIterator<string>;
-  }
-  interface ObjectGen {
-    kind: 'object';
-    field: SummaryField;
-    result: UsageProducer & { output: PromiseLike<StructuredOutput> };
-    iterator: AsyncIterator<Partial<StructuredOutput>>;
-  }
-  type Generation = TextGen | ObjectGen;
-
-  const generations: Generation[] = fieldsToGenerate.map((field): Generation => {
-    const prompt = buildPrompt(field, target, video.title, video.channel.name, transcriptText);
-    if (FIELDS_WITH_FRONTMATTER.has(field)) {
-      const result = streamText({
-        model: DEFAULT_AI_MODEL,
-        output: Output.object({ schema: CONTENT_WITH_LATEX_SCHEMA }),
-        prompt,
-      });
-      return {
-        kind: 'object',
+  // Run generation as a Vercel Workflow so it survives the request
+  // lifecycle — see the article route for the full rationale.
+  const run = await start(summaryWorkflow, [
+    {
+      fields: fieldsToGenerate.map((field) => ({
         field,
-        result,
-        iterator: result.partialOutputStream[Symbol.asyncIterator](),
-      };
-    }
-    const result = streamText({ model: DEFAULT_AI_MODEL, prompt });
-    return {
-      kind: 'text',
-      field,
-      result,
-      iterator: result.textStream[Symbol.asyncIterator](),
-    };
-  });
-
-  // Pre-flight: await the first chunk of each stream so auth/gateway errors
-  // surface as a proper HTTP error before the stream starts.
-  type FirstChunk =
-    | { kind: 'text'; value: IteratorResult<string> }
-    | {
-        kind: 'object';
-        value: IteratorResult<Partial<z.infer<typeof CONTENT_WITH_LATEX_SCHEMA>>>;
-      };
-  let firstChunks: FirstChunk[];
-  try {
-    firstChunks = await Promise.all(
-      generations.map(async (g) => {
-        if (g.kind === 'text') {
-          return { kind: 'text' as const, value: await g.iterator.next() };
-        }
-        return { kind: 'object' as const, value: await g.iterator.next() };
-      })
-    );
-  } catch (err) {
-    console.error('[summary/POST] stream pre-flight error:', err);
-    const message = err instanceof Error ? err.message : 'Failed to generate summary.';
-    return NextResponse.json({ error: message }, { status: 500 });
-  }
-
-  const transcriptId = transcript.id;
-  const encoder = new TextEncoder();
-
-  const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      const accumulated: Record<SummaryField, string> = {
-        headline: '',
-        short: '',
-        full: '',
-      };
-      const hasLatexByField: Partial<Record<SummaryField, boolean>> = {};
-      const fieldErrors: Partial<Record<SummaryField, string>> = {};
-
-      function emit(event: object) {
-        controller.enqueue(encoder.encode(JSON.stringify(event) + '\n'));
-      }
-
-      // Pump each source stream into the output, interleaved. For
-      // object streams we compute a delta relative to the previous
-      // content length, so the wire format stays chunk-based like
-      // the text path.
-      const pumps = generations.map(async (gen, idx) => {
-        const { field } = gen;
-        const first = firstChunks[idx];
-        try {
-          if (gen.kind === 'text' && first.kind === 'text') {
-            if (!first.value.done && first.value.value) {
-              accumulated[field] += first.value.value;
-              emit({ field, delta: first.value.value });
-            }
-            while (true) {
-              const next = await gen.iterator.next();
-              if (next.done) {
-                break;
-              }
-              accumulated[field] += next.value;
-              emit({ field, delta: next.value });
-            }
-            return;
-          }
-          if (gen.kind === 'object' && first.kind === 'object') {
-            let emittedHasLatex = false;
-            const applyPartial = (
-              partial: Partial<z.infer<typeof CONTENT_WITH_LATEX_SCHEMA>> | undefined
-            ) => {
-              if (partial == null) {
-                return;
-              }
-              if (
-                typeof partial.content === 'string' &&
-                partial.content.length > accumulated[field].length
-              ) {
-                const delta = partial.content.slice(accumulated[field].length);
-                accumulated[field] = partial.content;
-                emit({ field, delta });
-              }
-              if (!emittedHasLatex && typeof partial.hasLatex === 'boolean') {
-                emittedHasLatex = true;
-                hasLatexByField[field] = partial.hasLatex;
-                emit({ field, hasLatex: partial.hasLatex });
-              }
-            };
-            if (!first.value.done) {
-              applyPartial(first.value.value);
-            }
-            while (true) {
-              const next = await gen.iterator.next();
-              if (next.done) {
-                break;
-              }
-              applyPartial(next.value);
-            }
-            // Fallback: if the stream finished without a hasLatex flip
-            // (shouldn't happen — schema requires it — but be safe),
-            // resolve from the settled object and emit once.
-            if (!emittedHasLatex) {
-              try {
-                const settled = await gen.result.output;
-                hasLatexByField[field] = settled.hasLatex;
-                emit({ field, hasLatex: settled.hasLatex });
-              } catch {
-                // Swallow — we already streamed the content.
-              }
-            }
-          }
-        } catch (err) {
-          console.error(`[summary/POST] ${field} stream error:`, err);
-          const message = err instanceof Error ? err.message : 'Unknown error';
-          fieldErrors[field] = message;
-          emit({ field, error: message });
-        }
-      });
-
-      await Promise.all(pumps);
-
-      // Only persist if all requested fields completed successfully.
-      const allSuccessful =
-        Object.keys(fieldErrors).length === 0 &&
-        fieldsToGenerate.every((f) => accumulated[f].trim().length > 0);
-
-      let persistError: string | null = null;
-      // When the LLM streams cleanly but produces empty content (or a
-      // field errored so we skipped persist), there's nothing for the
-      // next SWR refetch to pick up. Per-field stream errors already
-      // emit `{ field, error }` inside the pump; the remaining gap is
-      // the "stream said done, nothing written" case — surface that
-      // as a terminal error so the client's spinner can reset.
-      if (!allSuccessful && Object.keys(fieldErrors).length === 0) {
-        persistError = 'Generation produced no content';
-      }
-      if (allSuccessful) {
-        try {
-          const usages = await Promise.all(generations.map((g) => g.result.usage));
-
-          // Merge with any existing row so non-regenerated fields stay intact.
-          // Lookup is per-(transcript, language) — Prisma can't model the
-          // partial unique indexes that enforce this, so we use findFirst
-          // and fall back to a try/catch upsert pattern on writes.
-          const existing = await prisma.summary.findFirst({
-            where: { transcript_id: transcriptId, language: target },
-            select: { id: true, headline: true, short: true, full: true, usage: true },
-          });
-
-          const mergedUsageObj: Record<string, unknown> = {
-            ...((existing?.usage as Record<string, unknown> | null) ?? {}),
-          };
-          for (let i = 0; i < generations.length; i++) {
-            mergedUsageObj[generations[i].field] = serializeUsage(usages[i]);
-          }
-          // Round-trip through JSON so Prisma's InputJsonValue type is happy.
-          const mergedUsage = JSON.parse(JSON.stringify(mergedUsageObj));
-
-          const wrapForStorage = (field: SummaryField): string => {
-            const body = accumulated[field].trim();
-            if (!FIELDS_WITH_FRONTMATTER.has(field)) {
-              return body;
-            }
-            return serializeMarkdownDocument(body, {
-              version: CURRENT_FRONTMATTER_VERSION,
-              hasLatex: hasLatexByField[field] === true,
-            });
-          };
-
-          const summaryData = {
-            headline: fieldsToGenerate.includes('headline')
-              ? wrapForStorage('headline')
-              : (existing?.headline ?? null),
-            short: fieldsToGenerate.includes('short')
-              ? wrapForStorage('short')
-              : (existing?.short ?? null),
-            full: fieldsToGenerate.includes('full')
-              ? wrapForStorage('full')
-              : (existing?.full ?? null),
-            prompt_version: SUMMARY_PROMPT_VERSION,
-            model: DEFAULT_AI_MODEL,
-            usage: mergedUsage,
-          };
-
-          // Bump `generated_at` on UPDATE — the schema's @default(now())
-          // only fires on CREATE, so without an explicit timestamp here
-          // the row would keep its original generated_at across regens.
-          // Matches the article POST's update behavior.
-          if (existing) {
-            await prisma.summary.update({
-              where: { id: existing.id },
-              data: { ...summaryData, generated_at: new Date() },
-            });
-          } else {
-            try {
-              await prisma.summary.create({
-                data: { transcript_id: transcriptId, language: target, ...summaryData },
-              });
-            } catch (err) {
-              // P2002 = a parallel writer beat us to (transcript_id, language).
-              // Re-find and update so we still persist the latest fields.
-              if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-                const raced = await prisma.summary.findFirst({
-                  where: { transcript_id: transcriptId, language: target },
-                  select: { id: true },
-                });
-                if (raced) {
-                  await prisma.summary.update({
-                    where: { id: raced.id },
-                    data: { ...summaryData, generated_at: new Date() },
-                  });
-                } else {
-                  throw err;
-                }
-              } else {
-                throw err;
-              }
-            }
-          }
-        } catch (err) {
-          console.error('[summary/POST] failed to persist summary:', err);
-          persistError = err instanceof Error ? err.message : 'Failed to save summary';
-        }
-      }
-
-      // Emit a terminal error instead of `done` when persist fails so
-      // the client's stream drain throws, the row's pending flag
-      // clears, and the user sees a toast + can retry. Silently
-      // logging and still emitting `done` left the UI spinner stuck.
-      if (persistError != null) {
-        emit({ error: persistError });
-      } else {
-        emit({ type: 'done' });
-      }
-      controller.close();
+        prompt: buildPrompt(field, target, video.title, video.channel.name, transcriptText),
+      })),
+      transcriptId: transcript.id,
+      language: target,
     },
-  });
+  ]);
 
-  return new Response(stream, {
+  const encoder = new TextEncoder();
+  const ndjsonStream = (run.readable as ReadableStream<SummaryStreamEvent>).pipeThrough(
+    new TransformStream<SummaryStreamEvent, Uint8Array>({
+      transform(event, controller) {
+        controller.enqueue(encoder.encode(JSON.stringify(event) + '\n'));
+      },
+    })
+  );
+
+  return new Response(ndjsonStream, {
     headers: {
       'Content-Type': 'application/x-ndjson; charset=utf-8',
       'Cache-Control': 'no-cache, no-transform',
