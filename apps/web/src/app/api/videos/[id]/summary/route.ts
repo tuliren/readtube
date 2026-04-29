@@ -8,12 +8,8 @@ import { buildLanguageRule } from '@/lib/language/prompt';
 import { resolveTargetLanguage } from '@/lib/language/resolve';
 import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
-import {
-  SUMMARY_FIELDS,
-  type SummaryField,
-  type SummaryStreamEvent,
-  summaryWorkflow,
-} from '@/lib/workflows/summary';
+import { type SummaryStreamEvent, summaryWorkflow } from '@/lib/workflows/summary';
+import { SUMMARY_FIELDS, type SummaryField } from '@/lib/workflows/summary/steps';
 
 const PROMPT_BODIES = {
   headline: `Write a very short title for this video. Rules:
