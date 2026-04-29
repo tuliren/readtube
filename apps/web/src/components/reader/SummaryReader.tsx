@@ -271,7 +271,7 @@ export default function SummaryReader({
       const decoder = new TextDecoder();
       const accumulated: Record<SummaryField, string> = { headline: '', short: '', full: '' };
       let buffer = '';
-      let fieldError: string | null = null;
+      let streamError: string | null = null;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -320,14 +320,19 @@ export default function SummaryReader({
             if (fieldName === 'short' || fieldName === 'full') {
               setHasLatexByField((prev) => ({ ...prev, [fieldName]: flag }));
             }
-          } else if (event.field && event.error) {
-            fieldError = event.error;
+          } else if (typeof event.error === 'string') {
+            // Both per-field errors (`{field, error}`) and top-level
+            // errors (`{error}` from a workflow generation/persist
+            // failure) abort the stream with the same UX. Catch both
+            // here so a top-level error never silently falls through
+            // to the "no content generated" branch.
+            streamError = event.error;
           }
         }
       }
 
-      if (fieldError) {
-        setErrorMessage(fieldError);
+      if (streamError) {
+        setErrorMessage(streamError);
         setStatus('error');
         setRegeneratingFields([]);
         return;
