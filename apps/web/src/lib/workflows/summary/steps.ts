@@ -145,11 +145,15 @@ export async function generateSummaryStep(input: SummaryWorkflowInput): Promise<
   };
 
   try {
-    // Pump every requested field's stream concurrently. Within a
-    // single step we hold the writer for the duration; we serialize
-    // writes per-event but interleave content from different fields
-    // so the client sees them stream together (matches the previous
-    // route behavior).
+    // Pump every requested field's stream concurrently. Each pump
+    // owns its own `pending[field]` / `lastFlushAt[field]` slot, so
+    // there's no shared mutable state between them. Concurrent
+    // `writer.write()` calls from different pumps are safe because
+    // `WritableStreamDefaultWriter.write` is spec-bound to FIFO-queue
+    // chunks in call order — the workflow runtime returns a standard
+    // `WritableStream` (the writable side of a `TransformStream`
+    // piped to the Redis-backed server stream), and `pipeTo`
+    // preserves order through to the consumer.
     const pumps = generations.map(async (gen) => {
       const { field } = gen;
       try {
