@@ -55,6 +55,10 @@ export interface GeneratedSummary {
   results: FieldResult[];
 }
 
+// See articleWorkflow's steps.ts for the rationale.
+const FLUSH_CHARS = 60;
+const FLUSH_INTERVAL_MS = 80;
+
 export async function generateSummaryStep(input: SummaryWorkflowInput): Promise<GeneratedSummary> {
   'use step';
 
@@ -107,6 +111,38 @@ export async function generateSummaryStep(input: SummaryWorkflowInput): Promise<
   };
   const hasLatexByField: Partial<Record<SummaryField, boolean>> = {};
   const fieldErrors: Partial<Record<SummaryField, string>> = {};
+  // Per-field coalescing buffers — see articleWorkflow's steps.ts
+  // for the rationale (Redis-backed stream, every write is a network
+  // op, structured-output partials arrive every few tokens).
+  const pending: Record<SummaryField, string> = {
+    headline: '',
+    short: '',
+    full: '',
+  };
+  const lastFlushAt: Record<SummaryField, number> = {
+    headline: Date.now(),
+    short: Date.now(),
+    full: Date.now(),
+  };
+  const flushField = async (field: SummaryField) => {
+    if (pending[field].length === 0) {
+      return;
+    }
+    await writer.write({ field, delta: pending[field] });
+    pending[field] = '';
+    lastFlushAt[field] = Date.now();
+  };
+  const maybeFlushField = async (field: SummaryField) => {
+    if (pending[field].length === 0) {
+      return;
+    }
+    if (
+      pending[field].length >= FLUSH_CHARS ||
+      Date.now() - lastFlushAt[field] >= FLUSH_INTERVAL_MS
+    ) {
+      await flushField(field);
+    }
+  };
 
   try {
     // Pump every requested field's stream concurrently. Within a
@@ -125,9 +161,11 @@ export async function generateSummaryStep(input: SummaryWorkflowInput): Promise<
             }
             if (next.value) {
               accumulated[field] += next.value;
-              await writer.write({ field, delta: next.value });
+              pending[field] += next.value;
+              await maybeFlushField(field);
             }
           }
+          await flushField(field);
           return;
         }
         let emittedHasLatex = false;
@@ -146,14 +184,20 @@ export async function generateSummaryStep(input: SummaryWorkflowInput): Promise<
           ) {
             const delta = partial.content.slice(accumulated[field].length);
             accumulated[field] = partial.content;
-            await writer.write({ field, delta });
+            pending[field] += delta;
+            await maybeFlushField(field);
           }
           if (!emittedHasLatex && typeof partial.hasLatex === 'boolean') {
+            // Drain pending content for this field before the flag
+            // so order is preserved on the wire.
+            await flushField(field);
             emittedHasLatex = true;
             hasLatexByField[field] = partial.hasLatex;
             await writer.write({ field, hasLatex: partial.hasLatex });
           }
         }
+        // Final tail flush before the optional fallback hasLatex.
+        await flushField(field);
         if (!emittedHasLatex) {
           try {
             const settled = await gen.result.output;
