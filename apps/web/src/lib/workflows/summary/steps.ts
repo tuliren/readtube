@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { DEFAULT_AI_MODEL } from '@/constants';
 import { CURRENT_FRONTMATTER_VERSION, serializeMarkdownDocument } from '@/lib/markdownFrontmatter';
+import { emitTerminalEvent } from '@/lib/workflows/emitTerminalEvent';
 
 export const SUMMARY_PROMPT_VERSION = 'v8';
 
@@ -332,13 +333,5 @@ export async function persistSummaryStep(
 
 export async function emitTerminalEventStep(event: SummaryStreamEvent): Promise<void> {
   'use step';
-
-  const writable = getWritable<SummaryStreamEvent>();
-  const writer = writable.getWriter();
-  try {
-    await writer.write(event);
-  } finally {
-    writer.releaseLock();
-  }
-  await getWritable<SummaryStreamEvent>().close();
+  await emitTerminalEvent(event);
 }

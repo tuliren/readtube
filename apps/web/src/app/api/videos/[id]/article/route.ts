@@ -10,6 +10,12 @@ import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
 import { type ArticleStreamEvent, articleWorkflow } from '@/lib/workflows/article';
 
+// Must be a literal — Next.js's route-segment-config analyzer can't
+// follow imports. See `GENERATION_MAX_DURATION_SECONDS` in
+// `@/constants` for the rationale; keep this in lockstep with that
+// value and the matching workflow `maxDuration`.
+export const maxDuration = 800;
+
 const DEFAULT_STYLE: ArticleStyle = ArticleStyle.NARRATIVE;
 
 function parseStyle(raw: string | null | undefined): ArticleStyle | null {

@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { DEFAULT_AI_MODEL } from '@/constants';
 import { CURRENT_FRONTMATTER_VERSION, serializeMarkdownDocument } from '@/lib/markdownFrontmatter';
+import { emitTerminalEvent } from '@/lib/workflows/emitTerminalEvent';
 
 export const ARTICLE_PROMPT_VERSION = 'v9';
 
@@ -206,13 +207,5 @@ export async function persistArticleStep(
 
 export async function emitTerminalEventStep(event: ArticleStreamEvent): Promise<void> {
   'use step';
-
-  const writable = getWritable<ArticleStreamEvent>();
-  const writer = writable.getWriter();
-  try {
-    await writer.write(event);
-  } finally {
-    writer.releaseLock();
-  }
-  await getWritable<ArticleStreamEvent>().close();
+  await emitTerminalEvent(event);
 }
