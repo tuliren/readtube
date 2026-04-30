@@ -7,7 +7,7 @@ import { DEFAULT_AI_MODEL } from '@/constants';
 import { CURRENT_FRONTMATTER_VERSION, serializeMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { emitTerminalEvent } from '@/lib/workflows/emitTerminalEvent';
 
-export const ARTICLE_PROMPT_VERSION = 'v8';
+export const ARTICLE_PROMPT_VERSION = 'v9';
 
 export const ARTICLE_SCHEMA = z.object({
   content: z

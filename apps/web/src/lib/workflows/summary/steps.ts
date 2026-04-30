@@ -7,7 +7,7 @@ import { DEFAULT_AI_MODEL } from '@/constants';
 import { CURRENT_FRONTMATTER_VERSION, serializeMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { emitTerminalEvent } from '@/lib/workflows/emitTerminalEvent';
 
-export const SUMMARY_PROMPT_VERSION = 'v7';
+export const SUMMARY_PROMPT_VERSION = 'v8';
 
 export type SummaryField = 'headline' | 'short' | 'full';
 export const SUMMARY_FIELDS: readonly SummaryField[] = ['headline', 'short', 'full'] as const;

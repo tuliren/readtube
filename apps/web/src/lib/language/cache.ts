@@ -19,7 +19,7 @@ function isUniqueViolation(err: unknown): boolean {
  * should treat that as "we don't know what this is in" and not try
  * to clone-from-Original.
  */
-async function resolveTranscriptLanguage(
+export async function resolveTranscriptLanguage(
   prisma: PrismaClient,
   transcriptId: string
 ): Promise<string | null> {

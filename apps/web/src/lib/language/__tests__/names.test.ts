@@ -46,16 +46,36 @@ describe('findTargetLanguage', () => {
 });
 
 describe('languageNameForPrompt', () => {
-  it('returns the English name for known codes', () => {
+  it('returns the English name for known target codes', () => {
     expect(languageNameForPrompt('zh-Hans')).toBe('Chinese (Simplified)');
     expect(languageNameForPrompt('zh-Hant')).toBe('Chinese (Traditional)');
     expect(languageNameForPrompt('en')).toBe('English');
   });
 
-  it('falls back to the raw code for unknown languages', () => {
+  it.each([
+    { code: 'zh', name: 'Chinese' },
+    { code: 'ar', name: 'Arabic' },
+    { code: 'hi', name: 'Hindi' },
+    { code: 'vi', name: 'Vietnamese' },
+    { code: 'tr', name: 'Turkish' },
+    { code: 'nl', name: 'Dutch' },
+    { code: 'he', name: 'Hebrew' },
+    { code: 'id', name: 'Indonesian' },
+  ])('resolves $code to $name through the source-language fallback', ({ code, name }) => {
+    // These codes aren't in the picker but `franc`-based source
+    // detection emits them, so the prompt builder needs a friendly
+    // English name for the language rule to read naturally.
+    expect(languageNameForPrompt(code)).toBe(name);
+  });
+
+  it('lowercases when looking up the source-language fallback', () => {
+    expect(languageNameForPrompt('ZH')).toBe('Chinese');
+    expect(languageNameForPrompt('Ar')).toBe('Arabic');
+  });
+
+  it('falls back to the raw code for genuinely unknown languages', () => {
     expect(languageNameForPrompt('fr-CA')).toBe('fr-CA');
     expect(languageNameForPrompt('xx')).toBe('xx');
-    expect(languageNameForPrompt('zh')).toBe('zh');
   });
 });
 
