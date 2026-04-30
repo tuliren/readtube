@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { countWords } from '@/lib/format/wordCount';
 import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { extractArticleHeadings } from '@/lib/reader/extractArticleHeadings';
+import { useFollowBottom } from '@/lib/reader/useFollowBottom';
 import { isProduction } from '@/lib/vercelEnv';
 
 import ArticleMarkdown from './ArticleMarkdown';
@@ -78,6 +79,11 @@ export default function ArticleReader({
   const [content, setContent] = useState('');
   const [hasLatex, setHasLatex] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Auto-scroll the reader to the bottom while content streams in,
+  // unless the user has scrolled away — the hook tracks that on its
+  // own and resumes following if the user scrolls back near the end.
+  const followBottomRef = useFollowBottom(status === 'streaming', [content]);
 
   useEffect(() => {
     let cancelled = false;
@@ -208,6 +214,7 @@ export default function ArticleReader({
       let buffer = '';
       let accumulated = '';
       let sawError: string | null = null;
+      let sawDone = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -243,11 +250,26 @@ export default function ArticleReader({
           if (typeof event.error === 'string') {
             sawError = event.error;
           }
+          if (event.type === 'done') {
+            sawDone = true;
+          }
         }
       }
 
       if (sawError != null) {
         setErrorMessage(sawError);
+        setStatus('error');
+        return;
+      }
+      if (!sawDone) {
+        // Stream closed without an explicit terminator. Could be a
+        // workflow-runtime hiccup, a function timeout that bypassed
+        // the terminal step, or a network drop. Don't trust the
+        // accumulated content as a finished article — the workflow
+        // may still be running and persisting in the background, and
+        // a refresh will pick it up via the existing-article GET if
+        // it does land.
+        setErrorMessage('Generation ended unexpectedly. Please refresh in a moment, or try again.');
         setStatus('error');
         return;
       }
@@ -362,7 +384,7 @@ export default function ArticleReader({
   const isStreaming = status === 'streaming';
 
   return (
-    <div>
+    <div ref={followBottomRef}>
       <div className="mb-4 flex items-center justify-end gap-3">
         {!publicMode && (
           <LanguagePicker

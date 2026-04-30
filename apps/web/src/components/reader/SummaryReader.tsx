@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 
 import { countWords } from '@/lib/format/wordCount';
 import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
+import { useFollowBottom } from '@/lib/reader/useFollowBottom';
 import { isProduction } from '@/lib/vercelEnv';
 
 import ArticleMarkdown from './ArticleMarkdown';
@@ -112,6 +113,15 @@ export default function SummaryReader({
   const [hasLatexByField, setHasLatexByField] = useState<HasLatexByField>({});
   const [regeneratingFields, setRegeneratingFields] = useState<SummaryField[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Auto-scroll the reader to the bottom while summary fields stream
+  // in, unless the user has scrolled away. See ArticleReader for the
+  // longer note.
+  const followBottomRef = useFollowBottom(status === 'generating', [
+    summary?.headline,
+    summary?.short,
+    summary?.full,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -271,7 +281,8 @@ export default function SummaryReader({
       const decoder = new TextDecoder();
       const accumulated: Record<SummaryField, string> = { headline: '', short: '', full: '' };
       let buffer = '';
-      let fieldError: string | null = null;
+      let streamError: string | null = null;
+      let sawDone = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -302,6 +313,7 @@ export default function SummaryReader({
           }
 
           if (event.type === 'done') {
+            sawDone = true;
             continue;
           }
           if (event.field && typeof event.delta === 'string') {
@@ -320,14 +332,27 @@ export default function SummaryReader({
             if (fieldName === 'short' || fieldName === 'full') {
               setHasLatexByField((prev) => ({ ...prev, [fieldName]: flag }));
             }
-          } else if (event.field && event.error) {
-            fieldError = event.error;
+          } else if (typeof event.error === 'string') {
+            // Both per-field errors (`{field, error}`) and top-level
+            // errors (`{error}` from a workflow generation/persist
+            // failure) abort the stream with the same UX. Catch both
+            // here so a top-level error never silently falls through
+            // to the "no content generated" branch.
+            streamError = event.error;
           }
         }
       }
 
-      if (fieldError) {
-        setErrorMessage(fieldError);
+      if (streamError) {
+        setErrorMessage(streamError);
+        setStatus('error');
+        setRegeneratingFields([]);
+        return;
+      }
+      if (!sawDone) {
+        // See ArticleReader for the rationale — stream closed without
+        // an explicit terminator, don't trust accumulated content.
+        setErrorMessage('Generation ended unexpectedly. Please refresh in a moment, or try again.');
         setStatus('error');
         setRegeneratingFields([]);
         return;
@@ -482,7 +507,7 @@ export default function SummaryReader({
     fullContent.length > 0;
 
   return (
-    <div>
+    <div ref={followBottomRef}>
       <div className="mb-4 flex items-center justify-end gap-3">
         {!publicMode && (
           <LanguagePicker
