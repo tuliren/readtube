@@ -4,7 +4,7 @@ import { ArrowLeftIcon, ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/
 import { Loader2, NotebookPen } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import useSWR from 'swr';
 
 import CopyButton from '@/components/CopyButton';
@@ -41,6 +41,10 @@ interface Props {
    *  meaningful in public mode (those views always render the Original
    *  row regardless of any visitor preference). */
   preferredLanguage?: string | null;
+  /** Optional content rendered at the end of the scrollable reader pane.
+   *  Public-share pages pass a compact footer here so the legal links
+   *  flow with the article instead of pinning to the viewport bottom. */
+  footerSlot?: ReactNode;
 }
 
 type Tab = 'summary' | 'article' | 'transcript';
@@ -68,6 +72,7 @@ export default function VideoReader({
   publicMode = false,
   channelFollowed = false,
   preferredLanguage = null,
+  footerSlot = null,
 }: Props) {
   const searchParams = useSearchParams();
 
@@ -460,7 +465,9 @@ export default function VideoReader({
         )}
 
         {/* Article */}
-        <article className="mx-auto w-full max-w-3xl px-6 py-8">
+        <article
+          className={`mx-auto w-full max-w-3xl px-6 pt-8 ${footerSlot != null ? 'pb-4' : 'pb-8'}`}
+        >
           {/* Meta: video title */}
           <h1 className="text-2xl font-bold leading-tight text-foreground">
             {video.thumbnailUrl != null && (
@@ -779,6 +786,7 @@ export default function VideoReader({
             </>
           )}
         </article>
+        {footerSlot}
       </div>
       {!publicMode && (
         <NotesPanel videoId={video.id} open={notesOpen} onOpenChange={handleNotesOpenChange} />

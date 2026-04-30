@@ -5,7 +5,7 @@ import { AdjustmentsHorizontalIcon } from '@heroicons/react/24/outline';
 import { CheckIcon } from '@heroicons/react/24/outline';
 import { Menu, PanelLeft, RefreshCw } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import useSWR, { useSWRConfig } from 'swr';
 
@@ -110,6 +110,13 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
   useAutoUncollapse(channels, selectedChannelId);
 
   const { width, collapsed, mobileOpen, isMobile, toggleCollapsed, setMobileOpen } = useSidebar();
+
+  // Close the mobile drawer whenever the URL changes — the drawer covers
+  // most of the small-screen viewport, so leaving it open after a menu
+  // click strands the user on top of the new view. Watching pathname +
+  // search params catches both /inbox-style navigations and triage-view
+  // links that only swap query strings.
+  useCloseDrawerOnNavigate(setMobileOpen);
 
   // Collapsed desktop sidebar keeps scrolling but hides the bar —
   // a visible scrollbar inside a 56px rail looks noisy. The sheet
@@ -430,6 +437,20 @@ function useReaderUnreadSync(revalidate: () => void) {
     }
     revalidate();
   }, [readerVideoId, revalidate]);
+}
+
+function useCloseDrawerOnNavigate(setMobileOpen: (open: boolean) => void) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const search = searchParams.toString();
+  const initial = useRef(true);
+  useEffect(() => {
+    if (initial.current) {
+      initial.current = false;
+      return;
+    }
+    setMobileOpen(false);
+  }, [pathname, search, setMobileOpen]);
 }
 
 /**

@@ -4,21 +4,45 @@ import { useAuth } from '@clerk/nextjs';
 import { Dialog, DialogPanel } from '@headlessui/react';
 import { Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 
 import { Logo } from '@/components/Logo';
 import ThemeSelector from '@/components/settings/ThemeSelector';
 import { TITLE } from '@/constants';
 
-export default function Header() {
+interface Props {
+  /** Override the home-page detection. Defaults to true on `/` (where
+   *  the Features / FAQ in-page anchors resolve) and false everywhere
+   *  else, where the nav swaps those anchors for a Home link back to
+   *  `/`. Pass explicitly only for stories or tests. */
+  onHomePage?: boolean;
+}
+
+interface NavigationItem {
+  name: string;
+  href: string;
+}
+
+const HOME_NAVIGATION: NavigationItem[] = [
+  { name: 'Features', href: '#features' },
+  // { name: 'Pricing', href: '#pricing' },
+  { name: 'FAQ', href: '#faq' },
+];
+
+const SIGNED_IN_NAVIGATION: NavigationItem[] = [{ name: 'Inbox', href: '/inbox' }];
+
+const NON_HOME_NAVIGATION: NavigationItem[] = [{ name: 'Home', href: '/' }];
+
+export default function Header({ onHomePage }: Props = {}) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { isSignedIn } = useAuth();
+  const pathname = usePathname();
+  const isHome = onHomePage ?? pathname === '/';
 
-  const navigation = [
-    { name: 'Features', href: '#features' },
-    // { name: 'Pricing', href: '#pricing' },
-    { name: 'FAQ', href: '#faq' },
-    ...(isSignedIn ? [{ name: 'Inbox', href: '/inbox' }] : []),
+  const navigation: NavigationItem[] = [
+    ...(isHome ? HOME_NAVIGATION : NON_HOME_NAVIGATION),
+    ...(isSignedIn ? SIGNED_IN_NAVIGATION : []),
   ];
 
   const linkClass = 'font-semibold leading-6 text-slate-700 dark:text-slate-200';
