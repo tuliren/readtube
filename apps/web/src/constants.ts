@@ -30,3 +30,16 @@ export const DEFAULT_AI_MODEL = 'openai/gpt-5.4-mini';
  * $0.02
  */
 export const DEFAULT_EMBEDDING_MODEL = 'openai/text-embedding-3-small';
+
+/**
+ * Function timeout (in seconds) shared by the summary/article generate
+ * routes and their workflow steps. Both ends of the pipe need to live
+ * long enough for the workflow to stream deltas, persist the row, and
+ * emit the terminal `{type:'done'}` event — if the route times out
+ * first the response closes mid-workflow and the client falls into the
+ * "Generation ended unexpectedly — refresh" branch even though the
+ * content lands in the database. 800 s is the Vercel Pro cap with
+ * Fluid Compute (the default for new projects); plenty of headroom for
+ * the longest transcripts the model has to chew through.
+ */
+export const GENERATION_MAX_DURATION_SECONDS = 800;

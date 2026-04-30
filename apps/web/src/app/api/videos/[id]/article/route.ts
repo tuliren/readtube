@@ -3,6 +3,7 @@ import { ArticleStyle, prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 import { start } from 'workflow/api';
 
+import { GENERATION_MAX_DURATION_SECONDS } from '@/constants';
 import { findOrCloneArticle } from '@/lib/language/cache';
 import { buildLanguageRule } from '@/lib/language/prompt';
 import { resolveTargetLanguage } from '@/lib/language/resolve';
@@ -10,15 +11,7 @@ import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
 import { type ArticleStreamEvent, articleWorkflow } from '@/lib/workflows/article';
 
-// Match the workflow's own maxDuration so the route function stays
-// alive long enough to proxy the workflow's full event stream
-// (deltas → persist → terminal `{type:'done'}`). Without this the
-// platform default (60 s on Pro) cuts the response off mid-workflow:
-// the workflow finishes and persists in the background, but the
-// client sees stream-end without `{type:'done'}` and falls into the
-// "Generation ended unexpectedly — refresh" branch even though the
-// content is already in the database.
-export const maxDuration = 300;
+export const maxDuration = GENERATION_MAX_DURATION_SECONDS;
 
 const DEFAULT_STYLE: ArticleStyle = ArticleStyle.NARRATIVE;
 
