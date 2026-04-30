@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { countWords } from '@/lib/format/wordCount';
 import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
+import { consumeNdjsonStream } from '@/lib/reader/consumeNdjsonStream';
 import { extractArticleHeadings } from '@/lib/reader/extractArticleHeadings';
 import { useFollowBottom } from '@/lib/reader/useFollowBottom';
 import { isProduction } from '@/lib/vercelEnv';
@@ -49,6 +50,12 @@ interface Props {
    *  tab header can render the reading time badge. Fires on every
    *  markdown change, so the badge updates live as content streams. */
   onArticleWordsChange: (words: number) => void;
+  /** Reports whether a generation is currently writing into this
+   *  tab. VideoReader uses it to swap the reading-time badge for a
+   *  spinner so the badge doesn't tick up dishonestly as partial
+   *  deltas land. Covers both the POST-driven `'streaming'` state
+   *  and the GET-tap-in path that lands in the same state. */
+  onArticleGeneratingChange: (generating: boolean) => void;
   /** When true, fetch from the unauthenticated public endpoint and
    *  render a read-only view — no generate affordance. */
   publicMode?: boolean;
@@ -70,6 +77,7 @@ export default function ArticleReader({
   onTranscriptStatusChange,
   onArticleAvailability,
   onArticleWordsChange,
+  onArticleGeneratingChange,
   publicMode = false,
   selectedLanguage,
   onLanguageChange,
@@ -94,43 +102,133 @@ export default function ArticleReader({
 
     const langFragment = languageQueryFragment(selectedLanguage);
     const url = `${apiBase}/${videoDbId}/article?style=${STYLE}&${langFragment}`;
-    fetch(url)
-      .then(async (res) => {
-        if (cancelled) {
-          return;
-        }
-        if (res.status === 404 || !res.ok) {
-          setStatus('idle');
-          onArticleAvailability(selectedLanguage, false);
-          return;
-        }
-        const data = (await res.json()) as { content: string };
-        // Stored content carries a YAML frontmatter with hasLatex.
-        // If the stored body happens to start with `---\n` but lacks
-        // a closing fence (malformed / pre-migration), fall back to
-        // the raw string so the user sees *something* rather than a
-        // blank panel.
-        const parsed = parseMarkdownDocument(data.content);
-        setContent(parsed.frontmatterPending ? data.content : parsed.content);
-        setHasLatex(parsed.properties.hasLatex === true);
-        setStatus('done');
-        // Cache hit — flip the parent's Article tab dot to blue
-        // immediately, regardless of which tab the user is on. Also
-        // marks this language as available so VideoReader can show
-        // the Share button.
-        onArticleAvailability(selectedLanguage, true);
-      })
-      .catch(() => {
+
+    (async () => {
+      let res: Response;
+      try {
+        res = await fetch(url);
+      } catch {
         if (!cancelled) {
           setStatus('idle');
           onArticleAvailability(selectedLanguage, false);
         }
-      });
+        return;
+      }
+      if (cancelled) {
+        return;
+      }
+      if (res.status === 404 || !res.ok) {
+        setStatus('idle');
+        onArticleAvailability(selectedLanguage, false);
+        return;
+      }
+
+      // Server signals "active workflow streaming" via the NDJSON
+      // content-type. Tap into the stream so a refresh mid-generation
+      // sees live progress instead of bouncing back to the Generate
+      // button — see runRegistry on the server side.
+      const contentType = res.headers.get('content-type') ?? '';
+      if (contentType.includes('application/x-ndjson')) {
+        if (res.body == null) {
+          setErrorMessage('No response body from server.');
+          setStatus('error');
+          return;
+        }
+
+        // Switch into streaming UX. Mirrors handleGenerate's setup so
+        // the rendered article markdown grows live as deltas arrive.
+        setStatus('streaming');
+        setContent('');
+        setHasLatex(false);
+
+        let accumulated = '';
+        let sawDone = false;
+        let streamError: string | null = null;
+
+        await consumeNdjsonStream(res.body, (event) => {
+          if (typeof event !== 'object' || event === null) {
+            return;
+          }
+          const e = event as {
+            delta?: unknown;
+            hasLatex?: unknown;
+            error?: unknown;
+            type?: unknown;
+          };
+          if (typeof e.delta === 'string') {
+            accumulated += e.delta;
+            setContent(accumulated);
+          }
+          if (typeof e.hasLatex === 'boolean') {
+            setHasLatex(e.hasLatex);
+          }
+          if (typeof e.error === 'string') {
+            streamError = e.error;
+          }
+          if (e.type === 'done') {
+            sawDone = true;
+          }
+        });
+
+        if (cancelled) {
+          return;
+        }
+        if (streamError != null) {
+          setErrorMessage(streamError);
+          setStatus('error');
+          return;
+        }
+        if (!sawDone) {
+          setErrorMessage(
+            'Generation ended unexpectedly. Please refresh in a moment, or try again.'
+          );
+          setStatus('error');
+          return;
+        }
+        if (!accumulated.trim()) {
+          setErrorMessage('No content was generated. Please try again.');
+          setStatus('error');
+          return;
+        }
+        setStatus('done');
+        onArticleAvailability(selectedLanguage, true);
+        return;
+      }
+
+      // application/json — cached Article row.
+      const data = (await res.json()) as { content: string };
+      if (cancelled) {
+        return;
+      }
+      // Stored content carries a YAML frontmatter with hasLatex.
+      // If the stored body happens to start with `---\n` but lacks
+      // a closing fence (malformed / pre-migration), fall back to
+      // the raw string so the user sees *something* rather than a
+      // blank panel.
+      const parsed = parseMarkdownDocument(data.content);
+      setContent(parsed.frontmatterPending ? data.content : parsed.content);
+      setHasLatex(parsed.properties.hasLatex === true);
+      setStatus('done');
+      // Cache hit — flip the parent's Article tab dot to blue
+      // immediately, regardless of which tab the user is on. Also
+      // marks this language as available so VideoReader can show
+      // the Share button.
+      onArticleAvailability(selectedLanguage, true);
+    })();
 
     return () => {
       cancelled = true;
     };
   }, [videoDbId, onArticleAvailability, apiBase, selectedLanguage]);
+
+  // Mirror the local streaming status up to VideoReader so the tab
+  // header can swap the (mid-stream-misleading) reading-time badge
+  // for a spinner. `'streaming'` covers both the POST-driven path
+  // and the GET-tap-in path that flips into the same status when
+  // the mount fetch sees NDJSON.
+  useEffect(() => {
+    onArticleGeneratingChange(status === 'streaming');
+  }, [status, onArticleGeneratingChange]);
 
   // Stream the article word count up to VideoReader so the Article
   // tab header can render the reading-time badge. Fires on every

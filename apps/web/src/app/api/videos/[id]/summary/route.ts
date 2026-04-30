@@ -1,15 +1,22 @@
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
-import { start } from 'workflow/api';
+import { getRun, start } from 'workflow/api';
 
+import { DEFAULT_AI_MODEL } from '@/constants';
 import { findOrCloneSummary, resolveTranscriptLanguage } from '@/lib/language/cache';
 import { buildLanguageRule } from '@/lib/language/prompt';
 import { resolveTargetLanguage } from '@/lib/language/resolve';
 import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
+import { claimSummaryRun, findActiveSummaryRun } from '@/lib/workflows/runRegistry';
+import { NDJSON_HEADERS, ndjsonResponseFromRun } from '@/lib/workflows/streamResponse';
 import { type SummaryStreamEvent, summaryWorkflow } from '@/lib/workflows/summary';
-import { SUMMARY_FIELDS, type SummaryField } from '@/lib/workflows/summary/steps';
+import {
+  SUMMARY_FIELDS,
+  SUMMARY_PROMPT_VERSION,
+  type SummaryField,
+} from '@/lib/workflows/summary/steps';
 
 // Must be a literal — Next.js's route-segment-config analyzer can't
 // follow imports. See `GENERATION_MAX_DURATION_SECONDS` in
@@ -102,6 +109,20 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   if (!transcript) {
     console.error(`[summary/GET] No transcript for video ${id}`);
     return NextResponse.json({ error: 'Not cached' }, { status: 404 });
+  }
+
+  // If a generation is in flight for this slot, tap into its stream
+  // instead of returning the cached row. This is what lets a refresh
+  // mid-generation pick up the live progress instead of bouncing back
+  // to the Generate button. The client switches into streaming mode
+  // when it sees the NDJSON content-type, reusing the same delta
+  // consumer it already has for POST.
+  const activeRun = await findActiveSummaryRun(prisma, transcript.id, target);
+  if (activeRun != null) {
+    console.info(
+      `[summary/GET] Tapping into active run ${activeRun.runId} for video ${id} (language ${target ?? 'original'})`
+    );
+    return ndjsonResponseFromRun<SummaryStreamEvent>(activeRun.runId);
   }
 
   const summary = await findOrCloneSummary(prisma, transcript.id, target);
@@ -212,6 +233,27 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const transcript = ensured.transcript;
   const transcriptText = transcript.segments.map((s) => s.text).join(' ');
 
+  // If a generation is already running for this slot — same user
+  // clicked Generate twice, or two clients hit the same video at
+  // once — tap into the existing stream rather than firing off a
+  // duplicate workflow. Skipped for per-field regenerate clicks
+  // (fields ⊂ all) since the user explicitly asked for a fresh run
+  // of those fields and tapping in would replay whatever the
+  // already-running workflow is doing for a *different* set of
+  // fields. The fields themselves are stored in the workflow input,
+  // not the registry, so we can't cleanly distinguish — easier to
+  // skip the short-circuit and let the regen go through.
+  const isFullGenerate = fieldsToGenerate.length === SUMMARY_FIELDS.length;
+  if (isFullGenerate) {
+    const activeRun = await findActiveSummaryRun(prisma, transcript.id, target);
+    if (activeRun != null) {
+      console.info(
+        `[summary/POST] Tapping into active run ${activeRun.runId} for video ${id} (language ${target ?? 'original'})`
+      );
+      return ndjsonResponseFromRun<SummaryStreamEvent>(activeRun.runId);
+    }
+  }
+
   // Cache + clone short-circuit. Mirrors the article POST cache check:
   // if the user clicked the main "Generate" button (all 3 fields
   // requested) and a row already exists for `(transcript, target)` —
@@ -220,7 +262,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // instead of running the LLM. Per-field regenerate (fields ⊂ all)
   // skips this path because that click means "fresh content for THIS
   // field", and cloning would defeat it.
-  const isFullGenerate = fieldsToGenerate.length === SUMMARY_FIELDS.length;
   const cached = isFullGenerate ? await findOrCloneSummary(prisma, transcript.id, target) : null;
   if (cached != null && cached.headline != null && cached.short != null && cached.full != null) {
     const shortDoc = parseMarkdownDocument(cached.short);
@@ -246,12 +287,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         controller.close();
       },
     });
-    return new Response(cachedStream, {
-      headers: {
-        'Content-Type': 'application/x-ndjson; charset=utf-8',
-        'Cache-Control': 'no-cache, no-transform',
-      },
-    });
+    return new Response(cachedStream, { headers: NDJSON_HEADERS });
   }
 
   // For "Original" requests, detect the transcript's source language
@@ -286,19 +322,33 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     },
   ]);
 
-  const encoder = new TextEncoder();
-  const ndjsonStream = (run.readable as ReadableStream<SummaryStreamEvent>).pipeThrough(
-    new TransformStream<SummaryStreamEvent, Uint8Array>({
-      transform(event, controller) {
-        controller.enqueue(encoder.encode(JSON.stringify(event) + '\n'));
-      },
-    })
-  );
+  // Claim the row for this slot so future GETs / regen clicks tap
+  // in. Only claim for full-generate runs — per-field regenerate
+  // writes to specific fields and doesn't represent a "fresh
+  // generation in progress" the user would want to subscribe to
+  // (the click is a fire-and-forget action). On a concurrent claim
+  // race we cancel our own start and stream the winner instead.
+  if (isFullGenerate) {
+    const claim = await claimSummaryRun(
+      prisma,
+      transcript.id,
+      target,
+      run.runId,
+      SUMMARY_PROMPT_VERSION,
+      DEFAULT_AI_MODEL
+    );
+    if (!claim.weWon) {
+      console.info(
+        `[summary/POST] Lost claim race; cancelling ${run.runId} and tapping into ${claim.winningRunId}`
+      );
+      try {
+        await getRun(run.runId).cancel();
+      } catch {
+        // ignore — the stray run will expire on its own
+      }
+      return ndjsonResponseFromRun<SummaryStreamEvent>(claim.winningRunId);
+    }
+  }
 
-  return new Response(ndjsonStream, {
-    headers: {
-      'Content-Type': 'application/x-ndjson; charset=utf-8',
-      'Cache-Control': 'no-cache, no-transform',
-    },
-  });
+  return ndjsonResponseFromRun<SummaryStreamEvent>(run.runId);
 }

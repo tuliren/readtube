@@ -53,9 +53,18 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           // ANY summary or article row. Translations don't always
           // derive from a pre-existing Original (the user can pick a
           // target language as their first generation), so a missing
-          // Original isn't the same thing as "no public artifact."
-          summaries: { take: 1, select: { transcript_id: true } },
-          articles: { take: 1, select: { id: true } },
+          // Original isn't the same thing as "no public artifact".
+          // `status: READY` filters out in-flight workflow rows.
+          summaries: {
+            where: { status: 'READY' },
+            take: 1,
+            select: { transcript_id: true },
+          },
+          articles: {
+            where: { status: 'READY' },
+            take: 1,
+            select: { id: true },
+          },
         },
       },
     },
@@ -83,17 +92,24 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   let article = null;
   if (targetLanguage != null) {
     article = await prisma.article.findFirst({
-      where: { transcript_id: transcript.id, style, language: targetLanguage },
+      where: {
+        transcript_id: transcript.id,
+        style,
+        language: targetLanguage,
+        status: 'READY',
+      },
       ...fields,
     });
   }
   if (article == null) {
     article = await prisma.article.findFirst({
-      where: { transcript_id: transcript.id, style, language: null },
+      where: { transcript_id: transcript.id, style, language: null, status: 'READY' },
       ...fields,
     });
   }
-  if (!article) {
+  // Guard against READY-with-null-content rows the same way the
+  // private article GET does — see that route for the rationale.
+  if (article == null || article.content == null) {
     console.error(`[public/article/GET] No cached article for video ${id} (style=${style})`);
     return NextResponse.json({ error: 'Not cached' }, { status: 404 });
   }

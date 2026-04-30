@@ -87,8 +87,19 @@ export default async function VideoPage({ params }: Props) {
         orderBy: { created_at: 'desc' },
         take: 1,
         select: {
-          summaries: { take: 1, select: { transcript_id: true } },
-          articles: { take: 1, select: { id: true } },
+          // Filter on `status = READY` so an in-flight workflow's row
+          // doesn't falsely flip the inbox `hasSummary`/`hasArticle`
+          // count derivation while content is still streaming.
+          summaries: {
+            where: { status: 'READY' },
+            take: 1,
+            select: { transcript_id: true },
+          },
+          articles: {
+            where: { status: 'READY' },
+            take: 1,
+            select: { id: true },
+          },
         },
       },
     },

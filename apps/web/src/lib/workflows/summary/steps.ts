@@ -1,11 +1,12 @@
-import { Prisma, prisma } from '@readtube/database';
+import { GenerationStatus, Prisma, prisma } from '@readtube/database';
 import { Output, streamText } from 'ai';
-import { FatalError, getWritable } from 'workflow';
+import { FatalError, getWorkflowMetadata, getWritable } from 'workflow';
 import { z } from 'zod';
 
 import { DEFAULT_AI_MODEL } from '@/constants';
 import { CURRENT_FRONTMATTER_VERSION, serializeMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { emitTerminalEvent } from '@/lib/workflows/emitTerminalEvent';
+import { revertSummaryRow } from '@/lib/workflows/runRegistry';
 
 export const SUMMARY_PROMPT_VERSION = 'v8';
 
@@ -263,10 +264,16 @@ export async function persistSummaryStep(
   'use step';
 
   const { transcriptId, language, fields, results } = input;
+  const { workflowRunId } = getWorkflowMetadata();
   const requestedFields = new Set(fields.map((f) => f.field));
   const resultByField = new Map(results.map((r) => [r.field, r]));
 
-  // Merge with any existing row so non-regenerated fields stay intact.
+  // The route's claim helper inserts a row before this step ever
+  // runs, so an existing row is the steady state. Read it for the
+  // merge of non-regenerated fields (per-field regenerate keeps the
+  // others intact) and to merge usage stats. The findFirst is
+  // intentionally not status-filtered — we want the row we just
+  // claimed, which has status=GENERATING.
   const existing = await prisma.summary.findFirst({
     where: { transcript_id: transcriptId, language },
     select: { id: true, headline: true, short: true, full: true, usage: true },
@@ -291,6 +298,11 @@ export async function persistSummaryStep(
     });
   };
 
+  // The same UPDATE atomically lands the new content AND flips status
+  // back to READY, so a concurrent reader never sees the row in a
+  // half-state where status=GENERATING but content is the new
+  // material. workflow_id stays at our runId — useful for tracing
+  // which run produced the cached row.
   const summaryData = {
     headline: requestedFields.has('headline')
       ? wrapForStorage('headline')
@@ -300,6 +312,8 @@ export async function persistSummaryStep(
     prompt_version: SUMMARY_PROMPT_VERSION,
     model: DEFAULT_AI_MODEL,
     usage: mergedUsage,
+    status: GenerationStatus.READY,
+    workflow_id: workflowRunId,
   };
 
   if (existing) {
@@ -309,6 +323,9 @@ export async function persistSummaryStep(
     });
     return;
   }
+  // Defensive fallback: the claim helper should have inserted the
+  // row, but a manual DB cleanup or backfill might have removed it
+  // mid-workflow. Create from scratch with the standard P2002 retry.
   try {
     await prisma.summary.create({
       data: { transcript_id: transcriptId, language, ...summaryData },
@@ -329,6 +346,19 @@ export async function persistSummaryStep(
     }
     throw err;
   }
+}
+
+/**
+ * Failure-path step: revert the row this workflow claimed at start
+ * time so a later request doesn't see a stuck-in-GENERATING row.
+ * Wraps {@link revertSummaryRow} as a workflow step so the runtime
+ * persists its execution. See `summary/index.ts` for invocation.
+ */
+export async function revertSummaryRowStep(input: SummaryWorkflowInput): Promise<void> {
+  'use step';
+
+  const { workflowRunId } = getWorkflowMetadata();
+  await revertSummaryRow(prisma, input.transcriptId, input.language, workflowRunId);
 }
 
 export async function emitTerminalEventStep(event: SummaryStreamEvent): Promise<void> {

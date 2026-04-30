@@ -26,6 +26,20 @@ enum ArticleStyle {
   DIALOG
 }
 
+// Lifecycle state of a Summary or Article row. GENERATING means a
+// Vercel Workflow is currently writing into the row — content fields
+// may be NULL or hold stale content from a prior generation pending
+// overwrite. READY means the row is canonical cached content.
+//
+// Read paths (the route's GET cache lookup, findOrCloneSummary /
+// findOrCloneArticle, the inbox `hasSummary`/`hasArticle` derivation)
+// MUST filter on `status = 'READY'` so an in-flight row never
+// surfaces as cached content.
+enum GenerationStatus {
+  GENERATING
+  READY
+}
+
 model User {
   id          String         @id @default(cuid())
   source_type UserSourceType @default(CLERK)
@@ -202,13 +216,25 @@ model Transcript {
 }
 
 model Article {
-  id             String       @id @default(cuid())
+  id             String           @id @default(cuid())
   transcript_id  String
   style          ArticleStyle
   // BCP-47 target language for this article (e.g. "en", "zh", "ja").
   // null means "Original" — the article was generated to match the
   // transcript's source language without an explicit target.
   language       String?
+  // Lifecycle state. GENERATING means a workflow is currently writing
+  // into this row and `content` may be NULL or hold stale content
+  // pending overwrite. READY is canonical cached content. The route's
+  // GET cache lookup, findOrCloneArticle, and the inbox `hasArticle`
+  // count derivation all filter on `status = 'READY'`.
+  status         GenerationStatus @default(READY)
+  // Vercel Workflow runId of the most recent workflow that wrote
+  // this row. Populated by the route's claim helper when a workflow
+  // starts; intentionally kept after the workflow completes so we
+  // can trace which run produced the current cached content. NULL
+  // only on rows that predate this column.
+  workflow_id    String?
   // Record-keeping only: tracks which prompt version generated the row.
   // NOT part of the unique index — once an article exists for a
   // (transcript_id, style, language) triple, subsequent prompt-version
@@ -216,10 +242,13 @@ model Article {
   prompt_version String
   // model identifier, e.g. "anthropic/claude-sonnet-4.5"
   model          String
-  content        String
+  // Nullable so rows can exist in the GENERATING state before any
+  // content has been persisted; set to the final markdown body by
+  // the workflow's persist step alongside `status = READY`.
+  content        String?
   // token usage from the AI SDK result.usage promise
   usage          Json?
-  generated_at   DateTime     @default(now())
+  generated_at   DateTime         @default(now())
 
   transcript Transcript @relation(fields: [transcript_id], references: [id], onDelete: Cascade)
 
@@ -229,16 +258,33 @@ model Article {
   // NULL (one row per (transcript_id, style, language) triple). Prisma
   // can't model partial indexes today, so we drop the @@unique attribute
   // here and use findFirst + try/catch on writes.
+  // The route's in-flight lookup (`WHERE transcript_id = $ AND style
+  // = $ AND language = $ AND status = 'GENERATING'`) rides this same
+  // index: the partial unique constraint above narrows the index
+  // scan to ≤ 1 candidate row, and Postgres applies `status =
+  // GENERATING` as a residual heap-side filter on that one row. A
+  // dedicated partial index `WHERE status = GENERATING` would only
+  // help if this lookup became hot enough for the single heap visit
+  // per call to matter — not our regime today.
   @@index([transcript_id, style, language], name: "Article_transcript_id_style_language_idx")
 }
 
 model Summary {
-  id             String   @id @default(cuid())
+  id             String           @id @default(cuid())
   transcript_id  String
   // BCP-47 target language for this summary (e.g. "en", "zh", "ja").
   // null means "Original" — the summary was generated to match the
   // transcript's source language without an explicit target.
   language       String?
+  // Lifecycle state. GENERATING means a workflow is currently writing
+  // into this row; READY is canonical cached content. Read paths
+  // filter on `status = 'READY'` to skip in-flight rows.
+  status         GenerationStatus @default(READY)
+  // Vercel Workflow runId of the most recent workflow that wrote
+  // this row. Set by the route's claim helper at workflow start and
+  // intentionally kept around after completion for trace/audit. NULL
+  // on rows that predate this column.
+  workflow_id    String?
   // one sentence, title-like, includes key info if present
   headline       String?
   // one paragraph, skimmable in 10-20 seconds
@@ -249,7 +295,7 @@ model Summary {
   model          String
   // { headline: {inputTokens, outputTokens}, short: {...}, full: {...} }
   usage          Json?
-  generated_at   DateTime @default(now())
+  generated_at   DateTime         @default(now())
 
   transcript Transcript @relation(fields: [transcript_id], references: [id], onDelete: Cascade)
 
@@ -258,6 +304,11 @@ model Summary {
   // IS NULL (one Original per transcript), one for language IS NOT NULL
   // (one row per (transcript_id, language) pair). Prisma can't model
   // partial indexes today, so we use findFirst + try/catch on writes.
+  // The route's in-flight lookup rides this index too: the partial
+  // unique constraint narrows the index scan to ≤ 1 candidate, and
+  // Postgres applies `status = GENERATING` as a residual heap-side
+  // filter on that one row. See Article above for when a partial
+  // `WHERE status = GENERATING` index would actually pay for itself.
   @@index([transcript_id, language], name: "Summary_transcript_id_language_idx")
 }
 

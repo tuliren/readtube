@@ -1,5 +1,5 @@
 import type { Article, ArticleStyle, PrismaClient, Summary } from '@readtube/database';
-import { Prisma } from '@readtube/database';
+import { GenerationStatus, Prisma } from '@readtube/database';
 
 import { detectLanguage } from './detect';
 import { languageTagsMatch } from './names';
@@ -74,8 +74,12 @@ export async function findOrCloneSummary(
   transcriptId: string,
   target: string | null
 ): Promise<Summary | null> {
+  // Filter on `status = READY` so an in-flight workflow's row never
+  // surfaces as cached content. The route's GET handles in-flight
+  // separately by tapping the workflow stream — this function is
+  // for "cached, finished" reads only.
   const direct = await prisma.summary.findFirst({
-    where: { transcript_id: transcriptId, language: target },
+    where: { transcript_id: transcriptId, language: target, status: GenerationStatus.READY },
   });
   if (direct != null) {
     return direct;
@@ -87,7 +91,7 @@ export async function findOrCloneSummary(
   }
 
   const original = await prisma.summary.findFirst({
-    where: { transcript_id: transcriptId, language: null },
+    where: { transcript_id: transcriptId, language: null, status: GenerationStatus.READY },
   });
   if (original == null) {
     return null;
@@ -105,10 +109,15 @@ export async function findOrCloneSummary(
   }
 
   // Clone the Original into a new (transcript_id, language=target)
-  // row, byte-for-byte. The Original row is untouched.
+  // row, byte-for-byte. The Original row is untouched. Status is set
+  // to READY explicitly (not relying on the column default) and the
+  // workflow_id is preserved so the clone retains its audit pointer
+  // to whichever run produced the source content.
   const cloneData = {
     transcript_id: original.transcript_id,
     language: target,
+    status: GenerationStatus.READY,
+    workflow_id: original.workflow_id,
     headline: original.headline,
     short: original.short,
     full: original.full,
@@ -121,7 +130,7 @@ export async function findOrCloneSummary(
   } catch (err) {
     if (isUniqueViolation(err)) {
       return prisma.summary.findFirst({
-        where: { transcript_id: transcriptId, language: target },
+        where: { transcript_id: transcriptId, language: target, status: GenerationStatus.READY },
       });
     }
     throw err;
@@ -139,7 +148,12 @@ export async function findOrCloneArticle(
   target: string | null
 ): Promise<Article | null> {
   const direct = await prisma.article.findFirst({
-    where: { transcript_id: transcriptId, style, language: target },
+    where: {
+      transcript_id: transcriptId,
+      style,
+      language: target,
+      status: GenerationStatus.READY,
+    },
   });
   if (direct != null) {
     return direct;
@@ -150,7 +164,12 @@ export async function findOrCloneArticle(
   }
 
   const original = await prisma.article.findFirst({
-    where: { transcript_id: transcriptId, style, language: null },
+    where: {
+      transcript_id: transcriptId,
+      style,
+      language: null,
+      status: GenerationStatus.READY,
+    },
   });
   if (original == null) {
     return null;
@@ -171,6 +190,8 @@ export async function findOrCloneArticle(
     transcript_id: original.transcript_id,
     style: original.style,
     language: target,
+    status: GenerationStatus.READY,
+    workflow_id: original.workflow_id,
     content: original.content,
     prompt_version: original.prompt_version,
     model: original.model,
@@ -181,7 +202,12 @@ export async function findOrCloneArticle(
   } catch (err) {
     if (isUniqueViolation(err)) {
       return prisma.article.findFirst({
-        where: { transcript_id: transcriptId, style, language: target },
+        where: {
+          transcript_id: transcriptId,
+          style,
+          language: target,
+          status: GenerationStatus.READY,
+        },
       });
     }
     throw err;

@@ -76,8 +76,18 @@ export default async function PublicVideoPage({ params, searchParams }: Props) {
         orderBy: { created_at: 'desc' },
         take: 1,
         select: {
-          summaries: { take: 1, select: { transcript_id: true } },
-          articles: { take: 1, select: { id: true } },
+          // Filter on `status = READY`; the public share page must
+          // 404 on a slot that only has an in-flight workflow row.
+          summaries: {
+            where: { status: 'READY' },
+            take: 1,
+            select: { transcript_id: true },
+          },
+          articles: {
+            where: { status: 'READY' },
+            take: 1,
+            select: { id: true },
+          },
         },
       },
     },

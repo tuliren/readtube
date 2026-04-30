@@ -1,11 +1,12 @@
-import { type ArticleStyle, Prisma, prisma } from '@readtube/database';
+import { type ArticleStyle, GenerationStatus, Prisma, prisma } from '@readtube/database';
 import { Output, streamText } from 'ai';
-import { FatalError, getWritable } from 'workflow';
+import { FatalError, getWorkflowMetadata, getWritable } from 'workflow';
 import { z } from 'zod';
 
 import { DEFAULT_AI_MODEL } from '@/constants';
 import { CURRENT_FRONTMATTER_VERSION, serializeMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { emitTerminalEvent } from '@/lib/workflows/emitTerminalEvent';
+import { revertArticleRow } from '@/lib/workflows/runRegistry';
 
 export const ARTICLE_PROMPT_VERSION = 'v9';
 
@@ -152,17 +153,24 @@ export async function persistArticleStep(
     hasLatex: input.hasLatex,
   });
 
+  // The same UPDATE atomically lands the new content AND flips status
+  // back to READY, so a concurrent reader never sees the row with
+  // status=GENERATING but new content. workflow_id stays at our
+  // runId — useful for tracing which run produced the cached row.
+  const { workflowRunId } = getWorkflowMetadata();
   const articleData = {
     prompt_version: ARTICLE_PROMPT_VERSION,
     model: DEFAULT_AI_MODEL,
     content: contentForStorage,
     usage: input.usage != null ? JSON.parse(JSON.stringify(input.usage)) : null,
+    status: GenerationStatus.READY,
+    workflow_id: workflowRunId,
   };
 
-  // Manual upsert keyed on (transcript_id, style, language). Prisma
-  // can't model the partial unique indexes that enforce this, so we
-  // use findFirst + create with a P2002 retry for the rare race where
-  // another writer takes the same slot between find and create.
+  // The route's claim helper inserts the row before this step ever
+  // runs, so the existing row is the steady state. The find is
+  // intentionally not status-filtered — we want the GENERATING row
+  // we claimed.
   const existing = await prisma.article.findFirst({
     where: { transcript_id: input.transcriptId, style: input.style, language: input.language },
     select: { id: true },
@@ -174,6 +182,9 @@ export async function persistArticleStep(
     });
     return;
   }
+  // Defensive fallback for the unusual case where the claimed row was
+  // removed mid-workflow (manual cleanup, table truncate, etc.).
+  // Standard P2002 retry covers concurrent inserts.
   try {
     await prisma.article.create({
       data: {
@@ -203,6 +214,19 @@ export async function persistArticleStep(
     }
     throw err;
   }
+}
+
+/**
+ * Failure-path step: revert the article row this workflow claimed at
+ * start time. See {@link revertArticleRow} for the DELETE-vs-revert
+ * decision; this is the workflow-step wrapper so the runtime
+ * persists its execution.
+ */
+export async function revertArticleRowStep(input: ArticleWorkflowInput): Promise<void> {
+  'use step';
+
+  const { workflowRunId } = getWorkflowMetadata();
+  await revertArticleRow(prisma, input.transcriptId, input.style, input.language, workflowRunId);
 }
 
 export async function emitTerminalEventStep(event: ArticleStreamEvent): Promise<void> {
