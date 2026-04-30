@@ -3,7 +3,6 @@ import { prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 import { start } from 'workflow/api';
 
-import { GENERATION_MAX_DURATION_SECONDS } from '@/constants';
 import { findOrCloneSummary, resolveTranscriptLanguage } from '@/lib/language/cache';
 import { buildLanguageRule } from '@/lib/language/prompt';
 import { resolveTargetLanguage } from '@/lib/language/resolve';
@@ -12,7 +11,11 @@ import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
 import { type SummaryStreamEvent, summaryWorkflow } from '@/lib/workflows/summary';
 import { SUMMARY_FIELDS, type SummaryField } from '@/lib/workflows/summary/steps';
 
-export const maxDuration = GENERATION_MAX_DURATION_SECONDS;
+// Must be a literal — Next.js's route-segment-config analyzer can't
+// follow imports. See `GENERATION_MAX_DURATION_SECONDS` in
+// `@/constants` for the rationale; keep this in lockstep with that
+// value and the matching workflow `maxDuration`.
+export const maxDuration = 800;
 
 const PROMPT_BODIES = {
   headline: `Write a very short title for this video. Rules:

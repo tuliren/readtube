@@ -3,7 +3,6 @@ import { ArticleStyle, prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 import { start } from 'workflow/api';
 
-import { GENERATION_MAX_DURATION_SECONDS } from '@/constants';
 import { findOrCloneArticle, resolveTranscriptLanguage } from '@/lib/language/cache';
 import { buildLanguageRule } from '@/lib/language/prompt';
 import { resolveTargetLanguage } from '@/lib/language/resolve';
@@ -11,7 +10,11 @@ import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
 import { type ArticleStreamEvent, articleWorkflow } from '@/lib/workflows/article';
 
-export const maxDuration = GENERATION_MAX_DURATION_SECONDS;
+// Must be a literal — Next.js's route-segment-config analyzer can't
+// follow imports. See `GENERATION_MAX_DURATION_SECONDS` in
+// `@/constants` for the rationale; keep this in lockstep with that
+// value and the matching workflow `maxDuration`.
+export const maxDuration = 800;
 
 const DEFAULT_STYLE: ArticleStyle = ArticleStyle.NARRATIVE;
 
