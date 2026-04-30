@@ -126,7 +126,7 @@ export default async function PublicVideoPage({ params, searchParams }: Props) {
   // container.
   return (
     <div className="flex h-screen flex-col overflow-hidden">
-      <Header onHomePage={false} />
+      <Header />
       <main className="flex min-h-0 flex-1 flex-col">
         <VideoReader
           video={videoData}
