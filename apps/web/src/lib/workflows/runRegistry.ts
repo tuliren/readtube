@@ -1,67 +1,76 @@
-import { type ArticleStyle, GenerationKind, Prisma, type PrismaClient } from '@readtube/database';
+import { type ArticleStyle, GenerationStatus, Prisma, type PrismaClient } from '@readtube/database';
 import { getRun } from 'workflow/api';
 
 /**
- * Reads and writes against the `GenerationRun` table — the registry
- * of in-flight summary/article workflow runs that lets a second
- * client (or the same client after a refresh) tap into an existing
- * stream instead of starting a duplicate generation.
+ * Reads and writes the in-flight workflow markers on `Summary` and
+ * `Article` rows themselves. The merged "registry-on-the-row" design:
  *
- * The lifecycle a row goes through:
+ *   - `status = GENERATING` + `workflow_id = <runId>` ⇒ a workflow is
+ *     currently writing into this row. A second client (or the same
+ *     client after a refresh) calls `findActiveSummaryRun` /
+ *     `findActiveArticleRun`, gets the runId, and pipes
+ *     `getRun(runId).getReadable({ startIndex: 0 })` back to the
+ *     client.
  *
- * 1. **Claim**: route POST calls workflow `start()`, then
- *    {@link claimSummaryRun} / {@link claimArticleRun} to insert a
- *    row keyed on the (transcript, kind, language[, style]) slot.
- *    A unique index on the slot enforces "at most one active
- *    workflow"; the loser of a concurrent claim cancels its own
- *    `start()` and reuses the winner's run.
+ *   - `status = READY` ⇒ canonical cached content. workflow_id, when
+ *     set, points at the run that produced the current row (handy
+ *     for tracing / audit, never used for tap-in).
  *
- * 2. **Read**: route GET (and route POST for the existing-stream
- *    short-circuit) calls {@link findActiveSummaryRun} /
- *    {@link findActiveArticleRun} to look up the slot. If the row
- *    exists AND the workflow is still alive (`pending`/`running`),
- *    the route returns its readable. Stale rows (workflow already
- *    finished, failed, expired, or got cancelled outside our
- *    control) are best-effort deleted on the read path so future
- *    requests don't keep tapping into a dead run.
+ *   - Stale rows (workflow died without flipping status back to READY
+ *     or persisting) are best-effort cleaned up on read by checking
+ *     `getRun(workflow_id).status` and reverting via `updateMany`.
  *
- * 3. **Clear**: the workflow's persist step (the only step that
- *    touches the DB and runs after generation succeeds) calls
- *    {@link clearRunBySlot} after its upsert, atomically freeing
- *    the slot for a future regenerate request. The slot key matches
- *    the workflow's input (transcript, kind, language[, style]), so
- *    the cleanup doesn't need to thread the runId — useful because
- *    the workflow function doesn't have easy access to its own
- *    runId.
+ * Claim is atomic on Postgres-level:
+ *   1. Try `prisma.summary.create` — wins if no row existed for the
+ *      slot. P2002 fires if a row is already there.
+ *   2. On P2002, try `prisma.summary.updateMany WHERE status = READY`
+ *      to claim an existing READY row for re-generation. Returns
+ *      count = 1 if we won, count = 0 if a different claimant already
+ *      flipped the row to GENERATING.
+ *   3. If both lose, fetch the row to read whose runId won.
+ *
+ * The workflow's persist step flips `status = READY` and sets
+ * `workflow_id` to its own runId on success. The catch path uses
+ * `revertWorkflowRow` to either DELETE the fresh row we just created
+ * or revert a regen claim to READY (preserving any prior content).
  */
 
 interface ActiveRun {
   runId: string;
+  rowId: string;
 }
 
-// WorkflowRunStatus values that indicate the workflow is still doing
-// something — `pending` (queued) and `running` (executing). Any other
-// status (`completed`, `failed`, `cancelled`, `expired`) means tapping
-// into this run would yield nothing useful, so callers treat it as
-// "no active run" and proceed as if the slot were free.
+// Workflow lifecycle states the runtime considers "still doing
+// something." Anything else (`completed` / `failed` / `cancelled` /
+// `expired`) means the run is no longer producing events; treat it
+// as "no active run" and let the caller fall through to a fresh
+// generate or a cached-row read.
 async function isWorkflowActive(runId: string): Promise<boolean> {
   try {
     const status = await getRun(runId).status;
     return status === 'pending' || status === 'running';
   } catch {
-    // getRun().status throws if the runId can't be resolved — treat
-    // that the same as "not active" so the caller falls back to the
-    // start-fresh path instead of bubbling up a 500.
     return false;
   }
 }
 
-async function deleteRunRow(prisma: PrismaClient, id: string): Promise<void> {
-  // Best-effort. Cleanup races (a second reader noticing the same
-  // staleness) resolve to no-ops via the where clause; we don't want
-  // a transient DB hiccup here to break the read path.
+async function revertStaleSummary(prisma: PrismaClient, rowId: string): Promise<void> {
   try {
-    await prisma.generationRun.delete({ where: { id } });
+    await prisma.summary.updateMany({
+      where: { id: rowId, status: GenerationStatus.GENERATING },
+      data: { status: GenerationStatus.READY },
+    });
+  } catch {
+    // ignore — best-effort cleanup
+  }
+}
+
+async function revertStaleArticle(prisma: PrismaClient, rowId: string): Promise<void> {
+  try {
+    await prisma.article.updateMany({
+      where: { id: rowId, status: GenerationStatus.GENERATING },
+      data: { status: GenerationStatus.READY },
+    });
   } catch {
     // ignore
   }
@@ -72,21 +81,21 @@ export async function findActiveSummaryRun(
   transcriptId: string,
   language: string | null
 ): Promise<ActiveRun | null> {
-  const row = await prisma.generationRun.findFirst({
+  const row = await prisma.summary.findFirst({
     where: {
       transcript_id: transcriptId,
-      kind: GenerationKind.SUMMARY,
       language,
-      style: null,
+      status: GenerationStatus.GENERATING,
     },
+    select: { id: true, workflow_id: true },
   });
-  if (row == null) {
+  if (row == null || row.workflow_id == null) {
     return null;
   }
-  if (await isWorkflowActive(row.run_id)) {
-    return { runId: row.run_id };
+  if (await isWorkflowActive(row.workflow_id)) {
+    return { runId: row.workflow_id, rowId: row.id };
   }
-  await deleteRunRow(prisma, row.id);
+  await revertStaleSummary(prisma, row.id);
   return null;
 }
 
@@ -96,28 +105,29 @@ export async function findActiveArticleRun(
   style: ArticleStyle,
   language: string | null
 ): Promise<ActiveRun | null> {
-  const row = await prisma.generationRun.findFirst({
+  const row = await prisma.article.findFirst({
     where: {
       transcript_id: transcriptId,
-      kind: GenerationKind.ARTICLE,
-      language,
       style,
+      language,
+      status: GenerationStatus.GENERATING,
     },
+    select: { id: true, workflow_id: true },
   });
-  if (row == null) {
+  if (row == null || row.workflow_id == null) {
     return null;
   }
-  if (await isWorkflowActive(row.run_id)) {
-    return { runId: row.run_id };
+  if (await isWorkflowActive(row.workflow_id)) {
+    return { runId: row.workflow_id, rowId: row.id };
   }
-  await deleteRunRow(prisma, row.id);
+  await revertStaleArticle(prisma, row.id);
   return null;
 }
 
-interface ClaimResult {
+export interface ClaimResult {
   /** The runId whose stream callers should subscribe to. May be the
    *  one we passed in (we won), or another concurrent claimant's
-   *  (we lost; cancel ours). */
+   *  (we lost — cancel ours and pipe the winner instead). */
   winningRunId: string;
   /** True if our `newRunId` won the slot. False means a concurrent
    *  claimant got there first and the caller should
@@ -125,110 +135,229 @@ interface ClaimResult {
   weWon: boolean;
 }
 
-async function tryClaim(
-  prisma: PrismaClient,
-  data: {
-    transcript_id: string;
-    kind: GenerationKind;
-    language: string | null;
-    style: ArticleStyle | null;
-    run_id: string;
-  }
-): Promise<ClaimResult> {
-  try {
-    await prisma.generationRun.create({ data });
-    return { winningRunId: data.run_id, weWon: true };
-  } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-      const winner = await prisma.generationRun.findFirst({
-        where: {
-          transcript_id: data.transcript_id,
-          kind: data.kind,
-          language: data.language,
-          style: data.style,
-        },
-      });
-      if (winner != null) {
-        return { winningRunId: winner.run_id, weWon: false };
-      }
-      // Constraint says someone has it but we can't find them — likely
-      // a concurrent clear between INSERT and SELECT. Fall back to
-      // "we won" so the caller proceeds with their fresh run; if the
-      // other claimant retries it'll lose now and tap into us.
-      return { winningRunId: data.run_id, weWon: true };
-    }
-    throw err;
-  }
-}
-
+/**
+ * Claim a Summary slot for a new workflow. Either inserts a brand-new
+ * GENERATING row or flips an existing READY row to GENERATING.
+ *
+ * `promptVersion` and `model` are required for the fresh-row insert
+ * branch — Summary's schema marks them NOT NULL. The persist step
+ * overwrites them anyway, but the insert needs valid values.
+ */
 export async function claimSummaryRun(
   prisma: PrismaClient,
   transcriptId: string,
   language: string | null,
-  newRunId: string
+  newRunId: string,
+  promptVersion: string,
+  model: string
 ): Promise<ClaimResult> {
-  return tryClaim(prisma, {
-    transcript_id: transcriptId,
-    kind: GenerationKind.SUMMARY,
-    language,
-    style: null,
-    run_id: newRunId,
+  // Step 1: try to insert a fresh row. Fastest path when nothing
+  // existed for the slot. The row goes in with content-fields=null;
+  // the workflow's persist step will populate them and flip to READY.
+  try {
+    await prisma.summary.create({
+      data: {
+        transcript_id: transcriptId,
+        language,
+        status: GenerationStatus.GENERATING,
+        workflow_id: newRunId,
+        prompt_version: promptVersion,
+        model,
+      },
+    });
+    return { winningRunId: newRunId, weWon: true };
+  } catch (err) {
+    if (!(err instanceof Prisma.PrismaClientKnownRequestError) || err.code !== 'P2002') {
+      throw err;
+    }
+  }
+
+  // Step 2: a row exists for the slot. Try to flip it from READY to
+  // GENERATING. This is the regen path. updateMany returns count = 1
+  // if we claimed it, count = 0 if it was already GENERATING (or
+  // someone else flipped it in the same instant).
+  const flip = await prisma.summary.updateMany({
+    where: {
+      transcript_id: transcriptId,
+      language,
+      status: GenerationStatus.READY,
+    },
+    data: {
+      status: GenerationStatus.GENERATING,
+      workflow_id: newRunId,
+    },
   });
+  if (flip.count === 1) {
+    return { winningRunId: newRunId, weWon: true };
+  }
+
+  // Step 3: someone else claimed the slot before us. Read the
+  // winner's workflow_id so the caller can pipe their stream.
+  const winner = await prisma.summary.findFirst({
+    where: {
+      transcript_id: transcriptId,
+      language,
+      status: GenerationStatus.GENERATING,
+    },
+    select: { workflow_id: true },
+  });
+  if (winner != null && winner.workflow_id != null) {
+    return { winningRunId: winner.workflow_id, weWon: false };
+  }
+
+  // The row left GENERATING between our updateMany and the find — it
+  // probably just completed. Treat us as the winner so the caller
+  // proceeds with the start; if there's a race the next claimant
+  // catches it.
+  return { winningRunId: newRunId, weWon: true };
 }
 
+/**
+ * Article variant of {@link claimSummaryRun}. Same flow; the slot is
+ * keyed on `(transcript_id, style, language)`.
+ */
 export async function claimArticleRun(
   prisma: PrismaClient,
   transcriptId: string,
   style: ArticleStyle,
   language: string | null,
-  newRunId: string
+  newRunId: string,
+  promptVersion: string,
+  model: string
 ): Promise<ClaimResult> {
-  return tryClaim(prisma, {
-    transcript_id: transcriptId,
-    kind: GenerationKind.ARTICLE,
-    language,
-    style,
-    run_id: newRunId,
+  try {
+    await prisma.article.create({
+      data: {
+        transcript_id: transcriptId,
+        style,
+        language,
+        status: GenerationStatus.GENERATING,
+        workflow_id: newRunId,
+        prompt_version: promptVersion,
+        model,
+      },
+    });
+    return { winningRunId: newRunId, weWon: true };
+  } catch (err) {
+    if (!(err instanceof Prisma.PrismaClientKnownRequestError) || err.code !== 'P2002') {
+      throw err;
+    }
+  }
+
+  const flip = await prisma.article.updateMany({
+    where: {
+      transcript_id: transcriptId,
+      style,
+      language,
+      status: GenerationStatus.READY,
+    },
+    data: {
+      status: GenerationStatus.GENERATING,
+      workflow_id: newRunId,
+    },
   });
+  if (flip.count === 1) {
+    return { winningRunId: newRunId, weWon: true };
+  }
+
+  const winner = await prisma.article.findFirst({
+    where: {
+      transcript_id: transcriptId,
+      style,
+      language,
+      status: GenerationStatus.GENERATING,
+    },
+    select: { workflow_id: true },
+  });
+  if (winner != null && winner.workflow_id != null) {
+    return { winningRunId: winner.workflow_id, weWon: false };
+  }
+
+  return { winningRunId: newRunId, weWon: true };
 }
 
 /**
- * Clear the run-registry slot identified by its key. Called by the
- * workflow's persist step after a successful upsert so the slot
- * frees the moment the row lands in the database.
+ * Revert the Summary row a workflow left in GENERATING when it
+ * fails. Called from the workflow's FatalError catch path (see
+ * `summary/index.ts`). The fresh-vs-regen branch is decided by
+ * inspecting the row's content state, not threaded via input:
  *
- * Slot-keyed rather than runId-keyed because the workflow function
- * doesn't have easy access to its own runId, and using the key is
- * idempotent — a stale-cleanup pass that happens to run concurrently
- * just no-ops on the second writer.
+ *   - Fresh claim: the workflow's claim helper INSERTed a row with
+ *     all content fields NULL. Nothing to revert to — DELETE the row
+ *     so a follow-up Generate click sees a clean slot.
+ *   - Regen claim: the claim helper flipped an existing READY row's
+ *     status to GENERATING; its content fields are still populated
+ *     from the prior successful generation. UPDATE status back to
+ *     READY; the prior content becomes visible again. workflow_id is
+ *     left pointing at the failed run so traces show what happened.
+ *
+ * Both queries are scoped to `workflow_id = ourRunId` so a concurrent
+ * regen claim by a *different* workflow doesn't get clobbered, and
+ * `headline IS NULL` (or `content IS NULL` for Article) decides the
+ * branch — that's only true for rows we just inserted.
  */
-export async function clearSummaryRunSlot(
+export async function revertSummaryRow(
   prisma: PrismaClient,
   transcriptId: string,
-  language: string | null
+  language: string | null,
+  workflowRunId: string
 ): Promise<void> {
-  await prisma.generationRun.deleteMany({
+  const row = await prisma.summary.findFirst({
     where: {
       transcript_id: transcriptId,
-      kind: GenerationKind.SUMMARY,
       language,
-      style: null,
+      workflow_id: workflowRunId,
+      status: GenerationStatus.GENERATING,
     },
+    select: { id: true, headline: true, short: true, full: true },
+  });
+  if (row == null) {
+    // Nothing to revert — the workflow never claimed, or another
+    // run has already taken the slot.
+    return;
+  }
+  // A fresh claim leaves all three content fields NULL. If any is
+  // populated, this was a regen claim on top of a prior successful
+  // generation; revert to READY rather than blowing away that
+  // content.
+  const isFreshClaim = row.headline == null && row.short == null && row.full == null;
+  if (isFreshClaim) {
+    await prisma.summary.delete({ where: { id: row.id } });
+    return;
+  }
+  await prisma.summary.update({
+    where: { id: row.id },
+    data: { status: GenerationStatus.READY },
   });
 }
 
-export async function clearArticleRunSlot(
+export async function revertArticleRow(
   prisma: PrismaClient,
   transcriptId: string,
   style: ArticleStyle,
-  language: string | null
+  language: string | null,
+  workflowRunId: string
 ): Promise<void> {
-  await prisma.generationRun.deleteMany({
+  const row = await prisma.article.findFirst({
     where: {
       transcript_id: transcriptId,
-      kind: GenerationKind.ARTICLE,
-      language,
       style,
+      language,
+      workflow_id: workflowRunId,
+      status: GenerationStatus.GENERATING,
     },
+    select: { id: true, content: true },
+  });
+  if (row == null) {
+    return;
+  }
+  const isFreshClaim = row.content == null;
+  if (isFreshClaim) {
+    await prisma.article.delete({ where: { id: row.id } });
+    return;
+  }
+  await prisma.article.update({
+    where: { id: row.id },
+    data: { status: GenerationStatus.READY },
   });
 }

@@ -3,12 +3,14 @@ import { ArticleStyle, prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 import { getRun, start } from 'workflow/api';
 
+import { DEFAULT_AI_MODEL } from '@/constants';
 import { findOrCloneArticle, resolveTranscriptLanguage } from '@/lib/language/cache';
 import { buildLanguageRule } from '@/lib/language/prompt';
 import { resolveTargetLanguage } from '@/lib/language/resolve';
 import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
 import { type ArticleStreamEvent, articleWorkflow } from '@/lib/workflows/article';
+import { ARTICLE_PROMPT_VERSION } from '@/lib/workflows/article/steps';
 import { claimArticleRun, findActiveArticleRun } from '@/lib/workflows/runRegistry';
 import { NDJSON_HEADERS, ndjsonResponseFromRun } from '@/lib/workflows/streamResponse';
 
@@ -254,7 +256,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // regenerating.
   const cached = force ? null : await findOrCloneArticle(prisma, transcript.id, style, target);
 
-  if (cached) {
+  // findOrCloneArticle only returns READY rows, which always have
+  // content — but the schema column is nullable to accommodate
+  // GENERATING rows that don't have it yet. Guard explicitly so the
+  // type narrows.
+  if (cached != null && cached.content != null) {
     const parsed = parseMarkdownDocument(cached.content);
     const hasLatex = parsed.properties.hasLatex === true;
     const cachedEncoder = new TextEncoder();
@@ -313,7 +319,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // stable copy onto the in-flight regen. On a concurrent claim
   // race we cancel our own start and stream the winner.
   if (!force) {
-    const claim = await claimArticleRun(prisma, transcript.id, style, target, run.runId);
+    const claim = await claimArticleRun(
+      prisma,
+      transcript.id,
+      style,
+      target,
+      run.runId,
+      ARTICLE_PROMPT_VERSION,
+      DEFAULT_AI_MODEL
+    );
     if (!claim.weWon) {
       console.info(
         `[article/POST] Lost claim race; cancelling ${run.runId} and tapping into ${claim.winningRunId}`

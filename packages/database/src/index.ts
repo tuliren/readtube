@@ -8,7 +8,7 @@ export {
   Prisma,
   PrismaClient,
   ArticleStyle,
-  GenerationKind,
+  GenerationStatus,
   UserSourceType,
   VideoPlatformType,
 } from '@prisma/client';

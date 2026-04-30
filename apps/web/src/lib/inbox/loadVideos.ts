@@ -145,13 +145,23 @@ export async function loadInboxVideos(
       // existence answers to render the artifact badges in VideoRow,
       // so each child select picks the cheapest possible columns:
       // a single Summary field via the unique transcript_id, and
-      // a single Article id with take: 1.
+      // a single Article id with take: 1. `status: READY` filters
+      // out in-flight workflow rows so the badge doesn't flip blue
+      // until generation lands.
       transcripts: {
         orderBy: { created_at: 'desc' },
         take: 1,
         select: {
-          summaries: { take: 1, select: { transcript_id: true } },
-          articles: { take: 1, select: { id: true } },
+          summaries: {
+            where: { status: 'READY' },
+            take: 1,
+            select: { transcript_id: true },
+          },
+          articles: {
+            where: { status: 'READY' },
+            take: 1,
+            select: { id: true },
+          },
         },
       },
     },
@@ -278,8 +288,18 @@ async function loadLibraryScope(
         orderBy: { created_at: 'desc' },
         take: 1,
         select: {
-          summaries: { take: 1, select: { transcript_id: true } },
-          articles: { take: 1, select: { id: true } },
+          // `status: READY` mirrors the inbox list; an in-flight
+          // workflow row mustn't flip the artifact badge.
+          summaries: {
+            where: { status: 'READY' },
+            take: 1,
+            select: { transcript_id: true },
+          },
+          articles: {
+            where: { status: 'READY' },
+            take: 1,
+            select: { id: true },
+          },
         },
       },
     },

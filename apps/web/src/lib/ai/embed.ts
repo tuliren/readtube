@@ -46,9 +46,11 @@ export async function embedVideo(videoId: string): Promise<EmbedResult> {
         select: {
           // Embed against the Original (language IS NULL) summary so
           // semantic search keys on the canonical text rather than
-          // whatever translation happened to land first.
+          // whatever translation happened to land first. `status:
+          // READY` skips in-flight rows — embedding partial content
+          // would index whatever the model has streamed so far.
           summaries: {
-            where: { language: null },
+            where: { language: null, status: 'READY' },
             take: 1,
             select: { full: true, short: true, headline: true },
           },

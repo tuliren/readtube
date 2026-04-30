@@ -47,8 +47,18 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           // user can pick a target language as their first
           // generation), so a missing Original isn't the same thing
           // as "no public artifact."
-          summaries: { take: 1, select: { transcript_id: true } },
-          articles: { take: 1, select: { id: true } },
+          // `status: READY` filters out in-flight workflow rows so a
+          // public visitor never lands on an empty page mid-generation.
+          summaries: {
+            where: { status: 'READY' },
+            take: 1,
+            select: { transcript_id: true },
+          },
+          articles: {
+            where: { status: 'READY' },
+            take: 1,
+            select: { id: true },
+          },
         },
       },
     },
@@ -72,17 +82,18 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   // When a target is requested, look it up directly. Fall back to
   // the Original on miss so a tampered or stale share URL renders
-  // the canonical version instead of 404'ing.
+  // the canonical version instead of 404'ing. Both lookups filter
+  // on `status = READY` so an in-flight row never surfaces.
   let summary = null;
   if (targetLanguage != null) {
     summary = await prisma.summary.findFirst({
-      where: { transcript_id: transcript.id, language: targetLanguage },
+      where: { transcript_id: transcript.id, language: targetLanguage, status: 'READY' },
       ...fields,
     });
   }
   if (summary == null) {
     summary = await prisma.summary.findFirst({
-      where: { transcript_id: transcript.id, language: null },
+      where: { transcript_id: transcript.id, language: null, status: 'READY' },
       ...fields,
     });
   }

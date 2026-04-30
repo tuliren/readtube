@@ -113,7 +113,11 @@ async function backfillArticles(): Promise<Counters> {
       counters.filled++;
       continue;
     }
-    const text = a.content.length > 0 ? a.content : (a.transcript?.text ?? '');
+    // a.content can be null after the GenerationStatus migration —
+    // GENERATING rows have no content yet. Treat null and empty as
+    // "fall back to transcript text."
+    const articleText = a.content ?? '';
+    const text = articleText.length > 0 ? articleText : (a.transcript?.text ?? '');
     const detected = detectLanguage(text);
     if (detected == null) {
       counters.unresolved++;

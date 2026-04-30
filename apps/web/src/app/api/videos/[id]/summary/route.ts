@@ -3,6 +3,7 @@ import { prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 import { getRun, start } from 'workflow/api';
 
+import { DEFAULT_AI_MODEL } from '@/constants';
 import { findOrCloneSummary, resolveTranscriptLanguage } from '@/lib/language/cache';
 import { buildLanguageRule } from '@/lib/language/prompt';
 import { resolveTargetLanguage } from '@/lib/language/resolve';
@@ -11,7 +12,11 @@ import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
 import { claimSummaryRun, findActiveSummaryRun } from '@/lib/workflows/runRegistry';
 import { NDJSON_HEADERS, ndjsonResponseFromRun } from '@/lib/workflows/streamResponse';
 import { type SummaryStreamEvent, summaryWorkflow } from '@/lib/workflows/summary';
-import { SUMMARY_FIELDS, type SummaryField } from '@/lib/workflows/summary/steps';
+import {
+  SUMMARY_FIELDS,
+  SUMMARY_PROMPT_VERSION,
+  type SummaryField,
+} from '@/lib/workflows/summary/steps';
 
 // Must be a literal — Next.js's route-segment-config analyzer can't
 // follow imports. See `GENERATION_MAX_DURATION_SECONDS` in
@@ -317,15 +322,21 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     },
   ]);
 
-  // Claim the registry slot for this slot so future GETs / regen
-  // clicks tap in. Only claim for full-generate runs — per-field
-  // regenerate writes to the same Summary row but doesn't represent
-  // a "fresh generation in progress" the user would want to subscribe
-  // to (the click that fired it is a per-field, fire-and-forget
-  // action). On a concurrent claim race we cancel our own start and
-  // fall through to streaming the winner.
+  // Claim the row for this slot so future GETs / regen clicks tap
+  // in. Only claim for full-generate runs — per-field regenerate
+  // writes to specific fields and doesn't represent a "fresh
+  // generation in progress" the user would want to subscribe to
+  // (the click is a fire-and-forget action). On a concurrent claim
+  // race we cancel our own start and stream the winner instead.
   if (isFullGenerate) {
-    const claim = await claimSummaryRun(prisma, transcript.id, target, run.runId);
+    const claim = await claimSummaryRun(
+      prisma,
+      transcript.id,
+      target,
+      run.runId,
+      SUMMARY_PROMPT_VERSION,
+      DEFAULT_AI_MODEL
+    );
     if (!claim.weWon) {
       console.info(
         `[summary/POST] Lost claim race; cancelling ${run.runId} and tapping into ${claim.winningRunId}`
