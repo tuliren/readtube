@@ -11,6 +11,16 @@ import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
 import { type SummaryStreamEvent, summaryWorkflow } from '@/lib/workflows/summary';
 import { SUMMARY_FIELDS, type SummaryField } from '@/lib/workflows/summary/steps';
 
+// Match the workflow's own maxDuration so the route function stays
+// alive long enough to proxy the workflow's full event stream
+// (deltas → persist → terminal `{type:'done'}`). Without this the
+// platform default (60 s on Pro) cuts the response off mid-workflow:
+// the workflow finishes and persists in the background, but the
+// client sees stream-end without `{type:'done'}` and falls into the
+// "Generation ended unexpectedly — refresh" branch even though the
+// content is already in the database.
+export const maxDuration = 300;
+
 const PROMPT_BODIES = {
   headline: `Write a very short title for this video. Rules:
 - Title style, not a sentence — think newspaper headline.
