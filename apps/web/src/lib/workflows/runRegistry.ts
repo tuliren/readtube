@@ -54,28 +54,6 @@ async function isWorkflowActive(runId: string): Promise<boolean> {
   }
 }
 
-async function revertStaleSummary(prisma: PrismaClient, rowId: string): Promise<void> {
-  try {
-    await prisma.summary.updateMany({
-      where: { id: rowId, status: GenerationStatus.GENERATING },
-      data: { status: GenerationStatus.READY },
-    });
-  } catch {
-    // ignore — best-effort cleanup
-  }
-}
-
-async function revertStaleArticle(prisma: PrismaClient, rowId: string): Promise<void> {
-  try {
-    await prisma.article.updateMany({
-      where: { id: rowId, status: GenerationStatus.GENERATING },
-      data: { status: GenerationStatus.READY },
-    });
-  } catch {
-    // ignore
-  }
-}
-
 export async function findActiveSummaryRun(
   prisma: PrismaClient,
   transcriptId: string,
@@ -95,7 +73,14 @@ export async function findActiveSummaryRun(
   if (await isWorkflowActive(row.workflow_id)) {
     return { runId: row.workflow_id, rowId: row.id };
   }
-  await revertStaleSummary(prisma, row.id);
+  // Stale row: the workflow_id points at a run that's no longer
+  // active (timed out, container killed, expired). Defer to the
+  // content-aware revert helper so a fresh claim — content fields
+  // all NULL — gets DELETEd instead of flipped to READY. A blind
+  // status flip would leave a READY row with no content visible to
+  // every downstream cache read, eventually crashing the client
+  // when it tries to parse `null.content`.
+  await revertSummaryRow(prisma, transcriptId, language, row.workflow_id);
   return null;
 }
 
@@ -120,7 +105,9 @@ export async function findActiveArticleRun(
   if (await isWorkflowActive(row.workflow_id)) {
     return { runId: row.workflow_id, rowId: row.id };
   }
-  await revertStaleArticle(prisma, row.id);
+  // Same content-aware revert as findActiveSummaryRun — see comment
+  // there for why we don't just blindly flip the status.
+  await revertArticleRow(prisma, transcriptId, style, language, row.workflow_id);
   return null;
 }
 

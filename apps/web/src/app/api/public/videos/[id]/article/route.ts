@@ -107,7 +107,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       ...fields,
     });
   }
-  if (!article) {
+  // Guard against READY-with-null-content rows the same way the
+  // private article GET does — see that route for the rationale.
+  if (article == null || article.content == null) {
     console.error(`[public/article/GET] No cached article for video ${id} (style=${style})`);
     return NextResponse.json({ error: 'Not cached' }, { status: 404 });
   }

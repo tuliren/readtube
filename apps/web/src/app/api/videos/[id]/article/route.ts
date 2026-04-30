@@ -135,7 +135,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   }
 
   const article = await findOrCloneArticle(prisma, transcript.id, style, target);
-  if (!article) {
+  // Guard against content == null. The runRegistry's stale-cleanup
+  // path (findActiveArticleRun) DELETEs fresh-claim rows rather
+  // than flipping them to READY, so a READY row should always have
+  // content. Treat any READY-with-null-content row as "not cached"
+  // belt-and-suspenders so a future code path that lands one
+  // doesn't 500 the client downstream (parseMarkdownDocument
+  // throws on null).
+  if (article == null || article.content == null) {
     console.error(
       `[article/GET] No cached article for video ${id} (style=${style}, language=${target ?? 'original'})`
     );
