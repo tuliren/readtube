@@ -11,25 +11,25 @@ import ThemeSelector from '@/components/settings/ThemeSelector';
 import { TITLE } from '@/constants';
 
 interface Props {
-  /** On non-marketing pages (e.g. the public share view) the in-page
-   *  Features / FAQ anchors don't resolve, so the header swaps them
-   *  for a single Home link back to the marketing root. */
-  variant?: 'marketing' | 'compact';
+  /** True on the marketing root (`/`), where Features / FAQ anchors
+   *  resolve to in-page sections. False everywhere else (e.g. the
+   *  public share view) so the nav offers a Home link back to `/`
+   *  instead of dead anchor links. */
+  onHomePage?: boolean;
 }
 
-export default function Header({ variant = 'marketing' }: Props = {}) {
+export default function Header({ onHomePage = true }: Props = {}) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { isSignedIn } = useAuth();
 
-  const navigation =
-    variant === 'compact'
-      ? [{ name: 'Home', href: '/' }, ...(isSignedIn ? [{ name: 'Inbox', href: '/inbox' }] : [])]
-      : [
-          { name: 'Features', href: '#features' },
-          // { name: 'Pricing', href: '#pricing' },
-          { name: 'FAQ', href: '#faq' },
-          ...(isSignedIn ? [{ name: 'Inbox', href: '/inbox' }] : []),
-        ];
+  const navigation = onHomePage
+    ? [
+        { name: 'Features', href: '#features' },
+        // { name: 'Pricing', href: '#pricing' },
+        { name: 'FAQ', href: '#faq' },
+        ...(isSignedIn ? [{ name: 'Inbox', href: '/inbox' }] : []),
+      ]
+    : [{ name: 'Home', href: '/' }, ...(isSignedIn ? [{ name: 'Inbox', href: '/inbox' }] : [])];
 
   const linkClass = 'font-semibold leading-6 text-slate-700 dark:text-slate-200';
   const mobileLinkClass =
