@@ -128,9 +128,13 @@ export default async function PublicVideoPage({ params, searchParams }: Props) {
     <div className="flex h-screen flex-col overflow-hidden">
       <Header />
       <main className="flex min-h-0 flex-1 flex-col">
-        <VideoReader video={videoData} publicMode preferredLanguage={requestedLanguage} />
+        <VideoReader
+          video={videoData}
+          publicMode
+          preferredLanguage={requestedLanguage}
+          footerSlot={<Footer compact />}
+        />
       </main>
-      <Footer />
     </div>
   );
 }
