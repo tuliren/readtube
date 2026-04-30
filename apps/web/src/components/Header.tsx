@@ -19,20 +19,31 @@ interface Props {
   onHomePage?: boolean;
 }
 
+interface NavigationItem {
+  name: string;
+  href: string;
+}
+
+const HOME_NAVIGATION: NavigationItem[] = [
+  { name: 'Features', href: '#features' },
+  // { name: 'Pricing', href: '#pricing' },
+  { name: 'FAQ', href: '#faq' },
+];
+
+const SIGNED_IN_NAVIGATION: NavigationItem[] = [{ name: 'Inbox', href: '/inbox' }];
+
+const NON_HOME_NAVIGATION: NavigationItem[] = [{ name: 'Home', href: '/' }];
+
 export default function Header({ onHomePage }: Props = {}) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { isSignedIn } = useAuth();
   const pathname = usePathname();
   const isHome = onHomePage ?? pathname === '/';
 
-  const navigation = isHome
-    ? [
-        { name: 'Features', href: '#features' },
-        // { name: 'Pricing', href: '#pricing' },
-        { name: 'FAQ', href: '#faq' },
-        ...(isSignedIn ? [{ name: 'Inbox', href: '/inbox' }] : []),
-      ]
-    : [{ name: 'Home', href: '/' }, ...(isSignedIn ? [{ name: 'Inbox', href: '/inbox' }] : [])];
+  const navigation: NavigationItem[] = [
+    ...(isHome ? HOME_NAVIGATION : NON_HOME_NAVIGATION),
+    ...(isSignedIn ? SIGNED_IN_NAVIGATION : []),
+  ];
 
   const linkClass = 'font-semibold leading-6 text-slate-700 dark:text-slate-200';
   const mobileLinkClass =
