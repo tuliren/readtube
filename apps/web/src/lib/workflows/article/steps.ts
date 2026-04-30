@@ -207,12 +207,21 @@ export async function persistArticleStep(
 export async function emitTerminalEventStep(event: ArticleStreamEvent): Promise<void> {
   'use step';
 
+  // Write the terminal event AND close on the same writer. Each
+  // `getWritable()` call instantiates a fresh WritableStream wired to
+  // the same Redis-backed server stream — calling `.close()` on a
+  // *second* `getWritable()` instance races directly to
+  // `world.closeStream()` and can land before the first writable has
+  // flushed its buffered chunks (the server-writable batches with a
+  // ~10 ms setTimeout). The earlier "write event on writer 1, release
+  // lock, then `getWritable().close()` on writer 2" pattern lost the
+  // terminal event under that race, leaving the client to see stream
+  // end without a `{type: 'done'}` and fall into the "Generation
+  // ended unexpectedly" error path. `writer.close()` here propagates
+  // through the same transform, so the close awaits the flush of the
+  // event we just queued before the underlying redis stream is shut.
   const writable = getWritable<ArticleStreamEvent>();
   const writer = writable.getWriter();
-  try {
-    await writer.write(event);
-  } finally {
-    writer.releaseLock();
-  }
-  await getWritable<ArticleStreamEvent>().close();
+  await writer.write(event);
+  await writer.close();
 }
