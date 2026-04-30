@@ -1,7 +1,7 @@
 'use client';
 
 import { ArrowLeftIcon, ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/outline';
-import { NotebookPen } from 'lucide-react';
+import { Loader2, NotebookPen } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -196,6 +196,14 @@ export default function VideoReader({
   const [articleWords, setArticleWords] = useState(0);
   const [transcriptWords, setTranscriptWords] = useState(0);
 
+  // Per-tab "generation in progress" flag. While true the tab header
+  // hides the reading-time badge (which would tick up dishonestly as
+  // partial deltas land) and shows a small spinner instead. Mirrors
+  // the reader's local `status === 'generating'` / `'streaming'` so
+  // the indicator covers both POST-driven and GET-tap-in flows.
+  const [summaryGenerating, setSummaryGenerating] = useState(false);
+  const [articleGenerating, setArticleGenerating] = useState(false);
+
   // useState only seeds from the initial render. When the user clicks
   // a different video in the sidebar Next.js performs a soft
   // navigation — VideoReader receives new props but is NOT
@@ -231,6 +239,8 @@ export default function VideoReader({
     setSummaryWords(0);
     setArticleWords(0);
     setTranscriptWords(0);
+    setSummaryGenerating(false);
+    setArticleGenerating(false);
     // Re-pick the default tab for the new video. A stale activeTab
     // from the previous video (e.g. 'transcript' on the way into a
     // public-mode video that hides it, or 'summary' on the way into
@@ -339,6 +349,14 @@ export default function VideoReader({
   const handleSummaryWordsChange = useCallback((words: number) => setSummaryWords(words), []);
   const handleArticleWordsChange = useCallback((words: number) => setArticleWords(words), []);
   const handleTranscriptWordsChange = useCallback((words: number) => setTranscriptWords(words), []);
+  const handleSummaryGeneratingChange = useCallback(
+    (generating: boolean) => setSummaryGenerating(generating),
+    []
+  );
+  const handleArticleGeneratingChange = useCallback(
+    (generating: boolean) => setArticleGenerating(generating),
+    []
+  );
 
   // Description collapse state — collapsed by default to keep the header compact.
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
@@ -662,6 +680,19 @@ export default function VideoReader({
                         : tab.key === 'article'
                           ? articleWords
                           : transcriptWords;
+                    // Suppress the reading-time badge while a
+                    // generation is mid-flight — the word count is
+                    // ticking up dishonestly as partial deltas land,
+                    // and "1 min" → "3 min" → "5 min" just as the
+                    // user is watching the article stream looks like
+                    // a buggy estimate. Show a spinner instead so
+                    // the tab still signals "this one is busy" but
+                    // doesn't promise a length yet. Transcript tab
+                    // never streams under our control, so it always
+                    // shows the badge whenever it has words.
+                    const isTabGenerating =
+                      (tab.key === 'summary' && summaryGenerating) ||
+                      (tab.key === 'article' && articleGenerating);
                     return (
                       <button
                         key={tab.key}
@@ -673,7 +704,14 @@ export default function VideoReader({
                         }`}
                       >
                         {tab.label}
-                        {words > 0 && <ReadingTimeBadge wordCount={words} />}
+                        {isTabGenerating ? (
+                          <Loader2
+                            aria-label="Generating"
+                            className="h-3.5 w-3.5 animate-spin text-blue-500"
+                          />
+                        ) : (
+                          words > 0 && <ReadingTimeBadge wordCount={words} />
+                        )}
                       </button>
                     );
                   })}
@@ -691,6 +729,7 @@ export default function VideoReader({
                       onTranscriptStatusChange={setTranscriptStatus}
                       onSummaryAvailability={handleSummaryAvailability}
                       onSummaryWordsChange={handleSummaryWordsChange}
+                      onSummaryGeneratingChange={handleSummaryGeneratingChange}
                       publicMode={publicMode}
                       selectedLanguage={selectedLanguage}
                       onLanguageChange={setSelectedLanguage}
@@ -706,6 +745,7 @@ export default function VideoReader({
                       onTranscriptStatusChange={setTranscriptStatus}
                       onArticleAvailability={handleArticleAvailability}
                       onArticleWordsChange={handleArticleWordsChange}
+                      onArticleGeneratingChange={handleArticleGeneratingChange}
                       publicMode={publicMode}
                       selectedLanguage={selectedLanguage}
                       onLanguageChange={setSelectedLanguage}

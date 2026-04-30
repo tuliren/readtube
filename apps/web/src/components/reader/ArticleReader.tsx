@@ -50,6 +50,12 @@ interface Props {
    *  tab header can render the reading time badge. Fires on every
    *  markdown change, so the badge updates live as content streams. */
   onArticleWordsChange: (words: number) => void;
+  /** Reports whether a generation is currently writing into this
+   *  tab. VideoReader uses it to swap the reading-time badge for a
+   *  spinner so the badge doesn't tick up dishonestly as partial
+   *  deltas land. Covers both the POST-driven `'streaming'` state
+   *  and the GET-tap-in path that lands in the same state. */
+  onArticleGeneratingChange: (generating: boolean) => void;
   /** When true, fetch from the unauthenticated public endpoint and
    *  render a read-only view — no generate affordance. */
   publicMode?: boolean;
@@ -71,6 +77,7 @@ export default function ArticleReader({
   onTranscriptStatusChange,
   onArticleAvailability,
   onArticleWordsChange,
+  onArticleGeneratingChange,
   publicMode = false,
   selectedLanguage,
   onLanguageChange,
@@ -213,6 +220,15 @@ export default function ArticleReader({
       cancelled = true;
     };
   }, [videoDbId, onArticleAvailability, apiBase, selectedLanguage]);
+
+  // Mirror the local streaming status up to VideoReader so the tab
+  // header can swap the (mid-stream-misleading) reading-time badge
+  // for a spinner. `'streaming'` covers both the POST-driven path
+  // and the GET-tap-in path that flips into the same status when
+  // the mount fetch sees NDJSON.
+  useEffect(() => {
+    onArticleGeneratingChange(status === 'streaming');
+  }, [status, onArticleGeneratingChange]);
 
   // Stream the article word count up to VideoReader so the Article
   // tab header can render the reading-time badge. Fires on every

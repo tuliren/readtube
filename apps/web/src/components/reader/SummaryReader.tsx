@@ -40,6 +40,13 @@ interface Props {
    *  time badge. Fires on every summary state change, so the badge
    *  updates live as content streams in. */
   onSummaryWordsChange: (words: number) => void;
+  /** Reports whether a generation is currently writing into this
+   *  tab. VideoReader uses it to swap the reading-time badge for a
+   *  spinner — the badge would tick up dishonestly as partial
+   *  deltas land otherwise. Covers POST-driven `'generating'` and
+   *  GET-tap-in (where the mount fetch sees NDJSON and switches
+   *  the same status). */
+  onSummaryGeneratingChange: (generating: boolean) => void;
   /** When true, fetch from the unauthenticated public endpoint and
    *  render a read-only view — no generate / regenerate affordances. */
   publicMode?: boolean;
@@ -104,6 +111,7 @@ export default function SummaryReader({
   onTranscriptStatusChange,
   onSummaryAvailability,
   onSummaryWordsChange,
+  onSummaryGeneratingChange,
   publicMode = false,
   selectedLanguage,
   onLanguageChange,
@@ -296,6 +304,15 @@ export default function SummaryReader({
       countWords(summary.headline) + countWords(summary.short) + countWords(summary.full);
     onSummaryWordsChange(total);
   }, [summary, onSummaryWordsChange]);
+
+  // Mirror the local generating status up to VideoReader so the tab
+  // header can swap the (mid-stream-misleading) reading-time badge
+  // for a spinner. `'generating'` covers both the POST-driven path
+  // and the GET-tap-in path that flips into the same status when
+  // the mount fetch sees NDJSON.
+  useEffect(() => {
+    onSummaryGeneratingChange(status === 'generating');
+  }, [status, onSummaryGeneratingChange]);
 
   async function handleGenerate(targetFields?: SummaryField[]) {
     const fields = targetFields ?? [...ALL_FIELDS];
