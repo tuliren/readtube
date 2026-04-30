@@ -5,7 +5,7 @@
 -- Clean up rows that exist only to mark in-flight workflows so the
 -- NOT NULL restoration on Article.content doesn't fail.
 DELETE FROM "Article" WHERE "status" = 'GENERATING' AND "content" IS NULL;
-DELETE FROM "Summary" WHERE "status" = 'GENERATING';
+DELETE FROM "Summary" WHERE "status" = 'GENERATING' AND "headline" IS NULL AND "short" IS NULL AND "full" IS NULL;
 
 -- AlterTable: Summary
 ALTER TABLE "Summary"
