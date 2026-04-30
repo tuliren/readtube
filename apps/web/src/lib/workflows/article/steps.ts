@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { DEFAULT_AI_MODEL } from '@/constants';
 import { CURRENT_FRONTMATTER_VERSION, serializeMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { emitTerminalEvent } from '@/lib/workflows/emitTerminalEvent';
+import { clearArticleRunSlot } from '@/lib/workflows/runRegistry';
 
 export const ARTICLE_PROMPT_VERSION = 'v9';
 
@@ -172,6 +173,7 @@ export async function persistArticleStep(
       where: { id: existing.id },
       data: { ...articleData, generated_at: new Date() },
     });
+    await clearArticleRunSlot(prisma, input.transcriptId, input.style, input.language);
     return;
   }
   try {
@@ -198,11 +200,13 @@ export async function persistArticleStep(
           where: { id: raced.id },
           data: { ...articleData, generated_at: new Date() },
         });
+        await clearArticleRunSlot(prisma, input.transcriptId, input.style, input.language);
         return;
       }
     }
     throw err;
   }
+  await clearArticleRunSlot(prisma, input.transcriptId, input.style, input.language);
 }
 
 export async function emitTerminalEventStep(event: ArticleStreamEvent): Promise<void> {

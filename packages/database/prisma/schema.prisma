@@ -26,6 +26,11 @@ enum ArticleStyle {
   DIALOG
 }
 
+enum GenerationKind {
+  SUMMARY
+  ARTICLE
+}
+
 model User {
   id          String         @id @default(cuid())
   source_type UserSourceType @default(CLERK)
@@ -195,8 +200,9 @@ model Transcript {
   created_at DateTime @default(now())
   video      Video    @relation(fields: [video_id], references: [id], onDelete: Cascade)
 
-  articles  Article[]
-  summaries Summary[]
+  articles         Article[]
+  summaries        Summary[]
+  generation_runs  GenerationRun[]
 
   @@index([video_id], name: "transcript_index_on_video_id")
 }
@@ -259,6 +265,37 @@ model Summary {
   // (one row per (transcript_id, language) pair). Prisma can't model
   // partial indexes today, so we use findFirst + try/catch on writes.
   @@index([transcript_id, language], name: "Summary_transcript_id_language_idx")
+}
+
+// Tracks an in-flight Vercel Workflow run for a summary or article so a
+// second client (or the same client after a refresh) can tap into the
+// existing stream instead of starting a duplicate generation. The row
+// is created when the route first calls workflow `start()` and deleted
+// by the workflow's persist step on success — see
+// `apps/web/src/lib/workflows/runRegistry.ts` for the full lifecycle.
+//
+// `style` is set only for ARTICLE rows and stays null for SUMMARY (the
+// summary route generates all three fields together, so its slot is
+// keyed only by language). Uniqueness is enforced by partial unique
+// indexes in the migration — Prisma can't model "(NULL, NULL) is a
+// conflict" via @@unique today.
+model GenerationRun {
+  id            String         @id @default(cuid())
+  transcript_id String
+  kind          GenerationKind
+  // null = Original (matches Summary/Article semantics).
+  language      String?
+  // null for SUMMARY rows; set to the requested ArticleStyle for ARTICLE rows.
+  style         ArticleStyle?
+  // Vercel Workflow runId returned by `start()`. Subsequent readers
+  // call `getRun(run_id).getReadable({ startIndex: 0 })` to replay the
+  // stream from the beginning.
+  run_id        String
+  started_at    DateTime       @default(now())
+
+  transcript Transcript @relation(fields: [transcript_id], references: [id], onDelete: Cascade)
+
+  @@index([transcript_id, kind, language, style], name: "GenerationRun_lookup_idx")
 }
 
 // ───────────────────────────────────────────────────────────────────────────

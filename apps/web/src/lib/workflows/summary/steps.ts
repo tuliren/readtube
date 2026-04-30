@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { DEFAULT_AI_MODEL } from '@/constants';
 import { CURRENT_FRONTMATTER_VERSION, serializeMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { emitTerminalEvent } from '@/lib/workflows/emitTerminalEvent';
+import { clearSummaryRunSlot } from '@/lib/workflows/runRegistry';
 
 export const SUMMARY_PROMPT_VERSION = 'v8';
 
@@ -307,6 +308,7 @@ export async function persistSummaryStep(
       where: { id: existing.id },
       data: { ...summaryData, generated_at: new Date() },
     });
+    await clearSummaryRunSlot(prisma, transcriptId, language);
     return;
   }
   try {
@@ -324,11 +326,13 @@ export async function persistSummaryStep(
           where: { id: raced.id },
           data: { ...summaryData, generated_at: new Date() },
         });
+        await clearSummaryRunSlot(prisma, transcriptId, language);
         return;
       }
     }
     throw err;
   }
+  await clearSummaryRunSlot(prisma, transcriptId, language);
 }
 
 export async function emitTerminalEventStep(event: SummaryStreamEvent): Promise<void> {

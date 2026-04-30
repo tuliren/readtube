@@ -1,7 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { ArticleStyle, prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
-import { start } from 'workflow/api';
+import { getRun, start } from 'workflow/api';
 
 import { findOrCloneArticle, resolveTranscriptLanguage } from '@/lib/language/cache';
 import { buildLanguageRule } from '@/lib/language/prompt';
@@ -9,6 +9,8 @@ import { resolveTargetLanguage } from '@/lib/language/resolve';
 import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
 import { type ArticleStreamEvent, articleWorkflow } from '@/lib/workflows/article';
+import { claimArticleRun, findActiveArticleRun } from '@/lib/workflows/runRegistry';
+import { NDJSON_HEADERS, ndjsonResponseFromRun } from '@/lib/workflows/streamResponse';
 
 // Must be a literal — Next.js's route-segment-config analyzer can't
 // follow imports. See `GENERATION_MAX_DURATION_SECONDS` in
@@ -119,6 +121,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: 'Not cached' }, { status: 404 });
   }
 
+  // If a generation is in flight for this slot, tap into its stream
+  // instead of returning the cached row. See the summary route for
+  // the full rationale — same flow, same UX promise.
+  const activeRun = await findActiveArticleRun(prisma, transcript.id, style, target);
+  if (activeRun != null) {
+    console.info(
+      `[article/GET] Tapping into active run ${activeRun.runId} for video ${id} (style=${style}, language=${target ?? 'original'})`
+    );
+    return ndjsonResponseFromRun<ArticleStreamEvent>(activeRun.runId);
+  }
+
   const article = await findOrCloneArticle(prisma, transcript.id, style, target);
   if (!article) {
     console.error(
@@ -217,14 +230,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
   const transcript = ensured.transcript;
 
-  const encoder = new TextEncoder();
-  const emitLine = (controller: ReadableStreamDefaultController<Uint8Array>, event: object) => {
-    controller.enqueue(encoder.encode(JSON.stringify(event) + '\n'));
-  };
-  const ndjsonHeaders = {
-    'Content-Type': 'application/x-ndjson; charset=utf-8',
-    'Cache-Control': 'no-cache, no-transform',
-  } as const;
+  // If a generation is already running for this (transcript, style,
+  // target) slot, tap into the existing stream instead of starting a
+  // duplicate workflow. Skipped when `force` is set — the dev-only
+  // Regenerate button explicitly wants a fresh run, and tapping in
+  // would replay the in-flight one's content instead.
+  if (!force) {
+    const activeRun = await findActiveArticleRun(prisma, transcript.id, style, target);
+    if (activeRun != null) {
+      console.info(
+        `[article/POST] Tapping into active run ${activeRun.runId} for video ${id} (style=${style}, language=${target ?? 'original'})`
+      );
+      return ndjsonResponseFromRun<ArticleStreamEvent>(activeRun.runId);
+    }
+  }
 
   // Cache hit: replay the stored article as a single-event NDJSON
   // stream so the client's POST handler only has to know one wire
@@ -238,15 +257,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (cached) {
     const parsed = parseMarkdownDocument(cached.content);
     const hasLatex = parsed.properties.hasLatex === true;
+    const cachedEncoder = new TextEncoder();
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
-        emitLine(controller, { delta: parsed.content });
-        emitLine(controller, { hasLatex });
-        emitLine(controller, { type: 'done' });
+        const emit = (event: object) => {
+          controller.enqueue(cachedEncoder.encode(JSON.stringify(event) + '\n'));
+        };
+        emit({ delta: parsed.content });
+        emit({ hasLatex });
+        emit({ type: 'done' });
         controller.close();
       },
     });
-    return new Response(stream, { headers: ndjsonHeaders });
+    return new Response(stream, { headers: NDJSON_HEADERS });
   }
 
   const transcriptText = transcript.segments.map((s) => s.text).join(' ');
@@ -283,15 +306,26 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     },
   ]);
 
-  // The workflow's typed readable yields ArticleStreamEvent objects;
-  // re-encode as NDJSON so the client wire format is unchanged.
-  const ndjsonStream = (run.readable as ReadableStream<ArticleStreamEvent>).pipeThrough(
-    new TransformStream<ArticleStreamEvent, Uint8Array>({
-      transform(event, controller) {
-        controller.enqueue(encoder.encode(JSON.stringify(event) + '\n'));
-      },
-    })
-  );
+  // Claim the registry slot so future GETs / regen clicks tap in.
+  // Skipped when `force` is set — Regenerate requests intentionally
+  // run a fresh workflow without registering, so a third party
+  // glancing at the article tab doesn't yank itself off the cached
+  // stable copy onto the in-flight regen. On a concurrent claim
+  // race we cancel our own start and stream the winner.
+  if (!force) {
+    const claim = await claimArticleRun(prisma, transcript.id, style, target, run.runId);
+    if (!claim.weWon) {
+      console.info(
+        `[article/POST] Lost claim race; cancelling ${run.runId} and tapping into ${claim.winningRunId}`
+      );
+      try {
+        await getRun(run.runId).cancel();
+      } catch {
+        // ignore — the stray run will expire on its own
+      }
+      return ndjsonResponseFromRun<ArticleStreamEvent>(claim.winningRunId);
+    }
+  }
 
-  return new Response(ndjsonStream, { headers: ndjsonHeaders });
+  return ndjsonResponseFromRun<ArticleStreamEvent>(run.runId);
 }

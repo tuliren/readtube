@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 
 import { countWords } from '@/lib/format/wordCount';
 import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
+import { consumeNdjsonStream } from '@/lib/reader/consumeNdjsonStream';
 import { useFollowBottom } from '@/lib/reader/useFollowBottom';
 import { isProduction } from '@/lib/vercelEnv';
 
@@ -133,43 +134,148 @@ export default function SummaryReader({
 
     const fragment = languageQueryFragment(selectedLanguage);
     const url = `${apiBase}/${videoDbId}/summary?${fragment}`;
-    fetch(url)
-      .then(async (res) => {
-        if (cancelled) {
-          return;
-        }
-        if (res.status === 404 || !res.ok) {
-          setStatus('idle');
-          onSummaryAvailability(selectedLanguage, false);
-          return;
-        }
-        const data = (await res.json()) as SummaryData;
-        // Stored short/full rows carry a YAML frontmatter with
-        // hasLatex. Peel it off so the renderer sees plain markdown.
-        const shortDoc = parseMarkdownDocument(data.short ?? '');
-        const fullDoc = parseMarkdownDocument(data.full ?? '');
-        setSummary({
-          headline: data.headline,
-          short: shortDoc.frontmatterPending ? (data.short ?? null) : shortDoc.content,
-          full: fullDoc.frontmatterPending ? (data.full ?? null) : fullDoc.content,
-        });
-        setHasLatexByField({
-          short: shortDoc.properties.hasLatex === true,
-          full: fullDoc.properties.hasLatex === true,
-        });
-        setStatus('done');
-        // Cache hit — flip the parent's Summary tab dot to blue
-        // immediately, regardless of whether the user is currently
-        // looking at this tab. Also marks this language as available
-        // so VideoReader can show the Share button.
-        onSummaryAvailability(selectedLanguage, true);
-      })
-      .catch(() => {
+
+    (async () => {
+      let res: Response;
+      try {
+        res = await fetch(url);
+      } catch {
         if (!cancelled) {
           setStatus('idle');
           onSummaryAvailability(selectedLanguage, false);
         }
+        return;
+      }
+      if (cancelled) {
+        return;
+      }
+      if (res.status === 404 || !res.ok) {
+        setStatus('idle');
+        onSummaryAvailability(selectedLanguage, false);
+        return;
+      }
+
+      // The server tells us whether to expect a cached JSON row or an
+      // in-flight workflow stream by the Content-Type. NDJSON means
+      // there's an active workflow — we tap into its readable so the
+      // user sees live progress (and a refresh mid-generation lands
+      // on the live stream instead of the Generate button).
+      const contentType = res.headers.get('content-type') ?? '';
+      if (contentType.includes('application/x-ndjson')) {
+        if (res.body == null) {
+          setErrorMessage('No response body from server.');
+          setStatus('error');
+          return;
+        }
+
+        // Switch into the same streaming UX that handleGenerate uses
+        // — empty fields with skeletons until deltas arrive. All three
+        // fields are considered "regenerating" since the active run
+        // is a full-generate (per-field regenerates aren't registered
+        // in the run registry).
+        setStatus('generating');
+        setRegeneratingFields([...ALL_FIELDS]);
+        setSummary({ headline: '', short: '', full: '' });
+
+        const accumulated: Record<SummaryField, string> = {
+          headline: '',
+          short: '',
+          full: '',
+        };
+        let sawDone = false;
+        let streamError: string | null = null;
+
+        await consumeNdjsonStream(res.body, (event) => {
+          if (typeof event !== 'object' || event === null) {
+            return;
+          }
+          const e = event as {
+            field?: SummaryField;
+            delta?: string;
+            hasLatex?: boolean;
+            error?: string;
+            type?: string;
+          };
+          if (e.type === 'done') {
+            sawDone = true;
+            return;
+          }
+          if (e.field != null && typeof e.delta === 'string') {
+            accumulated[e.field] += e.delta;
+            const fieldName = e.field;
+            const fieldValue = accumulated[fieldName];
+            setSummary((prev) => ({
+              headline: prev?.headline ?? null,
+              short: prev?.short ?? null,
+              full: prev?.full ?? null,
+              [fieldName]: fieldValue,
+            }));
+          } else if (e.field != null && typeof e.hasLatex === 'boolean') {
+            const fieldName = e.field;
+            if (fieldName === 'short' || fieldName === 'full') {
+              const flag = e.hasLatex;
+              setHasLatexByField((prev) => ({ ...prev, [fieldName]: flag }));
+            }
+          } else if (typeof e.error === 'string') {
+            streamError = e.error;
+          }
+        });
+
+        if (cancelled) {
+          return;
+        }
+        if (streamError != null) {
+          setErrorMessage(streamError);
+          setStatus('error');
+          setRegeneratingFields([]);
+          return;
+        }
+        if (!sawDone) {
+          setErrorMessage(
+            'Generation ended unexpectedly. Please refresh in a moment, or try again.'
+          );
+          setStatus('error');
+          setRegeneratingFields([]);
+          return;
+        }
+        const anyContent = ALL_FIELDS.some((f) => accumulated[f].trim().length > 0);
+        if (!anyContent) {
+          setErrorMessage('No content was generated. Please try again.');
+          setStatus('error');
+          setRegeneratingFields([]);
+          return;
+        }
+        setStatus('done');
+        setRegeneratingFields([]);
+        onSummaryAvailability(selectedLanguage, true);
+        return;
+      }
+
+      // application/json — cached Summary row.
+      const data = (await res.json()) as SummaryData;
+      if (cancelled) {
+        return;
+      }
+      // Stored short/full rows carry a YAML frontmatter with
+      // hasLatex. Peel it off so the renderer sees plain markdown.
+      const shortDoc = parseMarkdownDocument(data.short ?? '');
+      const fullDoc = parseMarkdownDocument(data.full ?? '');
+      setSummary({
+        headline: data.headline,
+        short: shortDoc.frontmatterPending ? (data.short ?? null) : shortDoc.content,
+        full: fullDoc.frontmatterPending ? (data.full ?? null) : fullDoc.content,
       });
+      setHasLatexByField({
+        short: shortDoc.properties.hasLatex === true,
+        full: fullDoc.properties.hasLatex === true,
+      });
+      setStatus('done');
+      // Cache hit — flip the parent's Summary tab dot to blue
+      // immediately, regardless of whether the user is currently
+      // looking at this tab. Also marks this language as available
+      // so VideoReader can show the Share button.
+      onSummaryAvailability(selectedLanguage, true);
+    })();
 
     return () => {
       cancelled = true;
