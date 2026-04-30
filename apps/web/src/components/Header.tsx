@@ -10,16 +10,26 @@ import { Logo } from '@/components/Logo';
 import ThemeSelector from '@/components/settings/ThemeSelector';
 import { TITLE } from '@/constants';
 
-export default function Header() {
+interface Props {
+  /** On non-marketing pages (e.g. the public share view) the in-page
+   *  Features / FAQ anchors don't resolve, so the header swaps them
+   *  for a single Home link back to the marketing root. */
+  variant?: 'marketing' | 'compact';
+}
+
+export default function Header({ variant = 'marketing' }: Props = {}) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { isSignedIn } = useAuth();
 
-  const navigation = [
-    { name: 'Features', href: '#features' },
-    // { name: 'Pricing', href: '#pricing' },
-    { name: 'FAQ', href: '#faq' },
-    ...(isSignedIn ? [{ name: 'Inbox', href: '/inbox' }] : []),
-  ];
+  const navigation =
+    variant === 'compact'
+      ? [{ name: 'Home', href: '/' }, ...(isSignedIn ? [{ name: 'Inbox', href: '/inbox' }] : [])]
+      : [
+          { name: 'Features', href: '#features' },
+          // { name: 'Pricing', href: '#pricing' },
+          { name: 'FAQ', href: '#faq' },
+          ...(isSignedIn ? [{ name: 'Inbox', href: '/inbox' }] : []),
+        ];
 
   const linkClass = 'font-semibold leading-6 text-slate-700 dark:text-slate-200';
   const mobileLinkClass =
