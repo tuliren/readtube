@@ -282,6 +282,7 @@ export default function SummaryReader({
       const accumulated: Record<SummaryField, string> = { headline: '', short: '', full: '' };
       let buffer = '';
       let streamError: string | null = null;
+      let sawDone = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -312,6 +313,7 @@ export default function SummaryReader({
           }
 
           if (event.type === 'done') {
+            sawDone = true;
             continue;
           }
           if (event.field && typeof event.delta === 'string') {
@@ -343,6 +345,14 @@ export default function SummaryReader({
 
       if (streamError) {
         setErrorMessage(streamError);
+        setStatus('error');
+        setRegeneratingFields([]);
+        return;
+      }
+      if (!sawDone) {
+        // See ArticleReader for the rationale — stream closed without
+        // an explicit terminator, don't trust accumulated content.
+        setErrorMessage('Generation ended unexpectedly. Please refresh in a moment, or try again.');
         setStatus('error');
         setRegeneratingFields([]);
         return;

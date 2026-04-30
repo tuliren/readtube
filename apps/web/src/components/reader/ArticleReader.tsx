@@ -214,6 +214,7 @@ export default function ArticleReader({
       let buffer = '';
       let accumulated = '';
       let sawError: string | null = null;
+      let sawDone = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -249,11 +250,26 @@ export default function ArticleReader({
           if (typeof event.error === 'string') {
             sawError = event.error;
           }
+          if (event.type === 'done') {
+            sawDone = true;
+          }
         }
       }
 
       if (sawError != null) {
         setErrorMessage(sawError);
+        setStatus('error');
+        return;
+      }
+      if (!sawDone) {
+        // Stream closed without an explicit terminator. Could be a
+        // workflow-runtime hiccup, a function timeout that bypassed
+        // the terminal step, or a network drop. Don't trust the
+        // accumulated content as a finished article — the workflow
+        // may still be running and persisting in the background, and
+        // a refresh will pick it up via the existing-article GET if
+        // it does land.
+        setErrorMessage('Generation ended unexpectedly. Please refresh in a moment, or try again.');
         setStatus('error');
         return;
       }
