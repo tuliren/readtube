@@ -465,7 +465,9 @@ export default function VideoReader({
         )}
 
         {/* Article */}
-        <article className="mx-auto w-full max-w-3xl px-6 py-8">
+        <article
+          className={`mx-auto w-full max-w-3xl px-6 pt-8 ${footerSlot != null ? 'pb-4' : 'pb-8'}`}
+        >
           {/* Meta: video title */}
           <h1 className="text-2xl font-bold leading-tight text-foreground">
             {video.thumbnailUrl != null && (
