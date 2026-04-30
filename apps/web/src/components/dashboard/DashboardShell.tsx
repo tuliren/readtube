@@ -418,20 +418,6 @@ function MobileTopBar({
  * paths (/videos, /videos/standalone, /videos/playlists/*) that
  * already keep their caches in sync via useTriage.
  */
-function useCloseDrawerOnNavigate(setMobileOpen: (open: boolean) => void) {
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const search = searchParams.toString();
-  const initial = useRef(true);
-  useEffect(() => {
-    if (initial.current) {
-      initial.current = false;
-      return;
-    }
-    setMobileOpen(false);
-  }, [pathname, search, setMobileOpen]);
-}
-
 function useReaderUnreadSync(revalidate: () => void) {
   const pathname = usePathname();
   const readerVideoId = useMemo(() => {
@@ -451,6 +437,20 @@ function useReaderUnreadSync(revalidate: () => void) {
     }
     revalidate();
   }, [readerVideoId, revalidate]);
+}
+
+function useCloseDrawerOnNavigate(setMobileOpen: (open: boolean) => void) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const search = searchParams.toString();
+  const initial = useRef(true);
+  useEffect(() => {
+    if (initial.current) {
+      initial.current = false;
+      return;
+    }
+    setMobileOpen(false);
+  }, [pathname, search, setMobileOpen]);
 }
 
 /**
