@@ -2,22 +2,30 @@ import { languageNameForPrompt } from './names';
 
 /**
  * Build the leading-position language rule that prepends every summary
- * and article prompt. When `target` is null, fall back to the original
- * "match the transcript" wording — that's how Original rows are
- * generated. When `target` is a BCP-47 code, force the model to write in
- * that language regardless of transcript source. The instruction is
- * phrased as a hard, leading constraint because the longer prompts have
- * historically slipped back into English when the rule was buried at
- * the end.
+ * and article prompt. When `target` is a BCP-47 code, force the model
+ * to write in that language regardless of transcript source. When
+ * `target` is null ("Original"), the caller should pre-detect the
+ * transcript's source language server-side (see
+ * resolveTranscriptLanguage) and pass it as `sourceLanguage` so the
+ * rule can name the language explicitly — leaving the model to detect
+ * from the prompt body has historically been unreliable on transcripts
+ * with mixed scripts, heavy code-switching, or non-Latin punctuation,
+ * and the model would sometimes pick a neighboring language (Spanish
+ * for English, Korean for Japanese, etc.). Falls back to English when
+ * detection was inconclusive — better a deterministic fallback than
+ * gambling on the model's guess.
+ *
+ * The instruction is phrased as a hard, leading constraint because the
+ * longer prompts have historically slipped back into English when the
+ * rule was buried at the end.
  */
-export function buildLanguageRule(target: string | null): string {
+export function buildLanguageRule(target: string | null, sourceLanguage?: string | null): string {
   if (target == null) {
-    // Don't enumerate specific languages here — earlier wording listed
-    // Chinese / Japanese / Spanish as examples and the model would
-    // sometimes latch onto one of those names instead of detecting from
-    // the transcript text. Pure detection instruction, no example
-    // anchors.
-    return `CRITICAL LANGUAGE REQUIREMENT: Every word of your output — every sentence, every bullet, every title — MUST be written in the exact same natural language as the transcript below. Detect the transcript's language from its content and write in THAT language. Do not translate. Do not mix languages. Apply this rule before anything else below.`;
+    // "Original" — server-detected source language, defaulting to
+    // English on inconclusive detection.
+    const code = sourceLanguage ?? 'en';
+    const name = languageNameForPrompt(code);
+    return `CRITICAL LANGUAGE REQUIREMENT: Every word of your output — every sentence, every bullet, every title — MUST be written in ${name}, matching the transcript's source language. Do not translate. Do not mix languages. Do not switch to English (or any other language) for headings, labels, or framing words. Apply this rule before anything else below.`;
   }
   const name = languageNameForPrompt(target);
   return `CRITICAL LANGUAGE REQUIREMENT: Every word of your output — every sentence, every bullet, every title — MUST be written in ${name}, regardless of the transcript's source language. Translate as needed. Do not mix languages. Do not output any text in the transcript's original language. Apply this rule before anything else below.`;

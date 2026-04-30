@@ -3,7 +3,7 @@ import { prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 import { start } from 'workflow/api';
 
-import { findOrCloneSummary } from '@/lib/language/cache';
+import { findOrCloneSummary, resolveTranscriptLanguage } from '@/lib/language/cache';
 import { buildLanguageRule } from '@/lib/language/prompt';
 import { resolveTargetLanguage } from '@/lib/language/resolve';
 import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
@@ -35,11 +35,12 @@ Output only the title itself, nothing else.`,
 function buildPrompt(
   kind: SummaryField,
   target: string | null,
+  sourceLanguage: string | null,
   title: string,
   channelName: string,
   transcript: string
 ) {
-  return `${buildLanguageRule(target)}
+  return `${buildLanguageRule(target, sourceLanguage)}
 
 ${PROMPT_BODIES[kind]}
 
@@ -247,13 +248,32 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     });
   }
 
+  // For "Original" requests, detect the transcript's source language
+  // server-side and feed it to the prompt builder. Asking the model
+  // to detect from the transcript body has been unreliable on
+  // transcripts with mixed scripts or heavy code-switching — it would
+  // sometimes pick a neighboring language (Spanish for English,
+  // Korean for Japanese, etc.). Falls back to English when franc
+  // can't decide; deterministic and predictable beats a coin flip.
+  // Skipped for explicit target-language requests since those force
+  // translation anyway and don't care about the source.
+  const sourceLanguage =
+    target == null ? await resolveTranscriptLanguage(prisma, transcript.id) : null;
+
   // Run generation as a Vercel Workflow so it survives the request
   // lifecycle — see the article route for the full rationale.
   const run = await start(summaryWorkflow, [
     {
       fields: fieldsToGenerate.map((field) => ({
         field,
-        prompt: buildPrompt(field, target, video.title, video.channel.name, transcriptText),
+        prompt: buildPrompt(
+          field,
+          target,
+          sourceLanguage,
+          video.title,
+          video.channel.name,
+          transcriptText
+        ),
       })),
       transcriptId: transcript.id,
       language: target,

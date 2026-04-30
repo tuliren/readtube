@@ -1,21 +1,42 @@
 import { buildLanguageRule, parseLanguageQuery } from '@/lib/language/prompt';
 
 describe('buildLanguageRule', () => {
-  it('returns the "match transcript" rule when target is null', () => {
-    const rule = buildLanguageRule(null);
-    expect(rule).toMatch(/same natural language as the transcript/i);
+  it('uses the explicit source language for Original requests', () => {
+    // Caller pre-detected English from the transcript and passed it
+    // through. Prompt should name the language explicitly so the model
+    // doesn't have to guess from the transcript body.
+    const rule = buildLanguageRule(null, 'en');
+    expect(rule).toContain('MUST be written in English');
+    expect(rule).toMatch(/matching the transcript's source language/i);
     expect(rule).toMatch(/CRITICAL LANGUAGE REQUIREMENT/);
+    expect(rule).toMatch(/Do not translate/i);
   });
 
-  it.each([['Chinese'], ['Japanese'], ['Spanish'], ['English'], ['French'], ['German']])(
-    'does not enumerate %s in the Original-target rule',
-    (langName) => {
-      // Earlier wording listed Chinese/Japanese/Spanish as examples and
-      // the model would sometimes latch onto one of those names instead
-      // of detecting from the transcript. Lock the regression out.
-      expect(buildLanguageRule(null)).not.toContain(langName);
+  it.each([
+    { source: 'ja', expectedName: 'Japanese' },
+    { source: 'es', expectedName: 'Spanish' },
+    { source: 'zh', expectedName: 'Chinese' },
+    { source: 'ko', expectedName: 'Korean' },
+    { source: 'fr', expectedName: 'French' },
+    { source: 'ar', expectedName: 'Arabic' },
+  ])(
+    'names $expectedName when source language is $source for an Original request',
+    ({ source, expectedName }) => {
+      expect(buildLanguageRule(null, source)).toContain(`MUST be written in ${expectedName}`);
     }
   );
+
+  it.each([
+    { label: 'null source', source: null },
+    { label: 'undefined source', source: undefined },
+  ] as const)('defaults to English when target is null and source is $label', ({ source }) => {
+    // Detection inconclusive — better a deterministic fallback than
+    // asking the model to guess. English is the safest default for
+    // this user base.
+    const rule = buildLanguageRule(null, source);
+    expect(rule).toContain('MUST be written in English');
+    expect(rule).toMatch(/matching the transcript's source language/i);
+  });
 
   it.each([
     { target: 'en', expectedName: 'English' },
@@ -30,6 +51,14 @@ describe('buildLanguageRule', () => {
 
   it('falls back to the raw code for unknown target languages', () => {
     expect(buildLanguageRule('fr-CA')).toContain('MUST be written in fr-CA');
+  });
+
+  it('ignores sourceLanguage when target is set (translation requests)', () => {
+    // Target overrides source — caller asked for translation, source
+    // is irrelevant here.
+    const rule = buildLanguageRule('en', 'ja');
+    expect(rule).toContain('MUST be written in English');
+    expect(rule).not.toContain('Japanese');
   });
 });
 
