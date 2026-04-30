@@ -3,7 +3,7 @@ import { ArticleStyle, prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 import { start } from 'workflow/api';
 
-import { findOrCloneArticle } from '@/lib/language/cache';
+import { findOrCloneArticle, resolveTranscriptLanguage } from '@/lib/language/cache';
 import { buildLanguageRule } from '@/lib/language/prompt';
 import { resolveTargetLanguage } from '@/lib/language/resolve';
 import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
@@ -25,6 +25,7 @@ function parseStyle(raw: string | null | undefined): ArticleStyle | null {
 function buildPrompt(
   style: ArticleStyle,
   target: string | null,
+  sourceLanguage: string | null,
   title: string,
   channelName: string,
   transcript: string
@@ -35,7 +36,7 @@ function buildPrompt(
 - If there's only one speaker, format as a reflective monologue with paragraph breaks.`
       : `- Reformat the transcript as an article in GitHub Flavored Markdown. This is a re-formatting task, not a rewriting or summarization task.`;
 
-  return `${buildLanguageRule(target)}
+  return `${buildLanguageRule(target, sourceLanguage)}
 
 You are an expert editor turning video transcripts into clean, well-formatted articles.
 
@@ -244,6 +245,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const transcriptText = transcript.segments.map((s) => s.text).join(' ');
 
+  // For "Original" requests, detect the transcript's source language
+  // server-side and feed it to the prompt builder. See the matching
+  // call in the summary route for the rationale — this avoids relying
+  // on the model to detect from prompt body, which has been unreliable
+  // on transcripts with mixed scripts or heavy code-switching. Falls
+  // back to English when franc can't decide. Skipped for explicit
+  // target-language requests since those force translation anyway.
+  const sourceLanguage =
+    target == null ? await resolveTranscriptLanguage(prisma, transcript.id) : null;
+
   // Run generation as a Vercel Workflow so it survives the request
   // lifecycle: even if the client closes the tab mid-stream, the
   // workflow keeps running, persists the row on completion, and the
@@ -252,7 +263,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // touches the DB, so a half-streamed article never lands.
   const run = await start(articleWorkflow, [
     {
-      prompt: buildPrompt(style, target, video.title, video.channel.name, transcriptText),
+      prompt: buildPrompt(
+        style,
+        target,
+        sourceLanguage,
+        video.title,
+        video.channel.name,
+        transcriptText
+      ),
       transcriptId: transcript.id,
       style,
       language: target,

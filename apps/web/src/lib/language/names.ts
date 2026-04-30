@@ -42,13 +42,56 @@ export function findTargetLanguage(code: string): TargetLanguage | null {
   return TARGET_LANGUAGE_MAP.get(code) ?? null;
 }
 
+// Wider fallback dictionary used by `languageNameForPrompt` for codes
+// that aren't in the curated picker list. Source-language detection
+// (`franc` → BCP-47 collapse) emits codes from a much wider set than
+// the picker offers — most importantly bare `zh` for Chinese (script
+// is ambiguous when detected from text) and a long tail of languages
+// the picker doesn't translate to but transcripts may still be in.
+// Falling through to the raw code (e.g. "zh", "ar") in a prompt
+// reads as a typo to the model and leaves room for misinterpretation,
+// so resolve to plain English names where we know them.
+const SOURCE_LANGUAGE_NAMES: Record<string, string> = {
+  zh: 'Chinese',
+  ar: 'Arabic',
+  hi: 'Hindi',
+  vi: 'Vietnamese',
+  th: 'Thai',
+  tr: 'Turkish',
+  pl: 'Polish',
+  nl: 'Dutch',
+  sv: 'Swedish',
+  no: 'Norwegian',
+  da: 'Danish',
+  fi: 'Finnish',
+  cs: 'Czech',
+  el: 'Greek',
+  he: 'Hebrew',
+  id: 'Indonesian',
+  ms: 'Malay',
+  uk: 'Ukrainian',
+  ro: 'Romanian',
+  hu: 'Hungarian',
+  fa: 'Persian',
+  bn: 'Bengali',
+  ta: 'Tamil',
+  te: 'Telugu',
+  ur: 'Urdu',
+};
+
 /**
  * Resolve a BCP-47 code to a human-readable English name suitable for
- * dropping into a prompt. Falls back to the raw code so unknown languages
- * still produce a coherent instruction (the model handles "fr-CA" fine).
+ * dropping into a prompt. Tries the curated picker list first, then
+ * the wider source-language fallback dictionary, then falls back to
+ * the raw code so unknown languages still produce a coherent
+ * instruction (the model handles "fr-CA" fine).
  */
 export function languageNameForPrompt(code: string): string {
-  return findTargetLanguage(code)?.englishName ?? code;
+  const direct = findTargetLanguage(code);
+  if (direct != null) {
+    return direct.englishName;
+  }
+  return SOURCE_LANGUAGE_NAMES[code.toLowerCase()] ?? code;
 }
 
 // Three-letter ISO 639-3 → two-letter ISO 639-1 collapse for codes the
