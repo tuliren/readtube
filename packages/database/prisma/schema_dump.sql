@@ -10,6 +10,12 @@ CREATE TYPE "VideoPlatformType" AS ENUM('YOUTUBE', 'BILIBILI');
 -- CreateEnum
 CREATE TYPE "ArticleStyle" AS ENUM('NARRATIVE', 'DIALOG');
 
+-- CreateEnum
+CREATE TYPE "GenerationStatus" AS ENUM('GENERATING', 'READY');
+
+-- CreateEnum
+CREATE TYPE "ChannelStatus" AS ENUM('REFRESHING', 'READY');
+
 -- CreateTable
 CREATE TABLE "User" (
   "id" TEXT NOT NULL,
@@ -38,6 +44,8 @@ CREATE TABLE "Channel" (
   "verified" BOOLEAN NOT NULL DEFAULT false,
   "logo_url" TEXT,
   "checked_at" TIMESTAMP(3),
+  "status" "ChannelStatus" NOT NULL DEFAULT 'READY',
+  "workflow_id" TEXT,
   CONSTRAINT "Channel_pkey" PRIMARY KEY ("id")
 );
 
@@ -109,10 +117,12 @@ CREATE TABLE "Article" (
   "style" "ArticleStyle" NOT NULL,
   "prompt_version" TEXT NOT NULL,
   "model" TEXT NOT NULL,
-  "content" TEXT NOT NULL,
+  "content" TEXT,
   "usage" JSONB,
   "generated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "language" TEXT,
+  "status" "GenerationStatus" NOT NULL DEFAULT 'READY',
+  "workflow_id" TEXT,
   CONSTRAINT "Article_pkey" PRIMARY KEY ("id")
 );
 
@@ -128,6 +138,8 @@ CREATE TABLE "Summary" (
   "usage" JSONB,
   "generated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "language" TEXT,
+  "status" "GenerationStatus" NOT NULL DEFAULT 'READY',
+  "workflow_id" TEXT,
   CONSTRAINT "Summary_pkey" PRIMARY KEY ("id")
 );
 

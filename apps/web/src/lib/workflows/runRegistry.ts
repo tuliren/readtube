@@ -1,4 +1,10 @@
-import { type ArticleStyle, GenerationStatus, Prisma, type PrismaClient } from '@readtube/database';
+import {
+  type ArticleStyle,
+  ChannelStatus,
+  GenerationStatus,
+  Prisma,
+  type PrismaClient,
+} from '@readtube/database';
 import { getRun } from 'workflow/api';
 
 /**
@@ -346,5 +352,92 @@ export async function revertArticleRow(
   await prisma.article.update({
     where: { id: row.id },
     data: { status: GenerationStatus.READY },
+  });
+}
+
+/**
+ * Detects an in-flight refresh on a Channel row. Mirrors
+ * `findActiveSummaryRun` / `findActiveArticleRun` but specialized for
+ * the `Channel.status = REFRESHING` case used by the manual refresh
+ * route and the cron's per-channel claim.
+ *
+ * Returns the runId of an active refresh workflow if one is currently
+ * running. Returns null when:
+ *   - the channel doesn't exist,
+ *   - the channel is `READY`,
+ *   - the channel is `REFRESHING` but its workflow is no longer active
+ *     (timed out / crashed / expired). In this case the row is
+ *     opportunistically reverted to `READY` so the caller can proceed
+ *     with a fresh claim. The revert is guarded on `workflow_id` so a
+ *     concurrent fresh claim by a different caller isn't clobbered.
+ */
+export async function findActiveChannelRefresh(
+  prisma: PrismaClient,
+  channelId: string
+): Promise<{ runId: string } | null> {
+  const row = await prisma.channel.findUnique({
+    where: { id: channelId },
+    select: { status: true, workflow_id: true },
+  });
+  if (row == null || row.status !== ChannelStatus.REFRESHING || row.workflow_id == null) {
+    return null;
+  }
+  if (await isWorkflowActive(row.workflow_id)) {
+    return { runId: row.workflow_id };
+  }
+  // Stale REFRESHING marker — workflow died without flipping back.
+  // Channel rows always retain valid metadata even mid-refresh
+  // (unlike Article/Summary which can have NULL content), so we just
+  // flip status back to READY without touching `checked_at`. The
+  // workflow_id is left pointing at the failed run for trace.
+  await prisma.channel.updateMany({
+    where: {
+      id: channelId,
+      status: ChannelStatus.REFRESHING,
+      workflow_id: row.workflow_id,
+    },
+    data: { status: ChannelStatus.READY },
+  });
+  return null;
+}
+
+/**
+ * Atomic claim helper for refresh workflows. Flips a channel row from
+ * `READY` to `REFRESHING` and stamps `workflow_id`. Returns true if
+ * the claim won, false if the row wasn't `READY` (meaning another
+ * refresh workflow currently owns it).
+ *
+ * Callers are responsible for calling `findActiveChannelRefresh`
+ * first to deal with stale REFRESHING markers — this helper does NOT
+ * recover them, it only succeeds against a clean READY row.
+ */
+export async function claimChannelRefresh(
+  prisma: PrismaClient,
+  channelId: string,
+  runId: string
+): Promise<boolean> {
+  const result = await prisma.channel.updateMany({
+    where: { id: channelId, status: ChannelStatus.READY },
+    data: { status: ChannelStatus.REFRESHING, workflow_id: runId },
+  });
+  return result.count === 1;
+}
+
+/**
+ * Release a channel from `REFRESHING` back to `READY`. Guarded on
+ * `workflow_id = runId` so callers don't accidentally release a row
+ * that's been claimed by another concurrent workflow (shouldn't
+ * happen in practice — claim is exclusive — but the guard makes the
+ * release safe under unexpected interleaving). `workflow_id` is left
+ * in place for audit.
+ */
+export async function releaseChannelRefresh(
+  prisma: PrismaClient,
+  channelId: string,
+  runId: string
+): Promise<void> {
+  await prisma.channel.updateMany({
+    where: { id: channelId, workflow_id: runId, status: ChannelStatus.REFRESHING },
+    data: { status: ChannelStatus.READY },
   });
 }

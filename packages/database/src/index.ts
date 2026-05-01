@@ -8,6 +8,7 @@ export {
   Prisma,
   PrismaClient,
   ArticleStyle,
+  ChannelStatus,
   GenerationStatus,
   UserSourceType,
   VideoPlatformType,
