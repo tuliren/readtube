@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { mutate } from 'swr';
@@ -18,6 +19,11 @@ import {
 interface Props {
   /** The channel being removed. Null hides the dialog. */
   target: { id: string; name: string } | null;
+  /** The channel currently being viewed, if any. When the user
+   *  removes the channel they're currently on, the channel page
+   *  would 404 on next load — redirect to /inbox so they land
+   *  somewhere valid. */
+  currentChannelId: string | null;
   onClose: () => void;
 }
 
@@ -26,7 +32,8 @@ interface Props {
  * This only deletes the user's subscription — the channel and its
  * videos remain in the database for other users.
  */
-export default function RemoveChannelDialog({ target, onClose }: Props) {
+export default function RemoveChannelDialog({ target, currentChannelId, onClose }: Props) {
+  const router = useRouter();
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -45,11 +52,15 @@ export default function RemoveChannelDialog({ target, onClose }: Props) {
       if (!res.ok) {
         throw new Error(`Failed (${res.status})`);
       }
+      const removedCurrent = target.id === currentChannelId;
       void mutate((key: unknown) => typeof key === 'string' && key.startsWith('/api/'), undefined, {
         revalidate: true,
       });
       toast.success(`Removed ${target.name}`);
       onClose();
+      if (removedCurrent) {
+        router.push('/inbox');
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to remove channel');
     } finally {
