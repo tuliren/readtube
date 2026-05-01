@@ -156,7 +156,11 @@ export default function VideosSection({ onAddVideo }: Props) {
         onCreated={() => void mutatePlaylists()}
       />
       <RenamePlaylistDialog target={renameTarget} onClose={() => setRenameTarget(null)} />
-      <DeletePlaylistDialog target={deleteTarget} onClose={() => setDeleteTarget(null)} />
+      <DeletePlaylistDialog
+        target={deleteTarget}
+        currentPlaylistId={activePlaylistId}
+        onClose={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

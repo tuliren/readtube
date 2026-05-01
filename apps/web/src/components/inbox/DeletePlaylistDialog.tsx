@@ -19,6 +19,11 @@ import {
 interface Props {
   /** The playlist being deleted. Null hides the dialog. */
   target: { id: string; name: string } | null;
+  /** The playlist currently being viewed, if any. When the user
+   *  deletes the playlist they're currently on, the playlist page
+   *  would 404 on next load — bounce them back to the Standalone
+   *  library so they land somewhere valid. */
+  currentPlaylistId: string | null;
   onClose: () => void;
 }
 
@@ -28,7 +33,7 @@ interface Props {
  * rows and the user's StandaloneVideo entries remain — only the
  * grouping goes away.
  */
-export default function DeletePlaylistDialog({ target, onClose }: Props) {
+export default function DeletePlaylistDialog({ target, currentPlaylistId, onClose }: Props) {
   const [busy, setBusy] = useState(false);
   const router = useRouter();
 
@@ -48,14 +53,13 @@ export default function DeletePlaylistDialog({ target, onClose }: Props) {
       if (!res.ok) {
         throw new Error(`Failed (${res.status})`);
       }
+      const deletedCurrent = target.id === currentPlaylistId;
       void mutate((key: unknown) => typeof key === 'string' && key.startsWith('/api/'), undefined, {
         revalidate: true,
       });
       toast.success(`Deleted ${target.name}`);
       onClose();
-      // If the user was viewing the deleted playlist, bounce them back
-      // to the Standalone library so they don't see a 404.
-      if (window.location.pathname.startsWith(`/videos/playlists/${target.id}`)) {
+      if (deletedCurrent) {
         router.push('/videos/standalone');
       }
     } catch (err) {
