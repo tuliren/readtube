@@ -5,7 +5,7 @@
  * re-fetch when the user adds a channel whose row already exists as
  * a shadow from the add-video / add-playlist flow).
  */
-export const STALE_DAYS = 5;
+export const STALE_DAYS = 1;
 
 /**
  * Minimum gap between user-triggered manual refreshes for a channel.
