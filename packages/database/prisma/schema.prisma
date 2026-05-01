@@ -40,6 +40,20 @@ enum GenerationStatus {
   READY
 }
 
+// Lifecycle state for a Channel row's refresh workflow. REFRESHING
+// means a manual or cron refresh workflow is currently fetching the
+// upstream snapshot and upserting videos. READY means the row is
+// not currently being refreshed (it may still be stale by
+// `checked_at`; READY just says "no workflow is touching it now").
+//
+// Used purely for refresh dedup: two refresh paths must not run
+// concurrently against the same row. The add-channel path uses
+// idempotent upserts and never reads/writes these columns.
+enum ChannelStatus {
+  REFRESHING
+  READY
+}
+
 model User {
   id          String         @id @default(cuid())
   source_type UserSourceType @default(CLERK)
@@ -94,6 +108,15 @@ model Channel {
   created_at  DateTime          @default(now())
   updated_at  DateTime          @updatedAt
   checked_at  DateTime?
+  // Refresh dedup state — see ChannelStatus enum comment. Driven only
+  // by the manual single-channel refresh route and the cron's per-row
+  // step; the add-channel path leaves these alone (its upsert is
+  // idempotent against a concurrent refresh).
+  status      ChannelStatus     @default(READY)
+  // Workflow run id of the most recent refresh attempt. Kept on
+  // success (audit trail) and on failure (used by the next caller to
+  // detect a stale REFRESHING marker via getRun(workflow_id).status).
+  workflow_id String?
 
   videos        Video[]
   subscriptions UserSubscription[]
