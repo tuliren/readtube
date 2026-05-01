@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/refresh-channels",
-      "schedule": "*/5 * * * *"
+      "schedule": "*/30 * * * *"
     }
   ]
 }

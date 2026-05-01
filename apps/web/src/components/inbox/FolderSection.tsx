@@ -191,6 +191,7 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
         })}
         <RemoveChannelDialog
           target={pendingRemoveChannel}
+          currentChannelId={selectedChannelId}
           onClose={() => setPendingRemoveChannel(null)}
         />
       </div>
@@ -327,6 +328,7 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
       <DeleteFolderDialog target={pendingDelete} onClose={() => setPendingDelete(null)} />
       <RemoveChannelDialog
         target={pendingRemoveChannel}
+        currentChannelId={selectedChannelId}
         onClose={() => setPendingRemoveChannel(null)}
       />
 
