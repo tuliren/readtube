@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { mutate } from 'swr';
@@ -19,10 +19,14 @@ import {
 interface Props {
   /** The channel being removed. Null hides the dialog. */
   target: { id: string; name: string } | null;
-  /** The channel currently being viewed, if any. When the user
-   *  removes the channel they're currently on, the channel page
-   *  would 404 on next load — redirect to /inbox so they land
-   *  somewhere valid. */
+  /** The channel page slug currently highlighted in the sidebar, if
+   *  any. Used together with the pathname to decide whether the user
+   *  is actively on the deleted channel's page (in which case we
+   *  redirect to /inbox to avoid a 404). We deliberately *don't*
+   *  redirect when the sidebar highlight comes from a `returnTo` on
+   *  a video reader page — unsubscribing leaves the underlying Video
+   *  row intact, so the reader is still valid and bouncing the user
+   *  to /inbox would interrupt their reading. */
   currentChannelId: string | null;
   onClose: () => void;
 }
@@ -34,6 +38,7 @@ interface Props {
  */
 export default function RemoveChannelDialog({ target, currentChannelId, onClose }: Props) {
   const router = useRouter();
+  const pathname = usePathname();
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -52,7 +57,8 @@ export default function RemoveChannelDialog({ target, currentChannelId, onClose 
       if (!res.ok) {
         throw new Error(`Failed (${res.status})`);
       }
-      const removedCurrent = target.id === currentChannelId;
+      const removedCurrent =
+        target.id === currentChannelId && pathname?.startsWith('/channels/') === true;
       void mutate((key: unknown) => typeof key === 'string' && key.startsWith('/api/'), undefined, {
         revalidate: true,
       });
