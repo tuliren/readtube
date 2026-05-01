@@ -10,6 +10,7 @@ import type { StaleChannel } from '@/lib/workflows/refresh-channels/steps';
 import {
   BATCH_SIZE,
   fetchStaleChannels,
+  recoverStaleRefreshingChannels,
   refreshChannel,
 } from '@/lib/workflows/refresh-channels/steps';
 
@@ -285,6 +286,43 @@ describe('fetchStaleChannels', () => {
     const result = await fetchStaleChannels();
 
     expect(result.map((c) => c.id)).toEqual([ready.id]);
+  });
+});
+
+// ─── recoverStaleRefreshingChannels ──────────────────────────────
+
+describe('recoverStaleRefreshingChannels', () => {
+  it('reverts rows whose REFRESHING marker is older than the threshold', async () => {
+    const stuck = await createChannel({ sourceId: 'UC_stuck', name: 'Stuck' });
+    // Force updated_at into the distant past via raw SQL; Prisma's
+    // @updatedAt would otherwise overwrite anything we tried to set
+    // through the normal update path.
+    await global.testPrisma.$executeRawUnsafe(
+      `UPDATE "Channel" SET status = 'REFRESHING', workflow_id = 'dead-run', updated_at = NOW() - INTERVAL '1 hour' WHERE id = $1`,
+      stuck.id
+    );
+
+    const recovered = await recoverStaleRefreshingChannels();
+
+    expect(recovered).toBe(1);
+    const row = await global.testPrisma.channel.findUniqueOrThrow({ where: { id: stuck.id } });
+    expect(row.status).toBe(ChannelStatus.READY);
+    // workflow_id is intentionally retained for audit
+    expect(row.workflow_id).toBe('dead-run');
+  });
+
+  it('leaves recently-claimed REFRESHING rows alone', async () => {
+    const fresh = await createChannel({ sourceId: 'UC_fresh_claim', name: 'Fresh Claim' });
+    await global.testPrisma.channel.update({
+      where: { id: fresh.id },
+      data: { status: ChannelStatus.REFRESHING, workflow_id: 'live-run' },
+    });
+
+    const recovered = await recoverStaleRefreshingChannels();
+
+    expect(recovered).toBe(0);
+    const row = await global.testPrisma.channel.findUniqueOrThrow({ where: { id: fresh.id } });
+    expect(row.status).toBe(ChannelStatus.REFRESHING);
   });
 });
 

@@ -17,6 +17,15 @@ export const BATCH_SIZE = 10;
  */
 const RATE_LIMIT_DELAY_MS = 250;
 
+/**
+ * How long a channel can sit in `REFRESHING` before we treat the
+ * marker as stale and revert it. The longest legitimate hold is
+ * `maxDuration = 300s` (the workflow's own time budget) plus a
+ * generous safety margin for clock skew and slow upstream calls;
+ * 30 minutes is well past anything healthy.
+ */
+const STALE_REFRESHING_MS = 30 * 60 * 1000;
+
 export interface StaleChannel {
   id: string;
   source_id: string;
@@ -66,6 +75,33 @@ export async function fetchStaleChannels(): Promise<StaleChannel[]> {
     select: { id: true, source_id: true, source_type: true, name: true },
   });
   return rows;
+}
+
+/**
+ * Recover channels stuck in `REFRESHING` whose workflow died without
+ * releasing the row (e.g. container kill, OOM). Cheap heuristic:
+ * `updated_at` is bumped on every status flip via `@updatedAt`, so a
+ * row whose `updated_at` is older than `STALE_REFRESHING_MS` is
+ * almost certainly orphaned. Reverts to `READY` so subsequent
+ * `fetchStaleChannels` calls (in this same cron tick) can pick it up.
+ *
+ * Without this, an orphaned REFRESHING row would be permanently
+ * invisible to the cron — the manual route's stale-marker recovery
+ * (`findActiveChannelRefresh`) only fires when a user clicks Refresh
+ * on that specific channel, which may never happen.
+ */
+export async function recoverStaleRefreshingChannels(): Promise<number> {
+  'use step';
+
+  const cutoff = new Date(Date.now() - STALE_REFRESHING_MS);
+  const result = await prisma.channel.updateMany({
+    where: { status: ChannelStatus.REFRESHING, updated_at: { lt: cutoff } },
+    data: { status: ChannelStatus.READY },
+  });
+  if (result.count > 0) {
+    console.info(`[refresh-channels] Recovered ${result.count} stale REFRESHING channel(s)`);
+  }
+  return result.count;
 }
 
 export async function fetchChannelById(channelId: string): Promise<StaleChannel | null> {

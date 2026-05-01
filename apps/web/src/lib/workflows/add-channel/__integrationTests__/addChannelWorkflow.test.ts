@@ -50,6 +50,19 @@ jest.mock('@/lib/platforms/bilibili/channelSnapshot', () => ({
   fetchBilibiliChannelSnapshot: (mid: string) => mockFetchBilibiliChannelSnapshot(mid),
 }));
 
+// The 'workflow' package is ESM-only; Jest's CJS loader can't parse
+// its `export` syntax. Provide just the surface this step uses —
+// FatalError. The class is a plain Error subclass so message-prefix
+// matching in the route still works under test.
+jest.mock('workflow', () => ({
+  FatalError: class FatalError extends Error {
+    constructor(message: string) {
+      super(message);
+      this.name = 'FatalError';
+    }
+  },
+}));
+
 // ─── Helpers ─────────────────────────────────────────────────────
 
 function makeRssFeed(

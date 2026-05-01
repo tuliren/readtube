@@ -1,4 +1,9 @@
-import { fetchChannelById, fetchStaleChannels, refreshChannel } from './steps';
+import {
+  fetchChannelById,
+  fetchStaleChannels,
+  recoverStaleRefreshingChannels,
+  refreshChannel,
+} from './steps';
 import type { RefreshResult } from './steps';
 
 export const maxDuration = 300;
@@ -17,6 +22,13 @@ export interface WorkflowResult {
  */
 export async function refreshChannelsWorkflow(): Promise<WorkflowResult> {
   'use workflow';
+
+  // Recover orphaned REFRESHING rows first so they re-enter the
+  // candidate pool for this same cron tick. Without this, a row
+  // whose previous workflow was killed mid-run would be permanently
+  // invisible to the cron (`fetchStaleChannels` filters status=READY)
+  // until a user manually refreshes it.
+  await recoverStaleRefreshingChannels();
 
   const channels = await fetchStaleChannels();
 
