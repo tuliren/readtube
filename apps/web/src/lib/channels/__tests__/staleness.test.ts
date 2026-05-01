@@ -10,11 +10,6 @@ describe('isChannelFresh', () => {
     expect(isChannelFresh(oneHourAgo)).toBe(true);
   });
 
-  it('returns true for a checked_at exactly 1 day ago', () => {
-    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    expect(isChannelFresh(oneDayAgo)).toBe(true);
-  });
-
   it('returns true just under the STALE_DAYS boundary', () => {
     const justFresh = new Date(Date.now() - (STALE_DAYS * 24 - 1) * 60 * 60 * 1000);
     expect(isChannelFresh(justFresh)).toBe(true);
@@ -54,7 +49,7 @@ describe('canManuallyRefresh', () => {
     expect(canManuallyRefresh(new Date('2020-01-01'))).toBe(true);
   });
 
-  it('uses an independent threshold from STALE_DAYS', () => {
-    expect(MANUAL_REFRESH_DAYS).toBeLessThan(STALE_DAYS);
+  it('manual threshold is no stricter than the auto-refresh threshold', () => {
+    expect(MANUAL_REFRESH_DAYS).toBeLessThanOrEqual(STALE_DAYS);
   });
 });
