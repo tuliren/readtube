@@ -1,9 +1,11 @@
-import { type VideoPlatformType, prisma } from '@readtube/database';
+import { ChannelStatus, type VideoPlatformType, prisma } from '@readtube/database';
+import { getWorkflowMetadata } from 'workflow';
 
 import { hasChannelHandleConflict } from '@/lib/channels/handleConflict';
 import { STALE_DAYS } from '@/lib/channels/staleness';
 import { getPlatformByType } from '@/lib/platforms';
 import { isEmptyString } from '@/lib/string';
+import { claimChannelRefresh, releaseChannelRefresh } from '@/lib/workflows/runRegistry';
 
 /** Maximum number of channels to refresh per workflow run. */
 export const BATCH_SIZE = 10;
@@ -50,6 +52,13 @@ export async function fetchStaleChannels(): Promise<StaleChannel[]> {
     where: {
       OR: [{ checked_at: null }, { checked_at: { lt: cutoff } }],
       subscriptions: { some: {} },
+      // Skip channels currently being refreshed by another workflow
+      // (manual single-channel refresh, or a previous cron run that
+      // hasn't released the row yet). The per-row claim inside
+      // `refreshChannel` is the safety net; this filter is the
+      // optimization so the cron doesn't waste a slot on a row it
+      // would just skip later.
+      status: ChannelStatus.READY,
       ...(excludedPlatforms.length > 0 ? { source_type: { notIn: excludedPlatforms } } : {}),
     },
     orderBy: { checked_at: { sort: 'asc', nulls: 'first' } },
@@ -75,9 +84,47 @@ export interface RefreshResult {
   nameUpdated: boolean;
 }
 
-export async function refreshChannel(channel: StaleChannel): Promise<RefreshResult> {
+/**
+ * Refresh one channel: re-fetch its upstream snapshot, upsert the
+ * snapshot's videos, and update its metadata + checked_at.
+ *
+ * Refresh-dedup integration:
+ *   - When called from `refreshChannelsWorkflow` (cron) with
+ *     `claimRow: true`, the step atomically claims the row using
+ *     its own runId from `getWorkflowMetadata()`. If the claim fails
+ *     (another path owns the row), the step returns null so the
+ *     caller can skip it.
+ *   - When called from `refreshSingleChannelWorkflow` (manual) with
+ *     `claimRow: false`, the route has already done the claim with
+ *     its own runId. The step skips the claim/release entirely so it
+ *     doesn't fight the route over the lifecycle.
+ */
+export async function refreshChannel(
+  channel: StaleChannel,
+  options: { claimRow: boolean }
+): Promise<RefreshResult | null> {
   'use step';
 
+  if (options.claimRow) {
+    const runId = getWorkflowMetadata().workflowRunId;
+    const claimed = await claimChannelRefresh(prisma, channel.id, runId);
+    if (!claimed) {
+      console.info(
+        `[refresh-channels] Skipping ${channel.id} — already being refreshed by another path`
+      );
+      return null;
+    }
+    try {
+      return await runRefreshChannel(channel);
+    } finally {
+      await releaseChannelRefresh(prisma, channel.id, runId);
+    }
+  }
+
+  return runRefreshChannel(channel);
+}
+
+async function runRefreshChannel(channel: StaleChannel): Promise<RefreshResult> {
   await new Promise((r) => setTimeout(r, RATE_LIMIT_DELAY_MS));
 
   const platform = getPlatformByType(channel.source_type);

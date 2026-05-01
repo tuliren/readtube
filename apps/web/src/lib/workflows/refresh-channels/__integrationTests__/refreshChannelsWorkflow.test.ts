@@ -1,4 +1,4 @@
-import { VideoPlatformType } from '@readtube/database';
+import { ChannelStatus, VideoPlatformType } from '@readtube/database';
 import '@tests/integration-tests';
 
 import { STALE_DAYS } from '@/lib/channels/staleness';
@@ -56,6 +56,29 @@ const mockFetchBilibiliChannelSnapshot = jest.fn();
 jest.mock('@/lib/platforms/bilibili/channelSnapshot', () => ({
   ...jest.requireActual('@/lib/platforms/bilibili/channelSnapshot'),
   fetchBilibiliChannelSnapshot: (mid: string) => mockFetchBilibiliChannelSnapshot(mid),
+}));
+
+// Stub the 'workflow' package — its own ESM `export` syntax can't be
+// loaded by Jest, so we provide just the API surfaces our code under
+// test actually uses (no `requireActual`).
+jest.mock('workflow', () => ({
+  getWorkflowMetadata: () => ({
+    workflowRunId: 'test-cron-run',
+    workflowName: 'refreshChannelsWorkflow',
+    workflowStartedAt: new Date(),
+    url: 'http://test',
+  }),
+}));
+
+// Same reason for `workflow/api`: runRegistry.ts imports `getRun`
+// from it. Tests don't exercise the stale-marker recovery branch so
+// returning a stub that always reports "not active" is sufficient.
+jest.mock('workflow/api', () => ({
+  getRun: () => ({
+    get status() {
+      return Promise.resolve('completed');
+    },
+  }),
 }));
 
 // ─── Helpers ─────────────────────────────────────────────────────
@@ -247,6 +270,22 @@ describe('fetchStaleChannels', () => {
 
     expect(result.map((c) => c.id)).toEqual([subscribed.id]);
   });
+
+  it('excludes channels currently REFRESHING', async () => {
+    const refreshing = await createChannel({
+      sourceId: 'UC_inflight',
+      name: 'In-flight Channel',
+    });
+    await global.testPrisma.channel.update({
+      where: { id: refreshing.id },
+      data: { status: ChannelStatus.REFRESHING, workflow_id: 'some-other-run' },
+    });
+    const ready = await createChannel({ sourceId: 'UC_ready', name: 'Ready Channel' });
+
+    const result = await fetchStaleChannels();
+
+    expect(result.map((c) => c.id)).toEqual([ready.id]);
+  });
 });
 
 // ─── refreshChannel ──────────────────────────────────────────────
@@ -277,7 +316,9 @@ describe('refreshChannel', () => {
       name: ch.name,
       source_type: VideoPlatformType.YOUTUBE,
     };
-    const result = await refreshChannel(staleChannel);
+    const resultOrNull = await refreshChannel(staleChannel, { claimRow: false });
+    expect(resultOrNull).not.toBeNull();
+    const result = resultOrNull!;
 
     expect(result.videosProcessed).toBe(2);
     expect(result.nameUpdated).toBe(false);
@@ -300,12 +341,15 @@ describe('refreshChannel', () => {
     const ch = await createChannel({ sourceId: 'UC_rename', name: 'Old Name' });
     mockFetchRssFeed.mockResolvedValueOnce(makeRssFeed('New Name', []));
 
-    const result = await refreshChannel({
-      id: ch.id,
-      source_id: ch.source_id,
-      name: ch.name,
-      source_type: VideoPlatformType.YOUTUBE,
-    });
+    const result = (await refreshChannel(
+      {
+        id: ch.id,
+        source_id: ch.source_id,
+        name: ch.name,
+        source_type: VideoPlatformType.YOUTUBE,
+      },
+      { claimRow: false }
+    ))!;
 
     expect(result.nameUpdated).toBe(true);
 
@@ -336,12 +380,15 @@ describe('refreshChannel', () => {
       ])
     );
 
-    await refreshChannel({
-      id: ch.id,
-      source_id: ch.source_id,
-      name: ch.name,
-      source_type: VideoPlatformType.YOUTUBE,
-    });
+    await refreshChannel(
+      {
+        id: ch.id,
+        source_id: ch.source_id,
+        name: ch.name,
+        source_type: VideoPlatformType.YOUTUBE,
+      },
+      { claimRow: false }
+    );
 
     const video = await global.testPrisma.video.findFirst({
       where: { channel_id: ch.id, source_id: 'vid_existing' },
@@ -379,12 +426,15 @@ describe('refreshChannel', () => {
       ])
     );
 
-    const result = await refreshChannel({
-      id: ch.id,
-      source_id: ch.source_id,
-      name: ch.name,
-      source_type: VideoPlatformType.YOUTUBE,
-    });
+    const result = (await refreshChannel(
+      {
+        id: ch.id,
+        source_id: ch.source_id,
+        name: ch.name,
+        source_type: VideoPlatformType.YOUTUBE,
+      },
+      { claimRow: false }
+    ))!;
 
     expect(result.videosProcessed).toBe(2);
 
@@ -429,12 +479,15 @@ describe('refreshChannel', () => {
       ],
     });
 
-    await refreshChannel({
-      id: ch.id,
-      source_id: ch.source_id,
-      name: ch.name,
-      source_type: VideoPlatformType.YOUTUBE,
-    });
+    await refreshChannel(
+      {
+        id: ch.id,
+        source_id: ch.source_id,
+        name: ch.name,
+        source_type: VideoPlatformType.YOUTUBE,
+      },
+      { claimRow: false }
+    );
 
     const updated = await global.testPrisma.channel.findUnique({ where: { id: ch.id } });
     expect(updated!.logo_url).toBe('https://yt3.googleusercontent.com/logo.jpg');
@@ -459,12 +512,15 @@ describe('refreshChannel', () => {
     );
     mockScrapeChannel.mockRejectedValueOnce(new Error('YouTube blocked'));
 
-    const result = await refreshChannel({
-      id: ch.id,
-      source_id: ch.source_id,
-      name: ch.name,
-      source_type: VideoPlatformType.YOUTUBE,
-    });
+    const result = (await refreshChannel(
+      {
+        id: ch.id,
+        source_id: ch.source_id,
+        name: ch.name,
+        source_type: VideoPlatformType.YOUTUBE,
+      },
+      { claimRow: false }
+    ))!;
 
     expect(result.videosProcessed).toBe(1);
 
@@ -516,12 +572,15 @@ describe('refreshChannel', () => {
       videos: [],
     });
 
-    await refreshChannel({
-      id: ch.id,
-      source_id: ch.source_id,
-      name: ch.name,
-      source_type: VideoPlatformType.YOUTUBE,
-    });
+    await refreshChannel(
+      {
+        id: ch.id,
+        source_id: ch.source_id,
+        name: ch.name,
+        source_type: VideoPlatformType.YOUTUBE,
+      },
+      { claimRow: false }
+    );
 
     // Scrape is always called now (for logo freshness)
     expect(mockScrapeChannel).toHaveBeenCalled();
@@ -560,12 +619,15 @@ describe('refreshChannel — Shorts filtering', () => {
       ])
     );
 
-    const result = await refreshChannel({
-      id: ch.id,
-      source_id: ch.source_id,
-      name: ch.name,
-      source_type: VideoPlatformType.YOUTUBE,
-    });
+    const result = (await refreshChannel(
+      {
+        id: ch.id,
+        source_id: ch.source_id,
+        name: ch.name,
+        source_type: VideoPlatformType.YOUTUBE,
+      },
+      { claimRow: false }
+    ))!;
 
     expect(result.videosProcessed).toBe(1);
     const stored = await global.testPrisma.video.findMany({ where: { channel_id: ch.id } });
@@ -602,12 +664,15 @@ describe('refreshChannel — Shorts filtering', () => {
       ],
     });
 
-    const result = await refreshChannel({
-      id: ch.id,
-      source_id: ch.source_id,
-      name: ch.name,
-      source_type: VideoPlatformType.YOUTUBE,
-    });
+    const result = (await refreshChannel(
+      {
+        id: ch.id,
+        source_id: ch.source_id,
+        name: ch.name,
+        source_type: VideoPlatformType.YOUTUBE,
+      },
+      { claimRow: false }
+    ))!;
 
     expect(result.videosProcessed).toBe(1);
     const stored = await global.testPrisma.video.findFirst({ where: { channel_id: ch.id } });
@@ -640,12 +705,15 @@ describe('refreshChannel — Shorts filtering', () => {
       ])
     );
 
-    const result = await refreshChannel({
-      id: ch.id,
-      source_id: ch.source_id,
-      name: ch.name,
-      source_type: VideoPlatformType.YOUTUBE,
-    });
+    const result = (await refreshChannel(
+      {
+        id: ch.id,
+        source_id: ch.source_id,
+        name: ch.name,
+        source_type: VideoPlatformType.YOUTUBE,
+      },
+      { claimRow: false }
+    ))!;
 
     // Filtered out of ingest — no upsert ran, stored row unchanged.
     expect(result.videosProcessed).toBe(0);
@@ -679,12 +747,15 @@ describe('refreshChannel — Shorts filtering', () => {
     });
     mockFetchRssFeed.mockResolvedValueOnce(makeRssFeed('Target', []));
 
-    const result = await refreshChannel({
-      id: ch.id,
-      source_id: ch.source_id,
-      name: ch.name,
-      source_type: VideoPlatformType.YOUTUBE,
-    });
+    const result = (await refreshChannel(
+      {
+        id: ch.id,
+        source_id: ch.source_id,
+        name: ch.name,
+        source_type: VideoPlatformType.YOUTUBE,
+      },
+      { claimRow: false }
+    ))!;
     expect(result.videosProcessed).toBe(0);
 
     // Target channel's handle stayed null (UC_collide_owner owns @collide).
@@ -771,6 +842,37 @@ describe('refreshChannelsWorkflow', () => {
     });
     expect(failedChannel!.checked_at).toBeNull();
   });
+
+  it('claimRow:true skips a row already claimed by another path', async () => {
+    const claimedByOther = await createChannel({
+      sourceId: 'UC_already_claimed',
+      name: 'Already Claimed',
+    });
+    await global.testPrisma.channel.update({
+      where: { id: claimedByOther.id },
+      data: { status: ChannelStatus.REFRESHING, workflow_id: 'manual-run-id' },
+    });
+
+    const result = await refreshChannel(
+      {
+        id: claimedByOther.id,
+        source_id: claimedByOther.source_id,
+        source_type: VideoPlatformType.YOUTUBE,
+        name: claimedByOther.name,
+      },
+      { claimRow: true }
+    );
+
+    expect(result).toBeNull();
+    // No fetch should have happened — we never got past the claim.
+    expect(mockFetchRssFeed).not.toHaveBeenCalled();
+    // The other path's claim is preserved.
+    const row = await global.testPrisma.channel.findUnique({
+      where: { id: claimedByOther.id },
+    });
+    expect(row!.status).toBe(ChannelStatus.REFRESHING);
+    expect(row!.workflow_id).toBe('manual-run-id');
+  });
 });
 
 describe('refreshChannel — Bilibili', () => {
@@ -807,12 +909,15 @@ describe('refreshChannel — Bilibili', () => {
       ],
     });
 
-    const result = await refreshChannel({
-      id: ch.id,
-      source_id: ch.source_id,
-      source_type: VideoPlatformType.BILIBILI,
-      name: ch.name,
-    });
+    const result = (await refreshChannel(
+      {
+        id: ch.id,
+        source_id: ch.source_id,
+        source_type: VideoPlatformType.BILIBILI,
+        name: ch.name,
+      },
+      { claimRow: false }
+    ))!;
 
     expect(result.videosProcessed).toBe(2);
     expect(mockFetchBilibiliChannelSnapshot).toHaveBeenCalledWith('946974');
