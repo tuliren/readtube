@@ -9,3 +9,24 @@ body {
   /*radial-gradient(circle at 50% 30%, #e9f2ff 10%, transparent 95%),*/
   /*linear-gradient(225deg, #fef7e0, #fef2f5, #eff7ee, #d7e6e9);*/
 }
+
+/*
+ * Tailwind Typography (`prose`) ships with stylized blockquotes —
+ * italic + medium font-weight + auto-inserted curly quotation marks
+ * via ::before/::after — and wraps inline `code` in literal backticks
+ * the same way. The LLM-generated content already contains the
+ * intended emphasis (and a blockquote naturally reads as a quote
+ * without extra glyphs), so these defaults pile on. Strip them.
+ */
+.prose blockquote {
+  font-style: normal;
+  font-weight: 400;
+}
+.prose blockquote p:first-of-type::before,
+.prose blockquote p:last-of-type::after {
+  content: none;
+}
+.prose code::before,
+.prose code::after {
+  content: none;
+}
