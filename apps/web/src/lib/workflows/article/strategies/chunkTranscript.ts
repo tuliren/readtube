@@ -1,3 +1,4 @@
+import { countWords } from '@/lib/format/wordCount';
 import type { TranscriptSegment } from '@/lib/platforms/types';
 
 export interface TranscriptChunk {
@@ -65,16 +66,4 @@ export function chunkTranscript(
 
   flush();
   return chunks;
-}
-
-function countWords(text: string): number {
-  // Whitespace split — good enough for word counting in any
-  // space-delimited transcript. Languages without spaces (Chinese,
-  // Japanese) will under-count, which makes chunks larger but doesn't
-  // break correctness — just trades parallelism for fewer LLM calls.
-  const trimmed = text.trim();
-  if (trimmed.length === 0) {
-    return 0;
-  }
-  return trimmed.split(/\s+/).length;
 }

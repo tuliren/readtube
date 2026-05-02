@@ -7,6 +7,7 @@ import {
   MAX_SECTIONS,
   SECTION_TARGET_WORDS,
 } from '@/constants';
+import { countWords } from '@/lib/format/wordCount';
 
 import { type TranscriptChunk, chunkTranscript } from './chunkTranscript';
 import { embedWindows } from './embedWindows';
@@ -319,16 +320,13 @@ function fallbackSectionsFromWindows(windows: TranscriptChunk[]): TopicSection[]
 
   console.info('[articleWorkflow:map-reduce] section grouping summary (fallback)', {
     windows: windows.length,
-    totalWords: windows.reduce(
-      (acc, w) => acc + w.text.trim().split(/\s+/).filter(Boolean).length,
-      0
-    ),
+    totalWords: windows.reduce((acc, w) => acc + countWords(w.text), 0),
     sections: sections.length,
     bounds: { target: SECTION_TARGET_WORDS },
     note: 'embedding pipeline failed; sections derived from word-count chunker',
     perSection: sections.map((s) => ({
       idx: s.index,
-      words: s.text.trim().split(/\s+/).filter(Boolean).length,
+      words: countWords(s.text),
     })),
   });
 

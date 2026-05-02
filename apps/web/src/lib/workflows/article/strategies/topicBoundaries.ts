@@ -5,6 +5,7 @@ import {
   SECTION_TARGET_WORDS,
   TOPIC_BOUNDARY_DISTANCE,
 } from '@/constants';
+import { countWords } from '@/lib/format/wordCount';
 
 import type { TranscriptChunk } from './chunkTranscript';
 import { cosineDistance } from './embedWindows';
@@ -154,12 +155,4 @@ function logGroupingSummary(
 
 function round(n: number): number {
   return Math.round(n * 1000) / 1000;
-}
-
-function countWords(text: string): number {
-  const trimmed = text.trim();
-  if (trimmed.length === 0) {
-    return 0;
-  }
-  return trimmed.split(/\s+/).length;
 }
