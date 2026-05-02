@@ -231,6 +231,22 @@ export const mapReduceStrategy: ArticleGenerationStrategy = {
   },
 };
 
+/**
+ * Bounded-concurrency map. Workers pull from a shared index queue and
+ * never reject — instead the FIRST error is captured, an abort flag is
+ * set, and remaining workers exit cleanly once their current item
+ * settles. Only after every worker has returned do we surface the
+ * captured error.
+ *
+ * This shape matters because each `fn(item)` here writes to the
+ * workflow's stream writer. If we used a plain `Promise.all`, a single
+ * worker rejection would unblock the caller, whose `finally` releases
+ * the writer lock — and any in-flight workers that subsequently call
+ * `writer.write(...)` would throw synchronously into nothing, surfacing
+ * as unhandled promise rejections (and on Node ≥15's default
+ * `--unhandled-rejections=throw`, killing the function before the
+ * workflow's error-recovery path runs).
+ */
 async function runWithConcurrency<T, R>(
   items: T[],
   concurrency: number,
@@ -238,16 +254,31 @@ async function runWithConcurrency<T, R>(
 ): Promise<R[]> {
   const results: R[] = new Array(items.length);
   let next = 0;
+  let aborted = false;
+  let firstError: unknown = null;
+
   const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
-    while (true) {
+    while (!aborted) {
       const idx = next++;
       if (idx >= items.length) {
         return;
       }
-      results[idx] = await fn(items[idx]);
+      try {
+        results[idx] = await fn(items[idx]);
+      } catch (err) {
+        if (firstError == null) {
+          firstError = err;
+        }
+        aborted = true;
+        return;
+      }
     }
   });
+
   await Promise.all(workers);
+  if (firstError != null) {
+    throw firstError;
+  }
   return results;
 }
 
