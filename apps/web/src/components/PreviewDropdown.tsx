@@ -30,7 +30,7 @@ export default function PreviewDropdown({ items }: Props) {
         {items.map((item) => (
           <DropdownMenuItem key={item.id} asChild>
             <a
-              href={`/p/videos/${item.id}?language=en`}
+              href={`https://www.read.tube/p/videos/${item.id}?language=en`}
               target="_blank"
               rel="noopener noreferrer"
               className="gap-3"
