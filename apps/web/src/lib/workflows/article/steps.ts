@@ -3,7 +3,11 @@ import { Output, streamText } from 'ai';
 import { FatalError, getWorkflowMetadata, getWritable } from 'workflow';
 import { z } from 'zod';
 
-import { DEFAULT_AI_MODEL } from '@/constants';
+import {
+  DEFAULT_AI_MODEL,
+  MAX_PRESTREAM_ATTEMPTS,
+  STREAM_INACTIVITY_TIMEOUT_MS,
+} from '@/constants';
 import { CURRENT_FRONTMATTER_VERSION, serializeMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { emitTerminalEvent } from '@/lib/workflows/emitTerminalEvent';
 import { revertArticleRow } from '@/lib/workflows/runRegistry';
@@ -57,17 +61,12 @@ export async function generateArticleStep(input: ArticleWorkflowInput): Promise<
   const writer = writable.getWriter();
 
   try {
-    const result = streamText({
-      model: DEFAULT_AI_MODEL,
-      output: Output.object({ schema: ARTICLE_SCHEMA }),
-      prompt: input.prompt,
-    });
-
     let accumulated = '';
     let hasLatex: boolean | null = null;
     let emittedHasLatex = false;
     let pending = '';
     let lastFlushAt = Date.now();
+    let usage: unknown = null;
 
     const flushDelta = async () => {
       if (pending.length === 0) {
@@ -78,59 +77,115 @@ export async function generateArticleStep(input: ArticleWorkflowInput): Promise<
       lastFlushAt = Date.now();
     };
 
-    try {
-      for await (const partial of result.partialOutputStream) {
-        if (partial == null) {
-          continue;
+    let attempt = 0;
+    while (true) {
+      attempt++;
+
+      // Inactivity watchdog: abort the upstream call if no token
+      // arrives within STREAM_INACTIVITY_TIMEOUT_MS. Without this, a
+      // gateway that holds the connection open but stops forwarding
+      // data would hang the workflow until maxDuration fires.
+      const inactivityController = new AbortController();
+      let inactivityTimer: ReturnType<typeof setTimeout> | null = null;
+      const armWatchdog = () => {
+        if (inactivityTimer != null) {
+          clearTimeout(inactivityTimer);
         }
-        if (typeof partial.content === 'string' && partial.content.length > accumulated.length) {
-          const delta = partial.content.slice(accumulated.length);
-          accumulated = partial.content;
-          pending += delta;
-          if (pending.length >= FLUSH_CHARS || Date.now() - lastFlushAt >= FLUSH_INTERVAL_MS) {
+        inactivityTimer = setTimeout(
+          () =>
+            inactivityController.abort(
+              new Error(`No tokens received within ${STREAM_INACTIVITY_TIMEOUT_MS}ms`)
+            ),
+          STREAM_INACTIVITY_TIMEOUT_MS
+        );
+      };
+      armWatchdog();
+
+      const result = streamText({
+        model: DEFAULT_AI_MODEL,
+        output: Output.object({ schema: ARTICLE_SCHEMA }),
+        prompt: input.prompt,
+        // gpt-5.x is a reasoning model. The article task is structured
+        // writing, not deep reasoning — the prompt fully specifies tone,
+        // structure, and schema — so cap reasoning at the floor to cut
+        // end-to-end latency on long transcripts (the main contributor
+        // to gateway-side "fetch failed" timeouts).
+        providerOptions: { openai: { reasoningEffort: 'minimal' } },
+        abortSignal: inactivityController.signal,
+      });
+
+      try {
+        for await (const partial of result.partialOutputStream) {
+          armWatchdog();
+          if (partial == null) {
+            continue;
+          }
+          if (typeof partial.content === 'string' && partial.content.length > accumulated.length) {
+            const delta = partial.content.slice(accumulated.length);
+            accumulated = partial.content;
+            pending += delta;
+            if (pending.length >= FLUSH_CHARS || Date.now() - lastFlushAt >= FLUSH_INTERVAL_MS) {
+              await flushDelta();
+            }
+          }
+          if (!emittedHasLatex && typeof partial.hasLatex === 'boolean') {
+            // Drain any pending content before the flag so order is
+            // preserved on the wire.
             await flushDelta();
+            emittedHasLatex = true;
+            hasLatex = partial.hasLatex;
+            await writer.write({ hasLatex });
           }
         }
-        if (!emittedHasLatex && typeof partial.hasLatex === 'boolean') {
-          // Drain any pending content before the flag so order is
-          // preserved on the wire.
-          await flushDelta();
-          emittedHasLatex = true;
-          hasLatex = partial.hasLatex;
-          await writer.write({ hasLatex });
+
+        // Final flush of any tail content shorter than FLUSH_CHARS.
+        await flushDelta();
+
+        if (!emittedHasLatex) {
+          try {
+            const settled = await result.output;
+            hasLatex = settled.hasLatex;
+            emittedHasLatex = true;
+            await writer.write({ hasLatex });
+          } catch {
+            // Swallow — body already streamed.
+          }
         }
-      }
 
-      // Final flush of any tail content shorter than FLUSH_CHARS.
-      await flushDelta();
-
-      if (!emittedHasLatex) {
         try {
-          const settled = await result.output;
-          hasLatex = settled.hasLatex;
-          emittedHasLatex = true;
-          await writer.write({ hasLatex });
+          usage = await result.usage;
         } catch {
-          // Swallow — body already streamed.
+          // Usage is best-effort.
+        }
+
+        break; // success — exit the retry loop.
+      } catch (err) {
+        // Pre-first-byte failures (gateway connect drops, "fetch
+        // failed", inactivity-watchdog aborts before the first delta)
+        // are transparently retried. Once *any* delta or hasLatex flag
+        // has reached the client, retrying would re-stream content the
+        // reader already saw, so we surface as a terminal error.
+        const noClientVisibleProgress = accumulated.length === 0 && !emittedHasLatex;
+        if (noClientVisibleProgress && attempt < MAX_PRESTREAM_ATTEMPTS) {
+          console.warn(
+            `[articleWorkflow] streamText failed before first delta (attempt ${attempt}/${MAX_PRESTREAM_ATTEMPTS}), retrying`,
+            err
+          );
+          await new Promise((r) => setTimeout(r, 500 * 2 ** (attempt - 1)));
+          continue;
+        }
+        console.error('[articleWorkflow] streamText error:', err);
+        const message = err instanceof Error ? err.message : 'Failed to generate article.';
+        throw new FatalError(message);
+      } finally {
+        if (inactivityTimer != null) {
+          clearTimeout(inactivityTimer);
         }
       }
-    } catch (err) {
-      console.error('[articleWorkflow] streamText error:', err);
-      const message = err instanceof Error ? err.message : 'Failed to generate article.';
-      // Don't retry — partial deltas are already on the wire and a
-      // retry would re-stream them. Surface as a terminal error.
-      throw new FatalError(message);
     }
 
     if (accumulated.trim().length === 0) {
       throw new FatalError('Generation produced no content');
-    }
-
-    let usage: unknown = null;
-    try {
-      usage = await result.usage;
-    } catch {
-      // Usage is best-effort.
     }
 
     return {
