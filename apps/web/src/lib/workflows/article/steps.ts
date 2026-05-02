@@ -1,58 +1,24 @@
-import { type ArticleStyle, GenerationStatus, Prisma, prisma } from '@readtube/database';
-import { Output, streamText } from 'ai';
+import { GenerationStatus, Prisma, prisma } from '@readtube/database';
 import { FatalError, getWorkflowMetadata, getWritable } from 'workflow';
-import { z } from 'zod';
 
-import {
-  DEFAULT_AI_MODEL,
-  MAX_PRESTREAM_ATTEMPTS,
-  STREAM_INACTIVITY_TIMEOUT_MS,
-} from '@/constants';
+import { DEFAULT_AI_MODEL } from '@/constants';
 import { CURRENT_FRONTMATTER_VERSION, serializeMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { emitTerminalEvent } from '@/lib/workflows/emitTerminalEvent';
 import { revertArticleRow } from '@/lib/workflows/runRegistry';
 
+import { selectStrategy } from './strategies/select';
+import type {
+  ArticleStreamEvent,
+  ArticleWorkflowInput,
+  GeneratedArticle,
+} from './strategies/types';
+
 export const ARTICLE_PROMPT_VERSION = 'v9';
 
-export const ARTICLE_SCHEMA = z.object({
-  content: z
-    .string()
-    .describe('The markdown body of the article. Do not include any YAML frontmatter.'),
-  hasLatex: z
-    .boolean()
-    .describe(
-      'True if the content field above contains at least one LaTeX math formula wrapped in single or double dollar signs (e.g. $E = mc^2$ or $$\\int_0^1 x\\,dx$$). False otherwise. Dollar amounts like "$5 million" are not math and must not set this flag to true.'
-    ),
-});
-
-export type ArticleStreamEvent =
-  | { delta: string }
-  | { hasLatex: boolean }
-  | { type: 'done' }
-  | { error: string };
-
-export interface ArticleWorkflowInput {
-  prompt: string;
-  transcriptId: string;
-  style: ArticleStyle;
-  language: string | null;
-}
-
-export interface GeneratedArticle {
-  content: string;
-  hasLatex: boolean;
-  usage: unknown;
-}
-
-// Coalesce token-level deltas before each `writer.write()`. The
-// workflow stream is Redis-backed, so every write is a network op;
-// `streamText`'s structured-output partials arrive every few tokens,
-// which produced hundreds of round-trips per article. Buffering until
-// either ~60 chars accumulate or ~80 ms pass keeps the reading
-// experience smooth (sub-100 ms gaps are imperceptible) while
-// dropping the write count by an order of magnitude.
-const FLUSH_CHARS = 60;
-const FLUSH_INTERVAL_MS = 80;
+// Re-export so existing imports (`@/lib/workflows/article` and
+// `@/lib/workflows/article/steps`) continue to work after the
+// strategy-pattern refactor moved the canonical definitions.
+export type { ArticleStreamEvent, ArticleWorkflowInput, GeneratedArticle };
 
 export async function generateArticleStep(input: ArticleWorkflowInput): Promise<GeneratedArticle> {
   'use step';
@@ -61,132 +27,8 @@ export async function generateArticleStep(input: ArticleWorkflowInput): Promise<
   const writer = writable.getWriter();
 
   try {
-    let accumulated = '';
-    let hasLatex: boolean | null = null;
-    let emittedHasLatex = false;
-    let pending = '';
-    let lastFlushAt = Date.now();
-    let usage: unknown = null;
-
-    const flushDelta = async () => {
-      if (pending.length === 0) {
-        return;
-      }
-      await writer.write({ delta: pending });
-      pending = '';
-      lastFlushAt = Date.now();
-    };
-
-    let attempt = 0;
-    while (true) {
-      attempt++;
-
-      // Inactivity watchdog: abort the upstream call if no token
-      // arrives within STREAM_INACTIVITY_TIMEOUT_MS. Without this, a
-      // gateway that holds the connection open but stops forwarding
-      // data would hang the workflow until maxDuration fires.
-      const inactivityController = new AbortController();
-      let inactivityTimer: ReturnType<typeof setTimeout> | null = null;
-      const armWatchdog = () => {
-        if (inactivityTimer != null) {
-          clearTimeout(inactivityTimer);
-        }
-        inactivityTimer = setTimeout(
-          () =>
-            inactivityController.abort(
-              new Error(`No tokens received within ${STREAM_INACTIVITY_TIMEOUT_MS}ms`)
-            ),
-          STREAM_INACTIVITY_TIMEOUT_MS
-        );
-      };
-      armWatchdog();
-
-      const result = streamText({
-        model: DEFAULT_AI_MODEL,
-        output: Output.object({ schema: ARTICLE_SCHEMA }),
-        prompt: input.prompt,
-        abortSignal: inactivityController.signal,
-      });
-
-      try {
-        for await (const partial of result.partialOutputStream) {
-          armWatchdog();
-          if (partial == null) {
-            continue;
-          }
-          if (typeof partial.content === 'string' && partial.content.length > accumulated.length) {
-            const delta = partial.content.slice(accumulated.length);
-            accumulated = partial.content;
-            pending += delta;
-            if (pending.length >= FLUSH_CHARS || Date.now() - lastFlushAt >= FLUSH_INTERVAL_MS) {
-              await flushDelta();
-            }
-          }
-          if (!emittedHasLatex && typeof partial.hasLatex === 'boolean') {
-            // Drain any pending content before the flag so order is
-            // preserved on the wire.
-            await flushDelta();
-            emittedHasLatex = true;
-            hasLatex = partial.hasLatex;
-            await writer.write({ hasLatex });
-          }
-        }
-
-        // Final flush of any tail content shorter than FLUSH_CHARS.
-        await flushDelta();
-
-        if (!emittedHasLatex) {
-          try {
-            const settled = await result.output;
-            hasLatex = settled.hasLatex;
-            emittedHasLatex = true;
-            await writer.write({ hasLatex });
-          } catch {
-            // Swallow — body already streamed.
-          }
-        }
-
-        try {
-          usage = await result.usage;
-        } catch {
-          // Usage is best-effort.
-        }
-
-        break; // success — exit the retry loop.
-      } catch (err) {
-        // Pre-first-byte failures (gateway connect drops, "fetch
-        // failed", inactivity-watchdog aborts before the first delta)
-        // are transparently retried. Once *any* delta or hasLatex flag
-        // has reached the client, retrying would re-stream content the
-        // reader already saw, so we surface as a terminal error.
-        const noClientVisibleProgress = accumulated.length === 0 && !emittedHasLatex;
-        if (noClientVisibleProgress && attempt < MAX_PRESTREAM_ATTEMPTS) {
-          console.warn(
-            `[articleWorkflow] streamText failed before first delta (attempt ${attempt}/${MAX_PRESTREAM_ATTEMPTS}), retrying`,
-            err
-          );
-          await new Promise((r) => setTimeout(r, 500 * 2 ** (attempt - 1)));
-          continue;
-        }
-        console.error('[articleWorkflow] streamText error:', err);
-        const message = err instanceof Error ? err.message : 'Failed to generate article.';
-        throw new FatalError(message);
-      } finally {
-        if (inactivityTimer != null) {
-          clearTimeout(inactivityTimer);
-        }
-      }
-    }
-
-    if (accumulated.trim().length === 0) {
-      throw new FatalError('Generation produced no content');
-    }
-
-    return {
-      content: accumulated.trim(),
-      hasLatex: hasLatex === true,
-      usage,
-    };
+    const strategy = selectStrategy(input);
+    return await strategy.generate(input, { writer });
   } finally {
     writer.releaseLock();
   }
@@ -282,3 +124,9 @@ export async function emitTerminalEventStep(event: ArticleStreamEvent): Promise<
   'use step';
   await emitTerminalEvent(event);
 }
+
+// Surfaced so the workflow orchestrator can throw FatalError when a
+// strategy reports zero content. (Callers in strategies already throw
+// FatalError directly; this re-export simplifies workflows that need
+// to construct one without importing from the underlying package.)
+export { FatalError };
