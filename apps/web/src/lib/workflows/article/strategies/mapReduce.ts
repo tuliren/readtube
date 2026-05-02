@@ -1,7 +1,12 @@
 import { FatalError } from 'workflow';
 import { z } from 'zod';
 
-import { EMBED_WINDOW_WORDS, MAX_PARALLEL_SECTIONS, MAX_SECTIONS } from '@/constants';
+import {
+  EMBED_WINDOW_WORDS,
+  MAX_PARALLEL_SECTIONS,
+  MAX_SECTIONS,
+  SECTION_TARGET_WORDS,
+} from '@/constants';
 
 import { type TranscriptChunk, chunkTranscript } from './chunkTranscript';
 import { embedWindows } from './embedWindows';
@@ -86,52 +91,65 @@ export const mapReduceStrategy: ArticleGenerationStrategy = {
 
     await writer.write({ phase: 'planning', sectionsTotal: sections.length });
 
-    // Phase 3 — generate section bodies in parallel with bounded concurrency.
-    const sectionResults = await runWithConcurrency(
-      sections,
-      MAX_PARALLEL_SECTIONS,
-      async (section) => {
-        const result = await streamWithGuards({
-          label: `articleWorkflow:map-reduce:section[${section.index}]`,
-          prompt: buildSectionPrompt(input, {
-            sectionIndex: section.index,
-            sectionsTotal: sections.length,
-            sectionText: section.text,
-          }),
-          schema: SECTION_SCHEMA,
-          onPartial: async () => {
-            // No client streaming during section generation; the
-            // watchdog inside streamWithGuards only needs partials to
-            // confirm the call is alive. Section completion is
-            // emitted as a single event below.
-          },
-        });
+    // Phase 3 — generate section bodies in parallel with bounded
+    // concurrency. Wrap in FatalError on failure: by this point we've
+    // already emitted `phase: embedding`, `phase: planning`, and
+    // possibly per-section completion events to the client. A workflow
+    // step retry would re-execute everything and duplicate those events
+    // — the client handler keys section state by index but never resets
+    // its sections Map on a second `planning` event, so a retry would
+    // corrupt rendered counts and content.
+    let sectionResults: SectionResult[];
+    try {
+      sectionResults = await runWithConcurrency(
+        sections,
+        MAX_PARALLEL_SECTIONS,
+        async (section) => {
+          const result = await streamWithGuards({
+            label: `articleWorkflow:map-reduce:section[${section.index}]`,
+            prompt: buildSectionPrompt(input, {
+              sectionIndex: section.index,
+              sectionsTotal: sections.length,
+              sectionText: section.text,
+            }),
+            schema: SECTION_SCHEMA,
+            onPartial: async () => {
+              // No client streaming during section generation; the
+              // watchdog inside streamWithGuards only needs partials to
+              // confirm the call is alive. Section completion is
+              // emitted as a single event below.
+            },
+          });
 
-        if (result.output == null) {
-          throw new Error(`Section ${section.index} produced no structured output.`);
+          if (result.output == null) {
+            throw new Error(`Section ${section.index} produced no structured output.`);
+          }
+
+          const sectionResult: SectionResult = {
+            index: section.index,
+            topic: result.output.topic,
+            body: result.output.body,
+            hasLatex: result.output.hasLatex,
+            usage: result.usage,
+          };
+
+          // Stream the section's completion event so the frontend can
+          // fill its slot. Sections complete out of order; the frontend
+          // renders by index.
+          await writer.write({
+            section: sectionResult.index,
+            topic: sectionResult.topic,
+            body: sectionResult.body,
+            hasLatex: sectionResult.hasLatex,
+          });
+
+          return sectionResult;
         }
-
-        const sectionResult: SectionResult = {
-          index: section.index,
-          topic: result.output.topic,
-          body: result.output.body,
-          hasLatex: result.output.hasLatex,
-          usage: result.usage,
-        };
-
-        // Stream the section's completion event so the frontend can
-        // fill its slot. Sections complete out of order; the frontend
-        // renders by index.
-        await writer.write({
-          section: sectionResult.index,
-          topic: sectionResult.topic,
-          body: sectionResult.body,
-          hasLatex: sectionResult.hasLatex,
-        });
-
-        return sectionResult;
-      }
-    );
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Map-reduce section generation failed.';
+      throw new FatalError(message);
+    }
 
     sectionResults.sort((a, b) => a.index - b.index);
 
@@ -284,9 +302,8 @@ function fallbackSectionsFromWindows(windows: TranscriptChunk[]): TopicSection[]
     endMs: w.endMs,
     text: w.text,
   }));
-  const sectionTargetWords = 2000;
   const grouped = chunkTranscript(synthSegments, {
-    targetWords: sectionTargetWords,
+    targetWords: SECTION_TARGET_WORDS,
     maxChunks: MAX_SECTIONS,
   });
   return grouped.map((c, idx) => ({
