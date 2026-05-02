@@ -1,6 +1,30 @@
 import { Button } from '@/components/Button';
+import PreviewDropdown, { type PreviewItem } from '@/components/PreviewDropdown';
 import RotatingWord from '@/components/RotatingWord';
 import { DESCRIPTION } from '@/constants';
+
+const PREVIEW_VIDEOS: readonly PreviewItem[] = [
+  {
+    title: 'Jensen Huang Interview with Lex Fridman',
+    url: 'https://www.read.tube/p/videos/vif8NQcjVf0?language=en',
+  },
+  {
+    title: 'Elon Musk Interview with Dwarkesh Patel',
+    url: 'https://www.read.tube/p/videos/BYXbuik3dgA?language=en',
+  },
+  {
+    title: 'Rules for Deep Work by Cal Newport',
+    url: 'https://www.read.tube/p/videos/nPzFhkTe2Uw?language=en',
+  },
+  {
+    title: 'Intro to Neural Networks by Andrej Karpathy',
+    url: 'https://www.read.tube/p/videos/VMj-3S1tku0?language=en',
+  },
+  {
+    title: 'Explanation of Special Relativity by Mahesh Shenoy',
+    url: 'https://www.read.tube/p/videos/TJmgKdc7H34?language=en',
+  },
+];
 
 export default function Hero() {
   return (
@@ -22,15 +46,7 @@ export default function Hero() {
         <Button href="/sign-up" variant="solid" color="slate">
           Get Started
         </Button>
-        <Button
-          href="https://www.read.tube/p/videos/Hrbq66XqtCo?language=en"
-          variant="outline"
-          color="slate"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Preview
-        </Button>
+        <PreviewDropdown items={PREVIEW_VIDEOS} />
       </div>
     </section>
   );
