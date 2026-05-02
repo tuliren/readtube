@@ -59,7 +59,7 @@ export const STREAM_INACTIVITY_TIMEOUT_MS = 90_000;
  * reliably fine; 60+ min starts dropping connections; 45 min is a
  * comfortable margin. Tunable — no other code changes needed.
  */
-export const MAP_REDUCE_THRESHOLD_MINUTES = 45;
+export const MAP_REDUCE_THRESHOLD_MINUTES = 10;
 
 /**
  * Target word count per section in the map-reduce strategy. Sections
