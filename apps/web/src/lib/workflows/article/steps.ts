@@ -51,8 +51,8 @@ export interface GeneratedArticle {
 // either ~60 chars accumulate or ~80 ms pass keeps the reading
 // experience smooth (sub-100 ms gaps are imperceptible) while
 // dropping the write count by an order of magnitude.
-const FLUSH_CHARS = 60;
-const FLUSH_INTERVAL_MS = 80;
+const FLUSH_CHARS = 1000;
+const FLUSH_INTERVAL_MS = 500;
 
 export async function generateArticleStep(input: ArticleWorkflowInput): Promise<GeneratedArticle> {
   'use step';
