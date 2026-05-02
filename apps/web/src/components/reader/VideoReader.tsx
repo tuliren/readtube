@@ -322,6 +322,36 @@ export default function VideoReader({
     // disappear from the URL and be lost on the next refresh.
   }, [activeTab, selectedLanguage, publicMode, video.id, video.hasSummary, video.hasArticle]);
 
+  // Public mode: once a per-language fetch confirms the active tab is
+  // empty for the selected language, redirect to the other tab if it
+  // has content. The button is already hidden by the tabs filter, but
+  // an SSR'd `?tab=summary` URL (or a tab whose content was
+  // subsequently deleted) would otherwise leave the reader staring at
+  // a blank pane. Falls through silently when both are empty — the
+  // page-level 404 in /p/videos/[videoId] catches the all-empty case
+  // for the aggregate, and a per-language all-empty state is rare
+  // enough that an empty pane is acceptable.
+  useEffect(() => {
+    if (!publicMode) {
+      return;
+    }
+    const summaryAvailable = summaryByLanguage[selectedLanguageKey] ?? hasSummary;
+    const articleAvailable = articleByLanguage[selectedLanguageKey] ?? hasArticle;
+    if (activeTab === 'summary' && !summaryAvailable && articleAvailable) {
+      setActiveTab('article');
+    } else if (activeTab === 'article' && !articleAvailable && summaryAvailable) {
+      setActiveTab('summary');
+    }
+  }, [
+    publicMode,
+    activeTab,
+    summaryByLanguage,
+    articleByLanguage,
+    selectedLanguageKey,
+    hasSummary,
+    hasArticle,
+  ]);
+
   // Stable callbacks the children pass into their effect dep arrays.
   // useState's setters are already stable, but wrapping the
   // single-update closures in useCallback gives a clean reference
@@ -672,12 +702,17 @@ export default function VideoReader({
                     // In public mode the reader can't generate
                     // anything — hide tabs whose content doesn't
                     // exist so the viewer isn't teased with an empty
-                    // panel.
+                    // panel. Prefer the per-language signal once the
+                    // reader has reported it (false = confirmed empty
+                    // for the selected language), and fall back to the
+                    // aggregate SSR flag while the fetch is in flight
+                    // so a slow API doesn't briefly hide a tab whose
+                    // content actually exists.
                     if (publicMode && tab.key === 'summary') {
-                      return hasSummary;
+                      return summaryByLanguage[selectedLanguageKey] ?? hasSummary;
                     }
                     if (publicMode && tab.key === 'article') {
-                      return hasArticle;
+                      return articleByLanguage[selectedLanguageKey] ?? hasArticle;
                     }
                     return true;
                   }).map((tab) => {
@@ -727,7 +762,7 @@ export default function VideoReader({
 
               {/* Tab content */}
               <div className="mt-6">
-                {(!publicMode || hasSummary) && (
+                {(!publicMode || (summaryByLanguage[selectedLanguageKey] ?? hasSummary)) && (
                   <div className={activeTab === 'summary' ? '' : 'hidden'}>
                     <SummaryReader
                       videoDbId={video.id}
@@ -743,7 +778,7 @@ export default function VideoReader({
                     />
                   </div>
                 )}
-                {(!publicMode || hasArticle) && (
+                {(!publicMode || (articleByLanguage[selectedLanguageKey] ?? hasArticle)) && (
                   <div className={activeTab === 'article' ? '' : 'hidden'}>
                     <ArticleReader
                       videoDbId={video.id}
