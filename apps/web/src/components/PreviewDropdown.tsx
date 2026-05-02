@@ -26,7 +26,7 @@ export default function PreviewDropdown({ items }: Props) {
         Preview
         <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="center" sideOffset={8} className="w-80">
+      <DropdownMenuContent align="center" sideOffset={8}>
         {items.map((item) => (
           <DropdownMenuItem key={item.id} asChild>
             <a
@@ -43,7 +43,7 @@ export default function PreviewDropdown({ items }: Props) {
                 className="h-10 w-16 shrink-0 rounded object-cover"
                 loading="lazy"
               />
-              <span className="min-w-0 flex-1 truncate">{item.title}</span>
+              <span className="whitespace-nowrap">{item.title}</span>
             </a>
           </DropdownMenuItem>
         ))}
