@@ -1,14 +1,21 @@
+import { Archive, Bookmark, Inbox as InboxIcon, Mail, Star } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+
 import type { InboxQuery } from '@/lib/types';
 
 /**
  * Metadata about an "inbox view" — the named buckets users can land
- * in via the sidebar (Inbox / Starred / Read Later /
+ * in via the sidebar (Inbox / Unread / Starred / Read Later /
  * Archived). Centralized so the sidebar entries, the header label,
  * and the contextual empty-state message all read from one source.
+ * Adding a new triage view should only require appending a new entry
+ * to `INBOX_VIEWS`; the sidebar, header, and empty-state surfaces
+ * pick it up automatically.
  *
  * Each view definition carries:
  *   - `key`: stable identifier for switch statements + tests
  *   - `label`: title to render in the inbox header and the sidebar
+ *   - `icon`: lucide icon rendered in the sidebar row
  *   - `query`: the InboxQuery shape that activates this view
  *   - `emptyMessage`: shown by VideoList when the view has zero rows.
  *     The default Inbox copy points the user at the next refresh; the
@@ -18,8 +25,9 @@ import type { InboxQuery } from '@/lib/types';
  *     something).
  */
 export interface InboxViewDef {
-  key: 'inbox' | 'starred' | 'saved' | 'archived';
+  key: 'inbox' | 'unread' | 'starred' | 'saved' | 'archived';
   label: string;
+  icon: LucideIcon;
   query: Partial<InboxQuery>;
   emptyMessage: string;
 }
@@ -28,24 +36,35 @@ export const INBOX_VIEWS: InboxViewDef[] = [
   {
     key: 'inbox',
     label: 'Inbox',
+    icon: InboxIcon,
     query: {},
     emptyMessage: 'No videos yet. New videos will appear here after the next refresh.',
   },
   {
+    key: 'unread',
+    label: 'Unread',
+    icon: Mail,
+    query: { unread: true },
+    emptyMessage: 'No unread videos. You are all caught up.',
+  },
+  {
     key: 'starred',
     label: 'Starred',
+    icon: Star,
     query: { starred: true },
     emptyMessage: 'No starred videos yet. Star a video to keep it in this view.',
   },
   {
     key: 'saved',
     label: 'Read Later',
+    icon: Bookmark,
     query: { saved: true },
     emptyMessage: 'Nothing saved for later yet. Save a video to read it here.',
   },
   {
     key: 'archived',
     label: 'Archived',
+    icon: Archive,
     query: { archived: true },
     emptyMessage: 'No archived videos. Archive a video to hide it from the inbox.',
   },
