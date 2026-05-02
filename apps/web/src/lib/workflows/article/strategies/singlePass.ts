@@ -29,7 +29,7 @@ export const SINGLE_PASS_SCHEMA = z.object({
 // experience smooth while dropping the write count and the size of
 // the workflow event log (which contributes to OOM on long articles).
 const FLUSH_CHARS = 1000;
-const FLUSH_INTERVAL_MS = 500;
+const FLUSH_INTERVAL_MS = 100;
 
 export const singlePassStrategy: ArticleGenerationStrategy = {
   name: 'single-pass',
