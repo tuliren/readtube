@@ -105,12 +105,6 @@ export async function generateArticleStep(input: ArticleWorkflowInput): Promise<
         model: DEFAULT_AI_MODEL,
         output: Output.object({ schema: ARTICLE_SCHEMA }),
         prompt: input.prompt,
-        // gpt-5.x is a reasoning model. The article task is structured
-        // writing, not deep reasoning — the prompt fully specifies tone,
-        // structure, and schema — so cap reasoning at the floor to cut
-        // end-to-end latency on long transcripts (the main contributor
-        // to gateway-side "fetch failed" timeouts).
-        providerOptions: { openai: { reasoningEffort: 'minimal' } },
         abortSignal: inactivityController.signal,
       });
 
