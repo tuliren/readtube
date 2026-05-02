@@ -1,16 +1,12 @@
-import { GENERATION_MAX_DURATION_SECONDS } from '@/constants';
-
+import type { GeneratedSummary, SummaryWorkflowInput } from './steps';
 import {
   emitTerminalEventStep,
   generateSummaryStep,
   persistSummaryStep,
   revertSummaryRowStep,
 } from './steps';
-import type { GeneratedSummary, SummaryWorkflowInput } from './steps';
 
 export type { SummaryStreamEvent, SummaryWorkflowInput } from './steps';
-
-export const maxDuration = GENERATION_MAX_DURATION_SECONDS;
 
 export async function summaryWorkflow(input: SummaryWorkflowInput): Promise<void> {
   'use workflow';

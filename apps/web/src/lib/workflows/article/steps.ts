@@ -17,7 +17,10 @@ export const ARTICLE_PROMPT_VERSION = 'v9';
 
 // Re-export so existing imports (`@/lib/workflows/article` and
 // `@/lib/workflows/article/steps`) continue to work after the
-// strategy-pattern refactor moved the canonical definitions.
+// strategy-pattern refactor moved the canonical definitions. The
+// flush-coalescing constants and ARTICLE_SCHEMA now live with the
+// single-pass strategy (`./strategies/singlePass.ts`); main's bump of
+// FLUSH_CHARS/FLUSH_INTERVAL_MS is mirrored there.
 export type { ArticleStreamEvent, ArticleWorkflowInput, GeneratedArticle };
 
 export async function generateArticleStep(input: ArticleWorkflowInput): Promise<GeneratedArticle> {
