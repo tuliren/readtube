@@ -9,19 +9,19 @@ import {
 } from '@/constants';
 import { countWords } from '@/lib/format/wordCount';
 
-import { type TranscriptChunk, chunkTranscript } from './chunkTranscript';
-import { embedWindows } from './embedWindows';
-import { jaccardSimilarity } from './jaccard';
-import { buildSectionPrompt } from './prompts';
-import { type SectionBrief, reduceOutline } from './reduceOutline';
-import { streamWithGuards } from './streamWithGuards';
-import { type TopicSection, groupWindowsIntoSections } from './topicBoundaries';
+import { buildSectionPrompt } from '../prompts';
+import { streamWithGuards } from '../streamWithGuards';
 import type {
   ArticleGenerationStrategy,
   ArticleWorkflowInput,
   GeneratedArticle,
   GenerationContext,
-} from './types';
+} from '../types';
+import { type TranscriptChunk, chunkTranscript } from './chunkTranscript';
+import { embedWindows } from './embedWindows';
+import { jaccardSimilarity } from './jaccard';
+import { type SectionBrief, reduceOutline } from './reduceOutline';
+import { type TopicSection, groupWindowsIntoSections } from './topicBoundaries';
 
 const SECTION_SCHEMA = z.object({
   topic: z

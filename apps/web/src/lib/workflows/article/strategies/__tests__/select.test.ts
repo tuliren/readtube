@@ -3,10 +3,10 @@ import { ArticleStyle } from '@readtube/database';
 import { MAP_REDUCE_THRESHOLD_MINUTES } from '@/constants';
 import type { TranscriptSegment } from '@/lib/platforms/types';
 
-import { mapReduceStrategy } from './mapReduce';
-import { selectStrategy } from './select';
-import { singlePassStrategy } from './singlePass';
-import type { ArticleWorkflowInput } from './types';
+import { mapReduceStrategy } from '../mapReduce';
+import { selectStrategy } from '../select';
+import { singlePassStrategy } from '../singlePass';
+import type { ArticleWorkflowInput } from '../types';
 
 function input(
   durationSeconds: number | null,

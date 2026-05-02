@@ -1,4 +1,4 @@
-import { jaccardSimilarity } from './jaccard';
+import { jaccardSimilarity } from '../jaccard';
 
 describe('jaccardSimilarity', () => {
   it.each([

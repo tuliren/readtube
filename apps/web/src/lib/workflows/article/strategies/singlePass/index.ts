@@ -1,14 +1,14 @@
 import { FatalError } from 'workflow';
 import { z } from 'zod';
 
-import { buildSinglePassPrompt } from './prompts';
-import { streamWithGuards } from './streamWithGuards';
+import { buildSinglePassPrompt } from '../prompts';
+import { streamWithGuards } from '../streamWithGuards';
 import type {
   ArticleGenerationStrategy,
   ArticleWorkflowInput,
   GeneratedArticle,
   GenerationContext,
-} from './types';
+} from '../types';
 
 export const SINGLE_PASS_SCHEMA = z.object({
   content: z

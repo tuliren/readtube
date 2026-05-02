@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
-import { buildReducePrompt } from './prompts';
-import { streamWithGuards } from './streamWithGuards';
-import type { ArticleWorkflowInput } from './types';
+import { buildReducePrompt } from '../prompts';
+import { streamWithGuards } from '../streamWithGuards';
+import type { ArticleWorkflowInput } from '../types';
 
 export interface SectionBrief {
   index: number;

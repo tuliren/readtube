@@ -1,6 +1,6 @@
 import type { TranscriptSegment } from '@/lib/platforms/types';
 
-import { chunkTranscript } from './chunkTranscript';
+import { chunkTranscript } from '../chunkTranscript';
 
 function seg(startMs: number, endMs: number, text: string): TranscriptSegment {
   return { startMs, endMs, text };
