@@ -22,6 +22,15 @@ export default function Hero() {
         <Button href="/sign-up" variant="solid" color="slate">
           Get Started
         </Button>
+        <Button
+          href="https://www.read.tube/p/videos/Hrbq66XqtCo?language=en"
+          variant="outline"
+          color="slate"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Preview
+        </Button>
       </div>
     </section>
   );
