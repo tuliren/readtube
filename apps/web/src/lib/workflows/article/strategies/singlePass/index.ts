@@ -25,7 +25,7 @@ export const SINGLE_PASS_SCHEMA = z.object({
 // workflow stream is Redis-backed, so every write is a network op;
 // `streamText`'s structured-output partials arrive every few tokens,
 // which produced hundreds of round-trips per article. Buffering until
-// either ~1000 chars accumulate or ~500 ms pass keeps the reading
+// either ~1000 chars accumulate or ~80 ms pass keeps the reading
 // experience smooth while dropping the write count and the size of
 // the workflow event log (which contributes to OOM on long articles).
 const FLUSH_CHARS = 1000;
