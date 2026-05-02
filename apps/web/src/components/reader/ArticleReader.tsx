@@ -14,8 +14,9 @@ import ArticleMarkdown from './ArticleMarkdown';
 import ExportMarkdownButtons from './ExportMarkdownButtons';
 import FloatingToc from './FloatingToc';
 import LanguagePicker, { languageQueryFragment } from './LanguagePicker';
+import StreamingArticleBody from './StreamingArticleBody';
 import type { TranscriptStatus } from './VideoReader';
-import { createArticleStreamHandler } from './articleStreamHandler';
+import { type SectionState, createArticleStreamHandler } from './articleStreamHandler';
 
 function RegenerateButton({ onClick, disabled }: { onClick: () => void; disabled?: boolean }) {
   return (
@@ -94,6 +95,11 @@ export default function ArticleReader({
   const [reducing, setReducing] = useState(false);
   // Reserved for future UI use (showing alongside the video title).
   const [, setArticleTitle] = useState<string | null>(null);
+  // Per-section state used to render section bodies + skeletons in the
+  // gaps while map-reduce is still streaming. Populated by the stream
+  // handler's `onSection` callback. Empty in single-pass mode.
+  const [sectionStates, setSectionStates] = useState<Record<number, SectionState>>({});
+  const [consolidatedHeadings, setConsolidatedHeadings] = useState<string[] | null>(null);
 
   // Auto-scroll the reader to the bottom while content streams in,
   // unless the user has scrolled away — the hook tracks that on its
@@ -110,6 +116,8 @@ export default function ArticleReader({
     setSectionsReady(0);
     setReducing(false);
     setArticleTitle(null);
+    setSectionStates({});
+    setConsolidatedHeadings(null);
 
     const langFragment = languageQueryFragment(selectedLanguage);
     const url = `${apiBase}/${videoDbId}/article?style=${STYLE}&${langFragment}`;
@@ -156,6 +164,8 @@ export default function ArticleReader({
         setSectionsTotal(null);
         setSectionsReady(0);
         setReducing(false);
+        setSectionStates({});
+        setConsolidatedHeadings(null);
 
         const handler = createArticleStreamHandler({
           setContent,
@@ -164,6 +174,8 @@ export default function ArticleReader({
           setSectionsReady,
           setReducing,
           setArticleTitle,
+          onSection: (i, state) => setSectionStates((prev) => ({ ...prev, [i]: state })),
+          setConsolidatedHeadings,
         });
         await consumeNdjsonStream(res.body, handler.onEvent);
 
@@ -250,6 +262,8 @@ export default function ArticleReader({
     setSectionsReady(0);
     setReducing(false);
     setArticleTitle(null);
+    setSectionStates({});
+    setConsolidatedHeadings(null);
 
     try {
       const langFragment = languageQueryFragment(selectedLanguage);
@@ -314,6 +328,8 @@ export default function ArticleReader({
         setSectionsReady,
         setReducing,
         setArticleTitle,
+        onSection: (i, state) => setSectionStates((prev) => ({ ...prev, [i]: state })),
+        setConsolidatedHeadings,
       });
       await consumeNdjsonStream(res.body, handler.onEvent);
       const finalState = handler.getState();
@@ -467,9 +483,17 @@ export default function ArticleReader({
           disabled={!hasExportableContent || isStreaming}
         />
       </div>
-      <ArticleMarkdown hasLatex={hasLatex} enableHeadingIds>
-        {content}
-      </ArticleMarkdown>
+      {isStreaming && sectionsTotal != null ? (
+        <StreamingArticleBody
+          sectionsTotal={sectionsTotal}
+          sections={sectionStates}
+          consolidatedHeadings={consolidatedHeadings}
+        />
+      ) : (
+        <ArticleMarkdown hasLatex={hasLatex} enableHeadingIds>
+          {content}
+        </ArticleMarkdown>
+      )}
       {status === 'streaming' && (
         <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
           <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-blue-500" />

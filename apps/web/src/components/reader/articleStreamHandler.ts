@@ -22,7 +22,7 @@
  */
 export type StreamMode = 'unknown' | 'single-pass' | 'map-reduce';
 
-interface SectionState {
+export interface SectionState {
   topic: string;
   body: string;
   hasLatex: boolean;
@@ -35,6 +35,17 @@ export interface ArticleStreamSetters {
   setSectionsReady: (n: number) => void;
   setReducing: (b: boolean) => void;
   setArticleTitle: (s: string | null) => void;
+  /**
+   * Per-section completion event from the map-reduce strategy. Lets the
+   * UI render section bodies as they arrive (with skeletons in gaps)
+   * rather than waiting for the whole article to land.
+   */
+  onSection: (index: number, state: SectionState) => void;
+  /**
+   * The reduce pass's consolidated heading list (one entry per section).
+   * Empty string entries mean "render this section without its own heading".
+   */
+  setConsolidatedHeadings: (headings: string[] | null) => void;
 }
 
 export interface ArticleStreamHandler {
@@ -107,12 +118,14 @@ export function createArticleStreamHandler(setters: ArticleStreamSetters): Artic
       typeof e.topic === 'string' &&
       typeof e.body === 'string'
     ) {
-      sections.set(e.section, {
+      const sectionState: SectionState = {
         topic: e.topic,
         body: e.body,
         hasLatex: e.hasLatex === true,
-      });
+      };
+      sections.set(e.section, sectionState);
       setters.setSectionsReady(sections.size);
+      setters.onSection(e.section, sectionState);
       refresh();
     }
 
@@ -122,6 +135,7 @@ export function createArticleStreamHandler(setters: ArticleStreamSetters): Artic
       const r = reduce as Record<string, unknown>;
       if (Array.isArray(r.headings)) {
         consolidatedHeadings = r.headings.filter((h): h is string => typeof h === 'string');
+        setters.setConsolidatedHeadings(consolidatedHeadings);
         refresh();
       }
       if (typeof r.articleTitle === 'string') {
