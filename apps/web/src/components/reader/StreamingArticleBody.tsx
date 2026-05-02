@@ -1,13 +1,11 @@
 'use client';
 
-import ReactMarkdown, { type Components } from 'react-markdown';
+import ReactMarkdown from 'react-markdown';
 import rehypeExternalLinks from 'rehype-external-links';
 import rehypeKatex from 'rehype-katex';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import type { PluggableList } from 'unified';
-
-import { headingDomId } from '@/lib/reader/extractArticleHeadings';
 
 import type { SectionState } from './articleStreamHandler';
 
@@ -27,24 +25,16 @@ const EXTERNAL_LINKS_PLUGIN: PluggableList[number] = [
   { target: '_blank', rel: ['noopener', 'noreferrer'] },
 ];
 
-const HEADING_COMPONENTS: Components = {
-  h2: ({ node, children, ...props }) => {
-    const line = node?.position?.start?.line ?? 0;
-    return (
-      <h2 id={headingDomId(2, line)} className="scroll-mt-20" {...props}>
-        {children}
-      </h2>
-    );
-  },
-  h3: ({ node, children, ...props }) => {
-    const line = node?.position?.start?.line ?? 0;
-    return (
-      <h3 id={headingDomId(3, line)} className="scroll-mt-20" {...props}>
-        {children}
-      </h3>
-    );
-  },
-};
+// Note: we deliberately do NOT inject `headingDomId`-style anchor ids
+// here. Each section is its own ReactMarkdown render, so the line
+// numbers in `node.position` are local to that section's markdown
+// fragment — every section's first `##` would get the same id
+// (`toc-h2-1`) and collide. The FloatingToc derives its targets from
+// the absolute line numbers in the ASSEMBLED `content` string, so any
+// ids we stamped here wouldn't match anyway. The TOC simply doesn't
+// resolve targets during the streaming phase; once the workflow
+// finishes, ArticleReader switches back to ArticleMarkdown (which
+// stamps proper global ids) and the TOC starts working.
 
 /** A single animated skeleton paragraph used to fill gaps where one or
  *  more contiguous sections haven't streamed in yet. Consecutive
@@ -111,12 +101,7 @@ export default function StreamingArticleBody({
     const markdown = buildSectionMarkdown(sec, heading);
     const plugins = makePlugins(sec.hasLatex);
     items.push(
-      <ReactMarkdown
-        key={`sec-${i}`}
-        remarkPlugins={plugins.remark}
-        rehypePlugins={plugins.rehype}
-        components={HEADING_COMPONENTS}
-      >
+      <ReactMarkdown key={`sec-${i}`} remarkPlugins={plugins.remark} rehypePlugins={plugins.rehype}>
         {markdown}
       </ReactMarkdown>
     );
