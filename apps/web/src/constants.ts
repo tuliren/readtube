@@ -43,3 +43,22 @@ export const DEFAULT_EMBEDDING_MODEL = 'openai/text-embedding-3-small';
  * the longest transcripts the model has to chew through.
  */
 export const GENERATION_MAX_DURATION_SECONDS = 800;
+
+/**
+ * Maximum attempts (initial + retries) for `streamText` calls in
+ * generation steps when nothing has been streamed to the client yet.
+ * Once any delta has been emitted, retrying would re-stream content
+ * the client already received, so the retry budget only applies to
+ * pre-first-byte failures (gateway connect, TLS, early "fetch
+ * failed").
+ */
+export const MAX_PRESTREAM_ATTEMPTS = 3;
+
+/**
+ * Inactivity watchdog: abort the model stream if no token has arrived
+ * for this long. Long transcripts can stall mid-stream when the
+ * gateway holds the connection open but stops forwarding data —
+ * without this, the workflow would hang until {@link GENERATION_MAX_DURATION_SECONDS}
+ * fires (~13 minutes). 90 s is well above normal token-gap variance.
+ */
+export const STREAM_INACTIVITY_TIMEOUT_MS = 90_000;
