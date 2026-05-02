@@ -4,26 +4,11 @@ import RotatingWord from '@/components/RotatingWord';
 import { DESCRIPTION } from '@/constants';
 
 const PREVIEW_VIDEOS: readonly PreviewItem[] = [
-  {
-    title: 'Jensen Huang Interview with Lex Fridman',
-    url: 'https://www.read.tube/p/videos/vif8NQcjVf0?language=en',
-  },
-  {
-    title: 'Elon Musk Interview with Dwarkesh Patel',
-    url: 'https://www.read.tube/p/videos/BYXbuik3dgA?language=en',
-  },
-  {
-    title: 'Rules for Deep Work by Cal Newport',
-    url: 'https://www.read.tube/p/videos/nPzFhkTe2Uw?language=en',
-  },
-  {
-    title: 'Intro to Neural Networks by Andrej Karpathy',
-    url: 'https://www.read.tube/p/videos/VMj-3S1tku0?language=en',
-  },
-  {
-    title: 'Explanation of Special Relativity by Mahesh Shenoy',
-    url: 'https://www.read.tube/p/videos/TJmgKdc7H34?language=en',
-  },
+  { title: 'Jensen Huang Interview with Lex Fridman', id: 'vif8NQcjVf0' },
+  { title: 'Elon Musk Interview with Dwarkesh Patel', id: 'BYXbuik3dgA' },
+  { title: 'Rules for Deep Work by Cal Newport', id: 'nPzFhkTe2Uw' },
+  { title: 'Intro to Neural Networks by Andrej Karpathy', id: 'VMj-3S1tku0' },
+  { title: 'Explanation of Special Relativity by Mahesh Shenoy', id: 'TJmgKdc7H34' },
 ];
 
 export default function Hero() {

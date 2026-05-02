@@ -8,10 +8,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { buildThumbnailUrl } from '@/lib/platforms/youtube/urls';
 
 export interface PreviewItem {
   title: string;
-  url: string;
+  id: string;
 }
 
 interface Props {
@@ -25,11 +26,24 @@ export default function PreviewDropdown({ items }: Props) {
         Preview
         <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="center" sideOffset={8}>
+      <DropdownMenuContent align="center" sideOffset={8} className="w-80">
         {items.map((item) => (
-          <DropdownMenuItem key={item.url} asChild>
-            <a href={item.url} target="_blank" rel="noopener noreferrer">
-              {item.title}
+          <DropdownMenuItem key={item.id} asChild>
+            <a
+              href={`/p/videos/${item.id}?language=en`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="gap-3"
+            >
+              <img
+                src={buildThumbnailUrl(item.id)}
+                alt=""
+                aria-hidden
+                referrerPolicy="no-referrer"
+                className="h-10 w-16 shrink-0 rounded object-cover"
+                loading="lazy"
+              />
+              <span className="min-w-0 flex-1 truncate">{item.title}</span>
             </a>
           </DropdownMenuItem>
         ))}
