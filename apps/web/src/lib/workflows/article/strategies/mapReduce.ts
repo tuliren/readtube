@@ -290,7 +290,9 @@ function aggregateUsage(sections: SectionResult[], reduceUsage: unknown): unknow
  * If the embedding pipeline fails, fall back to coalescing windows
  * into sections by word count alone — the chunker already snaps to
  * segment boundaries, so we just merge consecutive windows until the
- * accumulated word count crosses the section target.
+ * accumulated word count crosses the section target. Logs its own
+ * summary so log readers see the fallback path was taken (no distance
+ * stats / cosine cuts in this branch).
  */
 function fallbackSectionsFromWindows(windows: TranscriptChunk[]): TopicSection[] {
   // Re-chunk via the deterministic word-count chunker by feeding
@@ -306,11 +308,29 @@ function fallbackSectionsFromWindows(windows: TranscriptChunk[]): TopicSection[]
     targetWords: SECTION_TARGET_WORDS,
     maxChunks: MAX_SECTIONS,
   });
-  return grouped.map((c, idx) => ({
+  const sections: TopicSection[] = grouped.map((c, idx) => ({
     index: idx,
     startMs: c.startMs,
     endMs: c.endMs,
     text: c.text,
     windowRange: { start: 0, end: 0 },
+    cutReason: 'fallback',
   }));
+
+  console.info('[articleWorkflow:map-reduce] section grouping summary (fallback)', {
+    windows: windows.length,
+    totalWords: windows.reduce(
+      (acc, w) => acc + w.text.trim().split(/\s+/).filter(Boolean).length,
+      0
+    ),
+    sections: sections.length,
+    bounds: { target: SECTION_TARGET_WORDS },
+    note: 'embedding pipeline failed; sections derived from word-count chunker',
+    perSection: sections.map((s) => ({
+      idx: s.index,
+      words: s.text.trim().split(/\s+/).filter(Boolean).length,
+    })),
+  });
+
+  return sections;
 }
