@@ -1,40 +1,17 @@
 'use client';
 
-import {
-  Archive,
-  Bookmark,
-  ChevronDown,
-  ChevronRight,
-  Inbox as InboxIcon,
-  Star,
-} from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 
 import { useCollapseState } from '@/components/dashboard/CollapseStateContext';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { isDefaultQuery } from '@/lib/inbox/filter';
+import { INBOX_VIEWS, type InboxViewDef } from '@/lib/inbox/views';
 import type { InboxQuery } from '@/lib/types';
 
 import { useSidebar } from './SidebarContext';
 import { SidebarBadge, SidebarRowContent, sidebarRowClass } from './SidebarRow';
 import { useInboxQuery } from './useInboxQuery';
-
-interface ViewDef {
-  label: string;
-  icon: LucideIcon;
-  /** The query that pins this view. Also used to decide whether the
-   *  current URL matches it. The Inbox row uses an empty object — it's
-   *  handled specially in isActive. */
-  query: Partial<InboxQuery>;
-}
-
-const VIEWS: ViewDef[] = [
-  { label: 'Inbox', icon: InboxIcon, query: {} },
-  { label: 'Starred', icon: Star, query: { starred: true } },
-  { label: 'Read Later', icon: Bookmark, query: { saved: true } },
-  { label: 'Archived', icon: Archive, query: { archived: true } },
-];
 
 interface Props {
   /** Aggregate unread count across every subscribed channel. Renders as
@@ -63,7 +40,7 @@ export default function ViewsSection({ inboxUnread }: Props) {
   // hiding them behind a second collapse would leave the rail empty.
   const sectionCollapsed = !collapsed && viewsCollapsed;
 
-  function isActive(view: ViewDef): boolean {
+  function isActive(view: InboxViewDef): boolean {
     // The Inbox view is the "default" view — active iff no filter keys
     // are set. We can't rely on subset-match (every key absent matches
     // subset-of-anything) because an empty query is also a subset of
@@ -95,7 +72,7 @@ export default function ViewsSection({ inboxUnread }: Props) {
       )}
       {sectionCollapsed ? null : (
         <ul className="space-y-0.5">
-          {VIEWS.map((view) => {
+          {INBOX_VIEWS.map((view) => {
             const active = isActive(view);
             const params = new URLSearchParams();
             for (const [k, v] of Object.entries(view.query)) {
@@ -107,12 +84,14 @@ export default function ViewsSection({ inboxUnread }: Props) {
             }
             const qs = params.toString();
             const href = qs.length > 0 ? `/inbox?${qs}` : '/inbox';
-            const count = view.label === 'Inbox' ? inboxUnread : 0;
+            // Inbox + Unread both reflect the user's pending-triage
+            // queue, so both surface the aggregate unread count.
+            const count = view.key === 'inbox' || view.key === 'unread' ? inboxUnread : 0;
             const Icon = view.icon;
 
             if (collapsed) {
               return (
-                <li key={view.label}>
+                <li key={view.key}>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Link
@@ -136,7 +115,7 @@ export default function ViewsSection({ inboxUnread }: Props) {
             }
 
             return (
-              <li key={view.label}>
+              <li key={view.key}>
                 <Link href={href} className={sidebarRowClass(active)}>
                   <SidebarRowContent
                     icon={view.icon}

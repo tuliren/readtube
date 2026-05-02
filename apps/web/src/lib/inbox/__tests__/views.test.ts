@@ -21,8 +21,8 @@ describe('resolveInboxView', () => {
     },
     {
       query: { unread: true },
-      expectedKey: null,
-      desc: 'unread chip has no matching named view',
+      expectedKey: 'unread',
+      desc: 'unread=true → Unread',
     },
     {
       query: { folderId: 'f1' },
@@ -33,10 +33,11 @@ describe('resolveInboxView', () => {
     expect(resolveInboxView(query)?.key ?? null).toBe(expectedKey);
   });
 
-  it('every view in INBOX_VIEWS has a label and emptyMessage', () => {
+  it('every view in INBOX_VIEWS has a label, icon, and emptyMessage', () => {
     for (const view of INBOX_VIEWS) {
       expect(view.label.length).toBeGreaterThan(0);
       expect(view.emptyMessage.length).toBeGreaterThan(0);
+      expect(view.icon).toBeDefined();
     }
   });
 });

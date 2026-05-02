@@ -4,6 +4,7 @@ import {
   Archive,
   Bookmark,
   BookmarkCheck,
+  CheckCheck,
   FileText,
   Loader2,
   MoreHorizontal,
@@ -482,6 +483,12 @@ export default function VideoRow({
                       {pendingArticle ? 'Generating…' : 'Generate article'}
                     </DropdownMenuItem>
                   )}
+                  {isUnread && (
+                    <DropdownMenuItem onSelect={() => void triage.markRead(video.id)}>
+                      <CheckCheck className="mr-2 h-4 w-4 text-emerald-500" />
+                      Mark as read
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem onSelect={() => onOpenNotes(video.id, video.title)}>
                     <NotebookPen className="mr-2 h-4 w-4 text-amber-500" />
                     {video.noteCount > 0 ? `Notes (${video.noteCount})` : 'Add note'}
@@ -589,6 +596,20 @@ export default function VideoRow({
                   <span className="text-[10px] font-semibold leading-none">{video.noteCount}</span>
                 )}
               </button>
+              {isUnread && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    stop(e);
+                    void triage.markRead(video.id);
+                  }}
+                  title="Mark as read"
+                  aria-label="Mark as read"
+                  className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-emerald-500"
+                >
+                  <CheckCheck className="h-4 w-4" />
+                </button>
+              )}
               <button
                 type="button"
                 onClick={(e) => {

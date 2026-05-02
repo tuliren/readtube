@@ -153,6 +153,17 @@ export function useTriage() {
       }
     },
 
+    async markRead(videoId: string): Promise<boolean> {
+      try {
+        await call('POST', `/api/videos/${videoId}/read`);
+        invalidateLists();
+        return true;
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to mark as read');
+        return false;
+      }
+    },
+
     async archive(videoId: string): Promise<boolean> {
       try {
         await call('POST', `/api/videos/${videoId}/archive`);
