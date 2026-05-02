@@ -1,16 +1,12 @@
-import { GENERATION_MAX_DURATION_SECONDS } from '@/constants';
-
+import type { ArticleWorkflowInput, GeneratedArticle } from './steps';
 import {
   emitTerminalEventStep,
   generateArticleStep,
   persistArticleStep,
   revertArticleRowStep,
 } from './steps';
-import type { ArticleWorkflowInput, GeneratedArticle } from './steps';
 
 export type { ArticleStreamEvent, ArticleWorkflowInput } from './steps';
-
-export const maxDuration = GENERATION_MAX_DURATION_SECONDS;
 
 export async function articleWorkflow(input: ArticleWorkflowInput): Promise<void> {
   'use workflow';

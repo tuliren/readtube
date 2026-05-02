@@ -32,19 +32,6 @@ export const DEFAULT_AI_MODEL = 'openai/gpt-5.4-mini';
 export const DEFAULT_EMBEDDING_MODEL = 'openai/text-embedding-3-small';
 
 /**
- * Function timeout (in seconds) shared by the summary/article generate
- * routes and their workflow steps. Both ends of the pipe need to live
- * long enough for the workflow to stream deltas, persist the row, and
- * emit the terminal `{type:'done'}` event — if the route times out
- * first the response closes mid-workflow and the client falls into the
- * "Generation ended unexpectedly — refresh" branch even though the
- * content lands in the database. 800 s is the Vercel Pro cap with
- * Fluid Compute (the default for new projects); plenty of headroom for
- * the longest transcripts the model has to chew through.
- */
-export const GENERATION_MAX_DURATION_SECONDS = 800;
-
-/**
  * Maximum attempts (initial + retries) for `streamText` calls in
  * generation steps when nothing has been streamed to the client yet.
  * Once any delta has been emitted, retrying would re-stream content
@@ -57,8 +44,7 @@ export const MAX_PRESTREAM_ATTEMPTS = 3;
 /**
  * Inactivity watchdog: abort the model stream if no token has arrived
  * for this long. Long transcripts can stall mid-stream when the
- * gateway holds the connection open but stops forwarding data —
- * without this, the workflow would hang until {@link GENERATION_MAX_DURATION_SECONDS}
- * fires (~13 minutes). 90 s is well above normal token-gap variance.
+ * gateway holds the connection open but stops forwarding data.
+ * 90 s is well above normal token-gap variance.
  */
 export const STREAM_INACTIVITY_TIMEOUT_MS = 90_000;
