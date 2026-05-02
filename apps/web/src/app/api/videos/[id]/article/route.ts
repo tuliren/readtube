@@ -5,7 +5,6 @@ import { getRun, start } from 'workflow/api';
 
 import { DEFAULT_AI_MODEL } from '@/constants';
 import { findOrCloneArticle, resolveTranscriptLanguage } from '@/lib/language/cache';
-import { buildLanguageRule } from '@/lib/language/prompt';
 import { resolveTargetLanguage } from '@/lib/language/resolve';
 import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
@@ -30,43 +29,6 @@ function parseStyle(raw: string | null | undefined): ArticleStyle | null {
     return raw as ArticleStyle;
   }
   return null;
-}
-
-function buildPrompt(
-  style: ArticleStyle,
-  target: string | null,
-  sourceLanguage: string | null,
-  title: string,
-  channelName: string,
-  transcript: string
-) {
-  const styleGuidance =
-    style === ArticleStyle.DIALOG
-      ? `- Format the article as a dialog or interview transcript, preserving exchanges between speakers when the video is conversational.
-- If there's only one speaker, format as a reflective monologue with paragraph breaks.`
-      : `- Reformat the transcript as an article in GitHub Flavored Markdown. This is a re-formatting task, not a rewriting or summarization task.`;
-
-  return `${buildLanguageRule(target, sourceLanguage)}
-
-You are an expert editor turning video transcripts into clean, well-formatted articles.
-
-CRITICAL FIDELITY REQUIREMENT: Do NOT summarize, condense, abstract, paraphrase for brevity, or skip any substantive content. Every idea, argument, example, number, quote, and concrete detail in the transcript must appear in the article. The finished article should be roughly the same length as the transcript minus filler words — NOT shorter. If you find yourself compressing or omitting, stop and include the material.
-
-Instructions:
-${styleGuidance}
-- Structure the article with \`##\` section headings (and \`###\` subheadings where helpful) at every natural topic shift, so the reader can scan and navigate. Aim for a heading roughly every few hundred words; long unbroken prose with no sectioning is a failure mode to avoid. Write descriptive headings that summarize their section, not generic ones like "Introduction" or "Part 1". Skip headings only when the entire article is a single short topic.
-- Use whatever Markdown features best suit the content. Beyond headings and subheadings, also use lists, blockquotes, tables (for comparisons / specs / enumerations), fenced code blocks (for code, commands, file paths, or configuration), inline code for short technical tokens, bold and italic emphasis, horizontal rules to separate unrelated sections, and links where the speaker references them. Pick the feature that best represents each chunk of content.
-- Remove only filler words ("um", "uh", "like", "you know"), false starts, repeated words, and verbal tics. Do not remove substantive content.
-- Preserve the speaker's voice, phrasing, and stylistic quirks. Keep concrete details, numbers, and examples verbatim.
-- Do not invent facts, claims, or details that aren't in the transcript.
-- Do not include the video title as a top-level heading — it will be shown separately.
-- Start directly with the article content. No preamble of any kind, in any language. Do NOT prefix the article with framing sentences such as "Here is the article", "Below is the article", "The following is...", "以下是...", "下面是...", "이하는...", "次のように...", or any equivalent. The very first character of the output must be the first character of the article body itself (a heading, the opening of the first paragraph, etc.).
-
-Video title: ${title}
-Channel: ${channelName}
-
-Transcript:
-${transcript}`;
 }
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -188,8 +150,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     `[article/POST] Generating article for video ${id} (style=${style}, language=${target ?? 'original'}), user ${userId}`
   );
 
-  // Look up title + channel name first; ensureTranscript will do
-  // its own IDOR check + transcript resolution.
+  // Look up title + channel name + duration first; ensureTranscript
+  // will do its own IDOR check + transcript resolution. Duration
+  // drives the article workflow's strategy selection — videos at or
+  // above MAP_REDUCE_THRESHOLD_MINUTES use the map-reduce path.
   const video = await prisma.video.findFirst({
     where: {
       id,
@@ -202,6 +166,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     select: {
       id: true,
       title: true,
+      duration_seconds: true,
       channel: { select: { name: true } },
     },
   });
@@ -285,13 +250,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return new Response(stream, { headers: NDJSON_HEADERS });
   }
 
-  const transcriptText = transcript.segments.map((s) => s.text).join(' ');
-
   // For "Original" requests, detect the transcript's source language
-  // server-side and feed it to the prompt builder. See the matching
-  // call in the summary route for the rationale — this avoids relying
-  // on the model to detect from prompt body, which has been unreliable
-  // on transcripts with mixed scripts or heavy code-switching. Falls
+  // server-side and feed it to the strategy. See the matching call in
+  // the summary route for the rationale — this avoids relying on the
+  // model to detect from prompt body, which has been unreliable on
+  // transcripts with mixed scripts or heavy code-switching. Falls
   // back to English when franc can't decide. Skipped for explicit
   // target-language requests since those force translation anyway.
   const sourceLanguage =
@@ -302,20 +265,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // workflow keeps running, persists the row on completion, and the
   // user picks it up via the existing-article GET on next visit.
   // Persistence is all-or-nothing — only the final persist step
-  // touches the DB, so a half-streamed article never lands.
+  // touches the DB, so a half-streamed article never lands. The
+  // workflow's strategy selector reads `durationSeconds` to choose
+  // single-pass vs map-reduce.
   const run = await start(articleWorkflow, [
     {
-      prompt: buildPrompt(
-        style,
-        target,
-        sourceLanguage,
-        video.title,
-        video.channel.name,
-        transcriptText
-      ),
       transcriptId: transcript.id,
       style,
       language: target,
+      segments: transcript.segments,
+      videoTitle: video.title,
+      channelName: video.channel.name,
+      sourceLanguage,
+      durationSeconds: video.duration_seconds,
     },
   ]);
 

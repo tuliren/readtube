@@ -14,7 +14,9 @@ import ArticleMarkdown from './ArticleMarkdown';
 import ExportMarkdownButtons from './ExportMarkdownButtons';
 import FloatingToc from './FloatingToc';
 import LanguagePicker, { languageQueryFragment } from './LanguagePicker';
+import StreamingArticleBody from './StreamingArticleBody';
 import type { TranscriptStatus } from './VideoReader';
+import { type SectionState, createArticleStreamHandler } from './articleStreamHandler';
 
 function RegenerateButton({ onClick, disabled }: { onClick: () => void; disabled?: boolean }) {
   return (
@@ -87,6 +89,17 @@ export default function ArticleReader({
   const [content, setContent] = useState('');
   const [hasLatex, setHasLatex] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Map-reduce progress indicators. Null/0 in single-pass mode.
+  const [sectionsTotal, setSectionsTotal] = useState<number | null>(null);
+  const [sectionsReady, setSectionsReady] = useState(0);
+  const [reducing, setReducing] = useState(false);
+  // Reserved for future UI use (showing alongside the video title).
+  const [, setArticleTitle] = useState<string | null>(null);
+  // Per-section state used to render section bodies + skeletons in the
+  // gaps while map-reduce is still streaming. Populated by the stream
+  // handler's `onSection` callback. Empty in single-pass mode.
+  const [sectionStates, setSectionStates] = useState<Record<number, SectionState>>({});
+  const [consolidatedHeadings, setConsolidatedHeadings] = useState<string[] | null>(null);
 
   // Auto-scroll the reader to the bottom while content streams in,
   // unless the user has scrolled away — the hook tracks that on its
@@ -99,6 +112,12 @@ export default function ArticleReader({
     setContent('');
     setHasLatex(false);
     setErrorMessage(null);
+    setSectionsTotal(null);
+    setSectionsReady(0);
+    setReducing(false);
+    setArticleTitle(null);
+    setSectionStates({});
+    setConsolidatedHeadings(null);
 
     const langFragment = languageQueryFragment(selectedLanguage);
     const url = `${apiBase}/${videoDbId}/article?style=${STYLE}&${langFragment}`;
@@ -136,56 +155,47 @@ export default function ArticleReader({
         }
 
         // Switch into streaming UX. Mirrors handleGenerate's setup so
-        // the rendered article markdown grows live as deltas arrive.
+        // the rendered article markdown grows live as events arrive.
+        // Single-pass and map-reduce are auto-detected by the shared
+        // handler.
         setStatus('streaming');
         setContent('');
         setHasLatex(false);
+        setSectionsTotal(null);
+        setSectionsReady(0);
+        setReducing(false);
+        setSectionStates({});
+        setConsolidatedHeadings(null);
 
-        let accumulated = '';
-        let sawDone = false;
-        let streamError: string | null = null;
-
-        await consumeNdjsonStream(res.body, (event) => {
-          if (typeof event !== 'object' || event === null) {
-            return;
-          }
-          const e = event as {
-            delta?: unknown;
-            hasLatex?: unknown;
-            error?: unknown;
-            type?: unknown;
-          };
-          if (typeof e.delta === 'string') {
-            accumulated += e.delta;
-            setContent(accumulated);
-          }
-          if (typeof e.hasLatex === 'boolean') {
-            setHasLatex(e.hasLatex);
-          }
-          if (typeof e.error === 'string') {
-            streamError = e.error;
-          }
-          if (e.type === 'done') {
-            sawDone = true;
-          }
+        const handler = createArticleStreamHandler({
+          setContent,
+          setHasLatex,
+          setSectionsTotal,
+          setSectionsReady,
+          setReducing,
+          setArticleTitle,
+          onSection: (i, state) => setSectionStates((prev) => ({ ...prev, [i]: state })),
+          setConsolidatedHeadings,
         });
+        await consumeNdjsonStream(res.body, handler.onEvent);
 
+        const finalState = handler.getState();
         if (cancelled) {
           return;
         }
-        if (streamError != null) {
-          setErrorMessage(streamError);
+        if (finalState.error != null) {
+          setErrorMessage(finalState.error);
           setStatus('error');
           return;
         }
-        if (!sawDone) {
+        if (!finalState.sawDone) {
           setErrorMessage(
             'Generation ended unexpectedly. Please refresh in a moment, or try again.'
           );
           setStatus('error');
           return;
         }
-        if (!accumulated.trim()) {
+        if (!finalState.content.trim()) {
           setErrorMessage('No content was generated. Please try again.');
           setStatus('error');
           return;
@@ -248,6 +258,12 @@ export default function ArticleReader({
     setContent('');
     setHasLatex(false);
     setErrorMessage(null);
+    setSectionsTotal(null);
+    setSectionsReady(0);
+    setReducing(false);
+    setArticleTitle(null);
+    setSectionStates({});
+    setConsolidatedHeadings(null);
 
     try {
       const langFragment = languageQueryFragment(selectedLanguage);
@@ -302,64 +318,28 @@ export default function ArticleReader({
       // still showing the Fetch button.
       onTranscriptStatusChange('present');
 
-      // Parse NDJSON. Events:
-      //   { delta: string }   — appended to content
-      //   { hasLatex: bool }  — the LLM-declared flag
-      //   { type: 'done' }    — graceful stream end
-      //   { error: string }   — mid-stream failure
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let accumulated = '';
-      let sawError: string | null = null;
-      let sawDone = false;
+      // Parse NDJSON. Single-pass and map-reduce are auto-detected by
+      // the shared handler — see articleStreamHandler.ts for the full
+      // event vocabulary.
+      const handler = createArticleStreamHandler({
+        setContent,
+        setHasLatex,
+        setSectionsTotal,
+        setSectionsReady,
+        setReducing,
+        setArticleTitle,
+        onSection: (i, state) => setSectionStates((prev) => ({ ...prev, [i]: state })),
+        setConsolidatedHeadings,
+      });
+      await consumeNdjsonStream(res.body, handler.onEvent);
+      const finalState = handler.getState();
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-          break;
-        }
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (trimmed.length === 0) {
-            continue;
-          }
-          let event: {
-            delta?: unknown;
-            hasLatex?: unknown;
-            type?: unknown;
-            error?: unknown;
-          };
-          try {
-            event = JSON.parse(trimmed);
-          } catch {
-            continue;
-          }
-          if (typeof event.delta === 'string') {
-            accumulated += event.delta;
-            setContent(accumulated);
-          }
-          if (typeof event.hasLatex === 'boolean') {
-            setHasLatex(event.hasLatex);
-          }
-          if (typeof event.error === 'string') {
-            sawError = event.error;
-          }
-          if (event.type === 'done') {
-            sawDone = true;
-          }
-        }
-      }
-
-      if (sawError != null) {
-        setErrorMessage(sawError);
+      if (finalState.error != null) {
+        setErrorMessage(finalState.error);
         setStatus('error');
         return;
       }
-      if (!sawDone) {
+      if (!finalState.sawDone) {
         // Stream closed without an explicit terminator. Could be a
         // workflow-runtime hiccup, a function timeout that bypassed
         // the terminal step, or a network drop. Don't trust the
@@ -371,7 +351,7 @@ export default function ArticleReader({
         setStatus('error');
         return;
       }
-      if (!accumulated.trim()) {
+      if (!finalState.content.trim()) {
         setErrorMessage('No content was generated. Please try again.');
         setStatus('error');
         return;
@@ -503,13 +483,25 @@ export default function ArticleReader({
           disabled={!hasExportableContent || isStreaming}
         />
       </div>
-      <ArticleMarkdown hasLatex={hasLatex} enableHeadingIds>
-        {content}
-      </ArticleMarkdown>
+      {isStreaming && sectionsTotal != null ? (
+        <StreamingArticleBody
+          sectionsTotal={sectionsTotal}
+          sections={sectionStates}
+          consolidatedHeadings={consolidatedHeadings}
+        />
+      ) : (
+        <ArticleMarkdown hasLatex={hasLatex} enableHeadingIds>
+          {content}
+        </ArticleMarkdown>
+      )}
       {status === 'streaming' && (
         <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
           <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-blue-500" />
-          Generating…
+          {sectionsTotal != null
+            ? reducing
+              ? `Polishing outline (${sectionsReady} of ${sectionsTotal} sections ready)…`
+              : `Generating long article — ${sectionsReady} of ${sectionsTotal} sections ready…`
+            : 'Generating…'}
         </div>
       )}
       <FloatingToc items={tocItems} variant="headings" />
