@@ -1,7 +1,7 @@
 'use client';
 
 import { ArrowDownIcon, ArrowUpIcon } from '@heroicons/react/24/outline';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { findScrollableAncestor } from '@/lib/reader/findScrollableAncestor';
 
@@ -54,7 +54,6 @@ const TOC_MIN_GUTTER_PX = 80;
 export default function FloatingToc({ items, variant }: Props) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [hasRoom, setHasRoom] = useState(true);
-  const scrollerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (items.length === 0) {
@@ -98,10 +97,11 @@ export default function FloatingToc({ items, variant }: Props) {
     }
 
     // Locate the reader's scroll container by walking up from one of
-    // the known-good TOC targets and cache it on a ref so the Top /
-    // Bottom handlers can reuse it without another DOM walk.
+    // the known-good TOC targets. Used by the gutter measurement below;
+    // the Top / Bottom click handlers re-locate the scroller at click
+    // time (not via a cached ref) so soft-navigation between videos and
+    // tab switches can't strand them on a stale element.
     const scroller = findScrollableAncestor(targets[0]);
-    scrollerRef.current = scroller;
 
     // Watch the gutter between the article and the scroll container's
     // right edge. When the reader's column narrows (narrow viewport,
@@ -165,12 +165,33 @@ export default function FloatingToc({ items, variant }: Props) {
     el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
+  // Re-locate the scroll container at click time (rather than reading a
+  // cached ref) so the handlers stay correct across soft-navigation
+  // between videos, tab switches that re-mount the article subtree, and
+  // any future layout that wraps the reader in a different scroll
+  // ancestor. Walks up from the first known-good TOC target so we land
+  // on the same container the items effect uses.
+  const findScroller = (): HTMLElement | null => {
+    if (items.length === 0) {
+      return null;
+    }
+    const probe = document.getElementById(items[0].id);
+    if (probe == null) {
+      return null;
+    }
+    return findScrollableAncestor(probe);
+  };
+
   const handleScrollToTop = () => {
-    scrollerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+    const scroller = findScroller();
+    if (scroller == null) {
+      return;
+    }
+    scroller.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleScrollToBottom = () => {
-    const scroller = scrollerRef.current;
+    const scroller = findScroller();
     if (scroller == null) {
       return;
     }

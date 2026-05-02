@@ -1,6 +1,15 @@
 import { Button } from '@/components/Button';
+import PreviewDropdown, { type PreviewItem } from '@/components/PreviewDropdown';
 import RotatingWord from '@/components/RotatingWord';
 import { DESCRIPTION } from '@/constants';
+
+const PREVIEW_VIDEOS: readonly PreviewItem[] = [
+  { title: 'Jensen Huang Interview with Lex Fridman', id: 'vif8NQcjVf0' },
+  { title: 'Elon Musk Interview with Dwarkesh Patel', id: 'BYXbuik3dgA' },
+  { title: 'Rules for Deep Work by Cal Newport', id: 'nPzFhkTe2Uw' },
+  { title: 'Intro to Neural Networks by Andrej Karpathy', id: 'VMj-3S1tku0' },
+  { title: 'Explanation of Special Relativity by Mahesh Shenoy', id: 'TJmgKdc7H34' },
+];
 
 export default function Hero() {
   return (
@@ -22,6 +31,7 @@ export default function Hero() {
         <Button href="/sign-up" variant="solid" color="slate">
           Get Started
         </Button>
+        <PreviewDropdown items={PREVIEW_VIDEOS} />
       </div>
     </section>
   );
