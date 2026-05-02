@@ -63,15 +63,20 @@ export const MAP_REDUCE_THRESHOLD_MINUTES = 10;
 
 /**
  * Target word count per section in the map-reduce strategy. Sections
- * snap to transcript-segment boundaries, so actual sizes vary ±20%.
- * ~2000 words ≈ 10–12 min of typical speech, which keeps each
- * per-section LLM call small enough to be reliable while limiting
- * fan-out for very long videos.
+ * snap to transcript-segment boundaries, so actual sizes vary in the
+ * [0.5×, 2×] range around the target ({@link MIN_SECTION_WORDS} /
+ * {@link MAX_SECTION_WORDS}). ~600 words ≈ 4 min of typical speech —
+ * small enough that even a 10-min video produces multiple sections,
+ * which is the whole point of the map-reduce path.
  */
-export const SECTION_TARGET_WORDS = 2000;
+export const SECTION_TARGET_WORDS = 600;
 
-/** Sanity cap on map-reduce sections. ~200 × 12 min ≈ 40 hours of source. */
-export const MAX_SECTIONS = 200;
+/**
+ * Sanity cap on map-reduce sections. With a 600-word target, a 15hr
+ * (~135 k word) video produces ~225 sections; the cap accommodates
+ * that with a little headroom while still bounding pathological cases.
+ */
+export const MAX_SECTIONS = 300;
 
 /**
  * Bound on simultaneous in-flight section generations in map-reduce.
@@ -93,15 +98,20 @@ export const EMBED_WINDOW_WORDS = 250;
 export const EMBED_BATCH_SIZE = 100;
 
 /**
- * Minimum and maximum word counts for a map-reduce section. The
- * topic-boundary detector greedily merges windows into sections,
- * cutting at high cosine-distance boundaries once min is reached and
- * force-cutting when max is hit. Together these bound the per-section
- * LLM call's input size while letting natural topic shifts shape
- * variable-length sections.
+ * Minimum and maximum word counts for a map-reduce section, derived
+ * from {@link SECTION_TARGET_WORDS} so a single knob tunes sizing.
+ * The topic-boundary detector cuts at high cosine-distance boundaries
+ * once min is reached, and force-cuts at max regardless of semantic
+ * signal — important for single-topic monologues / lectures where
+ * adjacent windows never cross {@link TOPIC_BOUNDARY_DISTANCE}.
+ *
+ * 0.5× / 2× tolerance around the target gives sections that are
+ * substantive enough not to fragment trivially, but never balloon to
+ * the point where one section dominates the LLM context for the
+ * map step.
  */
-export const MIN_SECTION_WORDS = 1000;
-export const MAX_SECTION_WORDS = 4000;
+export const MIN_SECTION_WORDS = Math.floor(SECTION_TARGET_WORDS * 0.5);
+export const MAX_SECTION_WORDS = SECTION_TARGET_WORDS * 2;
 
 /**
  * Cosine-distance threshold above which a window-pair boundary
