@@ -8,7 +8,7 @@ import { CURRENT_FRONTMATTER_VERSION, serializeMarkdownDocument } from '@/lib/ma
 import { emitTerminalEvent } from '@/lib/workflows/emitTerminalEvent';
 import { revertSummaryRow } from '@/lib/workflows/runRegistry';
 
-export const SUMMARY_PROMPT_VERSION = 'v8';
+export const SUMMARY_PROMPT_VERSION = 'v9';
 
 export type SummaryField = 'headline' | 'short' | 'full';
 export const SUMMARY_FIELDS: readonly SummaryField[] = ['headline', 'short', 'full'] as const;
@@ -17,31 +17,52 @@ export const FIELDS_WITH_FRONTMATTER: ReadonlySet<SummaryField> = new Set<Summar
   'full',
 ]);
 
-const CONTENT_WITH_LATEX_SCHEMA = z.object({
-  content: z
-    .string()
-    .describe('The markdown body of the summary. Do not include any YAML frontmatter.'),
-  hasLatex: z
-    .boolean()
-    .describe(
-      'True if the content field above contains at least one LaTeX math formula wrapped in single or double dollar signs (e.g. $E = mc^2$ or $$\\int_0^1 x\\,dx$$). False otherwise. Dollar amounts like "$5 million" are not math and must not set this flag to true.'
-    ),
-});
+const HAS_LATEX_DESCRIPTION =
+  'True if this field\'s content contains at least one LaTeX math formula wrapped in single or double dollar signs (e.g. $E = mc^2$ or $$\\int_0^1 x\\,dx$$). False otherwise. Dollar amounts like "$5 million" are not math and must not set this flag to true.';
+
+const HEADLINE_DESCRIPTION =
+  'Newspaper-style title under 10 words. Plain text only — no markdown, no surrounding quotes, no "Title:" prefix.';
+const SHORT_CONTENT_DESCRIPTION =
+  '2-3 sentence summary in plain prose. First sentence is the essential point; the rest is the most important supporting context. No headings, no lists, no preamble. Do not include any YAML frontmatter.';
+const FULL_CONTENT_DESCRIPTION =
+  'Compact full summary — denser and longer than the short summary. Cover main arguments and conclusions in 2-3 short paragraphs, a Markdown bullet list using "- " (single-level only, terse one-liners), or a mix. Never use headings (#, ##, …) and do not bold or italicize. The full summary is NOT a truncation of the short — write it independently. Do not include any YAML frontmatter.';
+
+function buildSummarySchema(fields: readonly SummaryField[]) {
+  const shape: Record<string, z.ZodTypeAny> = {};
+  if (fields.includes('headline')) {
+    shape.headline = z.string().describe(HEADLINE_DESCRIPTION);
+  }
+  if (fields.includes('short')) {
+    shape.short = z.object({
+      content: z.string().describe(SHORT_CONTENT_DESCRIPTION),
+      hasLatex: z.boolean().describe(HAS_LATEX_DESCRIPTION),
+    });
+  }
+  if (fields.includes('full')) {
+    shape.full = z.object({
+      content: z.string().describe(FULL_CONTENT_DESCRIPTION),
+      hasLatex: z.boolean().describe(HAS_LATEX_DESCRIPTION),
+    });
+  }
+  return z.object(shape);
+}
+
+type StructuredFieldPartial = { content?: string; hasLatex?: boolean };
+type SummaryPartial = {
+  headline?: string;
+  short?: StructuredFieldPartial;
+  full?: StructuredFieldPartial;
+};
 
 export type SummaryStreamEvent =
   | { field: SummaryField; delta: string }
   | { field: SummaryField; hasLatex: boolean }
-  | { field: SummaryField; error: string }
   | { type: 'done' }
   | { error: string };
 
-export interface SummaryFieldPrompt {
-  field: SummaryField;
-  prompt: string;
-}
-
 export interface SummaryWorkflowInput {
-  fields: SummaryFieldPrompt[];
+  fieldsToGenerate: SummaryField[];
+  prompt: string;
   transcriptId: string;
   language: string | null;
 }
@@ -50,11 +71,11 @@ interface FieldResult {
   field: SummaryField;
   content: string;
   hasLatex: boolean;
-  usage: unknown;
 }
 
 export interface GeneratedSummary {
   results: FieldResult[];
+  usage: unknown;
 }
 
 // See articleWorkflow's steps.ts for the rationale.
@@ -64,43 +85,12 @@ const FLUSH_INTERVAL_MS = 80;
 export async function generateSummaryStep(input: SummaryWorkflowInput): Promise<GeneratedSummary> {
   'use step';
 
-  type StructuredOutput = z.infer<typeof CONTENT_WITH_LATEX_SCHEMA>;
-  type UsageProducer = { usage: PromiseLike<unknown> };
-  interface TextGen {
-    kind: 'text';
-    field: SummaryField;
-    result: UsageProducer;
-    iterator: AsyncIterator<string>;
-  }
-  interface ObjectGen {
-    kind: 'object';
-    field: SummaryField;
-    result: UsageProducer & { output: PromiseLike<StructuredOutput> };
-    iterator: AsyncIterator<Partial<StructuredOutput>>;
-  }
-  type Generation = TextGen | ObjectGen;
-
-  const generations: Generation[] = input.fields.map(({ field, prompt }): Generation => {
-    if (FIELDS_WITH_FRONTMATTER.has(field)) {
-      const result = streamText({
-        model: DEFAULT_AI_MODEL,
-        output: Output.object({ schema: CONTENT_WITH_LATEX_SCHEMA }),
-        prompt,
-      });
-      return {
-        kind: 'object',
-        field,
-        result,
-        iterator: result.partialOutputStream[Symbol.asyncIterator](),
-      };
-    }
-    const result = streamText({ model: DEFAULT_AI_MODEL, prompt });
-    return {
-      kind: 'text',
-      field,
-      result,
-      iterator: result.textStream[Symbol.asyncIterator](),
-    };
+  const fields = input.fieldsToGenerate;
+  const schema = buildSummarySchema(fields);
+  const result = streamText({
+    model: DEFAULT_AI_MODEL,
+    output: Output.object({ schema }),
+    prompt: input.prompt,
   });
 
   const writable = getWritable<SummaryStreamEvent>();
@@ -112,7 +102,7 @@ export async function generateSummaryStep(input: SummaryWorkflowInput): Promise<
     full: '',
   };
   const hasLatexByField: Partial<Record<SummaryField, boolean>> = {};
-  const fieldErrors: Partial<Record<SummaryField, string>> = {};
+  const emittedHasLatex: Partial<Record<SummaryField, boolean>> = {};
   // Per-field coalescing buffers — see articleWorkflow's steps.ts
   // for the rationale (Redis-backed stream, every write is a network
   // op, structured-output partials arrive every few tokens).
@@ -146,112 +136,102 @@ export async function generateSummaryStep(input: SummaryWorkflowInput): Promise<
     }
   };
 
+  const wantsHeadline = fields.includes('headline');
+  const wantsShort = fields.includes('short');
+  const wantsFull = fields.includes('full');
+
+  const handleStructuredField = async (
+    field: 'short' | 'full',
+    sub: StructuredFieldPartial | undefined
+  ) => {
+    if (sub == null) {
+      return;
+    }
+    if (typeof sub.content === 'string' && sub.content.length > accumulated[field].length) {
+      const delta = sub.content.slice(accumulated[field].length);
+      accumulated[field] = sub.content;
+      pending[field] += delta;
+      await maybeFlushField(field);
+    }
+    if (!emittedHasLatex[field] && typeof sub.hasLatex === 'boolean') {
+      // Drain pending content for this field before the flag so order
+      // is preserved on the wire.
+      await flushField(field);
+      emittedHasLatex[field] = true;
+      hasLatexByField[field] = sub.hasLatex;
+      await writer.write({ field, hasLatex: sub.hasLatex });
+    }
+  };
+
   try {
-    // Pump every requested field's stream concurrently. Each pump
-    // owns its own `pending[field]` / `lastFlushAt[field]` slot, so
-    // there's no shared mutable state between them. Concurrent
-    // `writer.write()` calls from different pumps are safe because
-    // `WritableStreamDefaultWriter.write` is spec-bound to FIFO-queue
-    // chunks in call order — the workflow runtime returns a standard
-    // `WritableStream` (the writable side of a `TransformStream`
-    // piped to the Redis-backed server stream), and `pipeTo`
-    // preserves order through to the consumer.
-    const pumps = generations.map(async (gen) => {
-      const { field } = gen;
-      try {
-        if (gen.kind === 'text') {
-          while (true) {
-            const next = await gen.iterator.next();
-            if (next.done) {
-              break;
-            }
-            if (next.value) {
-              accumulated[field] += next.value;
-              pending[field] += next.value;
-              await maybeFlushField(field);
-            }
-          }
-          await flushField(field);
-          return;
+    for await (const partial of result.partialOutputStream as AsyncIterable<SummaryPartial>) {
+      if (partial == null) {
+        continue;
+      }
+      if (wantsHeadline && typeof partial.headline === 'string') {
+        const next = partial.headline;
+        if (next.length > accumulated.headline.length) {
+          const delta = next.slice(accumulated.headline.length);
+          accumulated.headline = next;
+          pending.headline += delta;
+          await maybeFlushField('headline');
         }
-        let emittedHasLatex = false;
-        while (true) {
-          const next = await gen.iterator.next();
-          if (next.done) {
-            break;
-          }
-          const partial = next.value;
-          if (partial == null) {
+      }
+      if (wantsShort) {
+        await handleStructuredField('short', partial.short);
+      }
+      if (wantsFull) {
+        await handleStructuredField('full', partial.full);
+      }
+    }
+
+    for (const field of fields) {
+      await flushField(field);
+    }
+
+    // Fallback for hasLatex if the flag never appeared in the partial
+    // stream (e.g. truncated tail). Read the settled output once and
+    // emit any missing flags.
+    const needsFallback =
+      (wantsShort && !emittedHasLatex.short) || (wantsFull && !emittedHasLatex.full);
+    if (needsFallback) {
+      try {
+        const settled = (await result.output) as SummaryPartial;
+        for (const field of ['short', 'full'] as const) {
+          if (!fields.includes(field) || emittedHasLatex[field]) {
             continue;
           }
-          if (
-            typeof partial.content === 'string' &&
-            partial.content.length > accumulated[field].length
-          ) {
-            const delta = partial.content.slice(accumulated[field].length);
-            accumulated[field] = partial.content;
-            pending[field] += delta;
-            await maybeFlushField(field);
-          }
-          if (!emittedHasLatex && typeof partial.hasLatex === 'boolean') {
-            // Drain pending content for this field before the flag
-            // so order is preserved on the wire.
-            await flushField(field);
-            emittedHasLatex = true;
-            hasLatexByField[field] = partial.hasLatex;
-            await writer.write({ field, hasLatex: partial.hasLatex });
+          const sub = settled[field];
+          if (sub != null && typeof sub.hasLatex === 'boolean') {
+            emittedHasLatex[field] = true;
+            hasLatexByField[field] = sub.hasLatex;
+            await writer.write({ field, hasLatex: sub.hasLatex });
           }
         }
-        // Final tail flush before the optional fallback hasLatex.
-        await flushField(field);
-        if (!emittedHasLatex) {
-          try {
-            const settled = await gen.result.output;
-            hasLatexByField[field] = settled.hasLatex;
-            await writer.write({ field, hasLatex: settled.hasLatex });
-          } catch {
-            // Body already streamed; classification is best-effort.
-          }
-        }
-      } catch (err) {
-        console.error(`[summaryWorkflow] ${field} stream error:`, err);
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        fieldErrors[field] = message;
-        await writer.write({ field, error: message });
+      } catch {
+        // Body already streamed; classification is best-effort.
       }
-    });
-
-    await Promise.all(pumps);
-
-    const allFieldsHaveContent = input.fields.every(
-      ({ field }) => accumulated[field].trim().length > 0
-    );
-    const hadFieldError = Object.keys(fieldErrors).length > 0;
-    if (hadFieldError) {
-      // Don't retry — partial deltas already on the wire.
-      throw new FatalError('One or more summary fields failed to generate.');
     }
+
+    const allFieldsHaveContent = fields.every((field) => accumulated[field].trim().length > 0);
     if (!allFieldsHaveContent) {
       throw new FatalError('Generation produced no content');
     }
 
-    const usages = await Promise.all(
-      generations.map(async (g) => {
-        try {
-          return await g.result.usage;
-        } catch {
-          return null;
-        }
-      })
-    );
+    let usage: unknown = null;
+    try {
+      usage = await result.usage;
+    } catch {
+      // usage telemetry is best-effort
+    }
 
     return {
-      results: generations.map((g, idx) => ({
-        field: g.field,
-        content: accumulated[g.field].trim(),
-        hasLatex: hasLatexByField[g.field] === true,
-        usage: usages[idx],
+      results: fields.map((field) => ({
+        field,
+        content: accumulated[field].trim(),
+        hasLatex: hasLatexByField[field] === true,
       })),
+      usage,
     };
   } finally {
     writer.releaseLock();
@@ -263,29 +243,20 @@ export async function persistSummaryStep(
 ): Promise<void> {
   'use step';
 
-  const { transcriptId, language, fields, results } = input;
+  const { transcriptId, language, fieldsToGenerate, results, usage } = input;
   const { workflowRunId } = getWorkflowMetadata();
-  const requestedFields = new Set(fields.map((f) => f.field));
+  const requestedFields = new Set(fieldsToGenerate);
   const resultByField = new Map(results.map((r) => [r.field, r]));
 
   // The route's claim helper inserts a row before this step ever
   // runs, so an existing row is the steady state. Read it for the
   // merge of non-regenerated fields (per-field regenerate keeps the
-  // others intact) and to merge usage stats. The findFirst is
-  // intentionally not status-filtered — we want the row we just
-  // claimed, which has status=GENERATING.
+  // others intact). The findFirst is intentionally not status-filtered
+  // — we want the row we just claimed, which has status=GENERATING.
   const existing = await prisma.summary.findFirst({
     where: { transcript_id: transcriptId, language },
-    select: { id: true, headline: true, short: true, full: true, usage: true },
+    select: { id: true, headline: true, short: true, full: true },
   });
-
-  const mergedUsageObj: Record<string, unknown> = {
-    ...((existing?.usage as Record<string, unknown> | null) ?? {}),
-  };
-  for (const r of results) {
-    mergedUsageObj[r.field] = r.usage != null ? JSON.parse(JSON.stringify(r.usage)) : null;
-  }
-  const mergedUsage = JSON.parse(JSON.stringify(mergedUsageObj));
 
   const wrapForStorage = (field: SummaryField): string => {
     const r = resultByField.get(field)!;
@@ -311,7 +282,10 @@ export async function persistSummaryStep(
     full: requestedFields.has('full') ? wrapForStorage('full') : (existing?.full ?? null),
     prompt_version: SUMMARY_PROMPT_VERSION,
     model: DEFAULT_AI_MODEL,
-    usage: mergedUsage,
+    usage:
+      usage == null
+        ? Prisma.JsonNull
+        : (JSON.parse(JSON.stringify(usage)) as Prisma.InputJsonValue),
     status: GenerationStatus.READY,
     workflow_id: workflowRunId,
   };

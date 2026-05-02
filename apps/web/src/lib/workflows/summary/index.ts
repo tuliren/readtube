@@ -8,7 +8,7 @@ import {
 } from './steps';
 import type { GeneratedSummary, SummaryWorkflowInput } from './steps';
 
-export type { SummaryStreamEvent, SummaryWorkflowInput, SummaryFieldPrompt } from './steps';
+export type { SummaryStreamEvent, SummaryWorkflowInput } from './steps';
 
 export const maxDuration = GENERATION_MAX_DURATION_SECONDS;
 

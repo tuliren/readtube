@@ -5,7 +5,6 @@ import { getRun, start } from 'workflow/api';
 
 import { DEFAULT_AI_MODEL } from '@/constants';
 import { findOrCloneSummary, resolveTranscriptLanguage } from '@/lib/language/cache';
-import { buildLanguageRule } from '@/lib/language/prompt';
 import { resolveTargetLanguage } from '@/lib/language/resolve';
 import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
@@ -18,51 +17,13 @@ import {
   type SummaryField,
 } from '@/lib/workflows/summary/steps';
 
+import { buildSummaryPrompt } from './buildPrompt';
+
 // Must be a literal — Next.js's route-segment-config analyzer can't
 // follow imports. See `GENERATION_MAX_DURATION_SECONDS` in
 // `@/constants` for the rationale; keep this in lockstep with that
 // value and the matching workflow `maxDuration`.
 export const maxDuration = 800;
-
-const PROMPT_BODIES = {
-  headline: `Write a very short title for this video. Rules:
-- Title style, not a sentence — think newspaper headline.
-- Under 10 words. Shorter is better.
-- No markdown, no surrounding quotes, no prefix like "Title:".
-Output only the title itself, nothing else.`,
-  short: `Write a 2-3 sentence summary of this video. Rules:
-- First sentence: the essential point.
-- 1-2 more sentences: the most important supporting context.
-- Plain prose. No headings, no lists, no preamble.`,
-  full: `Write a compact summary of this video. Rules:
-- Focus only on the main arguments and conclusions. Cut examples, tangents, and non-essential details.
-- Favor density over completeness. A reader should get the gist in under a minute.
-- Choose the format that fits the content best:
-  - Use prose (2-3 short paragraphs) when the video is one continuous argument.
-  - Use a Markdown bullet list when the video naturally breaks into discrete items (steps, tips, comparisons, list-of-N).
-  - Mix prose and a short bullet list when an introductory point is followed by enumerated takeaways.
-- Bullets must be terse (one line each) and use Markdown "- " syntax. Do not nest more than one level.
-- Never use headings (no #, ##, etc.). Do not bold or italicize.`,
-} as const;
-
-function buildPrompt(
-  kind: SummaryField,
-  target: string | null,
-  sourceLanguage: string | null,
-  title: string,
-  channelName: string,
-  transcript: string
-) {
-  return `${buildLanguageRule(target, sourceLanguage)}
-
-${PROMPT_BODIES[kind]}
-
-Video title: ${title}
-Channel: ${channelName}
-
-Transcript:
-${transcript}`;
-}
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { userId } = await auth();
@@ -306,17 +267,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // lifecycle — see the article route for the full rationale.
   const run = await start(summaryWorkflow, [
     {
-      fields: fieldsToGenerate.map((field) => ({
-        field,
-        prompt: buildPrompt(
-          field,
-          target,
-          sourceLanguage,
-          video.title,
-          video.channel.name,
-          transcriptText
-        ),
-      })),
+      fieldsToGenerate,
+      prompt: buildSummaryPrompt(
+        fieldsToGenerate,
+        target,
+        sourceLanguage,
+        video.title,
+        video.channel.name,
+        transcriptText
+      ),
       transcriptId: transcript.id,
       language: target,
     },
