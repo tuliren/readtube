@@ -128,7 +128,7 @@ export default async function PublicVideoPage({ params, searchParams }: Props) {
     <div className="flex h-screen flex-col overflow-hidden">
       <Header
         compact
-        mobileCenter={
+        centerSlot={
           <div className="flex min-w-0 items-center gap-2">
             {videoData.thumbnailUrl != null && (
               <img
