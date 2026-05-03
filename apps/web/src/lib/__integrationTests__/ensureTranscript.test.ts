@@ -106,7 +106,7 @@ async function userRequestRows() {
 }
 
 describe('ensureTranscript audit log', () => {
-  it('records CACHED on a transcript cache hit and does not call upstream', async () => {
+  it('does not record a TRANSCRIPT row on a cache hit (zero-cost, no signal worth tracking)', async () => {
     const { videoId } = await seed({ withTranscript: true });
 
     const result = await ensureTranscript(global.testPrisma, TEST_USER_ID, videoId);
@@ -114,14 +114,10 @@ describe('ensureTranscript audit log', () => {
     expect(result.ok).toBe(true);
     expect(mockFetchSubtitleViaTranscriptApi).not.toHaveBeenCalled();
     const rows = await userRequestRows();
-    expect(rows).toHaveLength(1);
-    expect(rows[0].outcome).toBe(UserRequestOutcome.CACHED);
-    expect(rows[0].video_id).toBe(videoId);
-    expect(rows[0].transcript_id).not.toBeNull();
-    expect(rows[0].completed_at).not.toBeNull();
+    expect(rows).toHaveLength(0);
   });
 
-  it('records UNAVAILABLE_STICKY when transcript_unavailable is set', async () => {
+  it('does not record a TRANSCRIPT row on a sticky-unavailable short-circuit (zero-cost)', async () => {
     const { videoId } = await seed({ transcriptUnavailable: true });
 
     const result = await ensureTranscript(global.testPrisma, TEST_USER_ID, videoId);
@@ -129,9 +125,7 @@ describe('ensureTranscript audit log', () => {
     expect(result).toEqual({ ok: false, reason: 'unavailable' });
     expect(mockFetchSubtitleViaTranscriptApi).not.toHaveBeenCalled();
     const rows = await userRequestRows();
-    expect(rows).toHaveLength(1);
-    expect(rows[0].outcome).toBe(UserRequestOutcome.UNAVAILABLE_STICKY);
-    expect(rows[0].transcript_id).toBeNull();
+    expect(rows).toHaveLength(0);
   });
 
   it('records GENERATED on a successful upstream fetch', async () => {
@@ -168,7 +162,7 @@ describe('ensureTranscript audit log', () => {
     expect(video?.transcript_unavailable).toBe(false);
   });
 
-  it('records UNAVAILABLE_FRESH on a permanent upstream failure and flips sticky flag', async () => {
+  it('records UNAVAILABLE on a permanent upstream failure and flips sticky flag', async () => {
     const { videoId } = await seed();
     mockFetchSubtitleViaTranscriptApi.mockRejectedValue(
       new SubtitleFetchError('no captions', { transient: false })
@@ -179,7 +173,7 @@ describe('ensureTranscript audit log', () => {
     expect(result).toEqual({ ok: false, reason: 'unavailable' });
     const rows = await userRequestRows();
     expect(rows).toHaveLength(1);
-    expect(rows[0].outcome).toBe(UserRequestOutcome.UNAVAILABLE_FRESH);
+    expect(rows[0].outcome).toBe(UserRequestOutcome.UNAVAILABLE);
     expect(rows[0].error_message).toContain('no captions');
 
     const video = await global.testPrisma.video.findUnique({ where: { id: videoId } });

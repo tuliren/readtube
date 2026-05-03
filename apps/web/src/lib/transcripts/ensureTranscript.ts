@@ -45,10 +45,13 @@ export type EnsureTranscriptResult =
  * Returns reason: 'not-found' only when the IDOR check fails (the
  * caller maps that to a 404 response).
  *
- * Audit trail: every terminal branch writes a TRANSCRIPT row to
- * `UserRequest`. The mapping mirrors the return shape so per-user
- * usage queries can group by outcome without joining timing or other
- * signals (UNAVAILABLE_STICKY ≠ UNAVAILABLE_FRESH for billing).
+ * Audit trail: only branches that bear real upstream cost write a
+ * TRANSCRIPT row to `UserRequest` — GENERATED (paid call, got
+ * transcript), UNAVAILABLE (paid call, came back empty + flipped the
+ * sticky flag), and TRANSIENT_ERROR (paid call, blipped). Zero-cost
+ * paths — cache hit and sticky-unavailable short-circuit — skip the
+ * write. IDOR misses also skip: there's no video FK target to attach
+ * to and we don't want to leak signal.
  */
 export async function ensureTranscript(
   prisma: PrismaClient,
@@ -84,15 +87,14 @@ export async function ensureTranscript(
     return { ok: false, reason: 'not-found' };
   }
 
-  // Cache hit — newest Transcript row wins.
+  // Cache hit — newest Transcript row wins. We deliberately don't
+  // record a UserRequest here: a cached transcript fetch costs nothing
+  // and the "user accessed this transcript" signal is already implicit
+  // in the SUMMARY/ARTICLE row that triggered the auto-fetch (every
+  // Generate click ensures the transcript first). Recording would just
+  // double-count and add noise to per-user dashboards.
   const cached = video.transcripts[0];
   if (cached != null) {
-    await safeRecord(prisma, {
-      userId,
-      videoId: video.id,
-      outcome: UserRequestOutcome.CACHED,
-      transcriptId: cached.id,
-    });
     return {
       ok: true,
       transcript: {
@@ -103,13 +105,8 @@ export async function ensureTranscript(
   }
 
   // No cached transcript and the sticky "we already tried" flag is
-  // set — don't retry.
+  // set — don't retry. Zero-cost short-circuit, so no audit row.
   if (video.transcript_unavailable) {
-    await safeRecord(prisma, {
-      userId,
-      videoId: video.id,
-      outcome: UserRequestOutcome.UNAVAILABLE_STICKY,
-    });
     return { ok: false, reason: 'unavailable' };
   }
 
@@ -152,7 +149,7 @@ export async function ensureTranscript(
     await safeRecord(prisma, {
       userId,
       videoId: video.id,
-      outcome: UserRequestOutcome.UNAVAILABLE_FRESH,
+      outcome: UserRequestOutcome.UNAVAILABLE,
       errorMessage: err instanceof Error ? err.message : String(err),
     });
     return { ok: false, reason: 'unavailable' };

@@ -249,13 +249,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // duplicate workflow. Skipped when `force` is set — the dev-only
   // Regenerate button explicitly wants a fresh run, and tapping in
   // would replay the in-flight one's content instead.
+  //
+  // Tap-ins don't write a UserRequest — no LLM cost is incurred by
+  // the tapped client. The original GENERATED row owns attribution.
   if (!force) {
     const activeRun = await findActiveArticleRun(prisma, transcript.id, style, target);
     if (activeRun != null) {
       console.info(
         `[article/POST] Tapping into active run ${activeRun.runId} for video ${id} (style=${style}, language=${target ?? 'original'})`
       );
-      await recordSafe(UserRequestOutcome.TAPPED, { workflowId: activeRun.runId });
       return ndjsonResponseFromRun<ArticleStreamEvent>(activeRun.runId);
     }
   }
@@ -267,6 +269,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // request for a target language whose Original happens to already
   // be in that language gets promoted (single UPDATE) instead of
   // regenerating.
+  //
+  // Cache hits don't write a UserRequest — no LLM cost is incurred.
   const cached = force ? null : await findOrCloneArticle(prisma, transcript.id, style, target);
 
   // findOrCloneArticle only returns READY rows, which always have
@@ -274,7 +278,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // GENERATING rows that don't have it yet. Guard explicitly so the
   // type narrows.
   if (cached != null && cached.content != null) {
-    await recordSafe(UserRequestOutcome.CACHED, { articleId: cached.id });
     const parsed = parseMarkdownDocument(cached.content);
     const hasLatex = parsed.properties.hasLatex === true;
     const cachedEncoder = new TextEncoder();
@@ -358,21 +361,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       } catch {
         // ignore — the stray run will expire on its own
       }
-      // Demote the row we just inserted from GENERATED to TAPPED —
-      // we ended up consuming someone else's stream, not running our
-      // own.
+      // Delete the GENERATED row we just inserted — the workflow we
+      // started is being canceled, so no LLM cost is incurred against
+      // this user. Tap-ins don't get an audit row (the original
+      // generator's row owns attribution).
       if (userRequest != null) {
         try {
-          await prisma.userRequest.update({
-            where: { id: userRequest.id },
-            data: {
-              outcome: UserRequestOutcome.TAPPED,
-              workflow_id: claim.winningRunId,
-              completed_at: new Date(),
-            },
-          });
+          await prisma.userRequest.delete({ where: { id: userRequest.id } });
         } catch (err) {
-          console.error('[article/POST] failed to demote UserRequest to TAPPED:', err);
+          console.error('[article/POST] failed to delete claim-race UserRequest:', err);
         }
       }
       return ndjsonResponseFromRun<ArticleStreamEvent>(claim.winningRunId);

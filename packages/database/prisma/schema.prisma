@@ -61,27 +61,24 @@ enum UserRequestType {
   ARTICLE
 }
 
-// Outcome of a UserRequest. The set spans transcript + summary + article
-// flows. Pricing/categorization is a `WHERE outcome IN (...)` filter
-// downstream — kept out of the schema so rules can evolve without
-// migrations.
+// Outcome of a UserRequest. We only record events that bear real cost
+// (or attempted to). Zero-cost short-circuits — cache hits, taps into
+// someone else's in-flight workflow, sticky-unavailable bounces — are
+// not written at all and so don't appear here.
 //
-//   CACHED              pre-existing entity returned, no upstream/LLM work
-//   GENERATED           ran successfully (upstream API for transcript, LLM otherwise)
-//   TAPPED              tapped into in-flight workflow (summary/article only)
-//   TRANSIENT_ERROR     network blip; safe to retry
-//   NOT_FOUND           IDOR or video missing
-//   UNAVAILABLE_STICKY  transcript: short-circuited via Video.transcript_unavailable (free)
-//   UNAVAILABLE_FRESH   transcript: tried upstream, came back empty (paid call, no result)
-//   FAILED              summary/article workflow died after a fresh start
+//   GENERATED        ran successfully (upstream API for transcript, LLM otherwise)
+//   TRANSIENT_ERROR  network blip; safe to retry. Counts as an attempt that
+//                    burned an upstream call (transcript) or a workflow start.
+//   NOT_FOUND        IDOR / video missing — reserved for future use; the
+//                    current code skips this branch (no FK-valid row to attach to).
+//   UNAVAILABLE      transcript: tried upstream, came back empty and flipped
+//                    Video.transcript_unavailable. Paid call, no usable result.
+//   FAILED           summary/article workflow died after a fresh start
 enum UserRequestOutcome {
-  CACHED
   GENERATED
-  TAPPED
   TRANSIENT_ERROR
   NOT_FOUND
-  UNAVAILABLE_STICKY
-  UNAVAILABLE_FRESH
+  UNAVAILABLE
   FAILED
 }
 
@@ -538,12 +535,12 @@ model VideoEmbedding {
   video Video @relation(fields: [video_id], references: [id], onDelete: Cascade)
 }
 
-// Per-user, per-request audit log spanning the transcript fetch and
-// summary/article generation flows. One row per user-initiated POST
-// to /api/videos/:id/transcript, /summary, /article — plus an extra
-// TRANSCRIPT row for the auto-fetch that summary/article POSTs do
-// internally (so upstream API cost and LLM cost are attributable
-// independently).
+// Per-user, per-request audit log of cost-bearing events spanning the
+// transcript fetch and summary/article generation flows. We record a
+// row only when real upstream/LLM work happened or was attempted —
+// GENERATED, TRANSIENT_ERROR, UNAVAILABLE, FAILED. Zero-cost paths
+// (cache hits, taps into in-flight workflows, sticky-unavailable
+// short-circuits, IDOR misses) are intentionally not recorded.
 //
 // This table does NOT replace the cache rows. Summary/Article rows
 // remain the canonical "what produced the current cached content"

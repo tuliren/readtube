@@ -248,6 +248,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // fields. The fields themselves are stored in the workflow input,
   // not the registry, so we can't cleanly distinguish — easier to
   // skip the short-circuit and let the regen go through.
+  //
+  // Tap-ins don't write a UserRequest — no LLM cost is incurred by
+  // the tapped client. The original GENERATED row owns attribution.
   const isFullGenerate = fieldsToGenerate.length === SUMMARY_FIELDS.length;
   if (isFullGenerate) {
     const activeRun = await findActiveSummaryRun(prisma, transcript.id, target);
@@ -255,7 +258,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       console.info(
         `[summary/POST] Tapping into active run ${activeRun.runId} for video ${id} (language ${target ?? 'original'})`
       );
-      await recordSafe(UserRequestOutcome.TAPPED, { workflowId: activeRun.runId });
       return ndjsonResponseFromRun<SummaryStreamEvent>(activeRun.runId);
     }
   }
@@ -268,9 +270,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // instead of running the LLM. Per-field regenerate (fields ⊂ all)
   // skips this path because that click means "fresh content for THIS
   // field", and cloning would defeat it.
+  //
+  // Cache hits don't write a UserRequest — no LLM cost is incurred.
   const cached = isFullGenerate ? await findOrCloneSummary(prisma, transcript.id, target) : null;
   if (cached != null && cached.headline != null && cached.short != null && cached.full != null) {
-    await recordSafe(UserRequestOutcome.CACHED, { summaryId: cached.id });
     const shortDoc = parseMarkdownDocument(cached.short);
     const fullDoc = parseMarkdownDocument(cached.full);
     const cachedEncoder = new TextEncoder();
@@ -362,22 +365,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       } catch {
         // ignore — the stray run will expire on its own
       }
-      // Demote the row we just inserted from GENERATED to TAPPED —
-      // we ended up consuming someone else's stream, not running our
-      // own. Use prisma.userRequest.update directly (skipping the
-      // helper) since this is a one-off edge case.
+      // Delete the GENERATED row we just inserted — the workflow we
+      // started is being canceled, so no LLM cost is incurred against
+      // this user. Tap-ins don't get an audit row (the original
+      // generator's row owns attribution).
       if (userRequest != null) {
         try {
-          await prisma.userRequest.update({
-            where: { id: userRequest.id },
-            data: {
-              outcome: UserRequestOutcome.TAPPED,
-              workflow_id: claim.winningRunId,
-              completed_at: new Date(),
-            },
-          });
+          await prisma.userRequest.delete({ where: { id: userRequest.id } });
         } catch (err) {
-          console.error('[summary/POST] failed to demote UserRequest to TAPPED:', err);
+          console.error('[summary/POST] failed to delete claim-race UserRequest:', err);
         }
       }
       return ndjsonResponseFromRun<SummaryStreamEvent>(claim.winningRunId);
