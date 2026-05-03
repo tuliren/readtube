@@ -476,7 +476,7 @@ export default function VideoReader({
         with the same 12px-from-the-edge action rail.
       */}
         {!publicMode && (
-          <div className="sticky top-0 z-10 flex h-12 shrink-0 items-center gap-1 border-b border-border bg-background px-3 sidebar:h-auto sidebar:py-3">
+          <div className="sticky top-0 z-10 flex h-10 shrink-0 items-center gap-1 border-b border-border bg-background px-3 sidebar:h-auto sidebar:py-3">
             {/* On small screens this header replaces the dashboard
                 MobileTopBar entirely, so the burger that opens the
                 sidebar drawer lives here. Hidden once the desktop
@@ -511,7 +511,7 @@ export default function VideoReader({
                   alt=""
                   aria-hidden
                   referrerPolicy="no-referrer"
-                  className="hidden h-7 w-12 shrink-0 rounded object-cover sidebar:block"
+                  className="block h-6 w-10 shrink-0 rounded object-cover sidebar:h-7 sidebar:w-12"
                 />
               )}
               <span className="truncate text-sm font-medium text-foreground" title={video.title}>
