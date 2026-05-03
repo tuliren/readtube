@@ -29,6 +29,15 @@ export const metadata: Metadata = {
     description: DESCRIPTION,
     url: DOMAIN_URL,
     type: 'website',
+    siteName: TITLE,
+    images: [
+      {
+        url: `${DOMAIN_URL}/android-chrome-512x512.png`,
+        width: 512,
+        height: 512,
+        alt: TITLE,
+      },
+    ],
   },
 };
 
