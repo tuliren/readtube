@@ -9,6 +9,7 @@ node_modules
 # Generated files
 packages/database/generated
 packages/database/prisma/migrations
+packages/database/prisma/schema_dump.sql
 
 # Ignore all HTML files:
 **/*.html
