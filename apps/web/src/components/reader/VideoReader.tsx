@@ -556,22 +556,12 @@ export default function VideoReader({
         <article
           className={`mx-auto w-full max-w-3xl px-6 pt-8 ${footerSlot != null ? 'pb-4' : 'pb-8'}`}
         >
-          {/* Meta: video title */}
-          <h1 className="text-2xl font-bold leading-tight text-foreground">
-            {video.thumbnailUrl != null && (
-              <img
-                src={video.thumbnailUrl}
-                alt=""
-                aria-hidden
-                referrerPolicy="no-referrer"
-                // Inline thumbnail sized to the title's line-height.
-                // Only shown on narrow screens, where the full
-                // thumbnail row is hidden.
-                className="mr-1.5 inline-block h-[1.25em] w-auto rounded align-middle sidebar:hidden"
-              />
-            )}
-            {video.title}
-          </h1>
+          {/* Meta: video title. The dashboard reader's sticky header
+              and the public Header's mobileCenter slot both surface
+              a thumbnail next to the title on small screens, so the
+              old inline `h-[1.25em]` thumb that used to live in this
+              h1 was removed to avoid the duplicate-thumbnail look. */}
+          <h1 className="text-2xl font-bold leading-tight text-foreground">{video.title}</h1>
 
           {/* Meta line */}
           <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">

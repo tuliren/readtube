@@ -44,12 +44,22 @@ function readStoredWidth(): number {
 export default function NotesPanelResponsive({ videoId, subtitle, isMobile, onClose }: Props) {
   const [width, setWidth] = useState<number>(DEFAULT_WIDTH);
   const [isDragging, setIsDragging] = useState(false);
+  // Tracks whether the mount-time read from localStorage has been
+  // applied. Without this gate the persist effect runs on the very
+  // first render with `width === DEFAULT_WIDTH` (320) and clobbers a
+  // user-stored width like 400 — Effect 1 below queues a `setWidth`
+  // but the persist effect's closure still sees the default until the
+  // re-render lands. The ref flips to `true` synchronously inside the
+  // restore effect, so by the time React schedules the persist effect
+  // for any subsequent run the gate is open.
+  const hydratedRef = useRef(false);
   // Reading from localStorage during render would either trip an SSR
   // hydration mismatch (server has no localStorage) or force the panel
   // to default-flicker on the client's first paint. Seed once on mount
   // instead.
   useEffect(() => {
     setWidth(readStoredWidth());
+    hydratedRef.current = true;
   }, []);
 
   // The drag handlers attach mousemove/mouseup at document scope so the
@@ -111,6 +121,13 @@ export default function NotesPanelResponsive({ videoId, subtitle, isMobile, onCl
   // aligned with what the user actually committed to.
   useEffect(() => {
     if (isDragging || typeof window === 'undefined') {
+      return;
+    }
+    // Bail until the restore effect has applied any stored width. The
+    // first render still has `width === DEFAULT_WIDTH` even when
+    // localStorage has a different value, so persisting here would
+    // overwrite the stored value with the default.
+    if (!hydratedRef.current) {
       return;
     }
     if (width === DEFAULT_WIDTH) {

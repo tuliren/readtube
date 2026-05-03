@@ -80,6 +80,19 @@ export default function FloatingToc({ items, variant }: Props) {
   // this flag.
   const [drawerOpen, setDrawerOpen] = useState(false);
 
+  // Reset the drawer when the layout swaps back to full mode. Without
+  // this, a user could open the drawer in compact mode (e.g. notes
+  // panel taking up most of the row), close the notes panel so the
+  // gutter widens and we re-mount in full mode, then re-open the
+  // notes panel later — the compact branch would re-mount with
+  // `drawerOpen` still `true` and pop the bottom sheet open without
+  // any user gesture.
+  useEffect(() => {
+    if (hasRoom) {
+      setDrawerOpen(false);
+    }
+  }, [hasRoom]);
+
   useEffect(() => {
     if (items.length === 0) {
       return;
