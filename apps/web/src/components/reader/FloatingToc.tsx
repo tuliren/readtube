@@ -1,7 +1,11 @@
 'use client';
 
-import { ArrowDownIcon, ArrowUpIcon, MapPinIcon } from '@heroicons/react/24/outline';
-import { MapPinIcon as MapPinSolidIcon } from '@heroicons/react/24/solid';
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  LockClosedIcon,
+  LockOpenIcon,
+} from '@heroicons/react/24/outline';
 import { useEffect, useState } from 'react';
 
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
@@ -394,11 +398,19 @@ export default function FloatingToc({ items, variant }: Props) {
           (10rem) and capped so its bottom edge lands at 90vh —
           max-height = 90vh - 10rem — leaving a 10vh bottom margin and
           keeping the ladder fully on screen even on short viewports.
-          Scrolls (with the scrollbar hidden) when entries don't fit. */}
+          Scrolls (with the scrollbar hidden) when entries don't fit.
+
+          The pinned vs floating className is fully swapped (rather than
+          appended) so we don't apply both `pointer-events-none` and
+          `pointer-events-auto` at the same time. Tailwind would resolve
+          that conflict by CSS source order, which would silently flip
+          the resolved value depending on Tailwind's internal ordering. */}
       <div
-        className={`flex max-h-[calc(90vh-10rem)] flex-col items-end gap-2 overflow-y-auto py-1.5 transition-opacity duration-150 group-hover:pointer-events-none group-hover:opacity-0 [&::-webkit-scrollbar]:hidden [scrollbar-width:none] ${
-          pinned ? 'pointer-events-none opacity-0' : ''
-        }`}
+        className={
+          pinned
+            ? 'pointer-events-none flex max-h-[calc(90vh-10rem)] flex-col items-end gap-2 overflow-y-auto py-1.5 opacity-0 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]'
+            : 'flex max-h-[calc(90vh-10rem)] flex-col items-end gap-2 overflow-y-auto py-1.5 transition-opacity duration-150 group-hover:pointer-events-none group-hover:opacity-0 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]'
+        }
       >
         {items.map((it) => (
           <button
@@ -420,11 +432,23 @@ export default function FloatingToc({ items, variant }: Props) {
           scrollable region so the user can always see and tap them
           regardless of how far down they've scrolled the heading list.
           When `pinned` is true, the popup stays open regardless of
-          hover — the pin toggle on the top row controls this. */}
+          hover — the pin toggle on the top row controls this.
+
+          The pinned vs floating className is fully swapped (rather than
+          appended) so we never apply `pointer-events-none` and
+          `pointer-events-auto` at the same time. With both present
+          Tailwind resolves the conflict by CSS source order — and
+          `pointer-events: none` on a "pinned" popup makes it unable to
+          receive any pointer events including hover, so once the mouse
+          leaves and re-enters, `group-hover:pointer-events-auto` never
+          re-activates and the popup becomes permanently dead to
+          clicks. */}
       <div
-        className={`pointer-events-none absolute top-0 right-0 flex max-h-[calc(90vh-10rem)] w-64 flex-col rounded-xl border border-border bg-background p-2 opacity-0 shadow-lg transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 ${
-          pinned ? 'pointer-events-auto opacity-100' : ''
-        }`}
+        className={
+          pinned
+            ? 'pointer-events-auto absolute top-0 right-0 flex max-h-[calc(90vh-10rem)] w-64 flex-col rounded-xl border border-border bg-background p-2 opacity-100 shadow-lg'
+            : 'pointer-events-none absolute top-0 right-0 flex max-h-[calc(90vh-10rem)] w-64 flex-col rounded-xl border border-border bg-background p-2 opacity-0 shadow-lg transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100'
+        }
       >
         <div className="flex items-center gap-1">
           <div className="min-w-0 flex-1">{renderTopButton()}</div>
@@ -433,15 +457,15 @@ export default function FloatingToc({ items, variant }: Props) {
             onClick={() => setPinned((prev) => !prev)}
             aria-pressed={pinned}
             aria-label={pinned ? 'Unpin table of contents' : 'Pin table of contents'}
-            title={pinned ? 'Unpin' : 'Pin'}
+            title={pinned ? 'Unpin (floating)' : 'Pin (fixed)'}
             className={`shrink-0 rounded-md p-1.5 transition-colors hover:bg-foreground/5 dark:hover:bg-foreground/10 ${
               pinned ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             {pinned ? (
-              <MapPinSolidIcon className="h-3.5 w-3.5" />
+              <LockClosedIcon className="h-3.5 w-3.5" />
             ) : (
-              <MapPinIcon className="h-3.5 w-3.5" />
+              <LockOpenIcon className="h-3.5 w-3.5" />
             )}
           </button>
         </div>
