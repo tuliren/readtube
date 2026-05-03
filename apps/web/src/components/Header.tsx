@@ -83,7 +83,20 @@ export default function Header({ onHomePage, compact = false, centerSlot }: Prop
         <div className={`flex shrink-0 ${centerSlot != null ? '' : 'lg:flex-1'}`}>
           <Link href="/" className="-m-1.5 p-1.5">
             <span className="sr-only">{TITLE}</span>
-            <Logo size={logoSize} />
+            {compact ? (
+              <>
+                {/* Below `sidebar:` the public reader's nav competes
+                    with the article for horizontal space, so swap the
+                    wordmark for the square favicon — same brand
+                    anchor, far less width. */}
+                <img src="/favicon.png" alt={TITLE} className="h-8 w-8 sidebar:hidden" />
+                <div className="hidden sidebar:block">
+                  <Logo size={logoSize} />
+                </div>
+              </>
+            ) : (
+              <Logo size={logoSize} />
+            )}
           </Link>
         </div>
         {/* Caller-supplied slot between the logo and the right-side
