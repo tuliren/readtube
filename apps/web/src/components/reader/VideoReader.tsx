@@ -503,8 +503,12 @@ export default function VideoReader({
                 the header so the action rail on the right always has
                 room; `min-w-0` is what lets `truncate` actually clip
                 inside a flex row (without it the span keeps its
-                content width and the cap is a no-op). */}
-            <div className="flex min-w-0 max-w-[50%] items-center gap-2">
+                content width and the cap is a no-op). `pl-1` gives
+                the thumbnail a hair of breathing room from the back
+                arrow on small screens — the parent's `gap-0` keeps
+                the burger ↔ back pair packed, so the breathing room
+                lives on the title side instead. */}
+            <div className="flex min-w-0 max-w-[50%] items-center gap-2 pl-1 sidebar:pl-0">
               {video.thumbnailUrl != null && (
                 <img
                   src={video.thumbnailUrl}
