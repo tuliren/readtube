@@ -223,75 +223,75 @@ export default function FloatingToc({ items, variant }: Props) {
     scroller.scrollTo({ top: scroller.scrollHeight, behavior: 'smooth' });
   };
 
-  // Shared list body used by the hover popup (full mode) and the bottom
-  // drawer (compact mode). `onAfterPick` is called after every entry —
-  // including Top/Bottom — so the compact-mode caller can close the
-  // drawer immediately on tap without each list button needing its
-  // own onClose plumbing.
-  const renderList = (onAfterPick?: () => void) => (
-    <ul className="flex flex-col gap-0.5 text-sm">
-      <li>
-        <button
-          type="button"
-          onClick={() => {
-            handleScrollToTop();
-            onAfterPick?.();
-          }}
-          className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground dark:hover:bg-foreground/10"
-        >
-          <ArrowUpIcon className="h-3.5 w-3.5 shrink-0" />
-          <span>Top</span>
-        </button>
-      </li>
-      {items.map((it) => {
-        const isActive = activeId === it.id;
-        const indent = it.level === 3 ? 'ml-3' : '';
-        return (
-          <li key={it.id} className={indent}>
-            <button
-              type="button"
-              onClick={() => {
-                handleItemClick(it.id);
-                onAfterPick?.();
-              }}
-              className={`w-full rounded-md px-3 py-2 text-left transition-colors hover:bg-foreground/5 dark:hover:bg-foreground/10 ${
-                isActive ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-foreground'
-              }`}
-            >
-              {variant === 'timestamps' ? (
-                <span className="flex items-baseline gap-2">
-                  <span className="shrink-0 font-mono text-xs text-muted-foreground">
-                    {it.label}
-                  </span>
-                  {/* min-w-0 is what actually lets `truncate` take
-                      effect inside a flex row — otherwise the span
-                      keeps its content width and nothing gets
-                      clipped. The secondaryLabel can carry up to
-                      50 words; the ellipsis cuts it to whatever
-                      fits the popup width. */}
-                  <span className="min-w-0 flex-1 truncate">{it.secondaryLabel}</span>
-                </span>
-              ) : (
-                <span className="line-clamp-2">{it.label}</span>
-              )}
-            </button>
-          </li>
-        );
-      })}
-      <li>
-        <button
-          type="button"
-          onClick={() => {
-            handleScrollToBottom();
-            onAfterPick?.();
-          }}
-          className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground dark:hover:bg-foreground/10"
-        >
-          <ArrowDownIcon className="h-3.5 w-3.5 shrink-0" />
-          <span>Bottom</span>
-        </button>
-      </li>
-    </ul>
+  // Shared item rows used by both the hover popup (full mode) and the
+  // bottom drawer (compact mode). `onAfterPick` lets the drawer close
+  // itself on tap without each row needing its own onClose plumbing.
+  const renderItems = (onAfterPick?: () => void) =>
+    items.map((it) => {
+      const isActive = activeId === it.id;
+      const indent = it.level === 3 ? 'ml-3' : '';
+      return (
+        <li key={it.id} className={indent}>
+          <button
+            type="button"
+            onClick={() => {
+              handleItemClick(it.id);
+              onAfterPick?.();
+            }}
+            className={`w-full rounded-md px-3 py-2 text-left transition-colors hover:bg-foreground/5 dark:hover:bg-foreground/10 ${
+              isActive ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-foreground'
+            }`}
+          >
+            {variant === 'timestamps' ? (
+              <span className="flex items-baseline gap-2">
+                <span className="shrink-0 font-mono text-xs text-muted-foreground">{it.label}</span>
+                {/* min-w-0 is what actually lets `truncate` take
+                    effect inside a flex row — otherwise the span
+                    keeps its content width and nothing gets
+                    clipped. The secondaryLabel can carry up to
+                    50 words; the ellipsis cuts it to whatever
+                    fits the popup width. */}
+                <span className="min-w-0 flex-1 truncate">{it.secondaryLabel}</span>
+              </span>
+            ) : (
+              <span className="line-clamp-2">{it.label}</span>
+            )}
+          </button>
+        </li>
+      );
+    });
+
+  // Top / Bottom shortcut buttons. Used as `<li>` rows in the popup
+  // (so they slot into a single ladder of entries) and as bare
+  // `<button>` cells in the drawer's 50/50 grid (so each shortcut
+  // gets a full half-row tap target).
+  const topBottomButtonClass =
+    'flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground dark:hover:bg-foreground/10';
+  const renderTopButton = (onAfterPick?: () => void) => (
+    <button
+      type="button"
+      onClick={() => {
+        handleScrollToTop();
+        onAfterPick?.();
+      }}
+      className={topBottomButtonClass}
+    >
+      <ArrowUpIcon className="h-3.5 w-3.5 shrink-0" />
+      <span>Top</span>
+    </button>
+  );
+  const renderBottomButton = (onAfterPick?: () => void) => (
+    <button
+      type="button"
+      onClick={() => {
+        handleScrollToBottom();
+        onAfterPick?.();
+      }}
+      className={topBottomButtonClass}
+    >
+      <ArrowDownIcon className="h-3.5 w-3.5 shrink-0" />
+      <span>Bottom</span>
+    </button>
   );
 
   if (!hasRoom) {
@@ -334,9 +334,18 @@ export default function FloatingToc({ items, variant }: Props) {
             <div className="flex items-center gap-2 border-b border-border px-4 py-3">
               <SheetTitle className="text-sm font-semibold">Table of contents</SheetTitle>
             </div>
-            <div className="flex-1 overflow-y-auto px-2 py-2">
-              {renderList(() => setDrawerOpen(false))}
+            {/* Top + Bottom share the row 50/50 above the entries.
+                Pulling them out of the entry list means the user can
+                jump to either end without first scrolling past the
+                full list of headings — important on long videos
+                where the drawer is already at its 70vh max-height. */}
+            <div className="grid grid-cols-2 gap-1 border-b border-border px-2 py-2 text-sm">
+              {renderTopButton(() => setDrawerOpen(false))}
+              {renderBottomButton(() => setDrawerOpen(false))}
             </div>
+            <ul className="flex-1 overflow-y-auto px-2 py-2 text-sm">
+              {renderItems(() => setDrawerOpen(false))}
+            </ul>
           </SheetContent>
         </Sheet>
       </>
@@ -378,7 +387,11 @@ export default function FloatingToc({ items, variant }: Props) {
           so clicks land, and so the popup doesn't eat hits over the
           article when idle. */}
       <div className="pointer-events-none absolute top-0 right-0 w-64 rounded-xl border border-border bg-background p-2 opacity-0 shadow-lg transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
-        <div className="max-h-[70vh] overflow-y-auto">{renderList()}</div>
+        <ul className="flex max-h-[70vh] flex-col gap-0.5 overflow-y-auto text-sm">
+          <li>{renderTopButton()}</li>
+          {renderItems()}
+          <li>{renderBottomButton()}</li>
+        </ul>
       </div>
     </div>
   );
