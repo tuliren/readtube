@@ -61,23 +61,18 @@ enum UserRequestType {
   ARTICLE
 }
 
-// Outcome of a UserRequest. We only record events that bear real cost
-// (or attempted to). Zero-cost short-circuits — cache hits, taps into
-// someone else's in-flight workflow, sticky-unavailable bounces — are
-// not written at all and so don't appear here.
+// Outcome of a UserRequest. Only terminal events that bear real cost
+// to the user are recorded. Transient blips (retried automatically)
+// and zero-cost short-circuits (cache hits, taps, sticky-unavailable
+// bounces, IDOR misses) are not written at all and so don't appear
+// here.
 //
-//   GENERATED        ran successfully (upstream API for transcript, LLM otherwise)
-//   TRANSIENT_ERROR  network blip; safe to retry. Counts as an attempt that
-//                    burned an upstream call (transcript) or a workflow start.
-//   NOT_FOUND        IDOR / video missing — reserved for future use; the
-//                    current code skips this branch (no FK-valid row to attach to).
-//   UNAVAILABLE      transcript: tried upstream, came back empty and flipped
-//                    Video.transcript_unavailable. Paid call, no usable result.
-//   FAILED           summary/article workflow died after a fresh start
+//   GENERATED    ran successfully (upstream API for transcript, LLM otherwise)
+//   UNAVAILABLE  transcript: tried upstream, came back empty and flipped
+//                Video.transcript_unavailable — a permanent "no captions" verdict.
+//   FAILED       summary/article workflow died after a fresh start.
 enum UserRequestOutcome {
   GENERATED
-  TRANSIENT_ERROR
-  NOT_FOUND
   UNAVAILABLE
   FAILED
 }

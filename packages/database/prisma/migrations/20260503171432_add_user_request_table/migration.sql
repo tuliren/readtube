@@ -15,11 +15,11 @@
 CREATE TYPE "UserRequestType" AS ENUM ('TRANSCRIPT', 'SUMMARY', 'ARTICLE');
 
 -- CreateEnum
--- Outcome enum is intentionally narrow: only events that bear cost
--- (or attempted to). Cache hits, taps into existing in-flight
--- workflows, and sticky-unavailable short-circuits are NOT recorded
--- at all and so don't appear here.
-CREATE TYPE "UserRequestOutcome" AS ENUM ('GENERATED', 'TRANSIENT_ERROR', 'NOT_FOUND', 'UNAVAILABLE', 'FAILED');
+-- Outcome enum is intentionally narrow: only terminal events that
+-- bear real cost to the user. Transient blips (retried automatically)
+-- and zero-cost short-circuits (cache hits, taps, sticky-unavailable
+-- bounces, IDOR misses) are NOT recorded and so don't appear here.
+CREATE TYPE "UserRequestOutcome" AS ENUM ('GENERATED', 'UNAVAILABLE', 'FAILED');
 
 -- CreateTable
 CREATE TABLE "UserRequest" (

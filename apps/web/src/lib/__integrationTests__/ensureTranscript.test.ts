@@ -144,7 +144,7 @@ describe('ensureTranscript audit log', () => {
     expect(rows[0].transcript_id).not.toBeNull();
   });
 
-  it('records TRANSIENT_ERROR on a transient upstream failure and does NOT flip sticky flag', async () => {
+  it('does not record a TRANSCRIPT row on a transient upstream failure (caller retries)', async () => {
     const { videoId } = await seed();
     mockFetchSubtitleViaTranscriptApi.mockRejectedValue(
       new SubtitleFetchError('rate limited', { transient: true })
@@ -154,9 +154,7 @@ describe('ensureTranscript audit log', () => {
 
     expect(result).toEqual({ ok: false, reason: 'transient-error' });
     const rows = await userRequestRows();
-    expect(rows).toHaveLength(1);
-    expect(rows[0].outcome).toBe(UserRequestOutcome.TRANSIENT_ERROR);
-    expect(rows[0].error_message).toContain('rate limited');
+    expect(rows).toHaveLength(0);
 
     const video = await global.testPrisma.video.findUnique({ where: { id: videoId } });
     expect(video?.transcript_unavailable).toBe(false);

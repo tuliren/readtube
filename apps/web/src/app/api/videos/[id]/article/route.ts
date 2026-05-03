@@ -222,9 +222,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
     if (ensured.reason === 'transient-error') {
       console.error(`[article/POST] Transient transcript fetch error for video ${id}`);
-      await recordSafe(UserRequestOutcome.TRANSIENT_ERROR, {
-        errorMessage: 'transcript-transient',
-      });
+      // No audit row — caller retries, and a successful retry writes
+      // its own GENERATED row.
       return NextResponse.json(
         {
           error: 'Could not fetch the transcript right now — please try again.',

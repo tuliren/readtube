@@ -45,13 +45,12 @@ export type EnsureTranscriptResult =
  * Returns reason: 'not-found' only when the IDOR check fails (the
  * caller maps that to a 404 response).
  *
- * Audit trail: only branches that bear real upstream cost write a
- * TRANSCRIPT row to `UserRequest` — GENERATED (paid call, got
- * transcript), UNAVAILABLE (paid call, came back empty + flipped the
- * sticky flag), and TRANSIENT_ERROR (paid call, blipped). Zero-cost
- * paths — cache hit and sticky-unavailable short-circuit — skip the
- * write. IDOR misses also skip: there's no video FK target to attach
- * to and we don't want to leak signal.
+ * Audit trail: only terminal user-cost branches write a TRANSCRIPT
+ * row to `UserRequest` — GENERATED (paid call, got transcript) and
+ * UNAVAILABLE (paid call, came back empty + flipped the sticky flag).
+ * Transient blips don't write — the user retries and we shouldn't
+ * bill them for a network hiccup. Zero-cost paths (cache hit, sticky
+ * short-circuit, IDOR miss) also skip the write.
  */
 export async function ensureTranscript(
   prisma: PrismaClient,
@@ -134,12 +133,9 @@ export async function ensureTranscript(
     // the rest of the session.
     const transient = err instanceof SubtitleFetchError ? err.transient : true;
     if (transient) {
-      await safeRecord(prisma, {
-        userId,
-        videoId: video.id,
-        outcome: UserRequestOutcome.TRANSIENT_ERROR,
-        errorMessage: err instanceof Error ? err.message : String(err),
-      });
+      // Transient blip — caller retries. No audit row: charging the
+      // user for a retry-able failure would be unfair, and a successful
+      // retry would write its own GENERATED row.
       return { ok: false, reason: 'transient-error' };
     }
     await prisma.video.update({
