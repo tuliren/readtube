@@ -21,3 +21,7 @@ YouTube is a great source of ideas and a terrible place to think. Long videos bu
 ## Development
 
 See [DEVELOPMENT.md](./DEVELOPMENT.md) for local development.
+
+## License
+
+ReadTube is licensed under the [Elastic License 2.0 (ELv2)](./LICENSE.md).
