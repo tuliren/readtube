@@ -3,6 +3,7 @@
 import { ArrowDownIcon, ArrowUpIcon } from '@heroicons/react/24/outline';
 import { useEffect, useState } from 'react';
 
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { findScrollableAncestor } from '@/lib/reader/findScrollableAncestor';
 
 export interface TocItem {
@@ -23,37 +24,43 @@ interface Props {
 }
 
 /** Pixel gap required between the article's right edge and the scroll
- *  container's right edge before the TOC is willing to render. Covers
- *  the ladder's worst-case width (the w-6 active bar ≈ 24px) plus the
- *  TOC's right padding (32px) plus a small breathing buffer so the bars
- *  don't press against the article text. If the reader's column is
- *  narrower than this — e.g. a side sheet opened, the window got
- *  pulled in — we hide the TOC instead of overlapping the content. */
+ *  container's inner right edge before the *full* ladder is willing to
+ *  render. Covers the ladder's worst-case width (the w-6 active bar
+ *  ≈ 24px) plus the TOC's right padding (32px) plus a small breathing
+ *  buffer so the bars don't press against the article text. Below this
+ *  the component falls back to the compact tap-to-open-drawer mode
+ *  rather than hiding. */
 const TOC_MIN_GUTTER_PX = 80;
 
-/** Distance between the TOC's right edge and the scroll container's
- *  inner right edge (i.e. just left of the main scrollbar). */
+/** Distance between the full ladder's right edge and the scroll
+ *  container's inner right edge (i.e. just left of the main
+ *  scrollbar). */
 const TOC_RIGHT_INSET_PX = 32;
 
+/** Distance between the compact ladder's right edge and the scroll
+ *  container's inner right edge. Smaller than the full-mode inset
+ *  because the compact bars are designed to live inside the article's
+ *  right padding zone on narrow viewports. */
+const TOC_COMPACT_RIGHT_INSET_PX = 8;
+
 /**
- * Notion-style floating table of contents. Two visual states:
- *   - Idle: a vertical ladder of short bars, one per TOC item, with the
- *     currently-viewed bar drawn longer and darker.
- *   - Hover: a popup panel with the full label list (heading text for
- *     articles, timestamp + first three characters for transcript),
- *     bracketed by "Top" and "Bottom" shortcuts that snap the reader
- *     to either end of the scroll container.
+ * Notion-style floating table of contents. Two layouts:
  *
- * The Top/Bottom entries live in the popup rather than the ladder so
- * they never get eaten by the ladder's fade-out on hover — clicks on
- * them land cleanly even though the popup visually replaces the
- * ladder.
+ *   - Full (when the gutter next to the article is wide enough):
+ *     a vertical ladder of short bars on the right with the active
+ *     bar drawn longer + darker. Hover swaps the ladder for a popup
+ *     panel listing every entry with Top/Bottom shortcuts.
+ *
+ *   - Compact (when the gutter is narrow — small viewports, notes
+ *     panel open at a wide width, etc.): a tighter ladder of even
+ *     shorter bars that sits inside the article's right padding zone.
+ *     Tap opens a bottom Sheet drawer with the same Top/Bottom +
+ *     entries list, since the hover-popup affordance doesn't work on
+ *     touch devices and would also overflow a narrow viewport.
  *
  * Active-item tracking uses IntersectionObserver against the viewport —
  * the reader's scroll container fills the viewport, so visible elements
- * are what the user is actually looking at. Hidden below the compact
- * breakpoint that swaps the reader into its small-screen layout —
- * there's room for the ladder on every wider viewport.
+ * are what the user is actually looking at.
  */
 export default function FloatingToc({ items, variant }: Props) {
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -68,6 +75,10 @@ export default function FloatingToc({ items, variant }: Props) {
   // viewport-relative offset so the ladder still appears in roughly the
   // right place during that first frame.
   const [scrollerRightInset, setScrollerRightInset] = useState<number | null>(null);
+  // Compact-mode drawer open/close. Only meaningful when `hasRoom`
+  // is false; in full mode the popup is hover-driven and ignores
+  // this flag.
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   useEffect(() => {
     if (items.length === 0) {
@@ -118,11 +129,10 @@ export default function FloatingToc({ items, variant }: Props) {
     const scroller = findScrollableAncestor(targets[0]);
 
     // Watch the gutter between the article and the scroll container's
-    // right edge. When the reader's column narrows (narrow viewport,
-    // side sheet opened, etc.) the TOC hides itself rather than
-    // floating on top of the paragraph text. Uses a ResizeObserver so
-    // we track *element* size changes, which also covers window
-    // resizes without a separate listener.
+    // right edge. When the gutter narrows past the full-mode threshold
+    // we switch to the compact ladder + drawer instead of hiding. Uses
+    // a ResizeObserver so we track *element* size changes, which also
+    // covers window resizes without a separate listener.
     const probe = targets[0];
     let measureHandle: number | null = null;
     const measure = () => {
@@ -172,12 +182,6 @@ export default function FloatingToc({ items, variant }: Props) {
     return null;
   }
 
-  // No horizontal room next to the article — hiding the TOC is better
-  // than letting the bars sit on top of the paragraph text.
-  if (!hasRoom) {
-    return null;
-  }
-
   const handleItemClick = (id: string) => {
     const el = document.getElementById(id);
     if (el == null) {
@@ -219,6 +223,126 @@ export default function FloatingToc({ items, variant }: Props) {
     scroller.scrollTo({ top: scroller.scrollHeight, behavior: 'smooth' });
   };
 
+  // Shared list body used by the hover popup (full mode) and the bottom
+  // drawer (compact mode). `onAfterPick` is called after every entry —
+  // including Top/Bottom — so the compact-mode caller can close the
+  // drawer immediately on tap without each list button needing its
+  // own onClose plumbing.
+  const renderList = (onAfterPick?: () => void) => (
+    <ul className="flex flex-col gap-0.5 text-sm">
+      <li>
+        <button
+          type="button"
+          onClick={() => {
+            handleScrollToTop();
+            onAfterPick?.();
+          }}
+          className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground dark:hover:bg-foreground/10"
+        >
+          <ArrowUpIcon className="h-3.5 w-3.5 shrink-0" />
+          <span>Top</span>
+        </button>
+      </li>
+      {items.map((it) => {
+        const isActive = activeId === it.id;
+        const indent = it.level === 3 ? 'ml-3' : '';
+        return (
+          <li key={it.id} className={indent}>
+            <button
+              type="button"
+              onClick={() => {
+                handleItemClick(it.id);
+                onAfterPick?.();
+              }}
+              className={`w-full rounded-md px-3 py-2 text-left transition-colors hover:bg-foreground/5 dark:hover:bg-foreground/10 ${
+                isActive ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-foreground'
+              }`}
+            >
+              {variant === 'timestamps' ? (
+                <span className="flex items-baseline gap-2">
+                  <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                    {it.label}
+                  </span>
+                  {/* min-w-0 is what actually lets `truncate` take
+                      effect inside a flex row — otherwise the span
+                      keeps its content width and nothing gets
+                      clipped. The secondaryLabel can carry up to
+                      50 words; the ellipsis cuts it to whatever
+                      fits the popup width. */}
+                  <span className="min-w-0 flex-1 truncate">{it.secondaryLabel}</span>
+                </span>
+              ) : (
+                <span className="line-clamp-2">{it.label}</span>
+              )}
+            </button>
+          </li>
+        );
+      })}
+      <li>
+        <button
+          type="button"
+          onClick={() => {
+            handleScrollToBottom();
+            onAfterPick?.();
+          }}
+          className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground dark:hover:bg-foreground/10"
+        >
+          <ArrowDownIcon className="h-3.5 w-3.5 shrink-0" />
+          <span>Bottom</span>
+        </button>
+      </li>
+    </ul>
+  );
+
+  if (!hasRoom) {
+    // Compact mode: short bars hugging the scroll container's inner
+    // right edge, with a single tap target that opens a bottom drawer
+    // listing every entry. The whole ladder is one button so the user
+    // can hit any bar to bring up the same drawer — distinguishing
+    // per-bar taps would demand pixel-perfect aim on hitboxes that are
+    // already only a few pixels wide.
+    const compactRightStyle =
+      scrollerRightInset != null
+        ? scrollerRightInset + TOC_COMPACT_RIGHT_INSET_PX
+        : TOC_COMPACT_RIGHT_INSET_PX;
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => setDrawerOpen(true)}
+          aria-label="Open table of contents"
+          className="fixed top-40 z-20 cursor-pointer p-1"
+          style={{ right: compactRightStyle }}
+        >
+          <span className="flex flex-col items-end gap-1.5">
+            {items.map((it) => (
+              <span
+                key={it.id}
+                className={`block h-[2px] transition-all ${
+                  activeId === it.id ? 'w-3 bg-foreground' : 'w-2 bg-foreground/25'
+                }`}
+              />
+            ))}
+          </span>
+        </button>
+        <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
+          <SheetContent
+            side="bottom"
+            className="flex max-h-[70vh] flex-col gap-0 p-0"
+            aria-describedby={undefined}
+          >
+            <div className="flex items-center gap-2 border-b border-border px-4 py-3">
+              <SheetTitle className="text-sm font-semibold">Table of contents</SheetTitle>
+            </div>
+            <div className="flex-1 overflow-y-auto px-2 py-2">
+              {renderList(() => setDrawerOpen(false))}
+            </div>
+          </SheetContent>
+        </Sheet>
+      </>
+    );
+  }
+
   // Anchor the ladder to the scroll container's inner right edge plus a
   // fixed inset so the bars always sit inside the scrollable area,
   // regardless of how wide the notes side panel currently is. Falls
@@ -229,7 +353,7 @@ export default function FloatingToc({ items, variant }: Props) {
 
   return (
     <div
-      className="group fixed top-40 z-20 hidden sidebar:block"
+      className="group fixed top-40 z-20 block"
       style={{ right: rightStyle }}
       aria-label="Table of contents"
     >
@@ -254,60 +378,7 @@ export default function FloatingToc({ items, variant }: Props) {
           so clicks land, and so the popup doesn't eat hits over the
           article when idle. */}
       <div className="pointer-events-none absolute top-0 right-0 w-64 rounded-xl border border-border bg-background p-2 opacity-0 shadow-lg transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
-        <ul className="flex max-h-[70vh] flex-col gap-0.5 overflow-y-auto text-sm">
-          <li>
-            <button
-              type="button"
-              onClick={handleScrollToTop}
-              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground dark:hover:bg-foreground/10"
-            >
-              <ArrowUpIcon className="h-3.5 w-3.5 shrink-0" />
-              <span>Top</span>
-            </button>
-          </li>
-          {items.map((it) => {
-            const isActive = activeId === it.id;
-            const indent = it.level === 3 ? 'ml-3' : '';
-            return (
-              <li key={it.id} className={indent}>
-                <button
-                  type="button"
-                  onClick={() => handleItemClick(it.id)}
-                  className={`w-full rounded-md px-3 py-2 text-left transition-colors hover:bg-foreground/5 dark:hover:bg-foreground/10 ${
-                    isActive ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-foreground'
-                  }`}
-                >
-                  {variant === 'timestamps' ? (
-                    <span className="flex items-baseline gap-2">
-                      <span className="shrink-0 font-mono text-xs text-muted-foreground">
-                        {it.label}
-                      </span>
-                      {/* min-w-0 is what actually lets `truncate` take
-                          effect inside a flex row — otherwise the span
-                          keeps its content width and nothing gets
-                          clipped. The secondaryLabel can carry up to
-                          50 words; the ellipsis cuts it to whatever
-                          fits the popup width. */}
-                      <span className="min-w-0 flex-1 truncate">{it.secondaryLabel}</span>
-                    </span>
-                  ) : (
-                    <span className="line-clamp-2">{it.label}</span>
-                  )}
-                </button>
-              </li>
-            );
-          })}
-          <li>
-            <button
-              type="button"
-              onClick={handleScrollToBottom}
-              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground dark:hover:bg-foreground/10"
-            >
-              <ArrowDownIcon className="h-3.5 w-3.5 shrink-0" />
-              <span>Bottom</span>
-            </button>
-          </li>
-        </ul>
+        <div className="max-h-[70vh] overflow-y-auto">{renderList()}</div>
       </div>
     </div>
   );
