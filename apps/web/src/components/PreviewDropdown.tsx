@@ -8,7 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { DOMAIN_URL } from '@/constants';
+import { FULL_WEBSITE_URL } from '@/constants';
 import { buildThumbnailUrl } from '@/lib/platforms/youtube/urls';
 
 export interface PreviewItem {
@@ -31,7 +31,7 @@ export default function PreviewDropdown({ items }: Props) {
         {items.map((item) => (
           <DropdownMenuItem key={item.id} asChild>
             <a
-              href={`${DOMAIN_URL}/p/videos/${item.id}?language=en`}
+              href={`${FULL_WEBSITE_URL}/p/videos/${item.id}?language=en`}
               target="_blank"
               rel="noopener noreferrer"
               className="gap-3"

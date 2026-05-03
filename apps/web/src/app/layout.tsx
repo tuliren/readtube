@@ -7,7 +7,7 @@ import { Inter, Lexend } from 'next/font/google';
 import { ReactNode } from 'react';
 
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
-import { DESCRIPTION, DOMAIN_URL, MAIN_COLOR, TITLE } from '@/constants';
+import { DESCRIPTION, FULL_WEBSITE_URL, MAIN_COLOR, TITLE } from '@/constants';
 import '@/styles/globals.css';
 import '@/styles/tailwind.css';
 
@@ -27,12 +27,12 @@ export const metadata: Metadata = {
   openGraph: {
     title: `Home | ${TITLE}`,
     description: DESCRIPTION,
-    url: DOMAIN_URL,
+    url: FULL_WEBSITE_URL,
     type: 'website',
     siteName: TITLE,
     images: [
       {
-        url: `${DOMAIN_URL}/android-chrome-512x512.png`,
+        url: `${FULL_WEBSITE_URL}/android-chrome-512x512.png`,
         width: 512,
         height: 512,
         alt: TITLE,
