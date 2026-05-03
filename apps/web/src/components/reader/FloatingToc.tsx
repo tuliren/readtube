@@ -105,24 +105,6 @@ export default function FloatingToc({ items, variant }: Props) {
     }
   }, [hasRoom]);
 
-  // Publish a CSS variable on <html> while the popup is pinned so the
-  // reader's scroll pane can add right-side padding and shift the
-  // article away from the popup. Set on `documentElement` so the
-  // variable cascades to whichever scroll container chooses to
-  // consume it (currently the VideoReader pane). Width = popup width
-  // (w-64 = 16rem) + TOC right inset (~2rem) + breathing room — 19rem
-  // total. Reverts on unpin/unmount so the article reflows back. */
-  useEffect(() => {
-    if (!pinned) {
-      return;
-    }
-    const root = document.documentElement;
-    root.style.setProperty('--toc-pinned-pad', '19rem');
-    return () => {
-      root.style.removeProperty('--toc-pinned-pad');
-    };
-  }, [pinned]);
-
   useEffect(() => {
     if (items.length === 0) {
       return;

@@ -467,14 +467,7 @@ export default function VideoReader({
 
   return (
     <div className="flex flex-1 overflow-hidden">
-      {/* Right padding consumes a CSS variable set by FloatingToc when
-          the popup is pinned, shifting the article (and sticky header)
-          left so they don't sit underneath the popup. The variable is
-          unset by default so this is a no-op when nothing is pinned. */}
-      <div
-        className="flex min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto transition-[padding-right] duration-150"
-        style={{ paddingRight: 'var(--toc-pinned-pad, 0px)' }}
-      >
+      <div className="flex min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
         {/*
         Back nav + triage actions + notes toggle. The header bar
         deliberately bypasses the article's `mx-auto max-w-3xl` indent
