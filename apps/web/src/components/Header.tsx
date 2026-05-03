@@ -17,6 +17,13 @@ interface Props {
    *  else, where the nav swaps those anchors for a Home link back to
    *  `/`. Pass explicitly only for stories or tests. */
   onHomePage?: boolean;
+  /** Trim the header so it doesn't dominate a content-heavy page on
+   *  small screens. Halves the vertical padding and shrinks the logo
+   *  below the `lg:` breakpoint; `lg:` and up keep the marketing
+   *  proportions. Used by the public video reader, where the nav is
+   *  pinned above an article and the default 96-ish px header would
+   *  swallow a third of the mobile viewport. */
+  compact?: boolean;
 }
 
 interface NavigationItem {
@@ -34,11 +41,16 @@ const SIGNED_IN_NAVIGATION: NavigationItem[] = [{ name: 'Inbox', href: '/inbox' 
 
 const NON_HOME_NAVIGATION: NavigationItem[] = [{ name: 'Home', href: '/' }];
 
-export default function Header({ onHomePage }: Props = {}) {
+export default function Header({ onHomePage, compact = false }: Props = {}) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { isSignedIn } = useAuth();
   const pathname = usePathname();
   const isHome = onHomePage ?? pathname === '/';
+  // Padding and logo sizing flip below `lg:` when compact is set.
+  // The `lg:`-up classes are identical to the default header so a
+  // wide viewport still sees the marketing-grade nav.
+  const navPaddingClass = compact ? 'px-4 py-2 lg:px-8 lg:py-6' : 'p-6 lg:px-8';
+  const logoSize = compact ? 'text-2xl lg:text-5xl' : 'text-5xl';
 
   const navigation: NavigationItem[] = [
     ...(isHome ? HOME_NAVIGATION : NON_HOME_NAVIGATION),
@@ -53,12 +65,12 @@ export default function Header({ onHomePage }: Props = {}) {
     <header className="bg-transparent">
       <nav
         aria-label="Global"
-        className="mx-auto flex max-w-7xl items-center justify-between gap-x-6 p-6 lg:px-8"
+        className={`mx-auto flex max-w-7xl items-center justify-between gap-x-6 ${navPaddingClass}`}
       >
         <div className="flex lg:flex-1">
           <Link href="/" className="-m-1.5 p-1.5">
             <span className="sr-only">{TITLE}</span>
-            <Logo />
+            <Logo size={logoSize} />
           </Link>
         </div>
         <div className="hidden items-center text-gray-600 hover:text-gray-900 lg:flex lg:gap-x-12 dark:text-slate-300 dark:hover:text-slate-100">
