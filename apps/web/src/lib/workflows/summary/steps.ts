@@ -1,10 +1,11 @@
-import { GenerationStatus, Prisma, prisma } from '@readtube/database';
+import { GenerationStatus, Prisma, UserRequestOutcome, prisma } from '@readtube/database';
 import { Output, streamText } from 'ai';
 import { FatalError, getWorkflowMetadata, getWritable } from 'workflow';
 import { z } from 'zod';
 
 import { DEFAULT_AI_MODEL } from '@/constants';
 import { CURRENT_FRONTMATTER_VERSION, serializeMarkdownDocument } from '@/lib/markdownFrontmatter';
+import { completeUserRequest } from '@/lib/usage/userRequest';
 import { emitTerminalEvent } from '@/lib/workflows/emitTerminalEvent';
 import { revertSummaryRow } from '@/lib/workflows/runRegistry';
 
@@ -65,6 +66,14 @@ export interface SummaryWorkflowInput {
   prompt: string;
   transcriptId: string;
   language: string | null;
+  // Optional pointer to the row in `UserRequest` that triggered this
+  // workflow. Set by the route's full-generate path so the persist
+  // step can backfill `usage` and `completed_at` once tokens are
+  // known; `revertSummaryRowStep` flips it to FAILED on error.
+  // Nullable so per-field regen, force regen, and any pre-existing
+  // workflow runs that started before this column existed continue
+  // to work.
+  userRequestId?: string | null;
 }
 
 interface FieldResult {
@@ -290,35 +299,58 @@ export async function persistSummaryStep(
     workflow_id: workflowRunId,
   };
 
+  let summaryId: string;
   if (existing) {
     await prisma.summary.update({
       where: { id: existing.id },
       data: { ...summaryData, generated_at: new Date() },
     });
-    return;
-  }
-  // Defensive fallback: the claim helper should have inserted the
-  // row, but a manual DB cleanup or backfill might have removed it
-  // mid-workflow. Create from scratch with the standard P2002 retry.
-  try {
-    await prisma.summary.create({
-      data: { transcript_id: transcriptId, language, ...summaryData },
-    });
-  } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-      const raced = await prisma.summary.findFirst({
-        where: { transcript_id: transcriptId, language },
+    summaryId = existing.id;
+  } else {
+    // Defensive fallback: the claim helper should have inserted the
+    // row, but a manual DB cleanup or backfill might have removed it
+    // mid-workflow. Create from scratch with the standard P2002 retry.
+    try {
+      const created = await prisma.summary.create({
+        data: { transcript_id: transcriptId, language, ...summaryData },
         select: { id: true },
       });
-      if (raced) {
-        await prisma.summary.update({
-          where: { id: raced.id },
-          data: { ...summaryData, generated_at: new Date() },
+      summaryId = created.id;
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        const raced = await prisma.summary.findFirst({
+          where: { transcript_id: transcriptId, language },
+          select: { id: true },
         });
-        return;
+        if (raced) {
+          await prisma.summary.update({
+            where: { id: raced.id },
+            data: { ...summaryData, generated_at: new Date() },
+          });
+          summaryId = raced.id;
+        } else {
+          throw err;
+        }
+      } else {
+        throw err;
       }
     }
-    throw err;
+  }
+
+  // Backfill the audit row that the route inserted when it kicked off
+  // this workflow. Wrapped so a stale id (the route's row was deleted
+  // out from under us) never bubbles back as a workflow failure —
+  // the user content is already persisted at this point.
+  if (input.userRequestId != null) {
+    try {
+      await completeUserRequest(prisma, input.userRequestId, {
+        outcome: UserRequestOutcome.GENERATED,
+        usage,
+        summaryId,
+      });
+    } catch (err) {
+      console.error('[persistSummaryStep] failed to complete UserRequest:', err);
+    }
   }
 }
 
@@ -327,12 +359,30 @@ export async function persistSummaryStep(
  * time so a later request doesn't see a stuck-in-GENERATING row.
  * Wraps {@link revertSummaryRow} as a workflow step so the runtime
  * persists its execution. See `summary/index.ts` for invocation.
+ *
+ * Also flips the route's UserRequest row (when threaded in) to
+ * FAILED with the terminal error message so per-user dashboards
+ * show the failed attempt rather than a stuck "in flight" row.
  */
-export async function revertSummaryRowStep(input: SummaryWorkflowInput): Promise<void> {
+export async function revertSummaryRowStep(
+  input: SummaryWorkflowInput,
+  errorMessage?: string
+): Promise<void> {
   'use step';
 
   const { workflowRunId } = getWorkflowMetadata();
   await revertSummaryRow(prisma, input.transcriptId, input.language, workflowRunId);
+
+  if (input.userRequestId != null) {
+    try {
+      await completeUserRequest(prisma, input.userRequestId, {
+        outcome: UserRequestOutcome.FAILED,
+        errorMessage: errorMessage ?? 'Summary workflow failed.',
+      });
+    } catch (err) {
+      console.error('[revertSummaryRowStep] failed to flip UserRequest to FAILED:', err);
+    }
+  }
 }
 
 export async function emitTerminalEventStep(event: SummaryStreamEvent): Promise<void> {

@@ -10,6 +10,8 @@ export {
   ArticleStyle,
   ChannelStatus,
   GenerationStatus,
+  UserRequestOutcome,
+  UserRequestType,
   UserSourceType,
   VideoPlatformType,
 } from '@prisma/client';

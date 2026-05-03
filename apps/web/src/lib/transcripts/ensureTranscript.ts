@@ -1,7 +1,8 @@
-import type { PrismaClient } from '@readtube/database';
+import { type PrismaClient, UserRequestOutcome } from '@readtube/database';
 
 import { getPlatformByType } from '@/lib/platforms';
 import { SubtitleFetchError, type TranscriptSegment } from '@/lib/platforms/types';
+import { recordTranscriptRequest } from '@/lib/usage/userRequest';
 
 interface CachedTranscript {
   id: string;
@@ -43,6 +44,13 @@ export type EnsureTranscriptResult =
  *
  * Returns reason: 'not-found' only when the IDOR check fails (the
  * caller maps that to a 404 response).
+ *
+ * Audit trail: only terminal user-cost branches write a TRANSCRIPT
+ * row to `UserRequest` — GENERATED (paid call, got transcript) and
+ * UNAVAILABLE (paid call, came back empty + flipped the sticky flag).
+ * Transient blips don't write — the user retries and we shouldn't
+ * bill them for a network hiccup. Zero-cost paths (cache hit, sticky
+ * short-circuit, IDOR miss) also skip the write.
  */
 export async function ensureTranscript(
   prisma: PrismaClient,
@@ -71,10 +79,19 @@ export async function ensureTranscript(
     },
   });
   if (video == null) {
+    // No videoId we can attribute against here without leaking IDOR
+    // signal. Skip the audit row entirely on NOT_FOUND — the FK on
+    // user_id would be valid, but `video_id` requires a row that
+    // exists, and we don't want to fabricate one.
     return { ok: false, reason: 'not-found' };
   }
 
-  // Cache hit — newest Transcript row wins.
+  // Cache hit — newest Transcript row wins. We deliberately don't
+  // record a UserRequest here: a cached transcript fetch costs nothing
+  // and the "user accessed this transcript" signal is already implicit
+  // in the SUMMARY/ARTICLE row that triggered the auto-fetch (every
+  // Generate click ensures the transcript first). Recording would just
+  // double-count and add noise to per-user dashboards.
   const cached = video.transcripts[0];
   if (cached != null) {
     return {
@@ -87,7 +104,7 @@ export async function ensureTranscript(
   }
 
   // No cached transcript and the sticky "we already tried" flag is
-  // set — don't retry.
+  // set — don't retry. Zero-cost short-circuit, so no audit row.
   if (video.transcript_unavailable) {
     return { ok: false, reason: 'unavailable' };
   }
@@ -116,11 +133,20 @@ export async function ensureTranscript(
     // the rest of the session.
     const transient = err instanceof SubtitleFetchError ? err.transient : true;
     if (transient) {
+      // Transient blip — caller retries. No audit row: charging the
+      // user for a retry-able failure would be unfair, and a successful
+      // retry would write its own GENERATED row.
       return { ok: false, reason: 'transient-error' };
     }
     await prisma.video.update({
       where: { id: video.id },
       data: { transcript_unavailable: true },
+    });
+    await safeRecord(prisma, {
+      userId,
+      videoId: video.id,
+      outcome: UserRequestOutcome.UNAVAILABLE,
+      errorMessage: err instanceof Error ? err.message : String(err),
     });
     return { ok: false, reason: 'unavailable' };
   }
@@ -136,8 +162,28 @@ export async function ensureTranscript(
     },
     select: { id: true },
   });
+  await safeRecord(prisma, {
+    userId,
+    videoId: video.id,
+    outcome: UserRequestOutcome.GENERATED,
+    transcriptId: created.id,
+  });
   return {
     ok: true,
     transcript: { id: created.id, segments: fetched.segments },
   };
+}
+
+// Audit-log writes must never break the caller — a stale FK or DB
+// hiccup on an analytics row shouldn't bubble back into the user's
+// 200/404/410 response. Log and swallow.
+async function safeRecord(
+  prisma: PrismaClient,
+  params: Parameters<typeof recordTranscriptRequest>[1]
+): Promise<void> {
+  try {
+    await recordTranscriptRequest(prisma, params);
+  } catch (err) {
+    console.error('[ensureTranscript] failed to record UserRequest:', err);
+  }
 }

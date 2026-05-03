@@ -19,8 +19,10 @@ export async function summaryWorkflow(input: SummaryWorkflowInput): Promise<void
     // Revert the row we claimed at start time before the terminal
     // error event closes the stream. Without this, a fresh-claim
     // failure leaves a phantom GENERATING row that the next read
-    // would tap into and stream nothing useful.
-    await revertSummaryRowStep(input);
+    // would tap into and stream nothing useful. Also flips the
+    // route's UserRequest row (if any) to FAILED with the same
+    // message — the message is what the client sees in the stream.
+    await revertSummaryRowStep(input, message);
     await emitTerminalEventStep({ error: message });
     throw err;
   }
@@ -29,7 +31,7 @@ export async function summaryWorkflow(input: SummaryWorkflowInput): Promise<void
     await persistSummaryStep({ ...input, ...generated });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to save summary.';
-    await revertSummaryRowStep(input);
+    await revertSummaryRowStep(input, message);
     await emitTerminalEventStep({ error: message });
     throw err;
   }
