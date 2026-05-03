@@ -25,11 +25,15 @@ interface Props {
 /** Pixel gap required between the article's right edge and the scroll
  *  container's right edge before the TOC is willing to render. Covers
  *  the ladder's worst-case width (the w-6 active bar ≈ 24px) plus the
- *  `right-8` offset (32px) plus a small breathing buffer so the bars
+ *  TOC's right padding (32px) plus a small breathing buffer so the bars
  *  don't press against the article text. If the reader's column is
  *  narrower than this — e.g. a side sheet opened, the window got
  *  pulled in — we hide the TOC instead of overlapping the content. */
 const TOC_MIN_GUTTER_PX = 80;
+
+/** Distance between the TOC's right edge and the scroll container's
+ *  inner right edge (i.e. just left of the main scrollbar). */
+const TOC_RIGHT_INSET_PX = 32;
 
 /**
  * Notion-style floating table of contents. Two visual states:
@@ -54,6 +58,16 @@ const TOC_MIN_GUTTER_PX = 80;
 export default function FloatingToc({ items, variant }: Props) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [hasRoom, setHasRoom] = useState(true);
+  // Distance (in px) from the viewport's right edge to the scroll
+  // container's inner-right (i.e. just left of its scrollbar). The TOC's
+  // CSS `right` is anchored to this so the ladder always sits inside the
+  // scroller — when the notes side panel opens and shrinks the
+  // scroller, the TOC moves left to stay clear of the panel instead of
+  // overlapping it. `null` means we haven't measured yet (server render
+  // or before the first effect run); the render falls back to a
+  // viewport-relative offset so the ladder still appears in roughly the
+  // right place during that first frame.
+  const [scrollerRightInset, setScrollerRightInset] = useState<number | null>(null);
 
   useEffect(() => {
     if (items.length === 0) {
@@ -115,11 +129,18 @@ export default function FloatingToc({ items, variant }: Props) {
       measureHandle = null;
       if (scroller == null) {
         setHasRoom(true);
+        setScrollerRightInset(null);
         return;
       }
       const probeRight = probe.getBoundingClientRect().right;
-      const scrollerRight = scroller.getBoundingClientRect().right;
-      setHasRoom(scrollerRight - probeRight >= TOC_MIN_GUTTER_PX);
+      const scrollerRect = scroller.getBoundingClientRect();
+      // `clientWidth` excludes the scrollbar, so left + clientWidth
+      // lands exactly on the inner right edge — where we want the TOC's
+      // right side to sit. Without this, anchoring to the bounding
+      // rect's `right` would push the ladder under the scrollbar.
+      const innerRight = scrollerRect.left + scroller.clientWidth;
+      setHasRoom(innerRight - probeRight >= TOC_MIN_GUTTER_PX);
+      setScrollerRightInset(Math.max(0, window.innerWidth - innerRight));
     };
     // ResizeObserver can fire mid-layout — defer the measurement to
     // the next frame so `getBoundingClientRect` reads consistent
@@ -198,9 +219,18 @@ export default function FloatingToc({ items, variant }: Props) {
     scroller.scrollTo({ top: scroller.scrollHeight, behavior: 'smooth' });
   };
 
+  // Anchor the ladder to the scroll container's inner right edge plus a
+  // fixed inset so the bars always sit inside the scrollable area,
+  // regardless of how wide the notes side panel currently is. Falls
+  // back to a viewport-relative inset for the first render frame, when
+  // we haven't measured yet.
+  const rightStyle =
+    scrollerRightInset != null ? scrollerRightInset + TOC_RIGHT_INSET_PX : TOC_RIGHT_INSET_PX;
+
   return (
     <div
-      className="group fixed top-40 right-8 z-20 hidden sidebar:block"
+      className="group fixed top-40 z-20 hidden sidebar:block"
+      style={{ right: rightStyle }}
       aria-label="Table of contents"
     >
       {/* Ladder (idle). Fades out on hover so the popup visually
