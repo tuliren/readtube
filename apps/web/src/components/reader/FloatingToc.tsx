@@ -380,15 +380,19 @@ export default function FloatingToc({ items, variant }: Props) {
       aria-label="Table of contents"
     >
       {/* Ladder (idle). Fades out on hover so the popup visually
-          replaces it without the two overlapping. */}
-      <div className="flex flex-col items-end gap-2 py-1.5 transition-opacity duration-150 group-hover:pointer-events-none group-hover:opacity-0">
+          replaces it without the two overlapping. Capped at the
+          available viewport height (top-40 ≈ 10rem from the top, plus a
+          1rem bottom buffer) and made scrollable so very long articles
+          don't push bars below the viewport on short screens. The
+          scrollbar is hidden so the visual stays a clean ladder. */}
+      <div className="flex max-h-[calc(100vh-11rem)] flex-col items-end gap-2 overflow-y-auto py-1.5 transition-opacity duration-150 group-hover:pointer-events-none group-hover:opacity-0 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
         {items.map((it) => (
           <button
             key={it.id}
             type="button"
             onClick={() => handleItemClick(it.id)}
             aria-label={`Jump to ${it.label}`}
-            className={`h-[2px] transition-all ${
+            className={`shrink-0 h-[2px] transition-all ${
               activeId === it.id
                 ? 'w-6 bg-foreground'
                 : 'w-4 bg-foreground/20 hover:bg-foreground/40'
@@ -398,11 +402,17 @@ export default function FloatingToc({ items, variant }: Props) {
       </div>
       {/* Popup (hover). Pointer-events flip from none → auto on hover
           so clicks land, and so the popup doesn't eat hits over the
-          article when idle. */}
-      <div className="pointer-events-none absolute top-0 right-0 w-64 rounded-xl border border-border bg-background p-2 opacity-0 shadow-lg transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
-        <ul className="flex max-h-[70vh] flex-col gap-0.5 overflow-y-auto text-sm">
+          article when idle. Top and Bottom are pinned outside the
+          scrollable region so the user can always see and tap them
+          regardless of how far down they've scrolled the heading list. */}
+      <div className="pointer-events-none absolute top-0 right-0 flex max-h-[calc(100vh-11rem)] w-64 flex-col rounded-xl border border-border bg-background p-2 opacity-0 shadow-lg transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
+        <ul className="flex flex-col gap-0.5 text-sm">
           <li>{renderTopButton()}</li>
+        </ul>
+        <ul className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto text-sm">
           {renderItems()}
+        </ul>
+        <ul className="flex flex-col gap-0.5 text-sm">
           <li>{renderBottomButton()}</li>
         </ul>
       </div>
