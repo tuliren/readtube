@@ -86,6 +86,17 @@ export function useSidebar(): SidebarState {
 }
 
 /**
+ * Like `useSidebar` but returns `null` instead of throwing when no
+ * provider is in scope. Use this in components that may render in
+ * both the dashboard tree (where `SidebarProvider` is mounted) and
+ * standalone surfaces like the public share page (where it isn't),
+ * so the same component doesn't need to be split into two.
+ */
+export function useOptionalSidebar(): SidebarState | null {
+  return useContext(SidebarCtx);
+}
+
+/**
  * Override wrapper that forces `collapsed: false` for all descendants.
  * Used by the mobile drawer so it always renders the full sidebar
  * content regardless of the desktop collapse state.

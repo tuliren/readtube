@@ -118,6 +118,16 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
   // links that only swap query strings.
   useCloseDrawerOnNavigate(setMobileOpen);
 
+  // The video reader (`/videos/<sourceId>`) renders its own sticky
+  // header with Back + triage actions, and on small screens that
+  // header absorbs the burger + theme switcher too — so the
+  // dashboard-level MobileTopBar would just stack a redundant second
+  // row above it. Detect the reader path here and skip MobileTopBar
+  // when we're inside it. Library-style /videos paths
+  // (/videos, /videos/standalone, /videos/playlists/*) keep the
+  // top bar.
+  const isReaderPath = useIsReaderPath();
+
   // Collapsed desktop sidebar keeps scrolling but hides the bar —
   // a visible scrollbar inside a 56px rail looks noisy. The sheet
   // and expanded sidebar keep their default scrollbars.
@@ -150,8 +160,17 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
               aria-describedby={undefined}
             >
               <SidebarExpandedOverride>
-                <div className="flex h-14 shrink-0 items-center border-b border-border px-5">
+                <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border px-5">
                   <SheetTitle className="text-base font-bold text-foreground">ReadTube</SheetTitle>
+                  <UserButton>
+                    <UserButton.MenuItems>
+                      <UserButton.Link
+                        label="Settings"
+                        labelIcon={<AdjustmentsHorizontalIcon className="h-4 w-4" />}
+                        href="/settings"
+                      />
+                    </UserButton.MenuItems>
+                  </UserButton>
                 </div>
                 {renderSidebarContent(false)}
               </SidebarExpandedOverride>
@@ -223,7 +242,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
 
         {/* Main content */}
         <div className="flex min-w-0 flex-1 flex-col">
-          {isMobile && (
+          {isMobile && !isReaderPath && (
             <MobileTopBar
               onOpenSidebar={() => setMobileOpen(true)}
               selectedChannel={selectedChannel}
@@ -331,7 +350,7 @@ function MobileTopBar({
   }
 
   return (
-    <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-4">
+    <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
       <button
         type="button"
         onClick={onOpenSidebar}
@@ -392,15 +411,6 @@ function MobileTopBar({
           </button>
         )}
         <ThemeSelector />
-        <UserButton>
-          <UserButton.MenuItems>
-            <UserButton.Link
-              label="Settings"
-              labelIcon={<AdjustmentsHorizontalIcon className="h-4 w-4" />}
-              href="/settings"
-            />
-          </UserButton.MenuItems>
-        </UserButton>
       </div>
     </div>
   );
@@ -418,6 +428,28 @@ function MobileTopBar({
  * paths (/videos, /videos/standalone, /videos/playlists/*) that
  * already keep their caches in sync via useTriage.
  */
+/**
+ * True when the current pathname matches the video reader route
+ * (`/videos/<sourceId>`), i.e. the page that already renders its own
+ * sticky header with Back + triage actions. Excludes the library
+ * sub-routes that share the `/videos/` prefix (`/videos`,
+ * `/videos/standalone`, `/videos/playlists/*`) — those keep the
+ * dashboard MobileTopBar.
+ */
+function useIsReaderPath(): boolean {
+  const pathname = usePathname();
+  return useMemo(() => {
+    if (pathname == null || !pathname.startsWith('/videos/')) {
+      return false;
+    }
+    const rest = pathname.slice('/videos/'.length).split('/')[0];
+    if (rest.length === 0 || rest === 'standalone' || rest === 'playlists') {
+      return false;
+    }
+    return true;
+  }, [pathname]);
+}
+
 function useReaderUnreadSync(revalidate: () => void) {
   const pathname = usePathname();
   const readerVideoId = useMemo(() => {

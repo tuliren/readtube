@@ -1,7 +1,7 @@
 'use client';
 
 import { ArrowLeftIcon, ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/outline';
-import { Loader2, NotebookPen } from 'lucide-react';
+import { Loader2, Menu, NotebookPen } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
@@ -9,6 +9,8 @@ import useSWR from 'swr';
 
 import CopyButton from '@/components/CopyButton';
 import ExternalLinkActions from '@/components/ExternalLinkActions';
+import { useOptionalSidebar } from '@/components/inbox/SidebarContext';
+import ThemeSelector from '@/components/settings/ThemeSelector';
 import { Button } from '@/components/ui/button';
 import { formatDurationSeconds } from '@/lib/format/duration';
 import { findTargetLanguage } from '@/lib/language/names';
@@ -75,6 +77,15 @@ export default function VideoReader({
   footerSlot = null,
 }: Props) {
   const searchParams = useSearchParams();
+  // Sidebar context is only available inside the dashboard tree.
+  // Public share pages (`/p/videos/...`) render the same VideoReader
+  // outside of SidebarProvider, so use the safe variant and treat
+  // "no context" as "not the dashboard, no burger to render".
+  const sidebar = useOptionalSidebar();
+  const isMobile = sidebar?.isMobile ?? false;
+  const openMobileSidebar = useCallback(() => {
+    sidebar?.setMobileOpen(true);
+  }, [sidebar]);
 
   // Picker state lives at the VideoReader level so:
   //  - Summary and Article tabs stay in sync (changing the language on
@@ -465,14 +476,31 @@ export default function VideoReader({
         with the same 12px-from-the-edge action rail.
       */}
         {!publicMode && (
-          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background px-3 py-3">
-            <Link
-              href={backHref}
-              className="inline-flex items-center gap-1.5 px-2 text-sm text-muted-foreground hover:text-foreground"
-            >
-              <ArrowLeftIcon className="h-4 w-4" />
-              Back
-            </Link>
+          <div className="sticky top-0 z-10 flex h-12 shrink-0 items-center justify-between gap-1 border-b border-border bg-background px-3 sidebar:h-auto sidebar:py-3">
+            <div className="flex items-center gap-1">
+              {/* On small screens this header replaces the dashboard
+                  MobileTopBar entirely, so the burger that opens the
+                  sidebar drawer lives here. Hidden once the desktop
+                  sidebar appears, which carries its own toggle. */}
+              {isMobile && (
+                <button
+                  type="button"
+                  onClick={openMobileSidebar}
+                  className="shrink-0 rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                  aria-label="Open sidebar"
+                >
+                  <Menu className="h-5 w-5" />
+                </button>
+              )}
+              <Link
+                href={backHref}
+                className="inline-flex items-center gap-1.5 px-2 text-sm text-muted-foreground hover:text-foreground"
+                aria-label="Back"
+              >
+                <ArrowLeftIcon className="h-4 w-4" />
+                <span className="hidden sidebar:inline">Back</span>
+              </Link>
+            </div>
             <div className="flex items-center gap-0.5 sidebar:gap-2">
               <Button
                 variant="ghost"
@@ -490,6 +518,13 @@ export default function VideoReader({
                 )}
               </Button>
               <VideoReaderActions video={video} />
+              {/* Theme switcher migrates here on small screens because
+                  the dashboard MobileTopBar (which would normally host
+                  it) is suppressed on the reader path. On wider
+                  viewports the desktop sidebar's footer continues to
+                  carry it, so we hide this copy to avoid two
+                  ThemeSelector buttons in the same tree. */}
+              {isMobile && <ThemeSelector />}
             </div>
           </div>
         )}
