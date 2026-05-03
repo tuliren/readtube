@@ -595,9 +595,14 @@ model UserRequest {
   error_message String?
 
   created_at DateTime @default(now())
-  // Set when async work finishes (GENERATED success or FAILED). NULL
-  // while a workflow is in flight, NULL for synchronous outcomes
-  // (CACHED, TAPPED, NOT_FOUND, the transcript outcomes).
+  // NULL while an async workflow is in flight — set at insert time
+  // only for SUMMARY/ARTICLE rows with outcome=GENERATED, then
+  // backfilled to now() by the workflow's persist/revert step.
+  // All other rows (synchronous outcomes — CACHED, TAPPED, FAILED
+  // when the workflow never started, TRANSIENT_ERROR, every transcript
+  // outcome) get `completed_at = now()` at insert time. So
+  // `completed_at IS NULL` is precisely the "in-flight summary or
+  // article generation" predicate.
   completed_at DateTime?
 
   user       User        @relation(fields: [user_id], references: [source_id], onDelete: Cascade)
