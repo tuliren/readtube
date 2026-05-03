@@ -52,11 +52,14 @@ export default function Header({ onHomePage, compact = false, mobileCenter }: Pr
   const { isSignedIn } = useAuth();
   const pathname = usePathname();
   const isHome = onHomePage ?? pathname === '/';
-  // Padding and logo sizing flip below `lg:` when compact is set.
-  // The `lg:`-up classes are identical to the default header so a
-  // wide viewport still sees the marketing-grade nav.
-  const navPaddingClass = compact ? 'px-4 py-2 lg:px-8 lg:py-6' : 'p-6 lg:px-8';
-  const logoSize = compact ? 'text-2xl lg:text-5xl' : 'text-5xl';
+  // Padding and logo sizing both shrink when compact is set, with two
+  // tiers: a tight mobile size below `lg:`, and an intermediate
+  // wide-screen size at `lg:` and up that still trims the
+  // marketing-grade nav so the public reader's article isn't pushed
+  // halfway down the viewport. Default (non-compact) keeps the
+  // marketing proportions everywhere.
+  const navPaddingClass = compact ? 'px-4 py-2 lg:px-8 lg:py-3' : 'p-6 lg:px-8';
+  const logoSize = compact ? 'text-2xl lg:text-3xl' : 'text-5xl';
 
   const navigation: NavigationItem[] = [
     ...(isHome ? HOME_NAVIGATION : NON_HOME_NAVIGATION),
