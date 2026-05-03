@@ -1,7 +1,7 @@
 'use client';
 
 import { ArrowLeftIcon, ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/outline';
-import { Loader2, NotebookPen } from 'lucide-react';
+import { Loader2, Menu, NotebookPen } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
@@ -9,6 +9,8 @@ import useSWR from 'swr';
 
 import CopyButton from '@/components/CopyButton';
 import ExternalLinkActions from '@/components/ExternalLinkActions';
+import { useOptionalSidebar } from '@/components/inbox/SidebarContext';
+import ThemeSelector from '@/components/settings/ThemeSelector';
 import { Button } from '@/components/ui/button';
 import { formatDurationSeconds } from '@/lib/format/duration';
 import { findTargetLanguage } from '@/lib/language/names';
@@ -75,6 +77,15 @@ export default function VideoReader({
   footerSlot = null,
 }: Props) {
   const searchParams = useSearchParams();
+  // Sidebar context is only available inside the dashboard tree.
+  // Public share pages (`/p/videos/...`) render the same VideoReader
+  // outside of SidebarProvider, so use the safe variant and treat
+  // "no context" as "not the dashboard, no burger to render".
+  const sidebar = useOptionalSidebar();
+  const isMobile = sidebar?.isMobile ?? false;
+  const openMobileSidebar = useCallback(() => {
+    sidebar?.setMobileOpen(true);
+  }, [sidebar]);
 
   // Picker state lives at the VideoReader level so:
   //  - Summary and Article tabs stay in sync (changing the language on
@@ -465,24 +476,71 @@ export default function VideoReader({
         with the same 12px-from-the-edge action rail.
       */}
         {!publicMode && (
-          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background px-3 py-3">
+          <div className="sticky top-0 z-10 flex h-10 shrink-0 items-center gap-0 border-b border-border bg-background px-3 sidebar:h-auto sidebar:gap-1 sidebar:py-3">
+            {/* On small screens this header replaces the dashboard
+                MobileTopBar entirely, so the burger that opens the
+                sidebar drawer lives here. Hidden once the desktop
+                sidebar appears, which carries its own toggle. */}
+            {isMobile && (
+              <button
+                type="button"
+                onClick={openMobileSidebar}
+                className="shrink-0 rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                aria-label="Open sidebar"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+            )}
             <Link
               href={backHref}
-              className="inline-flex items-center gap-1.5 px-2 text-sm text-muted-foreground hover:text-foreground"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded px-1 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground sidebar:px-2"
+              aria-label="Back"
             >
               <ArrowLeftIcon className="h-4 w-4" />
-              Back
+              <span className="hidden sidebar:inline">Back</span>
             </Link>
-            <div className="flex items-center gap-0.5 sidebar:gap-2">
+            {/* Thumbnail + title. `max-w-[50%]` caps the block at half
+                the header so the action rail on the right always has
+                room; `min-w-0` is what lets `truncate` actually clip
+                inside a flex row (without it the span keeps its
+                content width and the cap is a no-op). `pl-1` gives
+                the thumbnail a hair of breathing room from the back
+                arrow on small screens — the parent's `gap-0` keeps
+                the burger ↔ back pair packed, so the breathing room
+                lives on the title side instead. */}
+            <div className="flex min-w-0 max-w-[50%] items-center gap-2 pl-1 sidebar:pl-0">
+              {video.thumbnailUrl != null && (
+                <img
+                  src={video.thumbnailUrl}
+                  alt=""
+                  aria-hidden
+                  referrerPolicy="no-referrer"
+                  className="block h-6 w-10 shrink-0 rounded object-cover sidebar:h-7 sidebar:w-12"
+                />
+              )}
+              <span className="truncate text-sm font-medium text-foreground" title={video.title}>
+                {video.title}
+              </span>
+            </div>
+            {/* Action rail. `ml-auto` shoves it to the right edge while
+                the title block stays packed against the back button.
+                Labels and the inter-button gap only kick in at `lg:`
+                so the rail collapses to icons well before the header
+                runs out of room — the title block already eats up to
+                half the width. `gap-0` on small screens lets each
+                button's `px-1.5` define the spacing instead, so a
+                row of icon-only buttons reads as a single packed
+                control strip rather than separate floating glyphs. */}
+            <div className="ml-auto flex shrink-0 items-center gap-0 lg:gap-2">
               <Button
                 variant="ghost"
                 size="sm"
-                className="gap-1"
+                className="gap-1 px-1.5 lg:px-3"
                 onClick={() => setNotesOpen((prev) => !prev)}
                 title="Notes"
               >
                 <NotebookPen className="h-4 w-4" />
-                <span className="hidden sidebar:inline">Notes</span>
+                <span className="hidden lg:inline">Notes</span>
                 {noteCount > 0 && (
                   <span className="rounded-full bg-amber-100 px-1.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
                     {noteCount}
@@ -490,6 +548,16 @@ export default function VideoReader({
                 )}
               </Button>
               <VideoReaderActions video={video} />
+              {/* Theme switcher migrates here on small screens because
+                  the dashboard MobileTopBar (which would normally host
+                  it) is suppressed on the reader path. On wider
+                  viewports the desktop sidebar's footer continues to
+                  carry it, so we hide this copy to avoid two
+                  ThemeSelector buttons in the same tree. The class
+                  override matches the action rail's `h-8 rounded-md`
+                  so the trigger doesn't read as a slightly different
+                  control among otherwise-uniform glyphs. */}
+              {isMobile && <ThemeSelector className="h-8 rounded-md" />}
             </div>
           </div>
         )}
@@ -498,22 +566,12 @@ export default function VideoReader({
         <article
           className={`mx-auto w-full max-w-3xl px-6 pt-8 ${footerSlot != null ? 'pb-4' : 'pb-8'}`}
         >
-          {/* Meta: video title */}
-          <h1 className="text-2xl font-bold leading-tight text-foreground">
-            {video.thumbnailUrl != null && (
-              <img
-                src={video.thumbnailUrl}
-                alt=""
-                aria-hidden
-                referrerPolicy="no-referrer"
-                // Inline thumbnail sized to the title's line-height.
-                // Only shown on narrow screens, where the full
-                // thumbnail row is hidden.
-                className="mr-1.5 inline-block h-[1.25em] w-auto rounded align-middle sidebar:hidden"
-              />
-            )}
-            {video.title}
-          </h1>
+          {/* Meta: video title. The dashboard reader's sticky header
+              and the public Header's mobileCenter slot both surface
+              a thumbnail next to the title on small screens, so the
+              old inline `h-[1.25em]` thumb that used to live in this
+              h1 was removed to avoid the duplicate-thumbnail look. */}
+          <h1 className="text-2xl font-bold leading-tight text-foreground">{video.title}</h1>
 
           {/* Meta line */}
           <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
