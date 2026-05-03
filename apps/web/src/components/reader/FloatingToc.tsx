@@ -1,9 +1,15 @@
 'use client';
 
-import { ArrowDownIcon, ArrowUpIcon } from '@heroicons/react/24/outline';
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  LockClosedIcon,
+  LockOpenIcon,
+} from '@heroicons/react/24/outline';
 import { useEffect, useState } from 'react';
 
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
+import { MOBILE_BREAKPOINT } from '@/lib/breakpoints';
 import { findScrollableAncestor } from '@/lib/reader/findScrollableAncestor';
 
 export interface TocItem {
@@ -24,12 +30,13 @@ interface Props {
 }
 
 /** Pixel gap required between the article's right edge and the scroll
- *  container's inner right edge before the *full* ladder is willing to
- *  render. Covers the ladder's worst-case width (the w-6 active bar
- *  ≈ 24px) plus the TOC's right padding (32px) plus a small breathing
- *  buffer so the bars don't press against the article text. Below this
- *  the component falls back to the compact tap-to-open-drawer mode
- *  rather than hiding. */
+ *  container's inner right edge for the *full-size* ladder to render
+ *  outside the article. Covers the ladder's worst-case width (the w-6
+ *  active bar ≈ 24px) plus the TOC's right padding (32px) plus a small
+ *  breathing buffer so the bars don't press against the article text.
+ *  Below this — typically when the article fills its scroll pane — we
+ *  shrink to compact-sized bars that live inside the article's
+ *  px-6 right padding instead. */
 const TOC_MIN_GUTTER_PX = 80;
 
 /** Distance between the full ladder's right edge and the scroll
@@ -44,19 +51,31 @@ const TOC_RIGHT_INSET_PX = 32;
 const TOC_COMPACT_RIGHT_INSET_PX = 8;
 
 /**
- * Notion-style floating table of contents. Two layouts:
+ * Notion-style floating table of contents.
  *
- *   - Full (when the gutter next to the article is wide enough):
- *     a vertical ladder of short bars on the right with the active
- *     bar drawn longer + darker. Hover swaps the ladder for a popup
- *     panel listing every entry with Top/Bottom shortcuts.
+ * Two independent layout decisions:
  *
- *   - Compact (when the gutter is narrow — small viewports, notes
- *     panel open at a wide width, etc.): a tighter ladder of even
- *     shorter bars that sits inside the article's right padding zone.
- *     Tap opens a bottom Sheet drawer with the same Top/Bottom +
- *     entries list, since the hover-popup affordance doesn't work on
- *     touch devices and would also overflow a narrow viewport.
+ *   1. **Open mechanism** — controlled by viewport width vs
+ *      `MOBILE_BREAKPOINT`. Desktop gets a hover-driven popup; mobile
+ *      gets a tap-to-open bottom Sheet drawer (hover doesn't work on
+ *      touch devices and a side popup would overflow a narrow
+ *      viewport).
+ *
+ *   2. **Ladder bar size** — controlled by the gutter between the
+ *      article and the scroll container's inner-right edge. When the
+ *      gutter is wide enough (`hasFullGutter`) we render the standard
+ *      w-4 / w-6 bars 32px in from the scroller's right edge — outside
+ *      the article. When it's narrow (article fills the pane) we drop
+ *      to w-2 / w-3 bars 8px in from the right edge, sized to live
+ *      inside the article's px-6 right padding zone without overlapping
+ *      text.
+ *
+ * The two decisions used to be coupled (one boolean drove both), which
+ * meant desktop users with the dashboard sidebar open would be forced
+ * into the touch-oriented drawer mode just because the gutter
+ * collapsed. They're now independent: a desktop reader between
+ * `MOBILE_BREAKPOINT` and the gutter cutoff (~1100px) keeps the
+ * hover popup but with smaller bars.
  *
  * Active-item tracking uses IntersectionObserver against the viewport —
  * the reader's scroll container fills the viewport, so visible elements
@@ -64,7 +83,16 @@ const TOC_COMPACT_RIGHT_INSET_PX = 8;
  */
 export default function FloatingToc({ items, variant }: Props) {
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [hasRoom, setHasRoom] = useState(true);
+  // Whether the gutter outside the article is wide enough for full-size
+  // ladder bars. When false (article fills the pane) we shrink to
+  // compact-sized bars on desktop instead of swapping to the drawer.
+  const [hasFullGutter, setHasFullGutter] = useState(true);
+  // Whether the viewport is at least the mobile breakpoint. Drives the
+  // hover-popup vs bottom-drawer choice independently of the gutter.
+  // Defaults to `true` for the SSR pass so server-rendered markup
+  // matches the typical (desktop) hydration target; the matchMedia
+  // effect below corrects it on mount.
+  const [isDesktop, setIsDesktop] = useState(true);
   // Distance (in px) from the viewport's right edge to the scroll
   // container's inner-right (i.e. just left of its scrollbar). The TOC's
   // CSS `right` is anchored to this so the ladder always sits inside the
@@ -75,23 +103,44 @@ export default function FloatingToc({ items, variant }: Props) {
   // viewport-relative offset so the ladder still appears in roughly the
   // right place during that first frame.
   const [scrollerRightInset, setScrollerRightInset] = useState<number | null>(null);
-  // Compact-mode drawer open/close. Only meaningful when `hasRoom`
-  // is false; in full mode the popup is hover-driven and ignores
-  // this flag.
+  // Mobile-mode drawer open/close. Only meaningful when `isDesktop`
+  // is false; on desktop the popup is hover-driven and ignores this
+  // flag.
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // Desktop-mode "pin" toggle. When true, the hover popup stays
+  // visible (and the ladder stays hidden) regardless of pointer
+  // position, so the reader can keep the heading list parked on
+  // screen while they work. Only meaningful when `isDesktop` is true.
+  const [pinned, setPinned] = useState(false);
 
-  // Reset the drawer when the layout swaps back to full mode. Without
-  // this, a user could open the drawer in compact mode (e.g. notes
-  // panel taking up most of the row), close the notes panel so the
-  // gutter widens and we re-mount in full mode, then re-open the
-  // notes panel later — the compact branch would re-mount with
-  // `drawerOpen` still `true` and pop the bottom sheet open without
-  // any user gesture.
+  // Track viewport width vs MOBILE_BREAKPOINT — same threshold the
+  // sidebar uses, so the TOC's open mechanism (hover popup ↔ bottom
+  // drawer) flips in the same frame as the rest of the dashboard's
+  // mobile/desktop UI.
   useEffect(() => {
-    if (hasRoom) {
+    const mql = window.matchMedia(`(min-width: ${MOBILE_BREAKPOINT}px)`);
+    const update = () => setIsDesktop(mql.matches);
+    update();
+    mql.addEventListener('change', update);
+    return () => {
+      mql.removeEventListener('change', update);
+    };
+  }, []);
+
+  // Reset transient open/pinned state when the open mechanism flips.
+  // - Going mobile: the drawer is the active surface, so any leftover
+  //   `pinned` from desktop must clear (it'd otherwise force the
+  //   never-rendered desktop popup to "stay open").
+  // - Going desktop: any leftover `drawerOpen` from mobile must clear
+  //   so a sidebar-toggle that crosses the breakpoint doesn't pop the
+  //   bottom sheet open without a user gesture.
+  useEffect(() => {
+    if (isDesktop) {
       setDrawerOpen(false);
+    } else {
+      setPinned(false);
     }
-  }, [hasRoom]);
+  }, [isDesktop]);
 
   useEffect(() => {
     if (items.length === 0) {
@@ -142,16 +191,17 @@ export default function FloatingToc({ items, variant }: Props) {
     const scroller = findScrollableAncestor(targets[0]);
 
     // Watch the gutter between the article and the scroll container's
-    // right edge. When the gutter narrows past the full-mode threshold
-    // we switch to the compact ladder + drawer instead of hiding. Uses
-    // a ResizeObserver so we track *element* size changes, which also
-    // covers window resizes without a separate listener.
+    // right edge. When the gutter narrows past TOC_MIN_GUTTER_PX we
+    // shrink the desktop ladder bars to compact size so they fit inside
+    // the article's right padding instead of overlapping its text.
+    // Uses a ResizeObserver so we track *element* size changes, which
+    // also covers window resizes without a separate listener.
     const probe = targets[0];
     let measureHandle: number | null = null;
     const measure = () => {
       measureHandle = null;
       if (scroller == null) {
-        setHasRoom(true);
+        setHasFullGutter(true);
         setScrollerRightInset(null);
         return;
       }
@@ -162,7 +212,7 @@ export default function FloatingToc({ items, variant }: Props) {
       // right side to sit. Without this, anchoring to the bounding
       // rect's `right` would push the ladder under the scrollbar.
       const innerRight = scrollerRect.left + scroller.clientWidth;
-      setHasRoom(innerRight - probeRight >= TOC_MIN_GUTTER_PX);
+      setHasFullGutter(innerRight - probeRight >= TOC_MIN_GUTTER_PX);
       setScrollerRightInset(Math.max(0, window.innerWidth - innerRight));
     };
     // ResizeObserver can fire mid-layout — defer the measurement to
@@ -307,13 +357,14 @@ export default function FloatingToc({ items, variant }: Props) {
     </button>
   );
 
-  if (!hasRoom) {
-    // Compact mode: short bars hugging the scroll container's inner
-    // right edge, with a single tap target that opens a bottom drawer
+  if (!isDesktop) {
+    // Mobile: short bars hugging the scroll container's inner right
+    // edge, with a single tap target that opens a bottom drawer
     // listing every entry. The whole ladder is one button so the user
     // can hit any bar to bring up the same drawer — distinguishing
-    // per-bar taps would demand pixel-perfect aim on hitboxes that are
-    // already only a few pixels wide.
+    // per-bar taps would demand pixel-perfect aim on hitboxes that
+    // are already only a few pixels wide, and hover-popups don't work
+    // on touch anyway.
     const compactRightStyle =
       scrollerRightInset != null
         ? scrollerRightInset + TOC_COMPACT_RIGHT_INSET_PX
@@ -365,13 +416,25 @@ export default function FloatingToc({ items, variant }: Props) {
     );
   }
 
-  // Anchor the ladder to the scroll container's inner right edge plus a
-  // fixed inset so the bars always sit inside the scrollable area,
+  // Desktop hover-popup mode. The bar size and right-inset depend on
+  // whether the gutter outside the article is wide enough for full-size
+  // bars. Without enough gutter we drop to the compact bar dimensions
+  // — w-2 / w-3 + 8px inset — so the ladder lives inside the article's
+  // px-6 right padding instead of overlapping its text. The popup
+  // itself stays the same size in both cases.
+  const ladderRightInset = hasFullGutter ? TOC_RIGHT_INSET_PX : TOC_COMPACT_RIGHT_INSET_PX;
+  const ladderActiveBarClass = hasFullGutter ? 'w-6 bg-foreground' : 'w-3 bg-foreground';
+  const ladderIdleBarClass = hasFullGutter
+    ? 'w-4 bg-foreground/20 hover:bg-foreground/40'
+    : 'w-2 bg-foreground/25 hover:bg-foreground/40';
+  const ladderGapClass = hasFullGutter ? 'gap-2' : 'gap-1.5';
+  // Anchor the ladder to the scroll container's inner right edge plus
+  // the inset, so the bars always sit inside the scrollable area
   // regardless of how wide the notes side panel currently is. Falls
   // back to a viewport-relative inset for the first render frame, when
   // we haven't measured yet.
   const rightStyle =
-    scrollerRightInset != null ? scrollerRightInset + TOC_RIGHT_INSET_PX : TOC_RIGHT_INSET_PX;
+    scrollerRightInset != null ? scrollerRightInset + ladderRightInset : ladderRightInset;
 
   return (
     <div
@@ -380,29 +443,85 @@ export default function FloatingToc({ items, variant }: Props) {
       aria-label="Table of contents"
     >
       {/* Ladder (idle). Fades out on hover so the popup visually
-          replaces it without the two overlapping. */}
-      <div className="flex flex-col items-end gap-2 py-1.5 transition-opacity duration-150 group-hover:pointer-events-none group-hover:opacity-0">
+          replaces it without the two overlapping. When the popup is
+          pinned the ladder stays faded out unconditionally — the popup
+          is the active surface in that mode. Anchored at top-40
+          (10rem) and capped so its bottom edge lands at 90vh —
+          max-height = 90vh - 10rem — leaving a 10vh bottom margin and
+          keeping the ladder fully on screen even on short viewports.
+          Scrolls (with the scrollbar hidden) when entries don't fit.
+
+          The pinned vs floating className is fully swapped (rather than
+          appended) so we don't apply both `pointer-events-none` and
+          `pointer-events-auto` at the same time. Tailwind would resolve
+          that conflict by CSS source order, which would silently flip
+          the resolved value depending on Tailwind's internal ordering. */}
+      <div
+        className={
+          pinned
+            ? `pointer-events-none flex max-h-[calc(90vh-10rem)] flex-col items-end ${ladderGapClass} overflow-y-auto py-1.5 opacity-0 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]`
+            : `flex max-h-[calc(90vh-10rem)] flex-col items-end ${ladderGapClass} overflow-y-auto py-1.5 transition-opacity duration-150 group-hover:pointer-events-none group-hover:opacity-0 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]`
+        }
+      >
         {items.map((it) => (
           <button
             key={it.id}
             type="button"
             onClick={() => handleItemClick(it.id)}
             aria-label={`Jump to ${it.label}`}
-            className={`h-[2px] transition-all ${
-              activeId === it.id
-                ? 'w-6 bg-foreground'
-                : 'w-4 bg-foreground/20 hover:bg-foreground/40'
+            className={`shrink-0 h-[2px] transition-all ${
+              activeId === it.id ? ladderActiveBarClass : ladderIdleBarClass
             }`}
           />
         ))}
       </div>
       {/* Popup (hover). Pointer-events flip from none → auto on hover
           so clicks land, and so the popup doesn't eat hits over the
-          article when idle. */}
-      <div className="pointer-events-none absolute top-0 right-0 w-64 rounded-xl border border-border bg-background p-2 opacity-0 shadow-lg transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
-        <ul className="flex max-h-[70vh] flex-col gap-0.5 overflow-y-auto text-sm">
-          <li>{renderTopButton()}</li>
+          article when idle. Top and Bottom are pinned outside the
+          scrollable region so the user can always see and tap them
+          regardless of how far down they've scrolled the heading list.
+          When `pinned` is true, the popup stays open regardless of
+          hover — the pin toggle on the top row controls this.
+
+          The pinned vs floating className is fully swapped (rather than
+          appended) so we never apply `pointer-events-none` and
+          `pointer-events-auto` at the same time. With both present
+          Tailwind resolves the conflict by CSS source order — and
+          `pointer-events: none` on a "pinned" popup makes it unable to
+          receive any pointer events including hover, so once the mouse
+          leaves and re-enters, `group-hover:pointer-events-auto` never
+          re-activates and the popup becomes permanently dead to
+          clicks. */}
+      <div
+        className={
+          pinned
+            ? 'pointer-events-auto absolute top-0 right-0 flex max-h-[calc(90vh-10rem)] w-64 flex-col rounded-xl border border-border bg-background p-2 opacity-100 shadow-lg'
+            : 'pointer-events-none absolute top-0 right-0 flex max-h-[calc(90vh-10rem)] w-64 flex-col rounded-xl border border-border bg-background p-2 opacity-0 shadow-lg transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100'
+        }
+      >
+        <div className="flex items-center gap-1">
+          <div className="min-w-0 flex-1">{renderTopButton()}</div>
+          <button
+            type="button"
+            onClick={() => setPinned((prev) => !prev)}
+            aria-pressed={pinned}
+            aria-label={pinned ? 'Unpin table of contents' : 'Pin table of contents'}
+            title={pinned ? 'Unpin (floating)' : 'Pin (fixed)'}
+            className={`shrink-0 rounded-md p-1.5 transition-colors hover:bg-foreground/5 dark:hover:bg-foreground/10 ${
+              pinned ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {pinned ? (
+              <LockClosedIcon className="h-3.5 w-3.5" />
+            ) : (
+              <LockOpenIcon className="h-3.5 w-3.5" />
+            )}
+          </button>
+        </div>
+        <ul className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto text-sm">
           {renderItems()}
+        </ul>
+        <ul className="flex flex-col gap-0.5 text-sm">
           <li>{renderBottomButton()}</li>
         </ul>
       </div>
