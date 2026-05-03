@@ -73,8 +73,9 @@ const TOC_COMPACT_RIGHT_INSET_PX = 8;
  * The two decisions used to be coupled (one boolean drove both), which
  * meant desktop users with the dashboard sidebar open would be forced
  * into the touch-oriented drawer mode just because the gutter
- * collapsed. They're now independent: a desktop reader at 800–1100px
- * keeps the hover popup but with smaller bars.
+ * collapsed. They're now independent: a desktop reader between
+ * `MOBILE_BREAKPOINT` and the gutter cutoff (~1100px) keeps the
+ * hover popup but with smaller bars.
  *
  * Active-item tracking uses IntersectionObserver against the viewport —
  * the reader's scroll container fills the viewport, so visible elements
@@ -102,14 +103,14 @@ export default function FloatingToc({ items, variant }: Props) {
   // viewport-relative offset so the ladder still appears in roughly the
   // right place during that first frame.
   const [scrollerRightInset, setScrollerRightInset] = useState<number | null>(null);
-  // Compact-mode drawer open/close. Only meaningful when `hasRoom`
-  // is false; in full mode the popup is hover-driven and ignores
-  // this flag.
+  // Mobile-mode drawer open/close. Only meaningful when `isDesktop`
+  // is false; on desktop the popup is hover-driven and ignores this
+  // flag.
   const [drawerOpen, setDrawerOpen] = useState(false);
-  // Full-mode "pin" toggle. When true, the hover popup stays visible
-  // (and the ladder stays hidden) regardless of pointer position, so
-  // the reader can keep the heading list parked on screen while they
-  // work. Only meaningful when `hasRoom` is true.
+  // Desktop-mode "pin" toggle. When true, the hover popup stays
+  // visible (and the ladder stays hidden) regardless of pointer
+  // position, so the reader can keep the heading list parked on
+  // screen while they work. Only meaningful when `isDesktop` is true.
   const [pinned, setPinned] = useState(false);
 
   // Track viewport width vs MOBILE_BREAKPOINT — same threshold the
