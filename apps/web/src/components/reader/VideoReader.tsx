@@ -659,19 +659,11 @@ export default function VideoReader({
 
           {/* Thumbnail + description row — thumbnail sits to the left
             of the description at the same height so it reads as one
-            unit. When there's no description the thumbnail still
-            renders standalone; when there's no thumbnail the
-            description spans the full width. */}
+            unit. Hidden below the sidebar breakpoint on every video:
+            the thumbnail is already mobile-hidden, and the description
+            crowds the narrow viewport before the article even starts. */}
           {(video.thumbnailUrl != null || video.description != null) && (
-            <div
-              className={`mt-5 items-start gap-4 ${
-                // Thumbnail-only videos collapse to an empty row on
-                // narrow screens (the thumbnail is hidden), so hide
-                // the whole row below the sidebar breakpoint in that
-                // case to avoid a stray 20px gap.
-                video.description == null ? 'hidden sidebar:flex' : 'flex'
-              }`}
-            >
+            <div className="mt-5 hidden items-start gap-4 sidebar:flex">
               {video.thumbnailUrl != null && (
                 <img
                   // Bilibili's hdslb CDN 403s when the Referer points

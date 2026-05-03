@@ -19,9 +19,16 @@ export default function Hero() {
       className="flex min-h-[60vh] flex-col justify-start px-6 pb-16 pt-[14vh] text-center sm:px-8"
     >
       <h1 className="mx-auto max-w-4xl font-display text-5xl font-medium leading-tight tracking-tight text-slate-700 sm:text-7xl sm:leading-tight dark:text-slate-100">
-        <RotatingWord /> your
-        <br />
-        <span className="text-[0.97em]">video subscriptions</span>
+        {/* Below `sidebar:` the slogan reads as three rows: verb /
+            "your video" / "subscriptions". At `sidebar:` and up it
+            collapses back to the original two-row marketing layout
+            ("{verb} your" / "video subscriptions"). */}
+        <RotatingWord /> <br className="sidebar:hidden" />
+        your <br className="hidden sidebar:inline" />
+        <span className="text-[0.97em]">
+          video <br className="sidebar:hidden" />
+          subscriptions
+        </span>
       </h1>
       <p className="mx-auto mt-10 max-w-2xl text-xl tracking-tight text-slate-500 dark:text-slate-400">
         {DESCRIPTION}
