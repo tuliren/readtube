@@ -476,7 +476,7 @@ export default function VideoReader({
         with the same 12px-from-the-edge action rail.
       */}
         {!publicMode && (
-          <div className="sticky top-0 z-10 flex h-10 shrink-0 items-center gap-1 border-b border-border bg-background px-3 sidebar:h-auto sidebar:py-3">
+          <div className="sticky top-0 z-10 flex h-10 shrink-0 items-center gap-0 border-b border-border bg-background px-3 sidebar:h-auto sidebar:gap-1 sidebar:py-3">
             {/* On small screens this header replaces the dashboard
                 MobileTopBar entirely, so the burger that opens the
                 sidebar drawer lives here. Hidden once the desktop
@@ -493,7 +493,7 @@ export default function VideoReader({
             )}
             <Link
               href={backHref}
-              className="inline-flex shrink-0 items-center gap-1.5 px-2 text-sm text-muted-foreground hover:text-foreground"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded px-1 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground sidebar:px-2"
               aria-label="Back"
             >
               <ArrowLeftIcon className="h-4 w-4" />
