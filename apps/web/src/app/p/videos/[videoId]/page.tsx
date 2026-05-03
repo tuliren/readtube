@@ -126,7 +126,25 @@ export default async function PublicVideoPage({ params, searchParams }: Props) {
   // container.
   return (
     <div className="flex h-screen flex-col overflow-hidden">
-      <Header compact />
+      <Header
+        compact
+        mobileCenter={
+          <div className="flex min-w-0 items-center gap-2">
+            {videoData.thumbnailUrl != null && (
+              <img
+                src={videoData.thumbnailUrl}
+                alt=""
+                aria-hidden
+                referrerPolicy="no-referrer"
+                className="h-6 w-10 shrink-0 rounded object-cover"
+              />
+            )}
+            <span className="truncate text-sm font-medium text-foreground" title={videoData.title}>
+              {videoData.title}
+            </span>
+          </div>
+        }
+      />
       <main className="flex min-h-0 flex-1 flex-col">
         <VideoReader
           video={videoData}

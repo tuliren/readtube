@@ -5,7 +5,7 @@ import { Dialog, DialogPanel } from '@headlessui/react';
 import { Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 
 import { Logo } from '@/components/Logo';
 import ThemeSelector from '@/components/settings/ThemeSelector';
@@ -24,6 +24,12 @@ interface Props {
    *  pinned above an article and the default 96-ish px header would
    *  swallow a third of the mobile viewport. */
   compact?: boolean;
+  /** Optional small-screen-only slot rendered between the logo and
+   *  the theme/burger group. The slot is capped at 60% of the nav
+   *  width and hidden at `lg:` and up, where the marketing nav already
+   *  fills the row. Used by the public video reader to surface the
+   *  current video's thumbnail + title alongside the brand. */
+  mobileCenter?: ReactNode;
 }
 
 interface NavigationItem {
@@ -41,7 +47,7 @@ const SIGNED_IN_NAVIGATION: NavigationItem[] = [{ name: 'Inbox', href: '/inbox' 
 
 const NON_HOME_NAVIGATION: NavigationItem[] = [{ name: 'Home', href: '/' }];
 
-export default function Header({ onHomePage, compact = false }: Props = {}) {
+export default function Header({ onHomePage, compact = false, mobileCenter }: Props = {}) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { isSignedIn } = useAuth();
   const pathname = usePathname();
@@ -67,12 +73,25 @@ export default function Header({ onHomePage, compact = false }: Props = {}) {
         aria-label="Global"
         className={`mx-auto flex max-w-7xl items-center justify-between gap-x-6 ${navPaddingClass}`}
       >
-        <div className="flex lg:flex-1">
+        <div className="flex shrink-0 lg:flex-1">
           <Link href="/" className="-m-1.5 p-1.5">
             <span className="sr-only">{TITLE}</span>
             <Logo size={logoSize} />
           </Link>
         </div>
+        {/* Caller-supplied slot between the logo and the right-side
+            actions. `flex-1 min-w-0` lets it absorb whatever the
+            logo + actions don't claim, `max-w-[60%]` caps it so a
+            long video title can't crowd the brand or the theme /
+            burger controls. Hidden at `lg:` and up — the marketing
+            nav already fills that row, and the public-share use
+            case (showing the current video's thumbnail + title) is
+            only relevant on the cramped mobile viewport. */}
+        {mobileCenter != null && (
+          <div className="flex min-w-0 max-w-[60%] flex-1 items-center lg:hidden">
+            {mobileCenter}
+          </div>
+        )}
         <div className="hidden items-center text-gray-600 hover:text-gray-900 lg:flex lg:gap-x-12 dark:text-slate-300 dark:hover:text-slate-100">
           {navigation.map((item) => (
             <Link key={item.name} href={item.href} className={linkClass}>
