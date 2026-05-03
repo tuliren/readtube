@@ -16,6 +16,21 @@ CREATE TYPE "GenerationStatus" AS ENUM('GENERATING', 'READY');
 -- CreateEnum
 CREATE TYPE "ChannelStatus" AS ENUM('REFRESHING', 'READY');
 
+-- CreateEnum
+CREATE TYPE "UserRequestType" AS ENUM('TRANSCRIPT', 'SUMMARY', 'ARTICLE');
+
+-- CreateEnum
+CREATE TYPE "UserRequestOutcome" AS ENUM(
+  'CACHED',
+  'GENERATED',
+  'TAPPED',
+  'TRANSIENT_ERROR',
+  'NOT_FOUND',
+  'UNAVAILABLE_STICKY',
+  'UNAVAILABLE_FRESH',
+  'FAILED'
+);
+
 -- CreateTable
 CREATE TABLE "User" (
   "id" TEXT NOT NULL,
@@ -238,6 +253,28 @@ CREATE TABLE "VideoEmbedding" (
   CONSTRAINT "VideoEmbedding_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "UserRequest" (
+  "id" TEXT NOT NULL,
+  "user_id" TEXT NOT NULL,
+  "type" "UserRequestType" NOT NULL,
+  "outcome" "UserRequestOutcome" NOT NULL,
+  "video_id" TEXT NOT NULL,
+  "transcript_id" TEXT,
+  "summary_id" TEXT,
+  "article_id" TEXT,
+  "language" TEXT,
+  "style" "ArticleStyle",
+  "prompt_version" TEXT,
+  "model" TEXT,
+  "usage" JSONB,
+  "workflow_id" TEXT,
+  "error_message" TEXT,
+  "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "completed_at" TIMESTAMP(3),
+  CONSTRAINT "UserRequest_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "User_source_id_key" ON "User" ("source_id");
 
@@ -334,6 +371,15 @@ CREATE UNIQUE INDEX "VideoEmbedding_video_id_key" ON "VideoEmbedding" ("video_id
 -- CreateIndex
 CREATE INDEX "video_embedding_hnsw_idx" ON "VideoEmbedding" ("embedding");
 
+-- CreateIndex
+CREATE INDEX "user_request_index_on_user_created" ON "UserRequest" ("user_id", "created_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "user_request_index_on_user_type_created" ON "UserRequest" ("user_id", "type", "created_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "user_request_index_on_video" ON "UserRequest" ("video_id");
+
 -- AddForeignKey
 ALTER TABLE "UserSubscription"
 ADD CONSTRAINT "UserSubscription_channel_id_fkey" FOREIGN KEY ("channel_id") REFERENCES "Channel" ("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -429,3 +475,23 @@ ADD CONSTRAINT "Note_video_id_fkey" FOREIGN KEY ("video_id") REFERENCES "Video" 
 -- AddForeignKey
 ALTER TABLE "VideoEmbedding"
 ADD CONSTRAINT "VideoEmbedding_video_id_fkey" FOREIGN KEY ("video_id") REFERENCES "Video" ("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "UserRequest"
+ADD CONSTRAINT "UserRequest_article_id_fkey" FOREIGN KEY ("article_id") REFERENCES "Article" ("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "UserRequest"
+ADD CONSTRAINT "UserRequest_summary_id_fkey" FOREIGN KEY ("summary_id") REFERENCES "Summary" ("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "UserRequest"
+ADD CONSTRAINT "UserRequest_transcript_id_fkey" FOREIGN KEY ("transcript_id") REFERENCES "Transcript" ("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "UserRequest"
+ADD CONSTRAINT "UserRequest_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "User" ("source_id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "UserRequest"
+ADD CONSTRAINT "UserRequest_video_id_fkey" FOREIGN KEY ("video_id") REFERENCES "Video" ("id") ON DELETE CASCADE ON UPDATE CASCADE;

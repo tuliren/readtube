@@ -54,6 +54,37 @@ enum ChannelStatus {
   READY
 }
 
+// Discriminator for UserRequest.type — see UserRequest model below.
+enum UserRequestType {
+  TRANSCRIPT
+  SUMMARY
+  ARTICLE
+}
+
+// Outcome of a UserRequest. The set spans transcript + summary + article
+// flows. Pricing/categorization is a `WHERE outcome IN (...)` filter
+// downstream — kept out of the schema so rules can evolve without
+// migrations.
+//
+//   CACHED              pre-existing entity returned, no upstream/LLM work
+//   GENERATED           ran successfully (upstream API for transcript, LLM otherwise)
+//   TAPPED              tapped into in-flight workflow (summary/article only)
+//   TRANSIENT_ERROR     network blip; safe to retry
+//   NOT_FOUND           IDOR or video missing
+//   UNAVAILABLE_STICKY  transcript: short-circuited via Video.transcript_unavailable (free)
+//   UNAVAILABLE_FRESH   transcript: tried upstream, came back empty (paid call, no result)
+//   FAILED              summary/article workflow died after a fresh start
+enum UserRequestOutcome {
+  CACHED
+  GENERATED
+  TAPPED
+  TRANSIENT_ERROR
+  NOT_FOUND
+  UNAVAILABLE_STICKY
+  UNAVAILABLE_FRESH
+  FAILED
+}
+
 model User {
   id          String         @id @default(cuid())
   source_type UserSourceType @default(CLERK)
@@ -80,6 +111,7 @@ model User {
   standalone_videos  StandaloneVideo[]
   playlists          Playlist[]
   notes              Note[]
+  requests           UserRequest[]
 }
 
 model Channel {
@@ -204,6 +236,7 @@ model Video {
   playlist_items PlaylistVideo[]
   notes          Note[]
   embedding      VideoEmbedding?
+  requests       UserRequest[]
 
   @@unique([channel_id, source_id], name: "video_unique_channel_source")
   @@unique([source_type, source_id], name: "video_unique_source")
@@ -234,6 +267,7 @@ model Transcript {
 
   articles  Article[]
   summaries Summary[]
+  requests  UserRequest[]
 
   @@index([video_id], name: "transcript_index_on_video_id")
 }
@@ -273,7 +307,8 @@ model Article {
   usage          Json?
   generated_at   DateTime         @default(now())
 
-  transcript Transcript @relation(fields: [transcript_id], references: [id], onDelete: Cascade)
+  transcript Transcript    @relation(fields: [transcript_id], references: [id], onDelete: Cascade)
+  requests   UserRequest[]
 
   // Uniqueness on (transcript_id, style, language) is enforced by two
   // partial unique indexes added by raw SQL in the migration: one for
@@ -320,7 +355,8 @@ model Summary {
   usage          Json?
   generated_at   DateTime         @default(now())
 
-  transcript Transcript @relation(fields: [transcript_id], references: [id], onDelete: Cascade)
+  transcript Transcript    @relation(fields: [transcript_id], references: [id], onDelete: Cascade)
+  requests   UserRequest[]
 
   // Uniqueness on (transcript_id, language) is enforced by two partial
   // unique indexes added by raw SQL in the migration: one for language
@@ -500,4 +536,77 @@ model VideoEmbedding {
   generated_at   DateTime                    @default(now())
 
   video Video @relation(fields: [video_id], references: [id], onDelete: Cascade)
+}
+
+// Per-user, per-request audit log spanning the transcript fetch and
+// summary/article generation flows. One row per user-initiated POST
+// to /api/videos/:id/transcript, /summary, /article — plus an extra
+// TRANSCRIPT row for the auto-fetch that summary/article POSTs do
+// internally (so upstream API cost and LLM cost are attributable
+// independently).
+//
+// This table does NOT replace the cache rows. Summary/Article rows
+// remain the canonical "what produced the current cached content"
+// record (with their own model/prompt_version/usage). UserRequest
+// is a separate immutable per-event log layered alongside, so a regen
+// that overwrites the shared row doesn't erase prior attributions.
+//
+// For async paths (summary/article fresh start), the route inserts a
+// row with `outcome=GENERATED, completed_at=null, usage=null` and
+// passes `id` into the workflow input as `userRequestId`. The
+// workflow's persist step backfills `usage` and `completed_at`; on
+// failure the revert step flips `outcome=FAILED` and stamps an error
+// message.
+model UserRequest {
+  id      String             @id @default(cuid())
+  // Clerk source id, matching User.source_id (the FK target used
+  // throughout the schema).
+  user_id String
+  type    UserRequestType
+  outcome UserRequestOutcome
+
+  // The video the request targeted — always populated.
+  video_id String
+
+  // Resulting entity rows when one exists. Polymorphic by `type`. SetNull
+  // on cascade so deleting cached content doesn't lose the audit row.
+  transcript_id String?
+  summary_id    String?
+  article_id    String?
+
+  // Generation context (Summary/Article). Denormalized so per-user
+  // usage queries don't have to join the shared cache row, which may
+  // have been overwritten by a later regen.
+  language       String?
+  style          ArticleStyle?
+  prompt_version String?
+  model          String?
+  // Token usage from the AI SDK result.usage. Backfilled by the
+  // workflow's persist step on GENERATED summary/article rows.
+  // For TAPPED rows we don't backfill — the original GENERATED row
+  // owns that attribution; pricing logic should treat TAPPED as
+  // "consumed someone else's generation."
+  usage          Json?
+
+  // Workflow trace. Set when a workflow ran (GENERATED or TAPPED).
+  workflow_id String?
+
+  // Free-form failure detail (FAILED, TRANSIENT_ERROR, etc.).
+  error_message String?
+
+  created_at DateTime @default(now())
+  // Set when async work finishes (GENERATED success or FAILED). NULL
+  // while a workflow is in flight, NULL for synchronous outcomes
+  // (CACHED, TAPPED, NOT_FOUND, the transcript outcomes).
+  completed_at DateTime?
+
+  user       User        @relation(fields: [user_id], references: [source_id], onDelete: Cascade)
+  video      Video       @relation(fields: [video_id], references: [id], onDelete: Cascade)
+  transcript Transcript? @relation(fields: [transcript_id], references: [id], onDelete: SetNull)
+  summary    Summary?    @relation(fields: [summary_id], references: [id], onDelete: SetNull)
+  article    Article?    @relation(fields: [article_id], references: [id], onDelete: SetNull)
+
+  @@index([user_id, created_at(sort: Desc)], name: "user_request_index_on_user_created")
+  @@index([user_id, type, created_at(sort: Desc)], name: "user_request_index_on_user_type_created")
+  @@index([video_id], name: "user_request_index_on_video")
 }

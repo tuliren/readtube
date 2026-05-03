@@ -1,5 +1,5 @@
 import { auth } from '@clerk/nextjs/server';
-import { prisma } from '@readtube/database';
+import { UserRequestOutcome, prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 import { getRun, start } from 'workflow/api';
 
@@ -8,6 +8,7 @@ import { findOrCloneSummary, resolveTranscriptLanguage } from '@/lib/language/ca
 import { resolveTargetLanguage } from '@/lib/language/resolve';
 import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
+import { recordSummaryRequest } from '@/lib/usage/userRequest';
 import { claimSummaryRun, findActiveSummaryRun } from '@/lib/workflows/runRegistry';
 import { NDJSON_HEADERS, ndjsonResponseFromRun } from '@/lib/workflows/streamResponse';
 import { type SummaryStreamEvent, summaryWorkflow } from '@/lib/workflows/summary';
@@ -162,21 +163,58 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: 'Video not found' }, { status: 404 });
   }
 
+  // Audit-log helper used at every terminal branch below. Wrapped in
+  // try/catch — a failed audit row must never break the user's
+  // request. The video.id resolved by the IDOR check above is reused
+  // so the FK to Video is always valid.
+  const recordSafe = async (
+    outcome: UserRequestOutcome,
+    extra: {
+      summaryId?: string | null;
+      workflowId?: string | null;
+      errorMessage?: string | null;
+    } = {}
+  ): Promise<{ id: string } | null> => {
+    try {
+      return await recordSummaryRequest(prisma, {
+        userId,
+        videoId: video.id,
+        outcome,
+        language: target,
+        model: DEFAULT_AI_MODEL,
+        promptVersion: SUMMARY_PROMPT_VERSION,
+        summaryId: extra.summaryId ?? null,
+        workflowId: extra.workflowId ?? null,
+        errorMessage: extra.errorMessage ?? null,
+      });
+    } catch (err) {
+      console.error('[summary/POST] failed to record UserRequest:', err);
+      return null;
+    }
+  };
+
   // Auto-fetch the transcript if it isn't already cached. The single
   // ensureTranscript call replaces "expect transcript or 400" — the
   // user clicks Generate once and the route transparently ensures
   // there's something to feed the model. If the upstream provider
   // can't deliver captions, ensureTranscript flips the sticky
   // transcript_unavailable flag on the Video so we don't waste a
-  // round-trip on the next click.
+  // round-trip on the next click. ensureTranscript records its own
+  // TRANSCRIPT UserRequest row; the SUMMARY rows below are
+  // independent so each cost (upstream API vs LLM) is attributable.
   const ensured = await ensureTranscript(prisma, userId, id);
   if (!ensured.ok) {
     if (ensured.reason === 'not-found') {
       console.error(`[summary/POST] Video ${id} not found during ensureTranscript`);
+      // Don't write a SUMMARY UserRequest for IDOR — see the matching
+      // skip in ensureTranscript for the rationale.
       return NextResponse.json({ error: 'Video not found' }, { status: 404 });
     }
     if (ensured.reason === 'transient-error') {
       console.error(`[summary/POST] Transient transcript fetch error for video ${id}`);
+      await recordSafe(UserRequestOutcome.TRANSIENT_ERROR, {
+        errorMessage: 'transcript-transient',
+      });
       return NextResponse.json(
         {
           error: 'Could not fetch the transcript right now — please try again.',
@@ -186,6 +224,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       );
     }
     console.error(`[summary/POST] Transcript unavailable for video ${id}`);
+    // Summary itself was never attempted — record as FAILED with the
+    // upstream cause in error_message rather than leaking a transcript
+    // outcome value into the SUMMARY type.
+    await recordSafe(UserRequestOutcome.FAILED, {
+      errorMessage: 'transcript-unavailable',
+    });
     return NextResponse.json(
       { error: 'Transcript unavailable for this video.', code: 'unavailable' },
       { status: 410 }
@@ -211,6 +255,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       console.info(
         `[summary/POST] Tapping into active run ${activeRun.runId} for video ${id} (language ${target ?? 'original'})`
       );
+      await recordSafe(UserRequestOutcome.TAPPED, { workflowId: activeRun.runId });
       return ndjsonResponseFromRun<SummaryStreamEvent>(activeRun.runId);
     }
   }
@@ -225,6 +270,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // field", and cloning would defeat it.
   const cached = isFullGenerate ? await findOrCloneSummary(prisma, transcript.id, target) : null;
   if (cached != null && cached.headline != null && cached.short != null && cached.full != null) {
+    await recordSafe(UserRequestOutcome.CACHED, { summaryId: cached.id });
     const shortDoc = parseMarkdownDocument(cached.short);
     const fullDoc = parseMarkdownDocument(cached.full);
     const cachedEncoder = new TextEncoder();
@@ -263,6 +309,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const sourceLanguage =
     target == null ? await resolveTranscriptLanguage(prisma, transcript.id) : null;
 
+  // Insert the SUMMARY UserRequest *before* starting the workflow so
+  // its id can be threaded into the workflow input. The persist step
+  // backfills `usage` and `completed_at`; the revert step on failure
+  // flips outcome=FAILED. We pass userRequestId only for full-generate
+  // runs because per-field regen is a fire-and-forget click that
+  // doesn't need its tokens attributed back to a synchronous request
+  // row (and the workflow currently writes only one row's worth of
+  // usage; mixing them across regen runs would clobber prior data).
+  const userRequest = isFullGenerate ? await recordSafe(UserRequestOutcome.GENERATED) : null;
+
   // Run generation as a Vercel Workflow so it survives the request
   // lifecycle — see the article route for the full rationale.
   const run = await start(summaryWorkflow, [
@@ -278,6 +334,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       ),
       transcriptId: transcript.id,
       language: target,
+      userRequestId: userRequest?.id ?? null,
     },
   ]);
 
@@ -305,7 +362,36 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       } catch {
         // ignore — the stray run will expire on its own
       }
+      // Demote the row we just inserted from GENERATED to TAPPED —
+      // we ended up consuming someone else's stream, not running our
+      // own. Use prisma.userRequest.update directly (skipping the
+      // helper) since this is a one-off edge case.
+      if (userRequest != null) {
+        try {
+          await prisma.userRequest.update({
+            where: { id: userRequest.id },
+            data: {
+              outcome: UserRequestOutcome.TAPPED,
+              workflow_id: claim.winningRunId,
+              completed_at: new Date(),
+            },
+          });
+        } catch (err) {
+          console.error('[summary/POST] failed to demote UserRequest to TAPPED:', err);
+        }
+      }
       return ndjsonResponseFromRun<SummaryStreamEvent>(claim.winningRunId);
+    }
+    // We won — stamp our own runId on the audit row for trace.
+    if (userRequest != null) {
+      try {
+        await prisma.userRequest.update({
+          where: { id: userRequest.id },
+          data: { workflow_id: run.runId },
+        });
+      } catch (err) {
+        console.error('[summary/POST] failed to stamp workflow_id on UserRequest:', err);
+      }
     }
   }
 

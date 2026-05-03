@@ -19,7 +19,9 @@ export async function articleWorkflow(input: ArticleWorkflowInput): Promise<void
     // Revert the row we claimed at start time before the terminal
     // error closes the stream. Fresh claims get DELETEd so the slot
     // is clean; regen claims revert to READY (old content stays).
-    await revertArticleRowStep(input);
+    // Also flips the route's UserRequest row (if any) to FAILED with
+    // the same message — what the client sees in the stream.
+    await revertArticleRowStep(input, message);
     await emitTerminalEventStep({ error: message });
     throw err;
   }
@@ -28,7 +30,7 @@ export async function articleWorkflow(input: ArticleWorkflowInput): Promise<void
     await persistArticleStep({ ...input, ...generated });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to save article.';
-    await revertArticleRowStep(input);
+    await revertArticleRowStep(input, message);
     await emitTerminalEventStep({ error: message });
     throw err;
   }

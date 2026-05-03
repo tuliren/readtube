@@ -18,6 +18,15 @@ export interface ArticleWorkflowInput {
   sourceLanguage: string | null;
   /** Drives strategy selection — see `selectStrategy`. */
   durationSeconds: number | null;
+  /**
+   * Optional pointer to the row in `UserRequest` that triggered this
+   * workflow. Set by the route's normal-generate path so the persist
+   * step can backfill `usage` and `completed_at`; the revert step
+   * flips it to FAILED on error. Nullable so force-regen runs and
+   * any in-flight workflows that started before this column existed
+   * keep working.
+   */
+  userRequestId?: string | null;
 }
 
 export interface GeneratedArticle {

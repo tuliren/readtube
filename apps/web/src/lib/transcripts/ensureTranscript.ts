@@ -1,7 +1,8 @@
-import type { PrismaClient } from '@readtube/database';
+import { type PrismaClient, UserRequestOutcome } from '@readtube/database';
 
 import { getPlatformByType } from '@/lib/platforms';
 import { SubtitleFetchError, type TranscriptSegment } from '@/lib/platforms/types';
+import { recordTranscriptRequest } from '@/lib/usage/userRequest';
 
 interface CachedTranscript {
   id: string;
@@ -43,6 +44,11 @@ export type EnsureTranscriptResult =
  *
  * Returns reason: 'not-found' only when the IDOR check fails (the
  * caller maps that to a 404 response).
+ *
+ * Audit trail: every terminal branch writes a TRANSCRIPT row to
+ * `UserRequest`. The mapping mirrors the return shape so per-user
+ * usage queries can group by outcome without joining timing or other
+ * signals (UNAVAILABLE_STICKY ≠ UNAVAILABLE_FRESH for billing).
  */
 export async function ensureTranscript(
   prisma: PrismaClient,
@@ -71,12 +77,22 @@ export async function ensureTranscript(
     },
   });
   if (video == null) {
+    // No videoId we can attribute against here without leaking IDOR
+    // signal. Skip the audit row entirely on NOT_FOUND — the FK on
+    // user_id would be valid, but `video_id` requires a row that
+    // exists, and we don't want to fabricate one.
     return { ok: false, reason: 'not-found' };
   }
 
   // Cache hit — newest Transcript row wins.
   const cached = video.transcripts[0];
   if (cached != null) {
+    await safeRecord(prisma, {
+      userId,
+      videoId: video.id,
+      outcome: UserRequestOutcome.CACHED,
+      transcriptId: cached.id,
+    });
     return {
       ok: true,
       transcript: {
@@ -89,6 +105,11 @@ export async function ensureTranscript(
   // No cached transcript and the sticky "we already tried" flag is
   // set — don't retry.
   if (video.transcript_unavailable) {
+    await safeRecord(prisma, {
+      userId,
+      videoId: video.id,
+      outcome: UserRequestOutcome.UNAVAILABLE_STICKY,
+    });
     return { ok: false, reason: 'unavailable' };
   }
 
@@ -116,11 +137,23 @@ export async function ensureTranscript(
     // the rest of the session.
     const transient = err instanceof SubtitleFetchError ? err.transient : true;
     if (transient) {
+      await safeRecord(prisma, {
+        userId,
+        videoId: video.id,
+        outcome: UserRequestOutcome.TRANSIENT_ERROR,
+        errorMessage: err instanceof Error ? err.message : String(err),
+      });
       return { ok: false, reason: 'transient-error' };
     }
     await prisma.video.update({
       where: { id: video.id },
       data: { transcript_unavailable: true },
+    });
+    await safeRecord(prisma, {
+      userId,
+      videoId: video.id,
+      outcome: UserRequestOutcome.UNAVAILABLE_FRESH,
+      errorMessage: err instanceof Error ? err.message : String(err),
     });
     return { ok: false, reason: 'unavailable' };
   }
@@ -136,8 +169,28 @@ export async function ensureTranscript(
     },
     select: { id: true },
   });
+  await safeRecord(prisma, {
+    userId,
+    videoId: video.id,
+    outcome: UserRequestOutcome.GENERATED,
+    transcriptId: created.id,
+  });
   return {
     ok: true,
     transcript: { id: created.id, segments: fetched.segments },
   };
+}
+
+// Audit-log writes must never break the caller — a stale FK or DB
+// hiccup on an analytics row shouldn't bubble back into the user's
+// 200/404/410 response. Log and swallow.
+async function safeRecord(
+  prisma: PrismaClient,
+  params: Parameters<typeof recordTranscriptRequest>[1]
+): Promise<void> {
+  try {
+    await recordTranscriptRequest(prisma, params);
+  } catch (err) {
+    console.error('[ensureTranscript] failed to record UserRequest:', err);
+  }
 }

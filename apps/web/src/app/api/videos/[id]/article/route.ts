@@ -1,5 +1,5 @@
 import { auth } from '@clerk/nextjs/server';
-import { ArticleStyle, prisma } from '@readtube/database';
+import { ArticleStyle, UserRequestOutcome, prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 import { getRun, start } from 'workflow/api';
 
@@ -8,6 +8,7 @@ import { findOrCloneArticle, resolveTranscriptLanguage } from '@/lib/language/ca
 import { resolveTargetLanguage } from '@/lib/language/resolve';
 import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
+import { recordArticleRequest } from '@/lib/usage/userRequest';
 import { type ArticleStreamEvent, articleWorkflow } from '@/lib/workflows/article';
 import { ARTICLE_PROMPT_VERSION } from '@/lib/workflows/article/steps';
 import { claimArticleRun, findActiveArticleRun } from '@/lib/workflows/runRegistry';
@@ -175,11 +176,44 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: 'Video not found' }, { status: 404 });
   }
 
+  // Audit-log helper used at every terminal branch below. Wrapped in
+  // try/catch — a failed audit row must never break the user's
+  // request. The video.id resolved by the IDOR check above is reused
+  // so the FK to Video is always valid.
+  const recordSafe = async (
+    outcome: UserRequestOutcome,
+    extra: {
+      articleId?: string | null;
+      workflowId?: string | null;
+      errorMessage?: string | null;
+    } = {}
+  ): Promise<{ id: string } | null> => {
+    try {
+      return await recordArticleRequest(prisma, {
+        userId,
+        videoId: video.id,
+        outcome,
+        language: target,
+        style,
+        model: DEFAULT_AI_MODEL,
+        promptVersion: ARTICLE_PROMPT_VERSION,
+        articleId: extra.articleId ?? null,
+        workflowId: extra.workflowId ?? null,
+        errorMessage: extra.errorMessage ?? null,
+      });
+    } catch (err) {
+      console.error('[article/POST] failed to record UserRequest:', err);
+      return null;
+    }
+  };
+
   // Auto-fetch the transcript on the user's first Generate click.
   // ensureTranscript caches success and the sticky unavailable flag
   // — same shared helper the summary route uses, so both Generate
   // paths behave identically (single click → wait → result, with
-  // no retry for confirmed-unavailable videos).
+  // no retry for confirmed-unavailable videos). ensureTranscript
+  // records its own TRANSCRIPT UserRequest row; the ARTICLE rows
+  // below are independent so each cost is attributable.
   const ensured = await ensureTranscript(prisma, userId, id);
   if (!ensured.ok) {
     if (ensured.reason === 'not-found') {
@@ -188,6 +222,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
     if (ensured.reason === 'transient-error') {
       console.error(`[article/POST] Transient transcript fetch error for video ${id}`);
+      await recordSafe(UserRequestOutcome.TRANSIENT_ERROR, {
+        errorMessage: 'transcript-transient',
+      });
       return NextResponse.json(
         {
           error: 'Could not fetch the transcript right now — please try again.',
@@ -197,6 +234,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       );
     }
     console.error(`[article/POST] Transcript unavailable for video ${id}`);
+    await recordSafe(UserRequestOutcome.FAILED, {
+      errorMessage: 'transcript-unavailable',
+    });
     return NextResponse.json(
       { error: 'Transcript unavailable for this video.', code: 'unavailable' },
       { status: 410 }
@@ -215,6 +255,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       console.info(
         `[article/POST] Tapping into active run ${activeRun.runId} for video ${id} (style=${style}, language=${target ?? 'original'})`
       );
+      await recordSafe(UserRequestOutcome.TAPPED, { workflowId: activeRun.runId });
       return ndjsonResponseFromRun<ArticleStreamEvent>(activeRun.runId);
     }
   }
@@ -233,6 +274,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // GENERATING rows that don't have it yet. Guard explicitly so the
   // type narrows.
   if (cached != null && cached.content != null) {
+    await recordSafe(UserRequestOutcome.CACHED, { articleId: cached.id });
     const parsed = parseMarkdownDocument(cached.content);
     const hasLatex = parsed.properties.hasLatex === true;
     const cachedEncoder = new TextEncoder();
@@ -260,6 +302,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const sourceLanguage =
     target == null ? await resolveTranscriptLanguage(prisma, transcript.id) : null;
 
+  // Insert the ARTICLE UserRequest *before* starting the workflow so
+  // its id can be threaded into the workflow input. The persist step
+  // backfills `usage` and `completed_at`; the revert step on failure
+  // flips outcome=FAILED. Skipped when force=true — that path is the
+  // dev-only Regenerate button and intentionally bypasses the
+  // run-registry; we keep audit semantics aligned by skipping the
+  // user-request thread too (no row, no backfill).
+  const userRequest = force ? null : await recordSafe(UserRequestOutcome.GENERATED);
+
   // Run generation as a Vercel Workflow so it survives the request
   // lifecycle: even if the client closes the tab mid-stream, the
   // workflow keeps running, persists the row on completion, and the
@@ -278,6 +329,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       channelName: video.channel.name,
       sourceLanguage,
       durationSeconds: video.duration_seconds,
+      userRequestId: userRequest?.id ?? null,
     },
   ]);
 
@@ -306,7 +358,34 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       } catch {
         // ignore — the stray run will expire on its own
       }
+      // Demote the row we just inserted from GENERATED to TAPPED —
+      // we ended up consuming someone else's stream, not running our
+      // own.
+      if (userRequest != null) {
+        try {
+          await prisma.userRequest.update({
+            where: { id: userRequest.id },
+            data: {
+              outcome: UserRequestOutcome.TAPPED,
+              workflow_id: claim.winningRunId,
+              completed_at: new Date(),
+            },
+          });
+        } catch (err) {
+          console.error('[article/POST] failed to demote UserRequest to TAPPED:', err);
+        }
+      }
       return ndjsonResponseFromRun<ArticleStreamEvent>(claim.winningRunId);
+    }
+    if (userRequest != null) {
+      try {
+        await prisma.userRequest.update({
+          where: { id: userRequest.id },
+          data: { workflow_id: run.runId },
+        });
+      } catch (err) {
+        console.error('[article/POST] failed to stamp workflow_id on UserRequest:', err);
+      }
     }
   }
 

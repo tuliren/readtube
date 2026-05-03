@@ -1,8 +1,9 @@
-import { GenerationStatus, Prisma, prisma } from '@readtube/database';
+import { GenerationStatus, Prisma, UserRequestOutcome, prisma } from '@readtube/database';
 import { FatalError, getWorkflowMetadata, getWritable } from 'workflow';
 
 import { DEFAULT_AI_MODEL } from '@/constants';
 import { CURRENT_FRONTMATTER_VERSION, serializeMarkdownDocument } from '@/lib/markdownFrontmatter';
+import { completeUserRequest } from '@/lib/usage/userRequest';
 import { emitTerminalEvent } from '@/lib/workflows/emitTerminalEvent';
 import { revertArticleRow } from '@/lib/workflows/runRegistry';
 
@@ -69,44 +70,67 @@ export async function persistArticleStep(
     where: { transcript_id: input.transcriptId, style: input.style, language: input.language },
     select: { id: true },
   });
+  let articleId: string;
   if (existing) {
     await prisma.article.update({
       where: { id: existing.id },
       data: { ...articleData, generated_at: new Date() },
     });
-    return;
-  }
-  // Defensive fallback for the unusual case where the claimed row was
-  // removed mid-workflow (manual cleanup, table truncate, etc.).
-  // Standard P2002 retry covers concurrent inserts.
-  try {
-    await prisma.article.create({
-      data: {
-        transcript_id: input.transcriptId,
-        style: input.style,
-        language: input.language,
-        ...articleData,
-      },
-    });
-  } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-      const raced = await prisma.article.findFirst({
-        where: {
+    articleId = existing.id;
+  } else {
+    // Defensive fallback for the unusual case where the claimed row was
+    // removed mid-workflow (manual cleanup, table truncate, etc.).
+    // Standard P2002 retry covers concurrent inserts.
+    try {
+      const created = await prisma.article.create({
+        data: {
           transcript_id: input.transcriptId,
           style: input.style,
           language: input.language,
+          ...articleData,
         },
         select: { id: true },
       });
-      if (raced) {
-        await prisma.article.update({
-          where: { id: raced.id },
-          data: { ...articleData, generated_at: new Date() },
+      articleId = created.id;
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        const raced = await prisma.article.findFirst({
+          where: {
+            transcript_id: input.transcriptId,
+            style: input.style,
+            language: input.language,
+          },
+          select: { id: true },
         });
-        return;
+        if (raced) {
+          await prisma.article.update({
+            where: { id: raced.id },
+            data: { ...articleData, generated_at: new Date() },
+          });
+          articleId = raced.id;
+        } else {
+          throw err;
+        }
+      } else {
+        throw err;
       }
     }
-    throw err;
+  }
+
+  // Backfill the audit row that the route inserted when it kicked off
+  // this workflow. Wrapped so a stale id (the route's row was deleted
+  // out from under us) never bubbles back as a workflow failure —
+  // the user content is already persisted at this point.
+  if (input.userRequestId != null) {
+    try {
+      await completeUserRequest(prisma, input.userRequestId, {
+        outcome: UserRequestOutcome.GENERATED,
+        usage: input.usage,
+        articleId,
+      });
+    } catch (err) {
+      console.error('[persistArticleStep] failed to complete UserRequest:', err);
+    }
   }
 }
 
@@ -115,12 +139,30 @@ export async function persistArticleStep(
  * start time. See {@link revertArticleRow} for the DELETE-vs-revert
  * decision; this is the workflow-step wrapper so the runtime
  * persists its execution.
+ *
+ * Also flips the route's UserRequest row (when threaded in) to
+ * FAILED with the terminal error message so per-user dashboards
+ * show the failed attempt rather than a stuck "in flight" row.
  */
-export async function revertArticleRowStep(input: ArticleWorkflowInput): Promise<void> {
+export async function revertArticleRowStep(
+  input: ArticleWorkflowInput,
+  errorMessage?: string
+): Promise<void> {
   'use step';
 
   const { workflowRunId } = getWorkflowMetadata();
   await revertArticleRow(prisma, input.transcriptId, input.style, input.language, workflowRunId);
+
+  if (input.userRequestId != null) {
+    try {
+      await completeUserRequest(prisma, input.userRequestId, {
+        outcome: UserRequestOutcome.FAILED,
+        errorMessage: errorMessage ?? 'Article workflow failed.',
+      });
+    } catch (err) {
+      console.error('[revertArticleRowStep] failed to flip UserRequest to FAILED:', err);
+    }
+  }
 }
 
 export async function emitTerminalEventStep(event: ArticleStreamEvent): Promise<void> {
