@@ -1,6 +1,7 @@
 'use client';
 
-import { ArrowDownIcon, ArrowUpIcon } from '@heroicons/react/24/outline';
+import { ArrowDownIcon, ArrowUpIcon, MapPinIcon } from '@heroicons/react/24/outline';
+import { MapPinIcon as MapPinSolidIcon } from '@heroicons/react/24/solid';
 import { useEffect, useState } from 'react';
 
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
@@ -79,17 +80,24 @@ export default function FloatingToc({ items, variant }: Props) {
   // is false; in full mode the popup is hover-driven and ignores
   // this flag.
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // Full-mode "pin" toggle. When true, the hover popup stays visible
+  // (and the ladder stays hidden) regardless of pointer position, so
+  // the reader can keep the heading list parked on screen while they
+  // work. Only meaningful when `hasRoom` is true.
+  const [pinned, setPinned] = useState(false);
 
-  // Reset the drawer when the layout swaps back to full mode. Without
-  // this, a user could open the drawer in compact mode (e.g. notes
-  // panel taking up most of the row), close the notes panel so the
-  // gutter widens and we re-mount in full mode, then re-open the
+  // Reset transient open/pinned state when the layout swaps modes.
+  // Without this, a user could open the drawer in compact mode (e.g.
+  // notes panel taking up most of the row), close the notes panel so
+  // the gutter widens and we re-mount in full mode, then re-open the
   // notes panel later — the compact branch would re-mount with
   // `drawerOpen` still `true` and pop the bottom sheet open without
-  // any user gesture.
+  // any user gesture. Same risk applies in reverse for `pinned`.
   useEffect(() => {
     if (hasRoom) {
       setDrawerOpen(false);
+    } else {
+      setPinned(false);
     }
   }, [hasRoom]);
 
@@ -380,12 +388,18 @@ export default function FloatingToc({ items, variant }: Props) {
       aria-label="Table of contents"
     >
       {/* Ladder (idle). Fades out on hover so the popup visually
-          replaces it without the two overlapping. Anchored at top-40
+          replaces it without the two overlapping. When the popup is
+          pinned the ladder stays faded out unconditionally — the popup
+          is the active surface in that mode. Anchored at top-40
           (10rem) and capped so its bottom edge lands at 90vh —
           max-height = 90vh - 10rem — leaving a 10vh bottom margin and
           keeping the ladder fully on screen even on short viewports.
           Scrolls (with the scrollbar hidden) when entries don't fit. */}
-      <div className="flex max-h-[calc(90vh-10rem)] flex-col items-end gap-2 overflow-y-auto py-1.5 transition-opacity duration-150 group-hover:pointer-events-none group-hover:opacity-0 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
+      <div
+        className={`flex max-h-[calc(90vh-10rem)] flex-col items-end gap-2 overflow-y-auto py-1.5 transition-opacity duration-150 group-hover:pointer-events-none group-hover:opacity-0 [&::-webkit-scrollbar]:hidden [scrollbar-width:none] ${
+          pinned ? 'pointer-events-none opacity-0' : ''
+        }`}
+      >
         {items.map((it) => (
           <button
             key={it.id}
@@ -404,11 +418,33 @@ export default function FloatingToc({ items, variant }: Props) {
           so clicks land, and so the popup doesn't eat hits over the
           article when idle. Top and Bottom are pinned outside the
           scrollable region so the user can always see and tap them
-          regardless of how far down they've scrolled the heading list. */}
-      <div className="pointer-events-none absolute top-0 right-0 flex max-h-[calc(90vh-10rem)] w-64 flex-col rounded-xl border border-border bg-background p-2 opacity-0 shadow-lg transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
-        <ul className="flex flex-col gap-0.5 text-sm">
-          <li>{renderTopButton()}</li>
-        </ul>
+          regardless of how far down they've scrolled the heading list.
+          When `pinned` is true, the popup stays open regardless of
+          hover — the pin toggle on the top row controls this. */}
+      <div
+        className={`pointer-events-none absolute top-0 right-0 flex max-h-[calc(90vh-10rem)] w-64 flex-col rounded-xl border border-border bg-background p-2 opacity-0 shadow-lg transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 ${
+          pinned ? 'pointer-events-auto opacity-100' : ''
+        }`}
+      >
+        <div className="flex items-center gap-1">
+          <div className="min-w-0 flex-1">{renderTopButton()}</div>
+          <button
+            type="button"
+            onClick={() => setPinned((prev) => !prev)}
+            aria-pressed={pinned}
+            aria-label={pinned ? 'Unpin table of contents' : 'Pin table of contents'}
+            title={pinned ? 'Unpin' : 'Pin'}
+            className={`shrink-0 rounded-md p-1.5 transition-colors hover:bg-foreground/5 dark:hover:bg-foreground/10 ${
+              pinned ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {pinned ? (
+              <MapPinSolidIcon className="h-3.5 w-3.5" />
+            ) : (
+              <MapPinIcon className="h-3.5 w-3.5" />
+            )}
+          </button>
+        </div>
         <ul className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto text-sm">
           {renderItems()}
         </ul>
