@@ -56,11 +56,13 @@ export default function VideoReaderActions({ video }: Props) {
     }
   }
 
-  // Each button overrides the Button cva's `gap-2` with `gap-1` so the
-  // icon sits closer to the label — gap-2 (8px) reads as a yawning
-  // void at this size. The labels also drop their `ml-1` because the
-  // gap utility already provides spacing.
-  const tightGap = 'gap-1';
+  // Tighten the layout on narrow viewports: `gap-1` icon-to-label
+  // because the cva default `gap-2` reads as a yawning void at this
+  // size, and `px-1.5` per button below `lg:` so a row of icon-only
+  // buttons sits packed instead of leaving 24px of dead space
+  // between every glyph. At `lg:` and up the labels are visible
+  // and the buttons restore the cva default `px-3`.
+  const buttonClass = 'gap-1 px-1.5 lg:px-3';
 
   return (
     <div className="flex items-center gap-0 lg:gap-1">
@@ -68,7 +70,7 @@ export default function VideoReaderActions({ video }: Props) {
         variant="ghost"
         size="sm"
         onClick={() => void toggleStar()}
-        className={`${tightGap} ${isStarred ? 'text-yellow-600 hover:text-yellow-700' : ''}`}
+        className={`${buttonClass} ${isStarred ? 'text-yellow-600 hover:text-yellow-700' : ''}`}
         title={isStarred ? 'Unstar' : 'Star'}
       >
         <Star className={`h-4 w-4 ${isStarred ? 'fill-yellow-400' : ''}`} />
@@ -79,7 +81,7 @@ export default function VideoReaderActions({ video }: Props) {
         variant="ghost"
         size="sm"
         onClick={() => void toggleSave()}
-        className={`${tightGap} ${isSaved ? 'text-blue-600 hover:text-blue-700' : ''}`}
+        className={`${buttonClass} ${isSaved ? 'text-blue-600 hover:text-blue-700' : ''}`}
         title={isSaved ? 'Remove from Read Later' : 'Read Later'}
       >
         {isSaved ? <BookmarkCheck className="h-4 w-4" /> : <Bookmark className="h-4 w-4" />}
@@ -90,7 +92,7 @@ export default function VideoReaderActions({ video }: Props) {
         variant="ghost"
         size="sm"
         onClick={() => void toggleArchive()}
-        className={`${tightGap} ${isArchived ? 'text-red-600 hover:text-red-700' : ''}`}
+        className={`${buttonClass} ${isArchived ? 'text-red-600 hover:text-red-700' : ''}`}
         title={isArchived ? 'Unarchive' : 'Archive'}
       >
         <Archive className="h-4 w-4" />

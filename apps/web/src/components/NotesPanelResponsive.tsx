@@ -157,7 +157,11 @@ export default function NotesPanelResponsive({ videoId, subtitle, isMobile, onCl
           aria-describedby={undefined}
         >
           <SheetTitle className="sr-only">Notes</SheetTitle>
-          <NotesPanel videoId={videoId} subtitle={subtitle} onClose={onClose} />
+          {/* SheetContent renders its own close button at `right-4
+              top-4`, so suppress NotesPanel's internal X — otherwise
+              the mobile drawer ends up with two stacked close
+              affordances in the top-right. */}
+          <NotesPanel videoId={videoId} subtitle={subtitle} onClose={onClose} hideCloseButton />
         </SheetContent>
       </Sheet>
     );

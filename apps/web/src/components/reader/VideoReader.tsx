@@ -523,12 +523,15 @@ export default function VideoReader({
                 Labels and the inter-button gap only kick in at `lg:`
                 so the rail collapses to icons well before the header
                 runs out of room — the title block already eats up to
-                half the width. */}
-            <div className="ml-auto flex shrink-0 items-center gap-0.5 lg:gap-2">
+                half the width. `gap-0` on small screens lets each
+                button's `px-1.5` define the spacing instead, so a
+                row of icon-only buttons reads as a single packed
+                control strip rather than separate floating glyphs. */}
+            <div className="ml-auto flex shrink-0 items-center gap-0 lg:gap-2">
               <Button
                 variant="ghost"
                 size="sm"
-                className="gap-1"
+                className="gap-1 px-1.5 lg:px-3"
                 onClick={() => setNotesOpen((prev) => !prev)}
                 title="Notes"
               >
@@ -546,8 +549,11 @@ export default function VideoReader({
                   it) is suppressed on the reader path. On wider
                   viewports the desktop sidebar's footer continues to
                   carry it, so we hide this copy to avoid two
-                  ThemeSelector buttons in the same tree. */}
-              {isMobile && <ThemeSelector />}
+                  ThemeSelector buttons in the same tree. The class
+                  override matches the action rail's `h-8 rounded-md`
+                  so the trigger doesn't read as a slightly different
+                  control among otherwise-uniform glyphs. */}
+              {isMobile && <ThemeSelector className="h-8 rounded-md" />}
             </div>
           </div>
         )}

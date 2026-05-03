@@ -28,6 +28,11 @@ interface Props {
   /** Optional subtitle shown below the header (e.g. video title in list view). */
   subtitle?: string;
   onClose: () => void;
+  /** Suppress the panel's own X close button. The mobile Sheet
+   *  wrapper renders its own close affordance at `right-4 top-4`,
+   *  so showing this one as well lands two X icons in the same
+   *  corner. */
+  hideCloseButton?: boolean;
 }
 
 /**
@@ -35,7 +40,7 @@ interface Props {
  * (w-80) with a header, compose area, and scrollable notes list.
  * Used in both the video list view and the video reader.
  */
-export default function NotesPanel({ videoId, subtitle, onClose }: Props) {
+export default function NotesPanel({ videoId, subtitle, onClose, hideCloseButton = false }: Props) {
   const [draft, setDraft] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -80,14 +85,16 @@ export default function NotesPanel({ videoId, subtitle, onClose }: Props) {
           <NotebookPen className="h-4 w-4 text-amber-500" />
           <h3 className="text-sm font-semibold text-foreground">Notes</h3>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-          aria-label="Close notes panel"
-        >
-          <X className="h-4 w-4" />
-        </button>
+        {!hideCloseButton && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+            aria-label="Close notes panel"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       {subtitle != null && (
