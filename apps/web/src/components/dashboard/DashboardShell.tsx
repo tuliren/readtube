@@ -160,7 +160,12 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
               aria-describedby={undefined}
             >
               <SidebarExpandedOverride>
-                <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border px-5">
+                {/* SheetContent renders its own close button at
+                    `right-4 top-4`, so we tuck the UserButton next to
+                    the ReadTube title rather than out at the right
+                    edge — otherwise the Clerk avatar lands directly
+                    underneath the X glyph. */}
+                <div className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-5">
                   <SheetTitle className="text-base font-bold text-foreground">ReadTube</SheetTitle>
                   <UserButton>
                     <UserButton.MenuItems>

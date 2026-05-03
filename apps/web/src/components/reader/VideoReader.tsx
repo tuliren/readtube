@@ -476,32 +476,55 @@ export default function VideoReader({
         with the same 12px-from-the-edge action rail.
       */}
         {!publicMode && (
-          <div className="sticky top-0 z-10 flex h-12 shrink-0 items-center justify-between gap-1 border-b border-border bg-background px-3 sidebar:h-auto sidebar:py-3">
-            <div className="flex items-center gap-1">
-              {/* On small screens this header replaces the dashboard
-                  MobileTopBar entirely, so the burger that opens the
-                  sidebar drawer lives here. Hidden once the desktop
-                  sidebar appears, which carries its own toggle. */}
-              {isMobile && (
-                <button
-                  type="button"
-                  onClick={openMobileSidebar}
-                  className="shrink-0 rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-                  aria-label="Open sidebar"
-                >
-                  <Menu className="h-5 w-5" />
-                </button>
-              )}
-              <Link
-                href={backHref}
-                className="inline-flex items-center gap-1.5 px-2 text-sm text-muted-foreground hover:text-foreground"
-                aria-label="Back"
+          <div className="sticky top-0 z-10 flex h-12 shrink-0 items-center gap-1 border-b border-border bg-background px-3 sidebar:h-auto sidebar:py-3">
+            {/* On small screens this header replaces the dashboard
+                MobileTopBar entirely, so the burger that opens the
+                sidebar drawer lives here. Hidden once the desktop
+                sidebar appears, which carries its own toggle. */}
+            {isMobile && (
+              <button
+                type="button"
+                onClick={openMobileSidebar}
+                className="shrink-0 rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                aria-label="Open sidebar"
               >
-                <ArrowLeftIcon className="h-4 w-4" />
-                <span className="hidden sidebar:inline">Back</span>
-              </Link>
+                <Menu className="h-5 w-5" />
+              </button>
+            )}
+            <Link
+              href={backHref}
+              className="inline-flex shrink-0 items-center gap-1.5 px-2 text-sm text-muted-foreground hover:text-foreground"
+              aria-label="Back"
+            >
+              <ArrowLeftIcon className="h-4 w-4" />
+              <span className="hidden sidebar:inline">Back</span>
+            </Link>
+            {/* Thumbnail + title. `max-w-[50%]` caps the block at half
+                the header so the action rail on the right always has
+                room; `min-w-0` is what lets `truncate` actually clip
+                inside a flex row (without it the span keeps its
+                content width and the cap is a no-op). */}
+            <div className="flex min-w-0 max-w-[50%] items-center gap-2">
+              {video.thumbnailUrl != null && (
+                <img
+                  src={video.thumbnailUrl}
+                  alt=""
+                  aria-hidden
+                  referrerPolicy="no-referrer"
+                  className="hidden h-7 w-12 shrink-0 rounded object-cover sidebar:block"
+                />
+              )}
+              <span className="truncate text-sm font-medium text-foreground" title={video.title}>
+                {video.title}
+              </span>
             </div>
-            <div className="flex items-center gap-0.5 sidebar:gap-2">
+            {/* Action rail. `ml-auto` shoves it to the right edge while
+                the title block stays packed against the back button.
+                Labels and the inter-button gap only kick in at `lg:`
+                so the rail collapses to icons well before the header
+                runs out of room — the title block already eats up to
+                half the width. */}
+            <div className="ml-auto flex shrink-0 items-center gap-0.5 lg:gap-2">
               <Button
                 variant="ghost"
                 size="sm"
@@ -510,7 +533,7 @@ export default function VideoReader({
                 title="Notes"
               >
                 <NotebookPen className="h-4 w-4" />
-                <span className="hidden sidebar:inline">Notes</span>
+                <span className="hidden lg:inline">Notes</span>
                 {noteCount > 0 && (
                   <span className="rounded-full bg-amber-100 px-1.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
                     {noteCount}
