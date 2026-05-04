@@ -28,25 +28,20 @@ type Tier = {
 
 const PRICING_TIERS: Tier[] = [
   {
-    name: 'Free',
+    name: 'Reader',
     id: 'tier-free',
     href: '/sign-up',
     price: { monthly: 0, annually: 0 },
     free: true,
-    description: 'Try ReadTube on a handful of videos before committing.',
-    features: [
-      'Up to 10 videos in your library',
-      'Read transcripts and AI summaries',
-      'Basic semantic search',
-      'Highlight and note a single channel',
-    ],
+    description: 'Self-host on your own infrastructure with full access.',
+    features: ['Source available on ELv2 license'],
     available: true,
   },
   {
-    name: 'Reader',
+    name: 'Curator',
     id: 'tier-reader',
     href: '/sign-up',
-    price: { monthly: 8, annually: 80 },
+    price: { monthly: 10, annually: 84 },
     description:
       'For people who follow a steady set of channels and want to read instead of watch.',
     features: [
@@ -91,10 +86,11 @@ export default function Pricing() {
       <Container>
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="font-display text-4xl font-medium tracking-tight text-slate-700 sm:text-5xl dark:text-slate-100">
-            Pricing that scales with your reading
+            Pricing that scales with
+            <br /> your reading
           </h2>
           <p className="mt-6 text-lg leading-relaxed text-slate-500 dark:text-slate-400">
-            Start free. Upgrade when your library outgrows casual reading.
+            ReadTube is source available and free to self-host.
           </p>
         </div>
 
