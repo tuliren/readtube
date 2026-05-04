@@ -22,6 +22,17 @@ YouTube is a great source of ideas and a terrible place to think. Long videos bu
 
 See [DEVELOPMENT.md](./DEVELOPMENT.md) for local development.
 
+## Deployment
+
+ReadTube self-hosts on the following stack:
+
+- **Vercel** — hosts the Next.js app, runs scheduled cron jobs, and routes LLM and embedding calls through the AI Gateway.
+- **Postgres** — application database (with `pgvector` for semantic search). Any managed Postgres works.
+- **[Transcript API](https://transcript-api.com)** — pulls captions from YouTube and Bilibili.
+- **[JustOneAPI](https://justoneapi.com)** — fetches channel and video metadata from YouTube.
+
+Bring your own API keys for each, set them as Vercel environment variables, and connect the Postgres URL. See [DEVELOPMENT.md](./DEVELOPMENT.md) for the full env reference.
+
 ## License
 
 ReadTube is licensed under the [Elastic License 2.0 (ELv2)](./LICENSE.md).
