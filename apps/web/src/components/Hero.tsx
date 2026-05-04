@@ -39,6 +39,7 @@ export default function Hero() {
         <Button href="/sign-up" variant="solid" color="slate">
           Get Started
         </Button>
+        <PreviewDropdown items={PREVIEW_VIDEOS} />
         <Button
           href={GITHUB_REPO_URL}
           variant="outline"
@@ -50,7 +51,6 @@ export default function Hero() {
           <GithubIcon aria-hidden="true" className="h-4 w-4" />
           Source available
         </Button>
-        <PreviewDropdown items={PREVIEW_VIDEOS} />
       </div>
     </section>
   );
