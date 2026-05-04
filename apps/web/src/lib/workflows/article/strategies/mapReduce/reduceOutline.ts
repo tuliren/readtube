@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { normalizeLlmJsonEscapes } from '@/lib/ai/normalizeJsonEscapes';
+
 import { buildReducePrompt } from '../prompts';
 import { streamWithGuards } from '../streamWithGuards';
 import type { ArticleWorkflowInput } from '../types';
@@ -62,7 +64,7 @@ export async function reduceOutline(
   // Belt-and-suspenders: the model occasionally returns fewer or more
   // headings than sections. Pad with empty strings if short, truncate
   // if long — the assembler treats empty as "no heading".
-  const headings = [...result.output.headings];
+  const headings = result.output.headings.map(normalizeLlmJsonEscapes);
   while (headings.length < briefs.length) {
     headings.push('');
   }
@@ -71,7 +73,7 @@ export async function reduceOutline(
   }
 
   return {
-    articleTitle: result.output.articleTitle,
+    articleTitle: normalizeLlmJsonEscapes(result.output.articleTitle),
     headings,
     usage: result.usage,
   };

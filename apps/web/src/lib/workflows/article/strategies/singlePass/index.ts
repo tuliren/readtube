@@ -1,6 +1,8 @@
 import { FatalError } from 'workflow';
 import { z } from 'zod';
 
+import { normalizeLlmJsonEscapes } from '@/lib/ai/normalizeJsonEscapes';
+
 import { buildSinglePassPrompt } from '../prompts';
 import { streamWithGuards } from '../streamWithGuards';
 import type {
@@ -66,12 +68,15 @@ export const singlePassStrategy: ArticleGenerationStrategy = {
         // surface the error instead.
         canRetry: () => accumulated.length === 0 && !emittedHasLatex,
         onPartial: async (partial) => {
-          if (typeof partial.content === 'string' && partial.content.length > accumulated.length) {
-            const delta = partial.content.slice(accumulated.length);
-            accumulated = partial.content;
-            pending += delta;
-            if (pending.length >= FLUSH_CHARS || Date.now() - lastFlushAt >= FLUSH_INTERVAL_MS) {
-              await flushDelta();
+          if (typeof partial.content === 'string') {
+            const normalized = normalizeLlmJsonEscapes(partial.content);
+            if (normalized.length > accumulated.length) {
+              const delta = normalized.slice(accumulated.length);
+              accumulated = normalized;
+              pending += delta;
+              if (pending.length >= FLUSH_CHARS || Date.now() - lastFlushAt >= FLUSH_INTERVAL_MS) {
+                await flushDelta();
+              }
             }
           }
           if (!emittedHasLatex && typeof partial.hasLatex === 'boolean') {

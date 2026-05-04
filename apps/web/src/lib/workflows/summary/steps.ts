@@ -4,6 +4,7 @@ import { FatalError, getWorkflowMetadata, getWritable } from 'workflow';
 import { z } from 'zod';
 
 import { DEFAULT_AI_MODEL } from '@/constants';
+import { normalizeLlmJsonEscapes } from '@/lib/ai/normalizeJsonEscapes';
 import { CURRENT_FRONTMATTER_VERSION, serializeMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { completeUserRequest } from '@/lib/usage/userRequest';
 import { emitTerminalEvent } from '@/lib/workflows/emitTerminalEvent';
@@ -156,11 +157,14 @@ export async function generateSummaryStep(input: SummaryWorkflowInput): Promise<
     if (sub == null) {
       return;
     }
-    if (typeof sub.content === 'string' && sub.content.length > accumulated[field].length) {
-      const delta = sub.content.slice(accumulated[field].length);
-      accumulated[field] = sub.content;
-      pending[field] += delta;
-      await maybeFlushField(field);
+    if (typeof sub.content === 'string') {
+      const normalized = normalizeLlmJsonEscapes(sub.content);
+      if (normalized.length > accumulated[field].length) {
+        const delta = normalized.slice(accumulated[field].length);
+        accumulated[field] = normalized;
+        pending[field] += delta;
+        await maybeFlushField(field);
+      }
     }
     if (!emittedHasLatex[field] && typeof sub.hasLatex === 'boolean') {
       // Drain pending content for this field before the flag so order
@@ -178,7 +182,7 @@ export async function generateSummaryStep(input: SummaryWorkflowInput): Promise<
         continue;
       }
       if (wantsHeadline && typeof partial.headline === 'string') {
-        const next = partial.headline;
+        const next = normalizeLlmJsonEscapes(partial.headline);
         if (next.length > accumulated.headline.length) {
           const delta = next.slice(accumulated.headline.length);
           accumulated.headline = next;
