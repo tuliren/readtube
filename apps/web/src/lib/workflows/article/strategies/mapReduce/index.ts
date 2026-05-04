@@ -7,6 +7,7 @@ import {
   MAX_SECTIONS,
   SECTION_TARGET_WORDS,
 } from '@/constants';
+import { normalizeLlmJsonEscapes } from '@/lib/ai/normalizeJsonEscapes';
 import { countWords } from '@/lib/format/wordCount';
 
 import { buildSectionPrompt } from '../prompts';
@@ -128,8 +129,8 @@ export const mapReduceStrategy: ArticleGenerationStrategy = {
 
           const sectionResult: SectionResult = {
             index: section.index,
-            topic: result.output.topic,
-            body: result.output.body,
+            topic: normalizeLlmJsonEscapes(result.output.topic),
+            body: normalizeLlmJsonEscapes(result.output.body),
             hasLatex: result.output.hasLatex,
             usage: result.usage,
           };
