@@ -20,7 +20,7 @@ type Tier = {
   name: string;
   id: string;
   href: string;
-  price: { monthly: number; annually: number };
+  price: { monthly: number | null; annually: number | null };
   free?: boolean;
   description: string;
   features: string[];
@@ -47,7 +47,7 @@ const PRICING_TIERS: Tier[] = [
     name: 'Curator',
     id: 'tier-reader',
     href: '/sign-up',
-    price: { monthly: 10, annually: 96 },
+    price: { monthly: 10, annually: 60 },
     description:
       'For people who follow a steady set of channels and want to read instead of watch.',
     features: [
@@ -159,6 +159,10 @@ export default function Pricing() {
                 {tier.free ? (
                   <span className="font-display text-4xl font-bold tracking-tight text-slate-700 dark:text-slate-100">
                     Free
+                  </span>
+                ) : tier.price[frequency.value] == null ? (
+                  <span className="font-display text-4xl font-bold tracking-tight text-slate-700 dark:text-slate-100">
+                    Undetermined
                   </span>
                 ) : (
                   <>
