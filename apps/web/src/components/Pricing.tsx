@@ -34,7 +34,11 @@ const PRICING_TIERS: Tier[] = [
     price: { monthly: 0, annually: 0 },
     free: true,
     description: 'Self-host on your own infrastructure with full access.',
-    features: ['Source available on ELv2 license'],
+    features: [
+      'Source available on ELv2 license',
+      'All Curator and Scholar features',
+      'Bring your own API keys',
+    ],
     available: true,
   },
   {
@@ -114,7 +118,7 @@ export default function Pricing() {
           </fieldset>
         </div>
 
-        <div className="isolate mx-auto mt-12 grid max-w-md grid-cols-1 gap-8 lg:mx-0 lg:max-w-none lg:grid-cols-3">
+        <div className="isolate mx-auto mt-12 grid max-w-md grid-cols-1 gap-8 lg:mx-0 lg:max-w-none lg:grid-cols-3 lg:grid-rows-[auto_auto_auto_auto_1fr] lg:gap-y-0">
           {PRICING_TIERS.map((tier, index) => (
             <div
               key={tier.id}
@@ -122,7 +126,8 @@ export default function Pricing() {
                 tier.mostPopular
                   ? 'ring-2 ring-[#515ada] dark:ring-indigo-400'
                   : 'ring-1 ring-slate-200 dark:ring-slate-700',
-                'rounded-2xl bg-white p-8 xl:p-10 dark:bg-slate-800/40'
+                'rounded-2xl bg-white p-8 xl:p-10 dark:bg-slate-800/40',
+                'flex flex-col lg:row-span-5 lg:grid lg:grid-rows-subgrid'
               )}
             >
               <div className="flex items-center justify-between gap-x-4">
@@ -143,7 +148,7 @@ export default function Pricing() {
                   </p>
                 )}
               </div>
-              <p className="mt-4 min-h-[48px] text-sm leading-6 text-slate-600 dark:text-slate-400">
+              <p className="mt-4 text-sm leading-6 text-slate-600 dark:text-slate-400">
                 {tier.description}
               </p>
               <p className="mt-6 flex items-baseline gap-x-1">
