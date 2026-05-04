@@ -7,10 +7,10 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { type ReactNode, useState } from 'react';
 
+import { GithubLink } from '@/components/GithubLink';
 import { Logo } from '@/components/Logo';
-import { GithubIcon } from '@/components/icons/GithubIcon';
 import ThemeSelector from '@/components/settings/ThemeSelector';
-import { GITHUB_REPO_URL, TITLE } from '@/constants';
+import { TITLE } from '@/constants';
 
 interface Props {
   /** Override the home-page detection. Defaults to true on `/` (where
@@ -121,31 +121,10 @@ export default function Header({ onHomePage, compact = false, centerSlot }: Prop
               Sign in
             </Link>
           )}
-          {!isSignedIn && (
-            <a
-              href={GITHUB_REPO_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={`${TITLE} on GitHub`}
-              className="text-slate-700 hover:text-slate-900 dark:text-slate-200 dark:hover:text-slate-50"
-            >
-              <GithubIcon aria-hidden="true" className="h-5 w-5" />
-            </a>
-          )}
+          <GithubLink className="text-slate-700 hover:text-slate-900 dark:text-slate-200 dark:hover:text-slate-50" />
           <ThemeSelector />
         </div>
         <div className="flex items-center gap-3 lg:hidden">
-          {!isSignedIn && (
-            <a
-              href={GITHUB_REPO_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={`${TITLE} on GitHub`}
-              className="text-slate-700 hover:text-slate-900 dark:text-slate-200 dark:hover:text-slate-50"
-            >
-              <GithubIcon aria-hidden="true" className="h-5 w-5" />
-            </a>
-          )}
           <ThemeSelector />
           <button
             type="button"
@@ -188,6 +167,10 @@ export default function Header({ onHomePage, compact = false, centerSlot }: Prop
                     Sign in
                   </Link>
                 )}
+                <GithubLink
+                  className={`flex items-center gap-2 ${mobileLinkClass}`}
+                  label="GitHub"
+                />
               </div>
             </div>
           </div>
