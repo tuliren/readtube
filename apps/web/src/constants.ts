@@ -2,6 +2,7 @@ export const MAIN_COLOR = '#515ada';
 export const MINOR_COLOR = '#76ABDF';
 
 export const TITLE = 'ReadTube';
+export const GITHUB_REPO_URL = 'https://github.com/tuliren/readtube';
 export const DESCRIPTION =
   'Turn YouTube subscriptions into a personal newsletter. Reclaim focus in a world engineered for distraction.';
 export const DOMAIN = 'read.tube';

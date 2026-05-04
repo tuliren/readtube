@@ -5,6 +5,8 @@ import { CheckIcon } from '@heroicons/react/20/solid';
 import { useState } from 'react';
 
 import { Container } from '@/components/Container';
+import { GithubIcon } from '@/components/icons/GithubIcon';
+import { GITHUB_REPO_URL } from '@/constants';
 import { cn } from '@/lib/utils';
 
 const FREQUENCIES = [
@@ -30,7 +32,7 @@ const PRICING_TIERS: Tier[] = [
   {
     name: 'Reader',
     id: 'tier-free',
-    href: '/sign-up',
+    href: GITHUB_REPO_URL,
     price: { monthly: 0, annually: 0 },
     free: true,
     description: 'Self-host on your own infrastructure with full access.',
@@ -45,12 +47,11 @@ const PRICING_TIERS: Tier[] = [
     name: 'Curator',
     id: 'tier-reader',
     href: '/sign-up',
-    price: { monthly: 10, annually: 84 },
+    price: { monthly: 10, annually: 72 },
     description:
       'For people who follow a steady set of channels and want to read instead of watch.',
     features: [
-      '500 videos per month',
-      'Long videos rewritten as articles',
+      '300 videos per month',
       'Semantic search across every channel',
       'Unlimited highlights and timestamped notes',
       'Personal RSS-style inbox',
@@ -170,14 +171,17 @@ export default function Pricing() {
               <a
                 href={tier.available ? tier.href : undefined}
                 aria-describedby={tier.id}
+                target={tier.free ? '_blank' : undefined}
+                rel={tier.free ? 'noopener noreferrer' : undefined}
                 className={cn(
                   tier.mostPopular
                     ? 'bg-[#515ada] text-white shadow-sm hover:bg-[#515ada]/90'
                     : 'text-slate-700 ring-1 ring-inset ring-slate-300 hover:bg-slate-100 dark:text-slate-100 dark:ring-slate-600 dark:hover:bg-slate-700/50',
-                  'mt-6 block rounded-full px-3 py-2 text-center text-sm font-semibold leading-6 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#515ada]'
+                  'mt-6 inline-flex items-center justify-center gap-x-2 rounded-full px-3 py-2 text-center text-sm font-semibold leading-6 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#515ada]'
                 )}
               >
-                {tier.available ? 'Get started' : 'Coming soon'}
+                {tier.free && <GithubIcon aria-hidden="true" className="h-4 w-4" />}
+                {tier.available ? (tier.free ? 'View on GitHub' : 'Get started') : 'Coming soon'}
               </a>
               <ul
                 role="list"
