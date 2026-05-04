@@ -37,8 +37,9 @@ ReadTube self-hosts on the following stack:
 1. Fork the repo and import it as a new Vercel project. Set the root directory to `apps/web` — Vercel will detect Next.js automatically.
 2. Provision a Postgres database (with `pgvector` enabled) and run the migrations: `yarn db:deploy` against the production `DATABASE_URL`.
 3. Add the environment variables from [DEVELOPMENT.md](./DEVELOPMENT.md#environment-variables) to the Vercel project (Postgres URL, Clerk keys, Transcript API key, JustOneAPI token, AI Gateway key, `CRON_SECRET`).
+    - The `CRON_SECRET` can be any random string (e.g. `openssl rand -hex 32`). Just make sure to set the same value in Vercel and in the `.env` file for local development.
 4. Enable the Vercel AI Gateway on the project so LLM and embedding calls route through it.
-5. Deploy. The cron in `apps/web/vercel.json` (`/api/cron/refresh-channels`, every 30 min) is registered automatically. It's gated by `CRON_SECRET` — generate any random string (e.g. `openssl rand -hex 32`) and set the same value in Vercel.
+5. Deploy. The cron in `apps/web/vercel.json` (`/api/cron/refresh-channels`, every 30 min) is registered automatically.
 
 ## License
 
