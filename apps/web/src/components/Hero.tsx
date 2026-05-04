@@ -1,7 +1,8 @@
 import { Button } from '@/components/Button';
 import PreviewDropdown, { type PreviewItem } from '@/components/PreviewDropdown';
 import RotatingWord from '@/components/RotatingWord';
-import { DESCRIPTION } from '@/constants';
+import { GithubIcon } from '@/components/icons/GithubIcon';
+import { DESCRIPTION, GITHUB_REPO_URL } from '@/constants';
 
 const PREVIEW_VIDEOS: readonly PreviewItem[] = [
   { title: 'Jensen Huang Interview with Lex Fridman', id: 'vif8NQcjVf0' },
@@ -34,9 +35,20 @@ export default function Hero() {
         {DESCRIPTION}
       </p>
 
-      <div className="mt-14 flex justify-center gap-x-6">
+      <div className="mt-14 flex flex-wrap justify-center gap-x-6 gap-y-3">
         <Button href="/sign-up" variant="solid" color="slate">
           Get Started
+        </Button>
+        <Button
+          href={GITHUB_REPO_URL}
+          variant="outline"
+          color="slate"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="gap-x-2"
+        >
+          <GithubIcon aria-hidden="true" className="h-4 w-4" />
+          Source available
         </Button>
         <PreviewDropdown items={PREVIEW_VIDEOS} />
       </div>
