@@ -38,8 +38,8 @@ const PRICING_TIERS: Tier[] = [
     description: 'Self-host on your own infrastructure with full access.',
     features: [
       'Source available on ELv2 license',
-      'All Curator and Scholar features',
       'Bring your own API keys',
+      'Unlimited videos, channels, playlists',
     ],
     available: true,
   },
@@ -47,16 +47,15 @@ const PRICING_TIERS: Tier[] = [
     name: 'Curator',
     id: 'tier-reader',
     href: '/sign-up',
-    price: { monthly: 6, annually: 60 },
+    price: { monthly: 10, annually: 96 },
     description:
       'For people who follow a steady set of channels and want to read instead of watch.',
     features: [
-      '300 video consumptions per month',
       'Personal RSS-style inbox',
       'Summary and article generation',
-      'Up to 30 channels',
-      'Up to 30 playlists',
-      'Up to 500 standalone videos',
+      '500 video transcription per month',
+      'Track 30 channels & playlists',
+      'Save 1,000 standalone videos',
       'Export as markdown',
       'Unlimited notes and highlights (coming soon)',
     ],
@@ -67,15 +66,14 @@ const PRICING_TIERS: Tier[] = [
     name: 'Scholar',
     id: 'tier-scholar',
     href: '/sign-up',
-    price: { monthly: 20, annually: 180 },
+    price: { monthly: 25, annually: 180 },
     description: 'For researchers and lifelong learners building a deep personal archive.',
     features: [
-      '1000 videos consumptions per month',
       'Personal RSS-style inbox',
       'Summary and article generation',
-      'Up to 500 channels',
-      'Up to 500 playlists',
-      'Up to 5000 standalone videos',
+      '2,000 video transcription per month',
+      'Track 500 channels and playlists',
+      'Save 10,000 standalone videos',
       'Export as markdown',
       'Unlimited notes and highlights (coming soon)',
     ],
@@ -99,8 +97,8 @@ export default function Pricing() {
             <br /> your reading
           </h2>
           <p className="mt-6 text-lg leading-relaxed text-slate-500 dark:text-slate-400">
-            ReadTube is source available and free to self-host. Cloud hosted plans are currently
-            free during beta. Quotas will be enforced some time in the future.
+            ReadTube is source available and free to self-host. Cloud plans are free during the
+            beta. Quotas will kick in later.
           </p>
         </div>
 
