@@ -31,7 +31,13 @@ ReadTube self-hosts on the following stack:
 - **[Transcript API](https://transcript-api.com)** — pulls captions from YouTube and Bilibili.
 - **[JustOneAPI](https://justoneapi.com)** — fetches channel and video metadata from YouTube.
 
-Bring your own API keys for each, set them as Vercel environment variables, and connect the Postgres URL. See [DEVELOPMENT.md](./DEVELOPMENT.md) for the full env reference.
+### Deploy on Vercel
+
+1. Fork the repo and import it as a new Vercel project. Set the root directory to `apps/web` — Vercel will detect Next.js automatically.
+2. Provision a Postgres database (with `pgvector` enabled) and run the migrations: `yarn db:deploy` against the production `DATABASE_URL`.
+3. Add the environment variables from [DEVELOPMENT.md](./DEVELOPMENT.md#environment-variables) to the Vercel project (Postgres URL, Clerk keys, Transcript API key, JustOneAPI token, AI Gateway key, `CRON_SECRET`).
+4. Enable the Vercel AI Gateway on the project so LLM and embedding calls route through it.
+5. Deploy. The cron in `apps/web/vercel.json` (`/api/cron/refresh-channels`, every 30 min) is registered automatically and is gated by `CRON_SECRET`.
 
 ## License
 
