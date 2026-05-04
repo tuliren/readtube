@@ -22,6 +22,25 @@ YouTube is a great source of ideas and a terrible place to think. Long videos bu
 
 See [DEVELOPMENT.md](./DEVELOPMENT.md) for local development.
 
+## Deployment
+
+ReadTube self-hosts on the following stack:
+
+- **Vercel**: Hosts the Next.js app, runs scheduled cron jobs, and routes LLM and embedding calls through the AI Gateway.
+- **Postgres**: Application database (with `pgvector` for semantic search). Any managed Postgres works.
+- **[Clerk](https://clerk.com/)**: Authentication and user management.
+- **[Transcript API](https://transcriptapi.com/)**: Transcript vendor for YouTube.
+- **[JustOneAPI](https://justoneapi.com)**: Channel metadata and transcript vendor for Bilibili.
+
+### Deploy on Vercel
+
+1. Fork the repo and import it as a new Vercel project. Set the root directory to `apps/web` — Vercel will detect Next.js automatically.
+2. Provision a Postgres database (with `pgvector` enabled) and run the migrations: `yarn db:deploy` against the production `DATABASE_URL`.
+3. Add the environment variables from [DEVELOPMENT.md](./DEVELOPMENT.md#environment-variables) to the Vercel project (Postgres URL, Clerk keys, Transcript API key, JustOneAPI token, AI Gateway key, `CRON_SECRET`).
+    - The `CRON_SECRET` can be any random string (e.g. `openssl rand -hex 32`). Just make sure to set the same value in Vercel and in the `.env` file for local development.
+4. Enable the Vercel AI Gateway on the project so LLM and embedding calls route through it.
+5. Deploy. The cron in `apps/web/vercel.json` (`/api/cron/refresh-channels`, every 30 min) is registered automatically.
+
 ## License
 
 ReadTube is licensed under the [Elastic License 2.0 (ELv2)](./LICENSE.md).
