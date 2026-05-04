@@ -31,7 +31,7 @@ type Tier = {
 const PRICING_TIERS: Tier[] = [
   {
     name: 'Reader',
-    id: 'tier-free',
+    id: 'tier-reader',
     href: GITHUB_REPO_URL,
     price: { monthly: 0, annually: 0 },
     free: true,
@@ -45,7 +45,7 @@ const PRICING_TIERS: Tier[] = [
   },
   {
     name: 'Curator',
-    id: 'tier-reader',
+    id: 'tier-curator',
     href: '/sign-up',
     price: { monthly: 10, annually: 60 },
     description:
