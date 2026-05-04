@@ -115,8 +115,20 @@ const FAQS: { question: string; answer: ReactNode }[] = [
   },
   {
     question: 'Is ReadTube free to use?',
-    answer:
-      "Pricing isn't finalized yet, but ReadTube likely won't be entirely free. Collecting transcripts, generating summaries, and running semantic search all carry costs for every video we process, and we'd rather charge a fair price than degrade the reading experience with ads or upsells. Expect a generous trial so you can try it before deciding.",
+    answer: (
+      <>
+        <p>
+          Yes, in two ways. ReadTube is source available under the Elastic License 2.0, so you can
+          self-host the full product on your own infrastructure with your own AI provider keys for
+          free.
+        </p>
+        <p>
+          The cloud version at read.tube is also free during the beta. Quotas on the paid tiers will
+          start being enforced later, but anything you read, highlight, or annotate during the beta
+          stays in your library.
+        </p>
+      </>
+    ),
   },
 ];
 
