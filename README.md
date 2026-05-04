@@ -26,10 +26,10 @@ See [DEVELOPMENT.md](./DEVELOPMENT.md) for local development.
 
 ReadTube self-hosts on the following stack:
 
-- **Vercel** — hosts the Next.js app, runs scheduled cron jobs, and routes LLM and embedding calls through the AI Gateway.
-- **Postgres** — application database (with `pgvector` for semantic search). Any managed Postgres works.
-- **[Transcript API](https://transcript-api.com)** — pulls captions from YouTube and Bilibili.
-- **[JustOneAPI](https://justoneapi.com)** — fetches channel and video metadata from YouTube.
+- **Vercel**: Hosts the Next.js app, runs scheduled cron jobs, and routes LLM and embedding calls through the AI Gateway.
+- **Postgres**: Application database (with `pgvector` for semantic search). Any managed Postgres works.
+- **[Transcript API](https://transcriptapi.com/)**: Transcript vendor for YouTube.
+- **[JustOneAPI](https://justoneapi.com)**: Channel metadata and transcript vendor for Bilibili.
 
 ### Deploy on Vercel
 
