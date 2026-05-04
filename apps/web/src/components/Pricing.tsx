@@ -59,8 +59,8 @@ const PRICING_TIERS: Tier[] = [
       'Export as markdown',
       'Unlimited notes and highlights (coming soon)',
     ],
-    mostPopular: true,
-    available: true,
+    mostPopular: false,
+    available: false,
   },
   {
     name: 'Scholar',
