@@ -28,6 +28,7 @@ ReadTube self-hosts on the following stack:
 
 - **Vercel**: Hosts the Next.js app, runs scheduled cron jobs, and routes LLM and embedding calls through the AI Gateway.
 - **Postgres**: Application database (with `pgvector` for semantic search). Any managed Postgres works.
+- **[Clerk](https://clerk.com/)**: Authentication and user management.
 - **[Transcript API](https://transcriptapi.com/)**: Transcript vendor for YouTube.
 - **[JustOneAPI](https://justoneapi.com)**: Channel metadata and transcript vendor for Bilibili.
 
@@ -37,7 +38,7 @@ ReadTube self-hosts on the following stack:
 2. Provision a Postgres database (with `pgvector` enabled) and run the migrations: `yarn db:deploy` against the production `DATABASE_URL`.
 3. Add the environment variables from [DEVELOPMENT.md](./DEVELOPMENT.md#environment-variables) to the Vercel project (Postgres URL, Clerk keys, Transcript API key, JustOneAPI token, AI Gateway key, `CRON_SECRET`).
 4. Enable the Vercel AI Gateway on the project so LLM and embedding calls route through it.
-5. Deploy. The cron in `apps/web/vercel.json` (`/api/cron/refresh-channels`, every 30 min) is registered automatically and is gated by `CRON_SECRET`.
+5. Deploy. The cron in `apps/web/vercel.json` (`/api/cron/refresh-channels`, every 30 min) is registered automatically. It's gated by `CRON_SECRET` — generate any random string (e.g. `openssl rand -hex 32`) and set the same value in Vercel.
 
 ## License
 
