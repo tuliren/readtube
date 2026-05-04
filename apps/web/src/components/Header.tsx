@@ -39,7 +39,7 @@ interface NavigationItem {
 
 const HOME_NAVIGATION: NavigationItem[] = [
   { name: 'Features', href: '#features' },
-  // { name: 'Pricing', href: '#pricing' },
+  { name: 'Pricing', href: '#pricing' },
   { name: 'FAQ', href: '#faq' },
 ];
 
