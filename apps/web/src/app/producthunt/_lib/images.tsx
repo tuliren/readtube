@@ -1,0 +1,786 @@
+import { ImageResponse } from 'next/og';
+import { ReactElement } from 'react';
+
+import { MAIN_COLOR, MINOR_COLOR, TITLE } from '@/constants';
+
+import {
+  CTA_HEADLINE,
+  CTA_SUBHEADLINE,
+  FEATURES,
+  FEATURES_HEADLINE,
+  FEATURES_SUBHEADLINE,
+  HERO_HEADLINE,
+  HERO_SUBTITLE,
+  PH_LINKS,
+} from './copy';
+import { loadInter } from './fonts';
+
+const GALLERY_SIZE = { width: 1270, height: 760 };
+const THUMBNAIL_SIZE = { width: 240, height: 240 };
+
+const PURPLE = MAIN_COLOR;
+const SKY = MINOR_COLOR;
+const SLATE_900 = '#0f172a';
+const SLATE_700 = '#334155';
+const SLATE_500 = '#64748b';
+const INDIGO_100 = '#e0e7ff';
+const SOFT_BG =
+  'linear-gradient(148deg, rgba(81, 90, 218, 0.08) 12%, rgba(118, 171, 223, 0.05) 90%)';
+
+function GradientTitle({ size = 84 }: { size?: number }) {
+  return (
+    <div
+      style={{
+        fontSize: `${size}px`,
+        fontWeight: 700,
+        letterSpacing: '-0.02em',
+        backgroundImage: `linear-gradient(to right, ${PURPLE}, ${SKY})`,
+        backgroundClip: 'text',
+        color: 'transparent',
+      }}
+    >
+      {TITLE}
+    </div>
+  );
+}
+
+function HeroLayout(): ReactElement {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        width: '100%',
+        height: '100%',
+        padding: '90px 100px',
+        background: 'white',
+        backgroundImage: SOFT_BG,
+        fontFamily: 'Inter, sans-serif',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center' }}>
+        <GradientTitle size={70} />
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
+        <div
+          style={{
+            fontSize: '110px',
+            fontWeight: 700,
+            lineHeight: 1.05,
+            letterSpacing: '-0.03em',
+            color: SLATE_900,
+          }}
+        >
+          {HERO_HEADLINE}
+        </div>
+        <div
+          style={{
+            fontSize: '34px',
+            lineHeight: 1.35,
+            color: SLATE_500,
+            maxWidth: '1000px',
+          }}
+        >
+          {HERO_SUBTITLE}
+        </div>
+      </div>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          fontSize: '24px',
+          color: SLATE_500,
+        }}
+      >
+        <div>{PH_LINKS.website}</div>
+        <div style={{ display: 'flex', gap: '14px' }}>
+          <div
+            style={{
+              padding: '12px 28px',
+              borderRadius: '999px',
+              background: PURPLE,
+              color: 'white',
+              fontWeight: 700,
+            }}
+          >
+            Get Started
+          </div>
+          <div
+            style={{
+              padding: '12px 28px',
+              borderRadius: '999px',
+              border: `2px solid ${PURPLE}`,
+              color: PURPLE,
+              fontWeight: 700,
+            }}
+          >
+            Source available
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FeatureMock({ featureKey }: { featureKey: string }): ReactElement {
+  const card = (children: ReactElement) => (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        width: '100%',
+        height: '100%',
+        background: 'white',
+        borderRadius: '24px',
+        boxShadow: '0 30px 60px -20px rgba(15, 23, 42, 0.18)',
+        padding: '32px',
+        gap: '16px',
+      }}
+    >
+      {children}
+    </div>
+  );
+
+  if (featureKey === 'inbox') {
+    const rows = [
+      { dot: PURPLE, title: 'Lex Fridman · Jensen Huang Interview', meta: 'New · 2h ago' },
+      { dot: SKY, title: 'Dwarkesh Patel · Elon Musk Interview', meta: 'Saved' },
+      { dot: '#a3a3a3', title: 'Cal Newport · Rules for Deep Work', meta: 'Read · ★' },
+      { dot: '#a3a3a3', title: 'Andrej Karpathy · Intro to Neural Networks', meta: 'Archived' },
+    ];
+    return card(
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            fontSize: '20px',
+            color: SLATE_500,
+            paddingBottom: '12px',
+            borderBottom: '1px solid #e2e8f0',
+          }}
+        >
+          <div style={{ fontWeight: 700, color: SLATE_900 }}>Inbox</div>
+          <div>4 unread</div>
+        </div>
+        {rows.map((r, i) => (
+          <div
+            key={i}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '16px',
+              padding: '14px',
+              borderRadius: '12px',
+              background: i === 0 ? 'rgba(81, 90, 218, 0.08)' : 'transparent',
+            }}
+          >
+            <div
+              style={{
+                width: '10px',
+                height: '10px',
+                borderRadius: '999px',
+                background: r.dot,
+              }}
+            />
+            <div
+              style={{
+                fontSize: '20px',
+                color: SLATE_900,
+                fontWeight: i === 0 ? 700 : 400,
+                flex: 1,
+              }}
+            >
+              {r.title}
+            </div>
+            <div style={{ fontSize: '16px', color: SLATE_500 }}>{r.meta}</div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (featureKey === 'article') {
+    return card(
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        <div style={{ fontSize: '14px', color: SLATE_500, letterSpacing: '0.08em' }}>HEADLINE</div>
+        <div
+          style={{
+            fontSize: '24px',
+            fontWeight: 700,
+            color: SLATE_900,
+            lineHeight: 1.25,
+          }}
+        >
+          The case for deep work in an era of infinite distraction
+        </div>
+        <div style={{ fontSize: '14px', color: SLATE_500, letterSpacing: '0.08em' }}>SUMMARY</div>
+        <div style={{ fontSize: '16px', color: SLATE_700, lineHeight: 1.5 }}>
+          A walk through the rituals, environments, and rules that protect concentration — and why
+          returning to undistracted work is harder, but more valuable, than ever.
+        </div>
+        <div style={{ fontSize: '14px', color: SLATE_500, letterSpacing: '0.08em' }}>ARTICLE</div>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '10px',
+          }}
+        >
+          {[100, 80, 92, 96, 76].map((w, i) => (
+            <div
+              key={i}
+              style={{
+                display: 'flex',
+                width: `${w}%`,
+                height: '8px',
+                borderRadius: '4px',
+                background: '#e2e8f0',
+              }}
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (featureKey === 'translation') {
+    const langs = ['English', '中文', 'Español', 'Français', '日本語', 'Deutsch'];
+    return card(
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <div style={{ fontSize: '20px', fontWeight: 700, color: SLATE_900 }}>
+          Read in your language
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+          {langs.map((l, i) => (
+            <div
+              key={l}
+              style={{
+                padding: '10px 18px',
+                borderRadius: '999px',
+                background: i === 1 ? PURPLE : '#f1f5f9',
+                color: i === 1 ? 'white' : SLATE_700,
+                fontSize: '18px',
+                fontWeight: i === 1 ? 700 : 400,
+              }}
+            >
+              {l}
+            </div>
+          ))}
+        </div>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '10px',
+            fontSize: '18px',
+            color: SLATE_700,
+            lineHeight: 1.5,
+            padding: '20px',
+            borderRadius: '14px',
+            background: '#f8fafc',
+          }}
+        >
+          <div style={{ color: SLATE_500, fontSize: '14px', letterSpacing: '0.08em' }}>
+            ARTICLE · 中文
+          </div>
+          <div>专注力是一种可以训练的能力。</div>
+          <div>每天留出一段不被打扰的时间，从最难的工作开始。</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (featureKey === 'search') {
+    return card(
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '14px',
+            padding: '16px 20px',
+            borderRadius: '14px',
+            border: '2px solid #e2e8f0',
+            fontSize: '20px',
+            color: SLATE_900,
+          }}
+        >
+          <div style={{ color: SLATE_500 }}>⌕</div>
+          <div>how to focus when everything competes for attention</div>
+        </div>
+        {[
+          {
+            ch: 'Cal Newport',
+            t: 'Why deep work is the superpower of the 21st century',
+          },
+          {
+            ch: 'Andrew Huberman',
+            t: 'Tools to reset attention after dopamine spikes',
+          },
+          {
+            ch: 'Lex Fridman',
+            t: 'On building a quiet workshop in a loud world',
+          },
+        ].map((r) => (
+          <div
+            key={r.t}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '4px',
+              padding: '14px 16px',
+              borderRadius: '12px',
+              background: '#f8fafc',
+            }}
+          >
+            <div style={{ fontSize: '14px', color: SLATE_500, letterSpacing: '0.05em' }}>
+              {r.ch.toUpperCase()}
+            </div>
+            <div style={{ fontSize: '18px', color: SLATE_900, fontWeight: 700 }}>{r.t}</div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (featureKey === 'notes') {
+    return card(
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ fontSize: '20px', fontWeight: 700, color: SLATE_900 }}>
+          On building attention as a skill
+        </div>
+        <div style={{ fontSize: '15px', color: SLATE_700, lineHeight: 1.55 }}>
+          The capacity to focus is not a fixed trait. It is a habit you build the way you build any
+          other muscle — slowly, deliberately, over months rather than days.
+        </div>
+        <div
+          style={{
+            display: 'flex',
+            padding: '6px 10px',
+            borderRadius: '6px',
+            background: 'rgba(118, 171, 223, 0.35)',
+            fontSize: '15px',
+            color: SLATE_900,
+            alignSelf: 'flex-start',
+          }}
+        >
+          Highlighted: with consistent, slightly uncomfortable practice
+        </div>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+            padding: '14px 16px',
+            borderRadius: '12px',
+            borderLeft: `4px solid ${PURPLE}`,
+            background: 'rgba(81, 90, 218, 0.06)',
+          }}
+        >
+          <div style={{ fontSize: '14px', color: SLATE_500 }}>Note · 12:34 — pinned to article</div>
+          <div style={{ fontSize: '16px', color: SLATE_900 }}>
+            Apply this to my morning block. Try one week, no phone before noon.
+          </div>
+        </div>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+            padding: '14px 16px',
+            borderRadius: '12px',
+            borderLeft: `4px solid ${SKY}`,
+            background: 'rgba(118, 171, 223, 0.10)',
+          }}
+        >
+          <div style={{ fontSize: '14px', color: SLATE_500 }}>Note · 27:08</div>
+          <div style={{ fontSize: '16px', color: SLATE_900 }}>
+            Compounding effect — see also Karpathy on building taste.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return <div style={{ display: 'flex' }} />;
+}
+
+function FeatureLayout({ featureKey }: { featureKey: string }): ReactElement {
+  const feature = FEATURES.find((f) => f.key === featureKey);
+  if (feature == null) {
+    throw new Error(`Unknown feature: ${featureKey}`);
+  }
+  return (
+    <div
+      style={{
+        display: 'flex',
+        width: '100%',
+        height: '100%',
+        background: 'white',
+        backgroundImage: SOFT_BG,
+        fontFamily: 'Inter, sans-serif',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          width: '50%',
+          height: '100%',
+          padding: '70px 60px',
+          justifyContent: 'space-between',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <GradientTitle size={42} />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          <div
+            style={{
+              fontSize: '52px',
+              fontWeight: 700,
+              lineHeight: 1.1,
+              letterSpacing: '-0.02em',
+              color: SLATE_900,
+            }}
+          >
+            {feature.title}
+          </div>
+          <div style={{ fontSize: '22px', lineHeight: 1.45, color: SLATE_700 }}>
+            {feature.description}
+          </div>
+        </div>
+        <div style={{ display: 'flex', fontSize: '20px', color: SLATE_500 }}>
+          {PH_LINKS.website}
+        </div>
+      </div>
+      <div
+        style={{
+          display: 'flex',
+          width: '50%',
+          height: '100%',
+          padding: '70px 60px 70px 0',
+        }}
+      >
+        <FeatureMock featureKey={featureKey} />
+      </div>
+    </div>
+  );
+}
+
+function CtaLayout(): ReactElement {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        width: '100%',
+        height: '100%',
+        padding: '90px 100px',
+        background: PURPLE,
+        backgroundImage: `linear-gradient(135deg, ${PURPLE} 0%, #4338ca 100%)`,
+        fontFamily: 'Inter, sans-serif',
+        color: 'white',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          fontSize: '42px',
+          fontWeight: 700,
+          letterSpacing: '-0.02em',
+          color: 'white',
+        }}
+      >
+        {TITLE}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <div
+          style={{
+            fontSize: '110px',
+            fontWeight: 700,
+            lineHeight: 1.05,
+            letterSpacing: '-0.03em',
+            color: 'white',
+          }}
+        >
+          {CTA_HEADLINE}
+        </div>
+        <div style={{ fontSize: '32px', lineHeight: 1.4, color: INDIGO_100, maxWidth: '900px' }}>
+          {CTA_SUBHEADLINE}
+        </div>
+      </div>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          fontSize: '22px',
+          color: INDIGO_100,
+        }}
+      >
+        <div>{PH_LINKS.website}</div>
+        <div
+          style={{
+            padding: '14px 32px',
+            borderRadius: '999px',
+            background: 'white',
+            color: PURPLE,
+            fontWeight: 700,
+          }}
+        >
+          Build your library
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FeaturesOverviewLayout(): ReactElement {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        width: '100%',
+        height: '100%',
+        padding: '80px 80px',
+        background: PURPLE,
+        backgroundImage: `linear-gradient(160deg, ${PURPLE} 0%, #3730a3 100%)`,
+        fontFamily: 'Inter, sans-serif',
+        color: 'white',
+        gap: '40px',
+      }}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        <div
+          style={{
+            fontSize: '60px',
+            fontWeight: 700,
+            letterSpacing: '-0.02em',
+            color: 'white',
+            lineHeight: 1.1,
+          }}
+        >
+          {FEATURES_HEADLINE}
+        </div>
+        <div style={{ fontSize: '24px', color: INDIGO_100, lineHeight: 1.4, maxWidth: '900px' }}>
+          {FEATURES_SUBHEADLINE}
+        </div>
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px' }}>
+        {FEATURES.map((f) => (
+          <div
+            key={f.key}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              width: '350px',
+              padding: '24px',
+              borderRadius: '16px',
+              background: 'rgba(255, 255, 255, 0.08)',
+              gap: '8px',
+            }}
+          >
+            <div
+              style={{
+                fontSize: '20px',
+                fontWeight: 700,
+                color: 'white',
+                lineHeight: 1.25,
+              }}
+            >
+              {f.title}
+            </div>
+            <div style={{ fontSize: '14px', color: INDIGO_100, lineHeight: 1.45 }}>
+              {f.description.length > 140 ? `${f.description.slice(0, 140)}…` : f.description}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ThumbnailLayout(): ReactElement {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '100%',
+        height: '100%',
+        background: 'white',
+        backgroundImage: `linear-gradient(135deg, ${PURPLE} 0%, ${SKY} 100%)`,
+        fontFamily: 'Inter, sans-serif',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          fontSize: '38px',
+          fontWeight: 700,
+          color: 'white',
+          letterSpacing: '-0.02em',
+        }}
+      >
+        {TITLE}
+      </div>
+    </div>
+  );
+}
+
+interface ImageDef {
+  size: { width: number; height: number };
+  render: () => ReactElement;
+  glyphs: () => string;
+  contentType: string;
+}
+
+const FEATURE_GLYPH_TEXT = FEATURES.map((f) => `${f.title}${f.description}`).join('');
+
+const FEATURE_MOCK_TEXT =
+  'InboxNew2hagoSavedReadArchivedLexFridmanJensenHuangInterviewDwarkeshPatelElonMuskInterviewCalNewportRulesforDeepWorkAndrejKarpathyIntrotoNeuralNetworksHEADLINESUMMARYARTICLEThecasefordeepworkinaneraofinfinitedistractionAwalkthroughtheritualsenvironmentsandrulesthatprotectconcentrationandwhyreturningtoundistractedworkisharderbutmorevaluablethaneverEnglishEspañolFrançaisDeutschReadinyourlanguage专注力是一种可以训练的能力每天留出一段不被打扰的时间从最难的工作开始howtofocuswheneverythingcompetesforattentionWhydeepworkisthesuperpowerofthe21stcenturyAndrewHubermanToolstoresetattentionafterdopaminespikesOnbuildingaquietworkshopinaloudworldOnbuildingattentionasaskillThecapacitytofocusisnotafixedtraitItisahabityoubuildthewayyoubuildanyothermusclewithconsistentslightlyuncomfortablepracticeovermonthsnotdaysApplythistomymorningblockTryoneweeknophonebeforenoonCompoundingeffectseealsoKarpathyonbuildingtastepinnedtoarticleNote';
+
+const ALL_TEXT = `${TITLE}${HERO_HEADLINE}${HERO_SUBTITLE}${CTA_HEADLINE}${CTA_SUBHEADLINE}${FEATURES_HEADLINE}${FEATURES_SUBHEADLINE}${FEATURE_GLYPH_TEXT}${FEATURE_MOCK_TEXT}${PH_LINKS.website}GetStartedSourceavailableBuildyourlibrary中文日本語·★⌕━…`;
+
+export const IMAGES: Record<string, ImageDef> = {
+  hero: {
+    size: GALLERY_SIZE,
+    render: HeroLayout,
+    glyphs: () => ALL_TEXT,
+    contentType: 'image/png',
+  },
+  'features-overview': {
+    size: GALLERY_SIZE,
+    render: FeaturesOverviewLayout,
+    glyphs: () => ALL_TEXT,
+    contentType: 'image/png',
+  },
+  'feature-inbox': {
+    size: GALLERY_SIZE,
+    render: () => <FeatureLayout featureKey="inbox" />,
+    glyphs: () => ALL_TEXT,
+    contentType: 'image/png',
+  },
+  'feature-article': {
+    size: GALLERY_SIZE,
+    render: () => <FeatureLayout featureKey="article" />,
+    glyphs: () => ALL_TEXT,
+    contentType: 'image/png',
+  },
+  'feature-translation': {
+    size: GALLERY_SIZE,
+    render: () => <FeatureLayout featureKey="translation" />,
+    glyphs: () => ALL_TEXT,
+    contentType: 'image/png',
+  },
+  'feature-search': {
+    size: GALLERY_SIZE,
+    render: () => <FeatureLayout featureKey="search" />,
+    glyphs: () => ALL_TEXT,
+    contentType: 'image/png',
+  },
+  'feature-notes': {
+    size: GALLERY_SIZE,
+    render: () => <FeatureLayout featureKey="notes" />,
+    glyphs: () => ALL_TEXT,
+    contentType: 'image/png',
+  },
+  cta: {
+    size: GALLERY_SIZE,
+    render: CtaLayout,
+    glyphs: () => ALL_TEXT,
+    contentType: 'image/png',
+  },
+  thumbnail: {
+    size: THUMBNAIL_SIZE,
+    render: ThumbnailLayout,
+    glyphs: () => TITLE,
+    contentType: 'image/png',
+  },
+};
+
+export type ImageName = keyof typeof IMAGES;
+
+export const IMAGE_NAMES = Object.keys(IMAGES) as ImageName[];
+
+export interface GalleryEntry {
+  name: ImageName;
+  label: string;
+  size: { width: number; height: number };
+  caption: string;
+}
+
+export const GALLERY: readonly GalleryEntry[] = [
+  {
+    name: 'hero',
+    label: 'Hero cover',
+    size: GALLERY_SIZE,
+    caption: 'Cover slide. Use as the first gallery image on Product Hunt.',
+  },
+  {
+    name: 'features-overview',
+    label: 'Features overview',
+    size: GALLERY_SIZE,
+    caption: 'All five features summarized in one card.',
+  },
+  {
+    name: 'feature-inbox',
+    label: 'Inbox feature',
+    size: GALLERY_SIZE,
+    caption: FEATURES[0].title,
+  },
+  {
+    name: 'feature-article',
+    label: 'Article feature',
+    size: GALLERY_SIZE,
+    caption: FEATURES[1].title,
+  },
+  {
+    name: 'feature-translation',
+    label: 'Translation feature',
+    size: GALLERY_SIZE,
+    caption: FEATURES[2].title,
+  },
+  {
+    name: 'feature-search',
+    label: 'Search feature',
+    size: GALLERY_SIZE,
+    caption: FEATURES[3].title,
+  },
+  {
+    name: 'feature-notes',
+    label: 'Notes feature',
+    size: GALLERY_SIZE,
+    caption: FEATURES[4].title,
+  },
+  {
+    name: 'cta',
+    label: 'Closing CTA',
+    size: GALLERY_SIZE,
+    caption: 'Closing slide. Use as the last gallery image.',
+  },
+  {
+    name: 'thumbnail',
+    label: 'Thumbnail / icon',
+    size: THUMBNAIL_SIZE,
+    caption: 'Square 240×240 thumbnail used for the Product Hunt listing icon.',
+  },
+];
+
+export async function renderImage(name: ImageName): Promise<ImageResponse> {
+  const def = IMAGES[name];
+  const fonts = await loadInter(def.glyphs());
+  return new ImageResponse(def.render(), {
+    width: def.size.width,
+    height: def.size.height,
+    fonts,
+  });
+}
