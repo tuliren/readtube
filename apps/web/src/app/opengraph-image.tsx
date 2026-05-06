@@ -1,19 +1,19 @@
 import { ImageResponse } from 'next/og';
 
 import { Logo } from '@/components/Logo';
-import { DESCRIPTION, FULL_WEBSITE_URL, TITLE } from '@/constants';
+import { FULL_WEBSITE_URL, TITLE } from '@/constants';
 
 export const runtime = 'edge';
 export const alt = `${TITLE} — Turn YouTube subscriptions into a personal newsletter`;
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
-const HEADLINE = 'Turn YouTube subscriptions into a personal newsletter';
-const SUBTITLE = DESCRIPTION;
-const FOOTER_RIGHT = 'Read · Annotate · Search';
+const HEADLINE = 'Read YouTube videos';
+const SUBTITLE =
+  'ReadTube turns your YouTube subscriptions into a personal newsletter, helps you reclaim focus in a world engineered for distraction.';
 
 async function loadGoogleFont(family: string, weight: number, text: string) {
-  const url = `https://fonts.googleapis.com/css2?family=${family.replace(' ', '+')}:wght@${weight}&text=${encodeURIComponent(text)}`;
+  const url = `https://fonts.googleapis.com/css2?family=${family.replaceAll(' ', '+')}:wght@${weight}&text=${encodeURIComponent(text)}`;
   const css = await fetch(url, {
     headers: {
       // Force a TTF response so Satori can parse it — without a UA, Google
@@ -29,7 +29,7 @@ async function loadGoogleFont(family: string, weight: number, text: string) {
 }
 
 export default async function OpengraphImage() {
-  const glyphs = `${HEADLINE}${SUBTITLE}${TITLE}${FULL_WEBSITE_URL}${FOOTER_RIGHT}`;
+  const glyphs = `${HEADLINE}${SUBTITLE}${TITLE}${FULL_WEBSITE_URL}`;
   const [interBold, interRegular] = await Promise.all([
     loadGoogleFont('Inter', 700, glyphs),
     loadGoogleFont('Inter', 400, glyphs),
@@ -89,7 +89,6 @@ export default async function OpengraphImage() {
           }}
         >
           <div>{FULL_WEBSITE_URL}</div>
-          <div>{FOOTER_RIGHT}</div>
         </div>
       </div>
     ),
