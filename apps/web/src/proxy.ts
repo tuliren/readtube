@@ -20,6 +20,7 @@ const isPublicRoute = createRouteMatcher([
   '/p/(.*)',
   '/api(.*)',
   '/opengraph-image',
+  '/producthunt(.*)',
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
