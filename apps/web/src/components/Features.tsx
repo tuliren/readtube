@@ -1,26 +1,34 @@
-import { BookOpen, Highlighter, ScrollText, Search } from 'lucide-react';
+import { Highlighter, Inbox, Languages, ScrollText, Search } from 'lucide-react';
 
 import { Container } from '@/components/Container';
 import FeatureRow from '@/components/features/FeatureRow';
 import ArticlePreview from '@/components/features/previews/ArticlePreview';
+import InboxPreview from '@/components/features/previews/InboxPreview';
 import NotesPreview from '@/components/features/previews/NotesPreview';
-import ReadPreview from '@/components/features/previews/ReadPreview';
 import SearchPreview from '@/components/features/previews/SearchPreview';
+import TranslationPreview from '@/components/features/previews/TranslationPreview';
 
 const FEATURES = [
   {
-    icon: BookOpen,
-    title: 'Read instead of watch',
+    icon: Inbox,
+    title: 'Read your subscriptions like a newsletter inbox',
     description:
-      'Full transcripts with AI-generated headlines and multi-level summaries. Skim in ten seconds, read in two minutes, without thumbnails, autoplay, or a feed tugging you toward the next thing.',
-    preview: <ReadPreview />,
+      'Every channel you follow becomes a triaged inbox of readable videos. Star, save for later, archive, mark unread — the same muscle memory as your email, applied to videos you would have otherwise watched on autoplay.',
+    preview: <InboxPreview />,
   },
   {
     icon: ScrollText,
-    title: 'Long videos as articles you can sit with',
+    title: 'Two summaries and a full-length article for every video',
     description:
-      'AI rewrites talks and lectures as narrative or dialogue articles. A 20-minute video becomes a 5-minute read you can annotate, re-read, and return to.',
+      'A one-line headline and a paragraph for skimming, then a full narrative rewrite when you want to sit with the ideas. A 20-minute video becomes a five-minute read you can come back to.',
     preview: <ArticlePreview />,
+  },
+  {
+    icon: Languages,
+    title: 'Read in your language',
+    description:
+      'Generate summaries and articles in the language you actually think in. Pick from the language menu and the entire piece switches in place — translated by the same model that wrote it, not a separate machine-translation pass.',
+    preview: <TranslationPreview />,
   },
   {
     icon: Search,
@@ -31,9 +39,9 @@ const FEATURES = [
   },
   {
     icon: Highlighter,
-    title: 'A library you build on purpose',
+    title: 'Notes and highlights you can sit with',
     description:
-      'Highlight passages, pin timestamped notes, and keep only what you chose to think about. Turn watch time into understanding.',
+      'Pin timestamped notes alongside the article. Your thinking lives next to the source — not in a second app you forget to open.',
     preview: <NotesPreview />,
   },
 ];
