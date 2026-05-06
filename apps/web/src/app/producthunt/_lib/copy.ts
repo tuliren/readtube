@@ -1,4 +1,6 @@
-import { DESCRIPTION, FULL_WEBSITE_URL, GITHUB_REPO_URL, TITLE } from '@/constants';
+import { DESCRIPTION, DOMAIN, GITHUB_REPO_URL, TITLE } from '@/constants';
+
+const SHORT_WEBSITE_URL = `https://${DOMAIN}`;
 
 export const PH_TAGLINE = 'Turn YouTube subscriptions into a personal newsletter';
 
@@ -34,11 +36,11 @@ Free during the beta. Works with YouTube and Bilibili. Would love your honest fe
 Stop scrolling. Start reading.
 
 — Liren
-${FULL_WEBSITE_URL}
+${SHORT_WEBSITE_URL}
 ${GITHUB_REPO_URL}`;
 
 export const PH_LINKS = {
-  website: FULL_WEBSITE_URL,
+  website: SHORT_WEBSITE_URL,
   github: GITHUB_REPO_URL,
 };
 

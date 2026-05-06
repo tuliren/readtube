@@ -205,43 +205,46 @@ function FeatureMock({ featureKey }: { featureKey: string }): ReactElement {
 
   if (featureKey === 'article') {
     return card(
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-        <div style={{ fontSize: '14px', color: SLATE_500, letterSpacing: '0.08em' }}>HEADLINE</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div style={{ fontSize: '12px', color: SLATE_500, letterSpacing: '0.08em' }}>HEADLINE</div>
         <div
           style={{
-            fontSize: '24px',
+            fontSize: '22px',
             fontWeight: 700,
             color: SLATE_900,
-            lineHeight: 1.25,
+            lineHeight: 1.2,
           }}
         >
           The case for deep work in an era of infinite distraction
         </div>
-        <div style={{ fontSize: '14px', color: SLATE_500, letterSpacing: '0.08em' }}>SUMMARY</div>
-        <div style={{ fontSize: '16px', color: SLATE_700, lineHeight: 1.5 }}>
-          A walk through the rituals, environments, and rules that protect concentration — and why
-          returning to undistracted work is harder, but more valuable, than ever.
+        <div style={{ fontSize: '12px', color: SLATE_500, letterSpacing: '0.08em' }}>ARTICLE</div>
+        <div style={{ fontSize: '18px', fontWeight: 700, color: SLATE_900, lineHeight: 1.3 }}>
+          Why undistracted hours matter
         </div>
-        <div style={{ fontSize: '14px', color: SLATE_500, letterSpacing: '0.08em' }}>ARTICLE</div>
+        <div style={{ fontSize: '14px', color: SLATE_700, lineHeight: 1.55 }}>
+          The capacity to concentrate without interruption is the rarest, and most valuable,
+          cognitive resource of the next decade.
+        </div>
         <div
           style={{
             display: 'flex',
-            flexDirection: 'column',
-            gap: '10px',
+            padding: '10px 14px',
+            borderLeft: `3px solid ${PURPLE}`,
+            background: 'rgba(81, 90, 218, 0.07)',
+            fontSize: '14px',
+            fontStyle: 'italic',
+            color: SLATE_900,
+            lineHeight: 1.5,
           }}
         >
-          {[100, 80, 92, 96, 76].map((w, i) => (
-            <div
-              key={i}
-              style={{
-                display: 'flex',
-                width: `${w}%`,
-                height: '8px',
-                borderRadius: '4px',
-                background: '#e2e8f0',
-              }}
-            />
-          ))}
+          Distraction is the natural state. Concentration is the practiced one.
+        </div>
+        <div style={{ fontSize: '18px', fontWeight: 700, color: SLATE_900, lineHeight: 1.3 }}>
+          Rituals that protect attention
+        </div>
+        <div style={{ fontSize: '14px', color: SLATE_700, lineHeight: 1.55 }}>
+          Block time on the calendar before anything else can claim it. Build environments where
+          focused work is the default, not the exception.
         </div>
       </div>
     );
@@ -249,6 +252,7 @@ function FeatureMock({ featureKey }: { featureKey: string }): ReactElement {
 
   if (featureKey === 'translation') {
     const langs = ['English', '中文', 'Español', 'Français', '日本語', 'Deutsch'];
+    const activeIndex = langs.indexOf('日本語');
     return card(
       <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
         <div style={{ fontSize: '20px', fontWeight: 700, color: SLATE_900 }}>
@@ -261,10 +265,10 @@ function FeatureMock({ featureKey }: { featureKey: string }): ReactElement {
               style={{
                 padding: '10px 18px',
                 borderRadius: '999px',
-                background: i === 1 ? PURPLE : '#f1f5f9',
-                color: i === 1 ? 'white' : SLATE_700,
+                background: i === activeIndex ? PURPLE : '#f1f5f9',
+                color: i === activeIndex ? 'white' : SLATE_700,
                 fontSize: '18px',
-                fontWeight: i === 1 ? 700 : 400,
+                fontWeight: i === activeIndex ? 700 : 400,
               }}
             >
               {l}
@@ -285,10 +289,10 @@ function FeatureMock({ featureKey }: { featureKey: string }): ReactElement {
           }}
         >
           <div style={{ color: SLATE_500, fontSize: '14px', letterSpacing: '0.08em' }}>
-            ARTICLE · 中文
+            ARTICLE · 日本語
           </div>
-          <div>专注力是一种可以训练的能力。</div>
-          <div>每天留出一段不被打扰的时间，从最难的工作开始。</div>
+          <div>集中力は鍛えられる能力です。</div>
+          <div>毎朝、邪魔されない時間を確保し、最も難しい仕事から始めましょう。</div>
         </div>
       </div>
     );
@@ -643,12 +647,11 @@ interface ImageDef {
   contentType: string;
 }
 
-const FEATURE_GLYPH_TEXT = FEATURES.map((f) => `${f.title}${f.description}`).join('');
+const LATIN_ALPHABET =
+  'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,;:!?\'"-—–·…★⌕()[]/&%@#+';
+const ACCENTED_LATIN = 'áéíóúñçÑÁÉÍÓÚüößÜÖÄäâêîôûàèìòùÀÈÌÒÙ';
 
-const FEATURE_MOCK_TEXT =
-  'InboxNew2hagoSavedReadArchivedLexFridmanJensenHuangInterviewDwarkeshPatelElonMuskInterviewCalNewportRulesforDeepWorkAndrejKarpathyIntrotoNeuralNetworksHEADLINESUMMARYARTICLEThecasefordeepworkinaneraofinfinitedistractionAwalkthroughtheritualsenvironmentsandrulesthatprotectconcentrationandwhyreturningtoundistractedworkisharderbutmorevaluablethaneverEnglishEspañolFrançaisDeutschReadinyourlanguage专注力是一种可以训练的能力每天留出一段不被打扰的时间从最难的工作开始howtofocuswheneverythingcompetesforattentionWhydeepworkisthesuperpowerofthe21stcenturyAndrewHubermanToolstoresetattentionafterdopaminespikesOnbuildingaquietworkshopinaloudworldOnbuildingattentionasaskillThecapacitytofocusisnotafixedtraitItisahabityoubuildthewayyoubuildanyothermusclewithconsistentslightlyuncomfortablepracticeovermonthsnotdaysApplythistomymorningblockTryoneweeknophonebeforenoonCompoundingeffectseealsoKarpathyonbuildingtastepinnedtoarticleNote';
-
-const ALL_TEXT = `${TITLE}${HERO_HEADLINE}${HERO_SUBTITLE}${CTA_HEADLINE}${CTA_SUBHEADLINE}${FEATURES_HEADLINE}${FEATURES_SUBHEADLINE}${FEATURE_GLYPH_TEXT}${FEATURE_MOCK_TEXT}${PH_LINKS.website}GetStartedSourceavailableBuildyourlibrary中文日本語·★⌕━…`;
+const ALL_TEXT = `${LATIN_ALPHABET}${ACCENTED_LATIN}${TITLE}${HERO_HEADLINE}${HERO_SUBTITLE}${CTA_HEADLINE}${CTA_SUBHEADLINE}${FEATURES_HEADLINE}${FEATURES_SUBHEADLINE}${FEATURES.map((f) => `${f.title}${f.description}`).join('')}${PH_LINKS.website}`;
 
 export const IMAGES: Record<string, ImageDef> = {
   hero: {
