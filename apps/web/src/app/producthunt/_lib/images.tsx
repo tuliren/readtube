@@ -144,72 +144,214 @@ function FeatureMock({ featureKey }: { featureKey: string }): ReactElement {
   );
 
   if (featureKey === 'inbox') {
-    const rows = [
-      { dot: PURPLE, title: 'Lex Fridman · Jensen Huang Interview', meta: 'New · 2h ago' },
-      { dot: SKY, title: 'Dwarkesh Patel · Elon Musk Interview', meta: 'Saved' },
-      { dot: '#a3a3a3', title: 'Cal Newport · Rules for Deep Work', meta: 'Read · ★' },
-      { dot: '#a3a3a3', title: 'Andrej Karpathy · Intro to Neural Networks', meta: 'Archived' },
+    const filters = [
+      { name: 'Inbox', count: '12', active: true },
+      { name: 'Unread', count: '4', active: false },
+      { name: 'Starred', count: '4', active: false },
+      { name: 'Saved for later', count: '7', active: false },
+      { name: 'Archive', count: '', active: false },
     ];
-    return card(
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+    const channels = [
+      { name: 'Lex Fridman', count: '3' },
+      { name: 'Dwarkesh Patel', count: '2' },
+      { name: 'Cal Newport', count: '1' },
+      { name: 'Andrej Karpathy', count: '1' },
+    ];
+    const videos = [
+      {
+        ch: 'Lex Fridman',
+        title: 'Jensen Huang on the next decade of compute',
+        meta: '2h ago',
+        unread: true,
+      },
+      {
+        ch: 'Dwarkesh Patel',
+        title: 'Elon Musk on why first principles win',
+        meta: 'Yesterday',
+        unread: true,
+      },
+      {
+        ch: 'Cal Newport',
+        title: 'Rules for deep work in a noisy world',
+        meta: '2d ago · ★',
+        unread: false,
+      },
+      {
+        ch: 'Andrej Karpathy',
+        title: 'Intro to neural networks, from scratch',
+        meta: '3d ago',
+        unread: false,
+      },
+      {
+        ch: 'Mahesh Shenoy',
+        title: 'Special relativity, intuitively',
+        meta: '1w ago',
+        unread: false,
+      },
+    ];
+    return (
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'row',
+          width: '100%',
+          height: '100%',
+          background: 'white',
+          borderRadius: '24px',
+          boxShadow: '0 30px 60px -20px rgba(15, 23, 42, 0.18)',
+          overflow: 'hidden',
+        }}
+      >
         <div
           style={{
             display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            fontSize: '20px',
-            color: SLATE_500,
-            paddingBottom: '12px',
-            borderBottom: '1px solid #e2e8f0',
+            flexDirection: 'column',
+            width: '190px',
+            padding: '20px 12px',
+            gap: '2px',
+            background: '#f8fafc',
+            borderRight: '1px solid #e2e8f0',
           }}
         >
-          <div style={{ fontWeight: 700, color: SLATE_900 }}>Inbox</div>
-          <div>4 unread</div>
-        </div>
-        {rows.map((r, i) => (
           <div
-            key={i}
             style={{
               display: 'flex',
-              alignItems: 'center',
-              gap: '16px',
-              padding: '14px',
-              borderRadius: '12px',
-              background: i === 0 ? 'rgba(81, 90, 218, 0.08)' : 'transparent',
+              fontSize: '11px',
+              color: SLATE_500,
+              letterSpacing: '0.08em',
+              padding: '4px 10px 8px 10px',
             }}
           >
+            FOLDERS
+          </div>
+          {filters.map((f) => (
             <div
+              key={f.name}
               style={{
-                width: '10px',
-                height: '10px',
-                borderRadius: '999px',
-                background: r.dot,
-              }}
-            />
-            <div
-              style={{
-                fontSize: '20px',
-                color: SLATE_900,
-                fontWeight: i === 0 ? 700 : 400,
-                flex: 1,
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '7px 10px',
+                borderRadius: '8px',
+                background: f.active ? 'rgba(81, 90, 218, 0.10)' : 'transparent',
+                fontSize: '13px',
+                fontWeight: f.active ? 700 : 400,
+                color: f.active ? PURPLE : SLATE_700,
               }}
             >
-              {r.title}
+              <div style={{ display: 'flex' }}>{f.name}</div>
+              <div
+                style={{
+                  display: 'flex',
+                  fontSize: '12px',
+                  color: f.active ? PURPLE : SLATE_500,
+                }}
+              >
+                {f.count}
+              </div>
             </div>
-            <div style={{ fontSize: '16px', color: SLATE_500 }}>{r.meta}</div>
+          ))}
+          <div style={{ display: 'flex', height: '12px' }} />
+          <div
+            style={{
+              display: 'flex',
+              fontSize: '11px',
+              color: SLATE_500,
+              letterSpacing: '0.08em',
+              padding: '4px 10px 8px 10px',
+            }}
+          >
+            CHANNELS
           </div>
-        ))}
+          {channels.map((c) => (
+            <div
+              key={c.name}
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '6px 10px',
+                fontSize: '13px',
+                color: SLATE_700,
+              }}
+            >
+              <div style={{ display: 'flex' }}>{c.name}</div>
+              <div style={{ display: 'flex', fontSize: '12px', color: SLATE_500 }}>{c.count}</div>
+            </div>
+          ))}
+        </div>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            flex: 1,
+            padding: '20px 22px',
+            gap: '8px',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              borderBottom: '1px solid #e2e8f0',
+              paddingBottom: '10px',
+              marginBottom: '4px',
+            }}
+          >
+            <div style={{ display: 'flex', fontSize: '17px', fontWeight: 700, color: SLATE_900 }}>
+              Inbox
+            </div>
+            <div style={{ display: 'flex', fontSize: '12px', color: SLATE_500 }}>
+              4 unread of 12
+            </div>
+          </div>
+          {videos.map((v) => (
+            <div
+              key={v.title}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '3px',
+                padding: '9px 12px',
+                borderRadius: '10px',
+                background: v.unread ? 'rgba(81, 90, 218, 0.07)' : 'transparent',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <div style={{ display: 'flex', fontSize: '11px', color: SLATE_500 }}>{v.ch}</div>
+                <div style={{ display: 'flex', fontSize: '11px', color: SLATE_500 }}>{v.meta}</div>
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  fontSize: '14px',
+                  color: SLATE_900,
+                  fontWeight: v.unread ? 700 : 400,
+                }}
+              >
+                {v.title}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
 
   if (featureKey === 'article') {
     return card(
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        <div style={{ fontSize: '12px', color: SLATE_500, letterSpacing: '0.08em' }}>HEADLINE</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <div style={{ fontSize: '11px', color: SLATE_500, letterSpacing: '0.08em' }}>HEADLINE</div>
         <div
           style={{
-            fontSize: '22px',
+            fontSize: '20px',
             fontWeight: 700,
             color: SLATE_900,
             lineHeight: 1.2,
@@ -217,21 +359,23 @@ function FeatureMock({ featureKey }: { featureKey: string }): ReactElement {
         >
           The case for deep work in an era of infinite distraction
         </div>
-        <div style={{ fontSize: '12px', color: SLATE_500, letterSpacing: '0.08em' }}>ARTICLE</div>
-        <div style={{ fontSize: '18px', fontWeight: 700, color: SLATE_900, lineHeight: 1.3 }}>
+        <div style={{ fontSize: '11px', color: SLATE_500, letterSpacing: '0.08em' }}>ARTICLE</div>
+        <div style={{ fontSize: '16px', fontWeight: 700, color: SLATE_900, lineHeight: 1.3 }}>
           Why undistracted hours matter
         </div>
-        <div style={{ fontSize: '14px', color: SLATE_700, lineHeight: 1.55 }}>
+        <div style={{ fontSize: '13px', color: SLATE_700, lineHeight: 1.55 }}>
           The capacity to concentrate without interruption is the rarest, and most valuable,
-          cognitive resource of the next decade.
+          cognitive resource of the next decade. Everything that compounds — research, writing,
+          craft, judgment — is built out of long, unbroken hours that the modern feed is engineered
+          to dissolve.
         </div>
         <div
           style={{
             display: 'flex',
-            padding: '10px 14px',
+            padding: '9px 12px',
             borderLeft: `3px solid ${PURPLE}`,
             background: 'rgba(81, 90, 218, 0.07)',
-            fontSize: '14px',
+            fontSize: '13px',
             fontStyle: 'italic',
             color: SLATE_900,
             lineHeight: 1.5,
@@ -239,12 +383,36 @@ function FeatureMock({ featureKey }: { featureKey: string }): ReactElement {
         >
           Distraction is the natural state. Concentration is the practiced one.
         </div>
-        <div style={{ fontSize: '18px', fontWeight: 700, color: SLATE_900, lineHeight: 1.3 }}>
+        <div style={{ fontSize: '16px', fontWeight: 700, color: SLATE_900, lineHeight: 1.3 }}>
           Rituals that protect attention
         </div>
-        <div style={{ fontSize: '14px', color: SLATE_700, lineHeight: 1.55 }}>
+        <div style={{ fontSize: '13px', color: SLATE_700, lineHeight: 1.55 }}>
           Block time on the calendar before anything else can claim it. Build environments where
-          focused work is the default, not the exception.
+          focused work is the default, not the exception, and treat the first ninety minutes of the
+          day as a non-negotiable appointment with the hardest problem on your list.
+        </div>
+        <div style={{ fontSize: '16px', fontWeight: 700, color: SLATE_900, lineHeight: 1.3 }}>
+          What this looks like in practice
+        </div>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '4px',
+            fontSize: '13px',
+            color: SLATE_700,
+            lineHeight: 1.5,
+          }}
+        >
+          <div style={{ display: 'flex' }}>
+            • A single morning block, phone in another room, one open document.
+          </div>
+          <div style={{ display: 'flex' }}>
+            • A weekly review where every saved video is either read, archived, or let go.
+          </div>
+          <div style={{ display: 'flex' }}>
+            • A short evening walk to consolidate what the day actually produced.
+          </div>
         </div>
       </div>
     );
