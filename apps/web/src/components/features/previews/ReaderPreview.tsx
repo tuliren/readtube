@@ -96,18 +96,18 @@ function SummaryTab({ language }: { language: LanguageCode }) {
         {summary.headline}
       </h4>
       <div>
-        <div className="text-[8px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+        <div className="inline-flex items-center gap-1 rounded bg-indigo-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300">
           Short
         </div>
-        <p className="mt-0.5 text-[10px] leading-relaxed text-slate-600 dark:text-slate-300">
+        <p className="mt-1 text-[10px] leading-relaxed text-slate-600 dark:text-slate-300">
           {summary.short}
         </p>
       </div>
       <div>
-        <div className="text-[8px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+        <div className="inline-flex items-center gap-1 rounded bg-indigo-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300">
           Full
         </div>
-        <p className="mt-0.5 text-[10px] leading-relaxed text-slate-600 dark:text-slate-300">
+        <p className="mt-1 text-[10px] leading-relaxed text-slate-600 dark:text-slate-300">
           {summary.full}
         </p>
       </div>
