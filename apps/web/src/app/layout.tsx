@@ -12,33 +12,55 @@ import '@/styles/globals.css';
 import '@/styles/tailwind.css';
 
 export const metadata: Metadata = {
+  metadataBase: new URL(FULL_WEBSITE_URL),
   title: {
     template: `%s | ${TITLE}`,
     default: TITLE,
   },
   description: DESCRIPTION,
+  applicationName: TITLE,
+  keywords: [
+    'YouTube to newsletter',
+    'YouTube subscriptions',
+    'video to article',
+    'video transcript',
+    'video summary',
+    'reading list',
+    'deep work',
+    'focus',
+  ],
+  alternates: {
+    canonical: '/',
+  },
+  openGraph: {
+    type: 'website',
+    siteName: TITLE,
+    title: TITLE,
+    description: DESCRIPTION,
+    url: FULL_WEBSITE_URL,
+    locale: 'en_US',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: TITLE,
+    description: DESCRIPTION,
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
+  },
   icons: [
     { rel: 'apple-touch-icon', sizes: '180x180', url: '/apple-touch-icon.png' },
     { rel: 'icon', type: 'image/png', sizes: '32x32', url: '/favicon-32x32.png' },
     { rel: 'icon', type: 'image/png', sizes: '16x16', url: '/favicon-16x16.png' },
     { rel: 'manifest', url: '/site.webmanifest' },
   ],
-  robots: 'index, follow',
-  openGraph: {
-    title: `Home | ${TITLE}`,
-    description: DESCRIPTION,
-    url: FULL_WEBSITE_URL,
-    type: 'website',
-    siteName: TITLE,
-    images: [
-      {
-        url: `${FULL_WEBSITE_URL}/android-chrome-512x512.png`,
-        width: 512,
-        height: 512,
-        alt: TITLE,
-      },
-    ],
-  },
 };
 
 const inter = Inter({
