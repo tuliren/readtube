@@ -946,12 +946,35 @@ export const GALLERY: readonly GalleryEntry[] = [
   },
 ];
 
+const RENDER_SCALE = 2;
+
 export async function renderImage(name: ImageName): Promise<ImageResponse> {
   const def = IMAGES[name];
   const fonts = await loadInter(def.glyphs());
-  return new ImageResponse(def.render(), {
-    width: def.size.width,
-    height: def.size.height,
+  const scaled = (
+    <div
+      style={{
+        display: 'flex',
+        width: `${def.size.width * RENDER_SCALE}px`,
+        height: `${def.size.height * RENDER_SCALE}px`,
+        transform: `scale(${RENDER_SCALE})`,
+        transformOrigin: 'top left',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          width: `${def.size.width}px`,
+          height: `${def.size.height}px`,
+        }}
+      >
+        {def.render()}
+      </div>
+    </div>
+  );
+  return new ImageResponse(scaled, {
+    width: def.size.width * RENDER_SCALE,
+    height: def.size.height * RENDER_SCALE,
     fonts,
   });
 }
