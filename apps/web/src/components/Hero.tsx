@@ -1,8 +1,7 @@
 import { Button } from '@/components/Button';
 import PreviewDropdown, { type PreviewItem } from '@/components/PreviewDropdown';
 import RotatingWord from '@/components/RotatingWord';
-import { GithubIcon } from '@/components/icons/GithubIcon';
-import { DESCRIPTION, GITHUB_REPO_URL } from '@/constants';
+import { DESCRIPTION } from '@/constants';
 
 const PREVIEW_VIDEOS: readonly PreviewItem[] = [
   { title: 'Jensen Huang Interview with Lex Fridman', id: 'vif8NQcjVf0' },
@@ -35,22 +34,25 @@ export default function Hero() {
         {DESCRIPTION}
       </p>
 
-      <div className="mt-14 flex flex-wrap justify-center gap-x-6 gap-y-3">
+      <div className="mt-14 flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
         <Button href="/sign-up" variant="solid" color="slate">
           Get Started
         </Button>
         <PreviewDropdown items={PREVIEW_VIDEOS} />
-        <Button
-          href={GITHUB_REPO_URL}
-          variant="outline"
-          color="slate"
+        <a
+          href="https://www.producthunt.com/products/readtube-2?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-readtube-2"
           target="_blank"
           rel="noopener noreferrer"
-          className="gap-x-2"
+          aria-label="ReadTube on Product Hunt"
+          className="inline-flex items-center"
         >
-          <GithubIcon aria-hidden="true" className="h-4 w-4" />
-          Source available
-        </Button>
+          <img
+            alt="ReadTube - Turn YouTube subscriptions into a personal newsletter | Product Hunt"
+            width={250}
+            height={54}
+            src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1140604&theme=dark"
+          />
+        </a>
       </div>
     </section>
   );
