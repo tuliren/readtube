@@ -5,7 +5,7 @@ const SHORT_WEBSITE_URL = `https://${DOMAIN}`;
 export const PH_TAGLINE = 'Turn YouTube subscriptions into a personal newsletter';
 
 export const PH_DESCRIPTION =
-  'Turn YouTube subscriptions into a personal newsletter. Every channel becomes a triaged inbox of readable videos. Two summaries plus a full article for every video. Search semantically, pin notes, read in your language. Built for depth, not distraction.';
+  'Turn YouTube subscriptions into a personal newsletter. Every channel becomes a triaged inbox of readable videos. Two summaries plus a full article for every video. Translate into your own language, search semantically, add notes, and create a personal library. Built for depth, not distraction.';
 
 export const PH_TOPICS = [
   'Productivity',
