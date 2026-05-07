@@ -1,5 +1,6 @@
 import { Button } from '@/components/Button';
 import PreviewDropdown, { type PreviewItem } from '@/components/PreviewDropdown';
+import ProductHuntButton from '@/components/ProductHuntButton';
 import RotatingWord from '@/components/RotatingWord';
 import { DESCRIPTION } from '@/constants';
 
@@ -34,25 +35,12 @@ export default function Hero() {
         {DESCRIPTION}
       </p>
 
-      <div className="mt-14 flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
+      <div className="mt-14 flex flex-wrap items-center justify-center gap-x-4 gap-y-3">
         <Button href="/sign-up" variant="solid" color="slate">
           Get Started
         </Button>
         <PreviewDropdown items={PREVIEW_VIDEOS} />
-        <a
-          href="https://www.producthunt.com/products/readtube-2?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-readtube-2"
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label="ReadTube on Product Hunt"
-          className="inline-flex items-center"
-        >
-          <img
-            alt="ReadTube - Turn YouTube subscriptions into a personal newsletter | Product Hunt"
-            width={250}
-            height={54}
-            src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1140604&theme=dark"
-          />
-        </a>
+        <ProductHuntButton height={40} />
       </div>
     </section>
   );

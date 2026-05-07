@@ -9,6 +9,7 @@ import { type ReactNode, useState } from 'react';
 
 import { GithubLink } from '@/components/GithubLink';
 import { Logo } from '@/components/Logo';
+import ProductHuntButton from '@/components/ProductHuntButton';
 import ThemeSelector from '@/components/settings/ThemeSelector';
 import { TITLE } from '@/constants';
 
@@ -110,7 +111,7 @@ export default function Header({ onHomePage, compact = false, centerSlot }: Prop
         {centerSlot != null && (
           <div className="flex min-w-0 max-w-[60%] flex-1 items-center">{centerSlot}</div>
         )}
-        <div className="hidden items-center text-gray-600 hover:text-gray-900 lg:flex lg:gap-x-12 dark:text-slate-300 dark:hover:text-slate-100">
+        <div className="hidden items-center text-gray-600 hover:text-gray-900 lg:flex lg:gap-x-8 dark:text-slate-300 dark:hover:text-slate-100">
           {navigation.map((item) => (
             <Link key={item.name} href={item.href} className={linkClass}>
               {item.name}
@@ -171,6 +172,7 @@ export default function Header({ onHomePage, compact = false, centerSlot }: Prop
                   className={`flex items-center gap-2 ${mobileLinkClass}`}
                   label="GitHub"
                 />
+                <ProductHuntButton height={35} />
               </div>
             </div>
           </div>
