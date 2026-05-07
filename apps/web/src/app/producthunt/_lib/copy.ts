@@ -62,6 +62,7 @@ export interface FeatureCopy {
   key: string;
   title: string;
   description: string;
+  overviewDescription?: string;
 }
 
 export const FEATURES: readonly FeatureCopy[] = [
@@ -70,18 +71,24 @@ export const FEATURES: readonly FeatureCopy[] = [
     title: 'Read your subscriptions like a newsletter inbox',
     description:
       'Every channel you follow becomes a triaged inbox of readable videos. Star, save for later, archive, mark unread — the same muscle memory as your email, applied to videos you would have otherwise watched on autoplay.',
+    overviewDescription:
+      'Every channel you follow becomes a triaged inbox of readable videos. Star, save, archive, mark unread — the same muscle memory as email.',
   },
   {
     key: 'article',
     title: 'Two summaries and a full-length article for every video',
     description:
       'A one-line headline and a paragraph for skimming, then a full narrative rewrite when you want to sit with the ideas. A 20-minute video becomes a five-minute read you can come back to.',
+    overviewDescription:
+      'A headline and a paragraph for skimming, then a full narrative rewrite when you want to sit with the ideas. A 20-minute video becomes a five-minute read.',
   },
   {
     key: 'translation',
     title: 'Read in your language',
     description:
       'Generate summaries and articles in the language you actually think in. Pick from the language menu and the entire piece switches in place — translated by the same model that wrote it, not a separate machine-translation pass.',
+    overviewDescription:
+      'Generate summaries and articles in the language you actually think in. Pick from the menu and the whole piece switches in place.',
   },
   {
     key: 'search',

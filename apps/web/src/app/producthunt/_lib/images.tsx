@@ -726,7 +726,7 @@ function FeaturesOverviewLayout(): ReactElement {
         backgroundImage: `linear-gradient(160deg, ${PURPLE} 0%, #3730a3 100%)`,
         fontFamily: 'Inter, sans-serif',
         color: 'white',
-        gap: '40px',
+        gap: '32px',
       }}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -753,10 +753,11 @@ function FeaturesOverviewLayout(): ReactElement {
               display: 'flex',
               flexDirection: 'column',
               width: '350px',
+              height: '200px',
               padding: '24px',
               borderRadius: '16px',
               background: 'rgba(255, 255, 255, 0.08)',
-              gap: '8px',
+              gap: '10px',
             }}
           >
             <div
@@ -769,8 +770,8 @@ function FeaturesOverviewLayout(): ReactElement {
             >
               {f.title}
             </div>
-            <div style={{ fontSize: '14px', color: INDIGO_100, lineHeight: 1.45 }}>
-              {f.description.length > 140 ? `${f.description.slice(0, 140)}…` : f.description}
+            <div style={{ fontSize: '14px', color: INDIGO_100, lineHeight: 1.5 }}>
+              {f.overviewDescription ?? f.description}
             </div>
           </div>
         ))}
