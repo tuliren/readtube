@@ -21,39 +21,24 @@ I'm Liren, the maker of ${TITLE}.
 
 This is an app that turns YouTube subscriptions into a personal newsletter.
 
-YouTube has lots of high quality content. But videos can be difficult to consume efficiently,
-especially those that are long and about series topics (e.g. general relativity, quantum
-physics). So I created this app to solve this need.
+YouTube has lots of high quality content. But videos can be difficult to consume efficiently, especially those that are long and about series topics (e.g. general relativity, quantum physics). So I created this app to solve this need.
 
-There are already many existing YouTube AI transcription websites. However, ReadTube is one
-step further in that it periodically fetches the updates from the channels I subscribe to so
-I don't need to paste in the video URL each time. Also it can generate two different versions
-of summary: one short and one long, as well as a full length article. I can pick which length
-to consume according to the type of videos.
+There are already tons of existing YouTube AI transcription websites. However, ReadTube is one step further in that it periodically fetches the updates from the channels I subscribe to so I don't need to paste in the video URL each time. Also it can generate two different versions of summary: one short and one long, as well as a full length article. I can pick which length to consume according to the type of videos.
 
-Some other features: playlist import, translation, custom folders, notes, semantic search.
-I also plan to add chatting with videos in the future.
+Some other features: playlist import, translation, custom folders, notes, semantic search. I also plan to add chatting with videos in the future.
 
-I use the Transcript API to get transcripts for YouTube videos (https://transcriptapi.com/),
-and JustOneAPI for Bilibili (https://justoneapi.com). These services rely on the video's
-native transcripts. So this app does have this one limitation that if a video has no native
-transcript, it won't work.
+I use the Transcript API to get transcripts for YouTube videos (https://transcriptapi.com/), and JustOneAPI for Bilibili (https://justoneapi.com). These services rely on the video's native transcripts. So this app does have this one limitation that if a video has no native transcript, it won't work.
 
-The app is built with the "standard" stack: Next.js on Vercel, Tailwind CSS, Postgres on
-Neon / Prisma, Clerk for auth, GPT for summary and article generation. This is my first
-fully agentically coded project. Claude Code did most of the heavy lifting. I set up the
-infra and worked as a PM.
+The app is built with the "standard" stack: Next.js on Vercel, Tailwind CSS, Postgres on Neon / Prisma, Clerk for auth, GPT for summary and article generation. This is my first fully agentically coded project. Claude Code did most of the heavy lifting. I set up the infra and worked as a PM.
 
 It is source available under the Elastic License 2.0, and free during the beta.
 
-Personally, I really enjoy using this app. There are lots of seemingly interesting but long
-interview videos that I would be curious about but never have the time to check out (e.g. Lex
-Fridman). Now I can easily skim through the summary and decide whether it is worth reading or
-watching. Hope that it is helpful to you too.
+Personally, I really enjoy using this app. There are so many seemingly interesting but long interview videos that I would be curious about but never have the time to check out (e.g. Lex Fridman). Now I can easily skim through the summary and decide whether it is worth reading or watching. Hope that it is helpful to you too.
 
 Scroll less. Read more.
 
 -- Liren
+
 ${SHORT_WEBSITE_URL}
 ${GITHUB_REPO_URL}`;
 
