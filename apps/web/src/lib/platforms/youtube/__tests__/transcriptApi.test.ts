@@ -1,4 +1,4 @@
-import { fetchChannelLatest } from '../transcriptApi';
+import { fetchChannelLatest, resolveChannelId } from '../transcriptApi';
 
 describe('fetchChannelLatest', () => {
   const originalEnv = process.env;
@@ -202,5 +202,81 @@ describe('fetchChannelLatest', () => {
     const result = await fetchChannelLatest('UC_no_thumb');
 
     expect(result.videos[0]!.thumbnailUrl).toBeNull();
+  });
+});
+
+describe('resolveChannelId', () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    process.env = { ...originalEnv, TRANSCRIPT_API_KEY: 'test-key' };
+    jest.spyOn(globalThis, 'fetch');
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+    jest.restoreAllMocks();
+  });
+
+  it('throws when TRANSCRIPT_API_KEY is not set', async () => {
+    delete process.env.TRANSCRIPT_API_KEY;
+
+    await expect(resolveChannelId('@TED')).rejects.toThrow('TRANSCRIPT_API_KEY is not set');
+  });
+
+  it('returns the UC channel id and url-encodes the input', async () => {
+    (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        channel_id: 'UCAuUUnT6oDeKwE6v1NGQxug',
+        resolved_from: '@TED',
+      }),
+    });
+
+    const channelId = await resolveChannelId('@TED');
+
+    expect(channelId).toBe('UCAuUUnT6oDeKwE6v1NGQxug');
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      'https://transcriptapi.com/api/v2/youtube/channel/resolve?input=%40TED',
+      { headers: { Authorization: 'Bearer test-key' }, cache: 'no-store' }
+    );
+  });
+
+  it('accepts a full author URL and passes it through encoded', async () => {
+    (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        channel_id: 'UC_xyz',
+        resolved_from: 'https://www.youtube.com/@RickAstley',
+      }),
+    });
+
+    await resolveChannelId('https://www.youtube.com/@RickAstley');
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      'https://transcriptapi.com/api/v2/youtube/channel/resolve?input=https%3A%2F%2Fwww.youtube.com%2F%40RickAstley',
+      { headers: { Authorization: 'Bearer test-key' }, cache: 'no-store' }
+    );
+  });
+
+  it('throws on non-OK response with status and body', async () => {
+    (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      text: async () => 'not found',
+    });
+
+    await expect(resolveChannelId('@missing')).rejects.toThrow(
+      'TranscriptAPI /channel/resolve 404: not found'
+    );
+  });
+
+  it('throws when response is missing channel_id', async () => {
+    (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ channel_id: '', resolved_from: '@empty' }),
+    });
+
+    await expect(resolveChannelId('@empty')).rejects.toThrow(/returned empty channel_id/);
   });
 });

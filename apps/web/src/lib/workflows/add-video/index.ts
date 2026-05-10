@@ -3,6 +3,7 @@ import { prisma } from '@readtube/database';
 import { hasChannelHandleConflict } from '@/lib/channels/handleConflict';
 import { detectPlatform } from '@/lib/platforms';
 import { isEmptyString } from '@/lib/string';
+import { persistTranscript } from '@/lib/transcripts/ensureTranscript';
 
 export interface AddVideoResult {
   videoId: string;
@@ -59,8 +60,11 @@ export async function addVideoForUser(args: {
   }
 
   let snapshot;
+  let prefetchedTranscript;
   try {
-    snapshot = await platform.fetchVideoSnapshot(videoId);
+    const result = await platform.fetchVideoSnapshot(videoId);
+    snapshot = result.snapshot;
+    prefetchedTranscript = result.prefetchedTranscript;
   } catch (err) {
     throw new AddVideoError(
       err instanceof Error ? err.message : 'Failed to fetch video metadata',
@@ -191,6 +195,27 @@ export async function addVideoForUser(args: {
     create: { user_id: args.userId, video_id: video.id },
     update: {},
   });
+
+  // When the platform's snapshot call bundled a transcript (currently
+  // only the YouTube TranscriptAPI fallback path does), persist it now
+  // so the reader's first `/transcript` request hits cache instead of
+  // re-spending an API credit. Skip if a Transcript row already exists
+  // for this video to avoid duplicating rows when re-adding.
+  if (prefetchedTranscript != null && createdVideo) {
+    try {
+      await persistTranscript(prisma, {
+        userId: args.userId,
+        videoId: video.id,
+        segments: prefetchedTranscript.segments,
+        language: prefetchedTranscript.language,
+      });
+    } catch (err) {
+      // Non-fatal — the video row already exists and the reader's
+      // first open will refetch the transcript through the normal
+      // ensureTranscript path.
+      console.error('[addVideoForUser] failed to persist prefetched transcript:', err);
+    }
+  }
 
   return {
     videoId: video.id,

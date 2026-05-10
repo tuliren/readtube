@@ -1,6 +1,10 @@
 import { VideoPlatformType } from '@readtube/database';
 
-import { type PlatformTranscriptResult, VideoPlatform } from '@/lib/platforms/base';
+import {
+  type PlatformTranscriptResult,
+  VideoPlatform,
+  type VideoSnapshotResult,
+} from '@/lib/platforms/base';
 import { fetchBilibiliChannelSnapshot } from '@/lib/platforms/bilibili/channelSnapshot';
 import { fetchBilibiliTranscript } from '@/lib/platforms/bilibili/transcript';
 import {
@@ -9,7 +13,7 @@ import {
   extractBilibiliVideoId,
 } from '@/lib/platforms/bilibili/urls';
 import { fetchBilibiliVideoSnapshot } from '@/lib/platforms/bilibili/videoSnapshot';
-import type { ChannelSnapshot, VideoSnapshot } from '@/lib/platforms/types';
+import type { ChannelSnapshot } from '@/lib/platforms/types';
 
 export class BilibiliPlatform extends VideoPlatform {
   readonly type = VideoPlatformType.BILIBILI;
@@ -50,8 +54,13 @@ export class BilibiliPlatform extends VideoPlatform {
     return extractBilibiliChannelMid(input);
   }
 
-  fetchVideoSnapshot(videoId: string): Promise<VideoSnapshot> {
-    return fetchBilibiliVideoSnapshot(videoId);
+  async fetchVideoSnapshot(videoId: string): Promise<VideoSnapshotResult> {
+    // Bilibili's `view` API already returns everything we need in a
+    // single call, with no realistic rate-limit risk against our
+    // serverless egress. No fallback path — the transcript is fetched
+    // separately by the reader.
+    const snapshot = await fetchBilibiliVideoSnapshot(videoId);
+    return { snapshot, prefetchedTranscript: null };
   }
 
   fetchChannelSnapshot(channelSourceId: string): Promise<ChannelSnapshot> {

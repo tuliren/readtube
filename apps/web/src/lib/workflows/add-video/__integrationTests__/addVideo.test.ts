@@ -1,5 +1,6 @@
 import '@tests/integration-tests';
 
+import type { VideoSnapshotResult } from '@/lib/platforms/base';
 import type { VideoSnapshot } from '@/lib/platforms/youtube/videoSnapshot';
 import { addVideoForUser } from '@/lib/workflows/add-video';
 
@@ -15,7 +16,7 @@ jest.mock('@readtube/database', () => {
   return { ...actual, prisma: prismaProxy };
 });
 
-const mockFetchVideoSnapshot = jest.fn<Promise<VideoSnapshot>, [string]>();
+const mockFetchVideoSnapshot = jest.fn<Promise<VideoSnapshotResult>, [string]>();
 jest.mock('@/lib/platforms/youtube/videoSnapshot', () => ({
   ...jest.requireActual('@/lib/platforms/youtube/videoSnapshot'),
   fetchVideoSnapshot: (id: string) => mockFetchVideoSnapshot(id),
@@ -49,7 +50,13 @@ function fakeSnapshot(overrides: Partial<VideoSnapshot> = {}): VideoSnapshot {
   };
 }
 
+function fakeSnapshotResult(overrides: Partial<VideoSnapshot> = {}): VideoSnapshotResult {
+  return { snapshot: fakeSnapshot(overrides), prefetchedTranscript: null };
+}
+
 async function resetDb() {
+  await global.testPrisma.userRequest.deleteMany();
+  await global.testPrisma.transcript.deleteMany();
   await global.testPrisma.userVideoConsumption.deleteMany();
   await global.testPrisma.playlistVideo.deleteMany();
   await global.testPrisma.playlist.deleteMany();
@@ -98,7 +105,7 @@ describe('addVideoForUser', () => {
   });
 
   it('creates a shadow Channel + Video + StandaloneVideo on first add', async () => {
-    mockFetchVideoSnapshot.mockResolvedValueOnce(fakeSnapshot());
+    mockFetchVideoSnapshot.mockResolvedValueOnce(fakeSnapshotResult());
 
     const res = await addVideoForUser({ userId: TEST_USER_ID, input: 'dQw4w9WgXcQ' });
     expect(res.createdVideo).toBe(true);
@@ -119,7 +126,7 @@ describe('addVideoForUser', () => {
   });
 
   it('marks the newly added video as read via UserVideoConsumption', async () => {
-    mockFetchVideoSnapshot.mockResolvedValueOnce(fakeSnapshot());
+    mockFetchVideoSnapshot.mockResolvedValueOnce(fakeSnapshotResult());
     await addVideoForUser({ userId: TEST_USER_ID, input: 'dQw4w9WgXcQ' });
 
     const consumed = await global.testPrisma.userVideoConsumption.count({
@@ -129,7 +136,7 @@ describe('addVideoForUser', () => {
   });
 
   it('is idempotent on re-add: same StandaloneVideo row, no new Video row', async () => {
-    mockFetchVideoSnapshot.mockResolvedValue(fakeSnapshot());
+    mockFetchVideoSnapshot.mockResolvedValue(fakeSnapshotResult());
 
     const first = await addVideoForUser({ userId: TEST_USER_ID, input: 'dQw4w9WgXcQ' });
     const second = await addVideoForUser({ userId: TEST_USER_ID, input: 'dQw4w9WgXcQ' });
@@ -153,7 +160,7 @@ describe('addVideoForUser', () => {
       },
     });
 
-    mockFetchVideoSnapshot.mockResolvedValueOnce(fakeSnapshot());
+    mockFetchVideoSnapshot.mockResolvedValueOnce(fakeSnapshotResult());
     const res = await addVideoForUser({ userId: TEST_USER_ID, input: 'dQw4w9WgXcQ' });
 
     expect(res.createdChannel).toBe(false);
@@ -182,7 +189,7 @@ describe('addVideoForUser', () => {
       },
     });
 
-    mockFetchVideoSnapshot.mockResolvedValueOnce(fakeSnapshot());
+    mockFetchVideoSnapshot.mockResolvedValueOnce(fakeSnapshotResult());
     const res = await addVideoForUser({ userId: TEST_USER_ID, input: 'dQw4w9WgXcQ' });
 
     // Same Video row — no P2002, no duplicate.
@@ -218,7 +225,7 @@ describe('addVideoForUser', () => {
       },
     });
 
-    mockFetchVideoSnapshot.mockResolvedValueOnce(fakeSnapshot());
+    mockFetchVideoSnapshot.mockResolvedValueOnce(fakeSnapshotResult());
     const res = await addVideoForUser({ userId: TEST_USER_ID, input: 'dQw4w9WgXcQ' });
 
     // No throw; shadow channel created with handle = null.
@@ -282,7 +289,7 @@ describe('addVideoForUser', () => {
 
   describe('nullable published_at', () => {
     it('stores null when the snapshot did not produce a publish date', async () => {
-      mockFetchVideoSnapshot.mockResolvedValueOnce(fakeSnapshot({ publishedAt: null }));
+      mockFetchVideoSnapshot.mockResolvedValueOnce(fakeSnapshotResult({ publishedAt: null }));
       await addVideoForUser({ userId: TEST_USER_ID, input: 'dQw4w9WgXcQ' });
 
       const video = await global.testPrisma.video.findUnique({
@@ -293,11 +300,11 @@ describe('addVideoForUser', () => {
     });
 
     it('backfills published_at on a later re-add when the first scrape returned null', async () => {
-      mockFetchVideoSnapshot.mockResolvedValueOnce(fakeSnapshot({ publishedAt: null }));
+      mockFetchVideoSnapshot.mockResolvedValueOnce(fakeSnapshotResult({ publishedAt: null }));
       await addVideoForUser({ userId: TEST_USER_ID, input: 'dQw4w9WgXcQ' });
 
       const realDate = new Date('2026-02-15T00:00:00Z');
-      mockFetchVideoSnapshot.mockResolvedValueOnce(fakeSnapshot({ publishedAt: realDate }));
+      mockFetchVideoSnapshot.mockResolvedValueOnce(fakeSnapshotResult({ publishedAt: realDate }));
       await addVideoForUser({ userId: TEST_USER_ID, input: 'dQw4w9WgXcQ' });
 
       const video = await global.testPrisma.video.findUnique({
@@ -309,10 +316,10 @@ describe('addVideoForUser', () => {
 
     it('preserves the stored published_at when a later scrape returns null', async () => {
       const realDate = new Date('2026-02-15T00:00:00Z');
-      mockFetchVideoSnapshot.mockResolvedValueOnce(fakeSnapshot({ publishedAt: realDate }));
+      mockFetchVideoSnapshot.mockResolvedValueOnce(fakeSnapshotResult({ publishedAt: realDate }));
       await addVideoForUser({ userId: TEST_USER_ID, input: 'dQw4w9WgXcQ' });
 
-      mockFetchVideoSnapshot.mockResolvedValueOnce(fakeSnapshot({ publishedAt: null }));
+      mockFetchVideoSnapshot.mockResolvedValueOnce(fakeSnapshotResult({ publishedAt: null }));
       await addVideoForUser({ userId: TEST_USER_ID, input: 'dQw4w9WgXcQ' });
 
       const video = await global.testPrisma.video.findUnique({
@@ -320,6 +327,57 @@ describe('addVideoForUser', () => {
         select: { published_at: true },
       });
       expect(video?.published_at).toEqual(realDate);
+    });
+  });
+
+  describe('prefetched transcript', () => {
+    const segments = [
+      { startMs: 0, endMs: 1000, text: 'hello' },
+      { startMs: 1000, endMs: 2000, text: 'world' },
+    ];
+
+    it('persists a Transcript row + GENERATED audit when the snapshot bundles one', async () => {
+      mockFetchVideoSnapshot.mockResolvedValueOnce({
+        snapshot: fakeSnapshot(),
+        prefetchedTranscript: { segments, language: 'en' },
+      });
+
+      const res = await addVideoForUser({ userId: TEST_USER_ID, input: 'dQw4w9WgXcQ' });
+
+      const transcripts = await global.testPrisma.transcript.findMany({
+        where: { video_id: res.videoId },
+        select: { language: true, text: true },
+      });
+      expect(transcripts).toHaveLength(1);
+      expect(transcripts[0]!.language).toBe('en');
+      expect(JSON.parse(transcripts[0]!.text)).toEqual(segments);
+
+      const audit = await global.testPrisma.userRequest.findMany({
+        where: { user_id: TEST_USER_ID, video_id: res.videoId },
+        select: { outcome: true, type: true },
+      });
+      expect(audit).toHaveLength(1);
+      expect(audit[0]!.outcome).toBe('GENERATED');
+      expect(audit[0]!.type).toBe('TRANSCRIPT');
+    });
+
+    it('skips persistence on idempotent re-add even when fallback still returns a transcript', async () => {
+      mockFetchVideoSnapshot.mockResolvedValueOnce({
+        snapshot: fakeSnapshot(),
+        prefetchedTranscript: { segments, language: 'en' },
+      });
+      const first = await addVideoForUser({ userId: TEST_USER_ID, input: 'dQw4w9WgXcQ' });
+
+      mockFetchVideoSnapshot.mockResolvedValueOnce({
+        snapshot: fakeSnapshot(),
+        prefetchedTranscript: { segments, language: 'en' },
+      });
+      await addVideoForUser({ userId: TEST_USER_ID, input: 'dQw4w9WgXcQ' });
+
+      const transcripts = await global.testPrisma.transcript.findMany({
+        where: { video_id: first.videoId },
+      });
+      expect(transcripts).toHaveLength(1);
     });
   });
 });

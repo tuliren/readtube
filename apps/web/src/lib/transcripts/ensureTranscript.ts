@@ -153,25 +153,53 @@ export async function ensureTranscript(
 
   // Success — persist and hand back the cached id so callers like
   // the summary route can attach generated rows to it.
-  const created = await prisma.transcript.create({
-    data: {
-      video_id: video.id,
-      text: JSON.stringify(fetched.segments),
-      language: fetched.language,
-      fetched_at: new Date(),
-    },
-    select: { id: true },
-  });
-  await safeRecord(prisma, {
+  const created = await persistTranscript(prisma, {
     userId,
     videoId: video.id,
-    outcome: UserRequestOutcome.GENERATED,
-    transcriptId: created.id,
+    segments: fetched.segments,
+    language: fetched.language,
   });
   return {
     ok: true,
     transcript: { id: created.id, segments: fetched.segments },
   };
+}
+
+/**
+ * Persist a successfully-fetched transcript and record the
+ * `GENERATED` audit row. Extracted from `ensureTranscript` so the
+ * add-video TranscriptAPI fallback can reuse the exact same shape
+ * when it bundles a transcript with the snapshot — fetching twice
+ * for the same video would double-bill the user.
+ *
+ * Returns the new `Transcript.id` so callers can hand it back to
+ * the client.
+ */
+export async function persistTranscript(
+  prisma: PrismaClient,
+  params: {
+    userId: string;
+    videoId: string;
+    segments: TranscriptSegment[];
+    language: string;
+  }
+): Promise<{ id: string }> {
+  const created = await prisma.transcript.create({
+    data: {
+      video_id: params.videoId,
+      text: JSON.stringify(params.segments),
+      language: params.language,
+      fetched_at: new Date(),
+    },
+    select: { id: true },
+  });
+  await safeRecord(prisma, {
+    userId: params.userId,
+    videoId: params.videoId,
+    outcome: UserRequestOutcome.GENERATED,
+    transcriptId: created.id,
+  });
+  return created;
 }
 
 // Audit-log writes must never break the caller — a stale FK or DB

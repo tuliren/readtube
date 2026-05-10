@@ -10,6 +10,20 @@ export interface PlatformTranscriptResult {
 }
 
 /**
+ * Result of `fetchVideoSnapshot`. Carries the persistable `VideoSnapshot`
+ * plus an optional pre-fetched transcript that the upstream call
+ * happened to bundle in the same response. Currently only the
+ * YouTube TranscriptAPI fallback path produces a non-null
+ * `prefetchedTranscript` — the add-video workflow persists it when
+ * present so the reader doesn't immediately re-spend a credit on
+ * `/api/videos/<id>/transcript`.
+ */
+export interface VideoSnapshotResult {
+  snapshot: VideoSnapshot;
+  prefetchedTranscript: PlatformTranscriptResult | null;
+}
+
+/**
  * Abstract base class for a video platform (YouTube, Bilibili, ...).
  * Concrete subclasses wrap the existing per-platform function modules
  * (`lib/youtube/*`, `lib/bilibili/*`). The subclasses never duplicate
@@ -43,7 +57,7 @@ export abstract class VideoPlatform {
   abstract extractChannelSourceId(input: string): string | null;
 
   /** Fetch full metadata for persisting a Video + owning Channel row. */
-  abstract fetchVideoSnapshot(videoId: string): Promise<VideoSnapshot>;
+  abstract fetchVideoSnapshot(videoId: string): Promise<VideoSnapshotResult>;
 
   /**
    * Fetch channel metadata + recent videos for a given channel
