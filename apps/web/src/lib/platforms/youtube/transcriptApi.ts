@@ -1,16 +1,15 @@
 /**
- * Client for the TranscriptAPI channel/latest endpoint. Requires an
- * API key (the endpoint is marked "Free" in the docs but still needs
- * auth). Returns the 15 most recent videos with thumbnails + view
- * counts, plus basic channel metadata (channelId, title, author).
+ * Client for the TranscriptAPI REST endpoints we use outside the
+ * subtitle/transcript flow:
+ *   - `/youtube/channel/latest` (free): 15 most recent videos for a
+ *     channel, used as a fallback when YouTube RSS is unavailable.
+ *   - `/youtube/channel/resolve` (free): @handle / URL → canonical
+ *     UC channel id, used by the add-video TranscriptAPI fallback.
  *
- * The endpoint does NOT return richer channel metadata (handle,
- * description, subscriber count, verified, logo) — those fields are
- * not available from this RSS-based endpoint. Channel logos would
- * need to come from scraping the YouTube channel page HTML, which is
- * a future enhancement.
+ * Both endpoints require `TRANSCRIPT_API_KEY` even though they are
+ * billed as free.
  *
- * Docs: https://transcriptapi.com/docs/api/#channel-latest-rss
+ * Docs: https://transcriptapi.com/docs/api/
  */
 import { isEmptyString } from '@/lib/string';
 
@@ -52,6 +51,11 @@ interface ChannelLatestResponse {
     published: string;
   };
   results: ChannelLatestVideo[];
+}
+
+interface ChannelResolveResponse {
+  channel_id: string;
+  resolved_from: string;
 }
 
 // ── Exported shapes ────────────────────────────────────────────────
@@ -137,4 +141,36 @@ export async function fetchChannelLatest(
     },
     videos,
   };
+}
+
+/**
+ * Resolve any channel reference (@handle, channel URL, or UC id) to
+ * a canonical UC-prefixed channel id. Used by the add-video
+ * TranscriptAPI fallback path to recover the channel id that's
+ * normally scraped out of the watch page.
+ *
+ * Free endpoint. Requires `TRANSCRIPT_API_KEY`. Throws on HTTP errors
+ * or network failures.
+ */
+export async function resolveChannelId(input: string): Promise<string> {
+  const apiKey = process.env.TRANSCRIPT_API_KEY;
+  if (isEmptyString(apiKey)) {
+    throw new Error('TRANSCRIPT_API_KEY is not set');
+  }
+
+  const url = `${BASE_URL}/youtube/channel/resolve?input=${encodeURIComponent(input)}`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${apiKey}` },
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`TranscriptAPI /channel/resolve ${res.status}: ${body}`);
+  }
+
+  const data: ChannelResolveResponse = await res.json();
+  if (isEmptyString(data.channel_id)) {
+    throw new Error(`TranscriptAPI /channel/resolve returned empty channel_id for ${input}`);
+  }
+  return data.channel_id;
 }

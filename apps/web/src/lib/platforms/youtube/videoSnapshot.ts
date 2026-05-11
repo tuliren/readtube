@@ -1,15 +1,29 @@
 /**
- * Scrape a single YouTube watch page to extract the metadata we need
- * to persist a `Video` row and its owning `Channel`. Used by the
- * "add individual video" flow in `lib/workflows/add-video`.
+ * Fetch the metadata snapshot we need to persist a YouTube `Video`
+ * row + its owning `Channel` row. Used by the "add individual video"
+ * flow in `lib/workflows/add-video`.
  *
- * YouTube's public watch page embeds rich itemprop microdata that
- * includes the channel id, author handle, publish date, duration
- * (ISO-8601), title, description and thumbnail. No API key required.
+ * Strategy is orchestrated here:
+ *   1. `fetchViaWatchPage` — scrape `https://www.youtube.com/watch?v=…`.
+ *      No API key, richest data (description, duration, publish date),
+ *      but YouTube rate-limits Vercel's egress IPs with 429.
+ *   2. `fetchViaTranscriptApi` — call TranscriptAPI's
+ *      `/youtube/transcript?…&send_metadata=true` and
+ *      `/youtube/channel/resolve`. Recovers the only field that's
+ *      hard-required (the UC channel id) plus title/thumbnail/handle.
+ *      Costs 1 transcript credit but bundles the transcript itself,
+ *      which is persisted by the add-video workflow so the reader
+ *      doesn't immediately re-fetch on first open.
+ *
+ * Mirrors the orchestrator-with-named-strategies layout used by
+ * `subtitles/index.ts` / `subtitles/fetchVia*.ts`.
  */
-import type { VideoSnapshot } from '@/lib/platforms/types';
+import type { PlatformTranscriptResult, VideoSnapshotResult } from '@/lib/platforms/base';
+import type { TranscriptSegment, VideoSnapshot } from '@/lib/platforms/types';
+import { isEmptyString } from '@/lib/string';
 
 import { UNKNOWN_CHANNEL_NAME } from './constants';
+import { resolveChannelId } from './transcriptApi';
 import { YOUTUBE_VIDEO_ID_PATTERN, buildThumbnailUrl } from './urls';
 
 const YT_USER_AGENT =
@@ -122,21 +136,36 @@ async function fetchOEmbed(videoId: string): Promise<OEmbedResponse | null> {
 }
 
 /**
- * Fetches video metadata via oEmbed (title, channel name, handle)
- * plus a watch-page scrape for fields oEmbed doesn't expose
- * (channelId, publishedAt, duration). Falls back gracefully when
- * specific scrape regexes miss — the only hard requirement is
- * channelId.
+ * Parse a YouTube channel `@handle` out of an author URL of any of
+ * the shapes oEmbed / TranscriptAPI return:
+ *   - https://www.youtube.com/@mkbhd            → "@mkbhd"
+ *   - https://www.youtube.com/user/marquesbrownlee → null
+ *   - https://www.youtube.com/channel/UC…       → null
  */
-export async function fetchVideoSnapshot(videoId: string): Promise<VideoSnapshot> {
-  // Fire oEmbed and page fetch in parallel — they're independent.
+function extractHandleFromAuthorUrl(authorUrl: string | null | undefined): string | null {
+  if (authorUrl == null) {
+    return null;
+  }
+  const m = authorUrl.match(/\/@([\w.-]+)/);
+  return m != null ? `@${m[1]}` : null;
+}
+
+/**
+ * Strategy 1: scrape the YouTube watch page directly. Returns null
+ * when the watch page is unavailable (429, 5xx, network blip, etc.)
+ * so the orchestrator can fall back to TranscriptAPI. Throws on
+ * structural parse failures (page reachable but missing channel id
+ * or title) — those are not retryable through the fallback either.
+ */
+async function fetchViaWatchPage(videoId: string): Promise<VideoSnapshot | null> {
   const watchUrl = `https://www.youtube.com/watch?v=${videoId}`;
   const [oembed, response] = await Promise.all([
     fetchOEmbed(videoId),
     fetch(watchUrl, { headers: { 'User-Agent': YT_USER_AGENT }, cache: 'no-store' }),
   ]);
   if (!response.ok) {
-    throw new Error(`Failed to fetch video page: ${response.status}`);
+    console.warn(`[videoSnapshot] watch page returned ${response.status} for ${videoId}`);
+    return null;
   }
   const html = await response.text();
 
@@ -193,13 +222,7 @@ export async function fetchVideoSnapshot(videoId: string): Promise<VideoSnapshot
     oembed?.author_name ?? firstMatch(html, /"author":"([^"]+)"/) ?? UNKNOWN_CHANNEL_NAME;
 
   const channelPageUrl = oembed?.author_url ?? firstMatch(html, /"ownerProfileUrl":"([^"]+)"/);
-  let handle: string | null = null;
-  if (channelPageUrl != null) {
-    const m = channelPageUrl.match(/\/@([\w.-]+)/);
-    if (m != null) {
-      handle = `@${m[1]}`;
-    }
-  }
+  const handle = extractHandleFromAuthorUrl(channelPageUrl);
 
   return {
     videoId,
@@ -215,4 +238,109 @@ export async function fetchVideoSnapshot(videoId: string): Promise<VideoSnapshot
       logoUrl: null,
     },
   };
+}
+
+interface TranscriptApiVideoResponse {
+  video_id: string;
+  language: string;
+  transcript: Array<{ text: string; start: number; duration: number }>;
+  metadata?: {
+    title?: string;
+    author_name?: string;
+    author_url?: string;
+    thumbnail_url?: string;
+  };
+}
+
+/**
+ * Strategy 2: call TranscriptAPI's `/youtube/transcript` endpoint
+ * with `send_metadata=true` to recover both the bare video metadata
+ * (title, channel name, channel URL, thumbnail) and the transcript
+ * itself in a single 1-credit request, then resolve the UC channel
+ * id via the free `/channel/resolve` endpoint.
+ *
+ * Throws on any upstream failure — there's no further fallback below
+ * this in `fetchVideoSnapshot`. The caller surfaces the failure as
+ * `AddVideoError(FETCH_FAILED)`.
+ *
+ * Returns the transcript alongside the snapshot so the add-video
+ * workflow can persist it (we've already paid for the credit;
+ * fetching it again on first reader open would double-bill).
+ */
+async function fetchViaTranscriptApi(
+  videoId: string
+): Promise<{ snapshot: VideoSnapshot; prefetchedTranscript: PlatformTranscriptResult }> {
+  const apiKey = process.env.TRANSCRIPT_API_KEY;
+  if (isEmptyString(apiKey)) {
+    throw new Error('TRANSCRIPT_API_KEY is not set');
+  }
+
+  const url = `https://transcriptapi.com/api/v2/youtube/transcript?video_url=${videoId}&send_metadata=true`;
+  console.info(`[videoSnapshot] Falling back to TranscriptAPI for ${videoId}`);
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${apiKey}` },
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`TranscriptAPI /youtube/transcript ${res.status}: ${body}`);
+  }
+
+  const data: TranscriptApiVideoResponse = await res.json();
+  const metadata = data.metadata;
+  if (metadata == null || isEmptyString(metadata.title) || isEmptyString(metadata.author_url)) {
+    throw new Error('TranscriptAPI response is missing required metadata block');
+  }
+
+  // The transcript endpoint doesn't return the UC channel id; pull
+  // it from the free `/channel/resolve` endpoint using the author
+  // URL. `/channel/resolve` accepts @handle, full channel URL, or a
+  // bare UC id, so passing `author_url` directly works for both
+  // modern (/@handle) and legacy (/user/<name>, /channel/UC…) URLs.
+  const channelId = await resolveChannelId(metadata.author_url);
+
+  const segments: TranscriptSegment[] = data.transcript.map((seg) => ({
+    startMs: Math.round(seg.start * 1000),
+    endMs: Math.round((seg.start + seg.duration) * 1000),
+    text: seg.text,
+  }));
+
+  const snapshot: VideoSnapshot = {
+    videoId,
+    title: metadata.title,
+    // Transcript endpoint doesn't expose description / duration /
+    // publish date — leave them empty/null. Downstream upserts
+    // tolerate all three and a later channel-refresh backfills.
+    description: '',
+    thumbnailUrl: metadata.thumbnail_url ?? buildThumbnailUrl(videoId),
+    publishedAt: null,
+    durationSeconds: null,
+    channel: {
+      sourceId: channelId,
+      name: metadata.author_name ?? UNKNOWN_CHANNEL_NAME,
+      handle: extractHandleFromAuthorUrl(metadata.author_url),
+      logoUrl: null,
+    },
+  };
+
+  return {
+    snapshot,
+    prefetchedTranscript: { segments, language: data.language },
+  };
+}
+
+/**
+ * Fetch a YouTube video's metadata for the add-video flow. Tries
+ * the watch-page scrape first; falls back to TranscriptAPI when the
+ * watch page is unreachable (e.g. YouTube 429-ing the Vercel egress
+ * IP pool). The fallback also returns the transcript, which the
+ * caller persists to avoid an immediate re-fetch on first reader
+ * open.
+ */
+export async function fetchVideoSnapshot(videoId: string): Promise<VideoSnapshotResult> {
+  const watchPageSnapshot = await fetchViaWatchPage(videoId);
+  if (watchPageSnapshot != null) {
+    return { snapshot: watchPageSnapshot, prefetchedTranscript: null };
+  }
+  return fetchViaTranscriptApi(videoId);
 }

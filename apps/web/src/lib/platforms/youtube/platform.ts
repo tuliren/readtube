@@ -1,7 +1,11 @@
 import { VideoPlatformType } from '@readtube/database';
 
-import { type PlatformTranscriptResult, VideoPlatform } from '@/lib/platforms/base';
-import type { ChannelSnapshot, VideoSnapshot } from '@/lib/platforms/types';
+import {
+  type PlatformTranscriptResult,
+  VideoPlatform,
+  type VideoSnapshotResult,
+} from '@/lib/platforms/base';
+import type { ChannelSnapshot } from '@/lib/platforms/types';
 import { fetchChannelSnapshot } from '@/lib/platforms/youtube/channelSnapshot';
 import { fetchSubtitleViaTranscriptApi } from '@/lib/platforms/youtube/subtitles/fetchViaTranscriptApi';
 import {
@@ -50,7 +54,7 @@ export class YouTubePlatform extends VideoPlatform {
     return extractChannelId(input);
   }
 
-  fetchVideoSnapshot(videoId: string): Promise<VideoSnapshot> {
+  fetchVideoSnapshot(videoId: string): Promise<VideoSnapshotResult> {
     return fetchVideoSnapshot(videoId);
   }
 
