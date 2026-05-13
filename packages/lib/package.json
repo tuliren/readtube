@@ -16,16 +16,16 @@
     "@readtube/eslint-config": "*",
     "@readtube/jest-presets": "*",
     "@readtube/typescript-config": "*",
-    "@turbo/gen": "^1.12.4",
-    "@types/eslint": "^8.56.5",
-    "@types/jest": "^29.5.14",
-    "@types/node": "^20.11.24",
-    "@types/react": "^18.2.61",
-    "@types/react-dom": "^18.2.19",
-    "eslint": "^9.0.0",
-    "jest": "^29.7.0",
-    "ts-jest": "^29.3.1",
-    "typescript": "^5.3.3"
+    "@turbo/gen": "^2.9.12",
+    "@types/eslint": "^9.6.1",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^22.19.19",
+    "@types/react": "^18.3.28",
+    "@types/react-dom": "^18.3.7",
+    "eslint": "^9.39.4",
+    "jest": "^30.4.2",
+    "ts-jest": "^29.4.9",
+    "typescript": "^5.9.3"
   },
   "peerDependencies": {
     "react": "*"

@@ -7,9 +7,9 @@
     "node/jest-preset.js"
   ],
   "dependencies": {
-    "jest": "^29.7.0",
-    "ts-jest": "^29.1.1",
-    "typescript": "^5.5.4"
+    "jest": "^30.4.2",
+    "ts-jest": "^29.4.9",
+    "typescript": "^5.9.3"
   },
   "packageManager": "yarn@4.9.1"
 }

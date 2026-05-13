@@ -1,5 +1,5 @@
 import { Meta, StoryObj } from '@storybook/nextjs';
-import { expect, within } from '@storybook/test';
+import { expect, within } from 'storybook/test';
 
 import ArticleMarkdown from '@/components/reader/ArticleMarkdown';
 

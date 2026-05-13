@@ -36,62 +36,60 @@ export default async function OpengraphImage() {
   ]);
 
   return new ImageResponse(
-    (
+    <div
+      style={{
+        height: '100%',
+        width: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        padding: '80px',
+        background: 'white',
+        backgroundImage:
+          'linear-gradient(148deg, rgba(81, 90, 218, 0.08) 12%, rgba(118, 171, 223, 0.05) 90%)',
+        fontFamily: 'Inter, sans-serif',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center' }}>
+        <Logo
+          weight="font-bold"
+          style={{ fontSize: '70px', fontWeight: 700, letterSpacing: '-0.02em' }}
+        />
+      </div>
+
       <div
         style={{
-          height: '100%',
-          width: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          padding: '80px',
-          background: 'white',
-          backgroundImage:
-            'linear-gradient(148deg, rgba(81, 90, 218, 0.08) 12%, rgba(118, 171, 223, 0.05) 90%)',
-          fontFamily: 'Inter, sans-serif',
+          fontSize: '72px',
+          fontWeight: 700,
+          lineHeight: 1.1,
+          color: '#334155',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center' }}>
-          <Logo
-            weight="font-bold"
-            style={{ fontSize: '70px', fontWeight: 700, letterSpacing: '-0.02em' }}
-          />
-        </div>
-
-        <div
-          style={{
-            fontSize: '72px',
-            fontWeight: 700,
-            lineHeight: 1.1,
-            color: '#334155',
-          }}
-        >
-          {HEADLINE}
-        </div>
-
-        <div
-          style={{
-            fontSize: '32px',
-            lineHeight: 1.3,
-            color: '#343d46',
-          }}
-        >
-          {SUBTITLE}
-        </div>
-
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            fontSize: '24px',
-            color: '#64748b',
-          }}
-        >
-          <div>{FULL_WEBSITE_URL}</div>
-        </div>
+        {HEADLINE}
       </div>
-    ),
+
+      <div
+        style={{
+          fontSize: '32px',
+          lineHeight: 1.3,
+          color: '#343d46',
+        }}
+      >
+        {SUBTITLE}
+      </div>
+
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          fontSize: '24px',
+          color: '#64748b',
+        }}
+      >
+        <div>{FULL_WEBSITE_URL}</div>
+      </div>
+    </div>,
     {
       ...size,
       fonts: [
