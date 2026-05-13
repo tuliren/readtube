@@ -1,6 +1,5 @@
 import { Button } from '@/components/Button';
 import PreviewDropdown, { type PreviewItem } from '@/components/PreviewDropdown';
-import ProductHuntButton from '@/components/ProductHuntButton';
 import RotatingWord from '@/components/RotatingWord';
 import { DESCRIPTION } from '@/constants';
 
@@ -40,7 +39,7 @@ export default function Hero() {
           Get Started
         </Button>
         <PreviewDropdown items={PREVIEW_VIDEOS} />
-        <ProductHuntButton height={40} />
+        {/*<ProductHuntButton height={40} />*/}
       </div>
     </section>
   );

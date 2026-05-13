@@ -9,7 +9,6 @@ import { type ReactNode, useState } from 'react';
 
 import { GithubLink } from '@/components/GithubLink';
 import { Logo } from '@/components/Logo';
-import ProductHuntButton from '@/components/ProductHuntButton';
 import ThemeSelector from '@/components/settings/ThemeSelector';
 import { TITLE } from '@/constants';
 
@@ -172,7 +171,7 @@ export default function Header({ onHomePage, compact = false, centerSlot }: Prop
                   className={`flex items-center gap-2 ${mobileLinkClass}`}
                   label="GitHub"
                 />
-                <ProductHuntButton height={35} />
+                {/*<ProductHuntButton height={35} />*/}
               </div>
             </div>
           </div>
