@@ -32,7 +32,11 @@ const SHORTS_DURATION_THRESHOLD = 60;
  *    missing from RSS are appended as `isScraped: true` entries —
  *    persisted on create, skipped on update.
  * 2. TranscriptAPI `/channel/latest` — same data shape as RSS
- *    (including `/shorts/` links). Used when RSS returns 404.
+ *    (including `/shorts/` links). Used when RSS returns 404, **and**
+ *    also when both scrape and RSS succeed but return zero videos
+ *    (observed when YouTube soft-blocks our hosting IP by returning
+ *    200 with empty channel pages and empty feeds — TranscriptAPI
+ *    routes via different infrastructure).
  * 3. Scrape-only — truncated descriptions, approximate publish times,
  *    Shorts filtered by duration (≤60s) instead of link pattern.
  *
@@ -49,6 +53,7 @@ export async function fetchChannelSnapshot(args: {
 
   let scraped: ScrapedChannel | null = null;
   let feed: RssChannel | null = null;
+  let triedTranscriptApi = false;
 
   if (args.rssUrl != null) {
     const [scrapeResult, rssResult] = await Promise.allSettled([
@@ -67,6 +72,7 @@ export async function fetchChannelSnapshot(args: {
     } else {
       console.warn('[channelSnapshot] RSS failed:', rssResult.reason);
       feed = await tryTranscriptApiFallback(scraped, args.channelPageUrl);
+      triedTranscriptApi = true;
     }
   } else {
     // Handle-based input — can't build RSS URL until we know the UC id.
@@ -76,6 +82,24 @@ export async function fetchChannelSnapshot(args: {
     } catch (err) {
       console.warn('[channelSnapshot] RSS failed:', err);
       feed = await tryTranscriptApiFallback(scraped, args.channelPageUrl);
+      triedTranscriptApi = true;
+    }
+  }
+
+  // YouTube has been observed to soft-block requests from certain
+  // hosting IPs (e.g. Vercel) by returning 200 with empty channel
+  // pages *and* empty RSS feeds. If neither source produced a video,
+  // try TranscriptAPI before giving up — it routes via different
+  // infrastructure.
+  if (
+    !triedTranscriptApi &&
+    (feed?.videos.length ?? 0) === 0 &&
+    (scraped?.videos.length ?? 0) === 0
+  ) {
+    console.warn('[channelSnapshot] scrape + RSS returned zero videos — trying TranscriptAPI');
+    const fallback = await tryTranscriptApiFallback(scraped, args.channelPageUrl);
+    if (fallback != null && fallback.videos.length > 0) {
+      feed = fallback;
     }
   }
 
