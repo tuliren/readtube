@@ -53,6 +53,10 @@ export function extractChannelId(input: string): string | null {
 
 /**
  * Returns the handle (without @) if the input is a /@handle URL, else null.
+ *
+ * Handles non-ASCII characters: YouTube allows Unicode handles (Cyrillic,
+ * CJK, etc.), and the URL constructor percent-encodes them in `pathname`,
+ * so we decode before applying a Unicode-aware regex.
  */
 export function extractHandle(input: string): string | null {
   if (!input || typeof input !== 'string') {
@@ -63,7 +67,19 @@ export function extractHandle(input: string): string | null {
     if (!url.hostname.includes('youtube.com')) {
       return null;
     }
-    const match = url.pathname.match(/^\/@([\w.-]+)/);
+    let pathname: string;
+    try {
+      pathname = decodeURIComponent(url.pathname);
+    } catch {
+      // Malformed percent-encoding — leave as-is; the regex below
+      // won't match `%` so we'll fall through to returning null.
+      pathname = url.pathname;
+    }
+    // Constructed via `new RegExp` because the project's TS target
+    // (es5) rejects the `u` flag on regex literals; the flag works
+    // fine at runtime on every supported Node/browser version.
+    const handleRegex = new RegExp('^/@([\\p{L}\\p{N}._-]+)', 'u');
+    const match = pathname.match(handleRegex);
     return match ? match[1] : null;
   } catch {
     return null;
