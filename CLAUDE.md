@@ -21,3 +21,16 @@ Turn YouTube subscriptions into a personal substack. Consume videos efficiently 
 - After making a change, thinking about updating these docs, if applicable:
   - `CLAUDE.md` (this file)
   - `README.md` for different modules
+
+## Channel snapshot fetching
+
+`fetchChannelSnapshot` (`apps/web/src/lib/platforms/youtube/channelSnapshot.ts`) combines three sources. Scrape always contributes channel handle, logo, and per-video duration. The video list comes from RSS (primary), with TranscriptAPI `/channel/latest` as the RSS-failure fallback, and a scrape-only build as the last resort.
+
+| Trigger | Scrape | RSS | TranscriptAPI |
+|---|---|---|---|
+| Add channel, cache hit | — | — | — |
+| Add channel, `/channel/UC…` URL or bare UC ID | always (parallel) | primary | RSS-failure fallback |
+| Add channel, `@handle` URL | always, **first** (resolves UC ID) | after scrape resolves UC | RSS-failure fallback |
+| Refresh channel | always (parallel) | primary | RSS-failure fallback |
+
+When RSS + TranscriptAPI both fail, the scrape-only build marks every video `isScraped: true` so a later healthy RSS pass doesn't get clobbered (create-on-insert, skip-on-update).
