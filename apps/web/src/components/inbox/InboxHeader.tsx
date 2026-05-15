@@ -12,6 +12,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { MANUAL_REFRESH_DAYS, canManuallyRefresh } from '@/lib/channels/staleness';
 import type { VideoPlatform } from '@/lib/types';
 import { buildChannelLink } from '@/lib/urls/watchUrl';
+import { isProduction } from '@/lib/vercelEnv';
 
 import ChannelAvatar from './ChannelAvatar';
 import Pagination from './Pagination';
@@ -71,7 +72,9 @@ export default function InboxHeader({
   const [refreshing, setRefreshing] = useState(false);
   const showRefresh = channelId != null;
   const checkedAtDate = channelCheckedAt != null ? new Date(channelCheckedAt) : null;
-  const refreshAllowed = canManuallyRefresh(checkedAtDate);
+  // Cooldown only applies in production. Preview + local dev have no
+  // limit so we can iterate without waiting a day between refreshes.
+  const refreshAllowed = !isProduction() || canManuallyRefresh(checkedAtDate);
   const refreshDisabled = refreshing || !refreshAllowed;
   const refreshTooltip = refreshAllowed
     ? 'Pull latest videos + metadata for this channel'
