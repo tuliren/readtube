@@ -90,5 +90,98 @@ describe('scrapeChannel', () => {
     const scraped = await scrapeChannel('https://www.youtube.com/@test');
 
     expect(scraped.videos.map((v) => v.videoId)).toEqual(['aired_vid']);
+    // The id is surfaced separately so `mergeSnapshot` can also drop
+    // the matching RSS entry — RSS exposes the upload time, not the
+    // air time, so its own `published > now` filter misses
+    // pre-uploaded premieres.
+    expect(scraped.upcomingVideoIds).toEqual(['upcoming_stream']);
+  });
+
+  it('detects scheduled premieres in the lockupViewModel shape', async () => {
+    // Newer rollouts of the /videos tab wrap entries in
+    // `lockupViewModel` rather than `videoRenderer`. Upcoming videos
+    // there carry no `upcomingEventData` block — the only signal is
+    // a "Premieres …" / "waiting" string inside the metadata rows.
+    function lockupItem(opts: {
+      contentId: string;
+      metadataRowText: string;
+    }): Record<string, unknown> {
+      return {
+        richItemRenderer: {
+          content: {
+            lockupViewModel: {
+              contentId: opts.contentId,
+              metadata: {
+                lockupMetadataViewModel: {
+                  metadata: {
+                    contentMetadataViewModel: {
+                      metadataRows: [
+                        {
+                          metadataParts: [{ text: { content: opts.metadataRowText } }],
+                        },
+                      ],
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      };
+    }
+    const data = {
+      contents: {
+        twoColumnBrowseResultsRenderer: {
+          tabs: [
+            {
+              tabRenderer: {
+                title: 'Videos',
+                selected: true,
+                content: {
+                  richGridRenderer: {
+                    contents: [
+                      lockupItem({
+                        contentId: 'premiere_id',
+                        metadataRowText: 'Premieres 5/15/26, 3:45 AM',
+                      }),
+                      lockupItem({
+                        contentId: 'aired_lockup_id',
+                        metadataRowText: '2.2K views • 20 hours ago',
+                      }),
+                    ],
+                  },
+                },
+              },
+            },
+          ],
+        },
+      },
+    };
+    const html = [
+      '<html><head>',
+      '<link rel="alternate" type="application/rss+xml" href="https://www.youtube.com/feeds/videos.xml?channel_id=UCabcdefghijklmnopqrstuv">',
+      '<meta property="og:title" content="Test Channel">',
+      '<meta property="og:image" content="https://logo.example/x.jpg">',
+      '</head><body>',
+      `<script>var ytInitialData = ${JSON.stringify(data)};</script>`,
+      '</body></html>',
+    ].join('');
+    globalThis.fetch = jest.fn(
+      async () =>
+        ({
+          ok: true,
+          text: async () => html,
+        }) as Response
+    );
+
+    const scraped = await scrapeChannel('https://www.youtube.com/@test');
+
+    // The lockup shape doesn't carry the duration/title fields the
+    // legacy shape did, so we don't synthesize aired-video rows from
+    // it — the RSS feed remains the source of truth for aired
+    // videos. The only thing we extract is the upcoming signal so
+    // mergeSnapshot can drop it from the RSS-derived list.
+    expect(scraped.videos).toEqual([]);
+    expect(scraped.upcomingVideoIds).toEqual(['premiere_id']);
   });
 });

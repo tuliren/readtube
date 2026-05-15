@@ -194,6 +194,12 @@ export function buildSnapshotFromScrape(scraped: ScrapedChannel): ChannelSnapsho
  */
 export function mergeSnapshot(feed: RssChannel, scraped: ScrapedChannel | null): ChannelSnapshot {
   const durationByVideoId = new Map<string, number>();
+  // Scheduled premieres / upcoming livestreams the channel-page
+  // scrape identified. RSS reports the upload time, not the air time,
+  // so RSS's own `published > now` filter misses pre-uploaded
+  // premieres — drop them here using the scrape's authoritative
+  // `upcomingEventData` signal.
+  const upcomingVideoIds = new Set<string>(scraped?.upcomingVideoIds ?? []);
   if (scraped != null) {
     for (const v of scraped.videos) {
       if (v.durationSeconds != null) {
@@ -203,7 +209,7 @@ export function mergeSnapshot(feed: RssChannel, scraped: ScrapedChannel | null):
   }
 
   const videos: SnapshotVideo[] = feed.videos
-    .filter((v) => !isYouTubeShort(v))
+    .filter((v) => !isYouTubeShort(v) && !upcomingVideoIds.has(v.videoId))
     .map((v) => ({
       videoId: v.videoId,
       title: v.title,

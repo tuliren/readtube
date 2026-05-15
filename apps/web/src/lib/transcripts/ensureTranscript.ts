@@ -16,10 +16,19 @@ export type EnsureTranscriptResult =
   //   - 'not-found'      → 404 (the user doesn't own this video)
   //   - 'unavailable'    → 410 Gone (sticky: video has no captions)
   //   - 'transient-error' → 503 (network / 429 / 5xx; safe to retry)
+  //   - 'scheduled'      → 425 Too Early (video is a premiere /
+  //     scheduled livestream that hasn't aired yet — captions don't
+  //     exist *yet* but should once it airs, so we deliberately do
+  //     NOT flip the sticky unavailable flag and the client surfaces
+  //     a toast warning instead of the permanent-unavailable state)
   // The transient case must NOT be conflated with unavailable on the
   // client — broadcasting transcriptStatus='unavailable' for a
   // transient blip would lock the entire reader for the session.
-  | { ok: false; reason: 'unavailable' | 'transient-error' | 'not-found' };
+  | {
+      ok: false;
+      reason: 'unavailable' | 'transient-error' | 'not-found' | 'scheduled';
+      scheduledStartTime?: Date | null;
+    };
 
 /**
  * Make sure a transcript exists for the given video, fetching it from
@@ -71,6 +80,7 @@ export async function ensureTranscript(
       source_id: true,
       source_type: true,
       transcript_unavailable: true,
+      channel: { select: { source_id: true } },
       transcripts: {
         orderBy: { created_at: 'desc' },
         take: 1,
@@ -137,6 +147,32 @@ export async function ensureTranscript(
       // user for a retry-able failure would be unfair, and a successful
       // retry would write its own GENERATED row.
       return { ok: false, reason: 'transient-error' };
+    }
+    // Before flipping the sticky transcript-unavailable bit, probe
+    // whether the video is actually a scheduled premiere / upcoming
+    // livestream that hasn't aired yet. Sticky-flagging a future-
+    // dated video would permanently lock the reader out of the
+    // transcript that will exist after it airs.
+    try {
+      const platform = getPlatformByType(video.source_type);
+      const scheduled = await platform.isScheduledVideo(video.source_id, {
+        channelSourceId: video.channel?.source_id ?? null,
+      });
+      if (scheduled.isScheduled) {
+        console.info(
+          `[ensureTranscript] Video ${video.id} (${video.source_id}) is scheduled; skipping sticky-unavailable flag.`
+        );
+        return {
+          ok: false,
+          reason: 'scheduled',
+          scheduledStartTime: scheduled.scheduledStartTime,
+        };
+      }
+    } catch (scheduledErr) {
+      // The scheduled-video probe is best-effort. A failure here
+      // shouldn't change behavior — fall through to the existing
+      // permanent-unavailable flow.
+      console.error('[ensureTranscript] scheduled-video probe failed:', scheduledErr);
     }
     await prisma.video.update({
       where: { id: video.id },

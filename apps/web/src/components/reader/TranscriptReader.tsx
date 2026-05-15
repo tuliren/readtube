@@ -1,11 +1,13 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 
 import { countWords } from '@/lib/format/wordCount';
 import type { TranscriptSegment } from '@/lib/platforms/types';
 import { formatTimestamp, groupTranscriptSegments } from '@/lib/platforms/youtube/transcript';
 import { buildTranscriptToc, transcriptParagraphId } from '@/lib/reader/buildTranscriptToc';
+import { buildScheduledMessage, parseScheduledResponse } from '@/lib/reader/scheduledVideoToast';
 import type { VideoPlatform } from '@/lib/types';
 import { buildWatchLink } from '@/lib/urls/watchUrl';
 
@@ -138,6 +140,14 @@ export default function TranscriptReader({
           setLocalStatus('notCached');
           return;
         }
+        // GET only returns 425 when the POST handler routes through
+        // here; the cache-only GET branch can't surface scheduled
+        // state. Handled defensively for forward compatibility.
+        if (res.status === 425) {
+          // Don't change transcriptStatus — scheduled is not sticky.
+          setLocalStatus('notCached');
+          return;
+        }
         if (res.status === 404) {
           // Genuine cache miss — leave the status alone so the user
           // can click Fetch (or kick off a Summary/Article generate
@@ -180,6 +190,18 @@ export default function TranscriptReader({
       const res = await fetch(`/api/videos/${videoDbId}/transcript`, { method: 'POST' });
       if (res.status === 410) {
         onTranscriptStatusChange('unavailable');
+        setLocalStatus('notCached');
+        return;
+      }
+      // 425 Too Early — the video is a scheduled premiere that
+      // hasn't aired yet. Toast a warning so the user knows why
+      // there's no transcript yet, and leave transcriptStatus
+      // alone so the next click after the video airs can succeed
+      // without the reader being locked into the sticky-
+      // unavailable UI.
+      if (res.status === 425) {
+        const body = await parseScheduledResponse(res);
+        toast.warning(buildScheduledMessage(body?.scheduledStartTime ?? null));
         setLocalStatus('notCached');
         return;
       }

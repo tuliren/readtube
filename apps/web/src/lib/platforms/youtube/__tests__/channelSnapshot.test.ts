@@ -27,6 +27,7 @@ function scrapedChannel(overrides: Partial<ScrapedChannel> = {}): ScrapedChannel
     logoUrl: null,
     handle: null,
     videos: [],
+    upcomingVideoIds: [],
     ...overrides,
   };
 }
@@ -204,6 +205,33 @@ describe('mergeSnapshot', () => {
     expect(snap.videos[0]!.isScraped).toBeUndefined();
     // Duration still merged from scrape.
     expect(snap.videos[0]!.durationSeconds).toBe(500);
+  });
+
+  it('drops RSS entries the scrape flagged as upcoming premieres', () => {
+    // RSS exposes a premiere's *upload* time in `published`, not its
+    // scheduled air time — so its own `published > now` filter
+    // misses pre-uploaded premieres entirely. The scrape's
+    // `upcomingEventData` is the only reliable ingest-time signal.
+    const feed = rssFeed([
+      rssVideo({
+        videoId: 'upcoming-1',
+        title: 'Premiere title',
+        publishedAt: new Date('2026-05-14T19:50:36Z'),
+      }),
+      rssVideo({
+        videoId: 'live-1',
+        title: 'Live one',
+        publishedAt: new Date('2026-04-01T00:00:00Z'),
+      }),
+    ]);
+    const scraped = scrapedChannel({
+      videos: [scrapedVideo({ videoId: 'live-1', durationSeconds: 500 })],
+      upcomingVideoIds: ['upcoming-1'],
+    });
+
+    const snap = mergeSnapshot(feed, scraped);
+
+    expect(snap.videos.map((v) => v.videoId)).toEqual(['live-1']);
   });
 });
 
