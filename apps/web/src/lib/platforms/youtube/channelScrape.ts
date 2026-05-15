@@ -30,6 +30,14 @@ export interface ScrapedChannel {
    *  when YouTube returns a `/channel/UCxxx` canonical instead). */
   handle: string | null;
   videos: ScrapedVideo[];
+  /** Video ids the channel-page scrape identified as scheduled
+   *  premieres / upcoming livestreams (entries carrying
+   *  `upcomingEventData`). These are intentionally absent from
+   *  `videos` — surfaced separately so `mergeSnapshot` can drop them
+   *  from the RSS-derived list as well. RSS reports the upload time
+   *  rather than the air time, so the channel page is the only
+   *  reliable source at ingest. */
+  upcomingVideoIds: string[];
 }
 
 /**
@@ -179,18 +187,18 @@ export async function scrapeChannel(channelUrl: string): Promise<ScrapedChannel>
   const dataMatch = html.match(/var ytInitialData = ({[\s\S]*?});<\/script>/);
   if (!dataMatch) {
     // Return channel info without videos if ytInitialData is missing
-    return { channelId, name, logoUrl, handle, videos: [] };
+    return { channelId, name, logoUrl, handle, videos: [], upcomingVideoIds: [] };
   }
 
   let data: Record<string, unknown>;
   try {
     data = JSON.parse(dataMatch[1]) as Record<string, unknown>;
   } catch {
-    return { channelId, name, logoUrl, handle, videos: [] };
+    return { channelId, name, logoUrl, handle, videos: [], upcomingVideoIds: [] };
   }
 
-  const videos = extractVideosFromInitialData(data);
-  return { channelId, name, logoUrl, handle, videos };
+  const { videos, upcomingVideoIds } = extractVideosFromInitialData(data);
+  return { channelId, name, logoUrl, handle, videos, upcomingVideoIds };
 }
 
 type YtData = Record<string, unknown>;
@@ -201,12 +209,54 @@ type YtData = Record<string, unknown>;
  * the channel's uploads in chronological (newest-first) order, each wrapped
  * as `richItemRenderer.content.videoRenderer`.
  */
-function extractVideosFromInitialData(data: YtData): ScrapedVideo[] {
+/**
+ * Detect whether a `lockupViewModel` entry represents a scheduled
+ * premiere / upcoming livestream. The lockup shape doesn't expose
+ * an `upcomingEventData` field — instead the metadata-row text
+ * carries strings like "Premieres 5/15/26, 3:45 AM" or "N waiting".
+ * Match those literally; anything aired carries a view count + a
+ * relative date instead. Exported via the snapshot fixture path
+ * only — not part of the public module surface.
+ */
+function isLockupUpcoming(lockup: YtData): boolean {
+  const metadata = (lockup.metadata as YtData)?.lockupMetadataViewModel as YtData | undefined;
+  const rows = ((metadata?.metadata as YtData)?.contentMetadataViewModel as YtData)
+    ?.metadataRows as YtData[] | undefined;
+  if (rows == null) {
+    return false;
+  }
+  for (const row of rows) {
+    const parts = (row as YtData).metadataParts as YtData[] | undefined;
+    if (parts == null) {
+      continue;
+    }
+    for (const part of parts) {
+      const content = ((part as YtData).text as YtData)?.content as string | undefined;
+      if (content == null) {
+        continue;
+      }
+      // YouTube's localized strings for upcoming premieres / streams
+      // all carry one of these stems on the en-US rollout we scrape
+      // with. A more language-agnostic detection would require
+      // walking thumbnail overlay icons, but for now we always
+      // scrape the en-US channel page.
+      if (/Premieres?\b/i.test(content) || /\bwaiting\b/i.test(content)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function extractVideosFromInitialData(data: YtData): {
+  videos: ScrapedVideo[];
+  upcomingVideoIds: string[];
+} {
   const tabs = ((data.contents as YtData)?.twoColumnBrowseResultsRenderer as YtData)?.tabs as
     | YtData[]
     | undefined;
   if (!tabs) {
-    return [];
+    return { videos: [], upcomingVideoIds: [] };
   }
 
   // Find the tab YouTube marked as selected. Since we fetched /videos, this
@@ -222,7 +272,7 @@ function extractVideosFromInitialData(data: YtData): ScrapedVideo[] {
     return renderer.title === 'Videos';
   });
   if (selectedTab == null) {
-    return [];
+    return { videos: [], upcomingVideoIds: [] };
   }
 
   const richGridContents = (((selectedTab as YtData).tabRenderer as YtData)?.content as YtData)
@@ -230,24 +280,46 @@ function extractVideosFromInitialData(data: YtData): ScrapedVideo[] {
   const items = (richGridContents?.contents as YtData[]) ?? [];
 
   const videos: ScrapedVideo[] = [];
+  const upcomingVideoIds: string[] = [];
   for (const item of items) {
     const richItem = (item as YtData).richItemRenderer as YtData | undefined;
-    const v = (richItem?.content as YtData)?.videoRenderer as YtData | undefined;
+    const content = richItem?.content as YtData | undefined;
+
+    // YouTube ships two distinct shapes for entries in the /videos
+    // tab depending on rollout: the legacy `videoRenderer` and the
+    // newer `lockupViewModel`. Handle the lockup shape first so we
+    // can detect "Premieres …"-style upcoming markers it carries in
+    // its metadata text rows — that's the only place a scheduled
+    // premiere shows up on this rollout.
+    const lockup = content?.lockupViewModel as YtData | undefined;
+    if (lockup != null) {
+      const lockupId = lockup.contentId as string | undefined;
+      if (lockupId != null && isLockupUpcoming(lockup)) {
+        upcomingVideoIds.push(lockupId);
+      }
+      continue;
+    }
+
+    const v = content?.videoRenderer as YtData | undefined;
     if (v?.videoId == null) {
       // Skip continuationItemRenderer, ad slots, etc.
       continue;
     }
+
+    const videoId = v.videoId as string;
 
     // Scheduled livestreams and unaired premieres carry an
     // `upcomingEventData` block with a future `startTime`. Pulling
     // them in would only burn a transcript fetch that's guaranteed
     // to 404 — and worse, the sticky `transcript_unavailable` flag
     // would then block re-fetching after the stream actually airs.
+    // Record the id so `mergeSnapshot` can also drop the matching
+    // RSS entry — RSS reports the upload time, not the air time, so
+    // its own "published > now" filter misses pre-uploaded premieres.
     if (v.upcomingEventData != null) {
+      upcomingVideoIds.push(videoId);
       continue;
     }
-
-    const videoId = v.videoId as string;
 
     const titleRuns = (v.title as YtData)?.runs as YtData[] | undefined;
     const titleSimple = (v.title as YtData)?.simpleText as string | undefined;
@@ -272,5 +344,5 @@ function extractVideosFromInitialData(data: YtData): ScrapedVideo[] {
     });
   }
 
-  return videos;
+  return { videos, upcomingVideoIds };
 }

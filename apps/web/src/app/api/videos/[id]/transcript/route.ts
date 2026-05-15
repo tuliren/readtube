@@ -89,6 +89,21 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
         { status: 503 }
       );
     }
+    if (result.reason === 'scheduled') {
+      // 425 Too Early: the video is a scheduled premiere / upcoming
+      // livestream whose transcript doesn't exist yet but should
+      // once it airs. Deliberately NOT 410 — we don't want the
+      // client to remember this as permanently unavailable.
+      console.info(`[videos/transcript/POST] Video ${id} is scheduled, not yet aired`);
+      return NextResponse.json(
+        {
+          error: 'This video has not aired yet. Try again after the scheduled premiere.',
+          code: 'scheduled',
+          scheduledStartTime: result.scheduledStartTime?.toISOString() ?? null,
+        },
+        { status: 425 }
+      );
+    }
     console.error(`[videos/transcript/POST] Transcript unavailable for video ${id}`);
     return NextResponse.json(
       { error: 'Transcript unavailable', code: 'unavailable' },

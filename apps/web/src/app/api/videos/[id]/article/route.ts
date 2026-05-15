@@ -232,6 +232,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         { status: 503 }
       );
     }
+    if (ensured.reason === 'scheduled') {
+      console.info(`[article/POST] Video ${id} is scheduled, not yet aired`);
+      return NextResponse.json(
+        {
+          error: 'This video has not aired yet. Try again after the scheduled premiere.',
+          code: 'scheduled',
+          scheduledStartTime: ensured.scheduledStartTime?.toISOString() ?? null,
+        },
+        { status: 425 }
+      );
+    }
     console.error(`[article/POST] Transcript unavailable for video ${id}`);
     await recordSafe(UserRequestOutcome.FAILED, {
       errorMessage: 'transcript-unavailable',

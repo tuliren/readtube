@@ -2,11 +2,13 @@
 
 import { ArrowPathIcon } from '@heroicons/react/24/outline';
 import { useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 
 import { countWords } from '@/lib/format/wordCount';
 import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { consumeNdjsonStream } from '@/lib/reader/consumeNdjsonStream';
 import { extractArticleHeadings } from '@/lib/reader/extractArticleHeadings';
+import { buildScheduledMessage, parseScheduledResponse } from '@/lib/reader/scheduledVideoToast';
 import { useFollowBottom } from '@/lib/reader/useFollowBottom';
 import { isProduction } from '@/lib/vercelEnv';
 
@@ -285,6 +287,17 @@ export default function ArticleReader({
           onTranscriptStatusChange('unavailable');
           setErrorMessage('Transcript unavailable for this video.');
           setStatus('error');
+          return;
+        }
+        // 425 Too Early — scheduled premiere that hasn't aired yet.
+        // Toast a warning and reset to idle so the user can retry
+        // after the air time. Don't broadcast unavailable.
+        if (res.status === 425) {
+          const body = await parseScheduledResponse(res);
+          const message = buildScheduledMessage(body?.scheduledStartTime ?? null);
+          toast.warning(message);
+          setStatus('idle');
+          setContent('');
           return;
         }
         // 503 means the upstream transcript provider blipped

@@ -7,6 +7,7 @@ import {
 } from '@/lib/platforms/base';
 import type { ChannelSnapshot } from '@/lib/platforms/types';
 import { fetchChannelSnapshot } from '@/lib/platforms/youtube/channelSnapshot';
+import { detectScheduledVideo } from '@/lib/platforms/youtube/scheduledVideo';
 import { fetchSubtitleViaTranscriptApi } from '@/lib/platforms/youtube/subtitles/fetchViaTranscriptApi';
 import {
   YOUTUBE_VIDEO_ID_PATTERN,
@@ -67,6 +68,14 @@ export class YouTubePlatform extends VideoPlatform {
 
   async fetchTranscript(videoId: string): Promise<PlatformTranscriptResult> {
     return fetchSubtitleViaTranscriptApi(videoId);
+  }
+
+  async isScheduledVideo(
+    videoId: string,
+    opts: { channelSourceId?: string | null } = {}
+  ): Promise<{ isScheduled: boolean; scheduledStartTime: Date | null }> {
+    const result = await detectScheduledVideo(videoId, opts);
+    return { isScheduled: result.isScheduled, scheduledStartTime: result.scheduledStartTime };
   }
 
   buildRssUrl(channelSourceId: string): string | null {

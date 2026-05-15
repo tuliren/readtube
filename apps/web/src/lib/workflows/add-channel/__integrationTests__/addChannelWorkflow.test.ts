@@ -101,6 +101,7 @@ beforeEach(async () => {
     logoUrl: null,
     handle: null,
     videos: [],
+    upcomingVideoIds: [],
   });
   await global.testPrisma.userSubscription.deleteMany();
   await global.testPrisma.video.deleteMany();
@@ -117,6 +118,7 @@ describe('fetchAndPersistChannelStep', () => {
       logoUrl: 'https://yt3.ggpht.com/logo.jpg',
       handle: '@newchannel',
       videos: [],
+      upcomingVideoIds: [],
     });
     mockFetchRssFeed.mockResolvedValueOnce(
       makeRssFeed('UCnewchannelidexample22', 'New YouTube Channel', [
@@ -168,6 +170,7 @@ describe('fetchAndPersistChannelStep', () => {
       logoUrl: null,
       handle: '@somehandle',
       videos: [],
+      upcomingVideoIds: [],
     });
     mockFetchRssFeed.mockResolvedValueOnce(
       makeRssFeed('UChandlechannelid12345', 'Handle Channel', [
@@ -243,6 +246,7 @@ describe('fetchAndPersistChannelStep', () => {
       logoUrl: null,
       handle: null,
       videos: [],
+      upcomingVideoIds: [],
     });
     mockFetchRssFeed.mockResolvedValue(
       makeRssFeed('UCidemidemchannel12345', 'Idempotent', [

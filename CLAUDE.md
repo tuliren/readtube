@@ -38,3 +38,9 @@ TranscriptAPI fires when **either** of these is true:
 2. Scrape and RSS both succeeded but each returned zero videos — observed when YouTube soft-blocks a hosting IP (e.g. Vercel) by serving 200s with empty channel pages and empty feeds. TranscriptAPI routes via different infrastructure.
 
 When RSS + TranscriptAPI both fail, the scrape-only build marks every video `isScraped: true` so a later healthy RSS pass doesn't get clobbered (create-on-insert, skip-on-update).
+
+## Scheduled premieres / upcoming livestreams
+
+Future-dated videos are filtered out of every channel-ingest path: `channelScrape.ts` skips entries carrying `upcomingEventData`, while `channelRss.ts` and TranscriptAPI's `fetchChannelLatest` drop entries whose `published` is strictly after `Date.now()`. The result is that a refresh-channels pass never pulls scheduled videos into the system.
+
+For individually-added videos that *are* scheduled (or videos that flipped to scheduled between ingest and the user's first transcript click), `ensureTranscript` probes the watch page via `lib/platforms/youtube/scheduledVideo.ts` before flipping the sticky `transcript_unavailable` flag. The scrape's `"isUpcoming":true` flag plus `liveBroadcastDetails.startTimestamp` is the authoritative signal; TranscriptAPI `/channel/latest` (using `published > now`) is a best-effort fallback when the scrape is unreachable — premieres of pre-uploaded videos may slip past the fallback because their `published` carries the upload time, not the air time. When detected, the route returns `425 Too Early` with `code: 'scheduled'` instead of `410`, and the reader surfaces a toast warning rather than sticky-locking the tabs.

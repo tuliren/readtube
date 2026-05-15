@@ -222,6 +222,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         { status: 503 }
       );
     }
+    if (ensured.reason === 'scheduled') {
+      console.info(`[summary/POST] Video ${id} is scheduled, not yet aired`);
+      // No audit row — same rationale as the transient branch: the
+      // user can retry once the video airs.
+      return NextResponse.json(
+        {
+          error: 'This video has not aired yet. Try again after the scheduled premiere.',
+          code: 'scheduled',
+          scheduledStartTime: ensured.scheduledStartTime?.toISOString() ?? null,
+        },
+        { status: 425 }
+      );
+    }
     console.error(`[summary/POST] Transcript unavailable for video ${id}`);
     // Summary itself was never attempted — record as FAILED with the
     // upstream cause in error_message rather than leaking a transcript

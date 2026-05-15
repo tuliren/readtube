@@ -71,6 +71,26 @@ export abstract class VideoPlatform {
   abstract fetchTranscript(videoId: string): Promise<PlatformTranscriptResult>;
 
   /**
+   * Best-effort probe for "is this video a scheduled premiere /
+   * upcoming livestream that hasn't aired yet?" Called by
+   * `ensureTranscript` right before flipping the sticky
+   * transcript-unavailable flag, so a future-dated video that
+   * happens to fail the transcript fetch isn't permanently locked
+   * out of the reader.
+   *
+   * Returns `{ isScheduled: false }` when the platform doesn't
+   * support the concept, or when the probe is inconclusive.
+   * `scheduledStartTime` is best-effort and may be null even when
+   * `isScheduled` is true.
+   */
+  isScheduledVideo(
+    _videoId: string,
+    _opts: { channelSourceId?: string | null } = {}
+  ): Promise<{ isScheduled: boolean; scheduledStartTime: Date | null }> {
+    return Promise.resolve({ isScheduled: false, scheduledStartTime: null });
+  }
+
+  /**
    * RSS feed URL for the owning channel, or null if the platform has
    * no native RSS concept. Used only when creating a new Channel row.
    */
