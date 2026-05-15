@@ -45,6 +45,18 @@ describe('extractHandle', () => {
     ['handle URL', 'https://youtube.com/@MrBeast', 'MrBeast'],
     ['handle URL with www', 'https://www.youtube.com/@HealthyGamerGG', 'HealthyGamerGG'],
     ['handle with dots', 'https://youtube.com/@some.channel.123', 'some.channel.123'],
+    [
+      'Cyrillic handle',
+      'https://youtube.com/@БОРИСБОЯРШИНОВСОДНАНАУКИ',
+      'БОРИСБОЯРШИНОВСОДНАНАУКИ',
+    ],
+    ['CJK handle', 'https://www.youtube.com/@中文频道', '中文频道'],
+    [
+      'percent-encoded Cyrillic handle',
+      'https://youtube.com/@%D0%91%D0%9E%D0%A0%D0%98%D0%A1',
+      'БОРИС',
+    ],
+    ['mixed-script handle', 'https://youtube.com/@user_中文_123', 'user_中文_123'],
   ])('extracts handle from %s', (_label, input, expected) => {
     expect(extractHandle(input)).toBe(expected);
   });
