@@ -24,13 +24,17 @@ Turn YouTube subscriptions into a personal substack. Consume videos efficiently 
 
 ## Channel snapshot fetching
 
-`fetchChannelSnapshot` (`apps/web/src/lib/platforms/youtube/channelSnapshot.ts`) combines three sources. Scrape always contributes channel handle, logo, and per-video duration. The video list comes from RSS (primary), with TranscriptAPI `/channel/latest` as the RSS-failure fallback, and a scrape-only build as the last resort.
+`fetchChannelSnapshot` (`apps/web/src/lib/platforms/youtube/channelSnapshot.ts`) combines three sources. Scrape always contributes channel handle, logo, and per-video duration. The video list comes from RSS (primary), with TranscriptAPI `/channel/latest` as a fallback, and a scrape-only build as the last resort.
 
 | Trigger | Scrape | RSS | TranscriptAPI |
 |---|---|---|---|
 | Add channel, cache hit | — | — | — |
-| Add channel, `/channel/UC…` URL or bare UC ID | always (parallel) | primary | RSS-failure fallback |
-| Add channel, `@handle` URL | always, **first** (resolves UC ID) | after scrape resolves UC | RSS-failure fallback |
-| Refresh channel | always (parallel) | primary | RSS-failure fallback |
+| Add channel, `/channel/UC…` URL or bare UC ID | always (parallel) | primary | fallback (see below) |
+| Add channel, `@handle` URL | always, **first** (resolves UC ID) | after scrape resolves UC | fallback (see below) |
+| Refresh channel | always (parallel) | primary | fallback (see below) |
+
+TranscriptAPI fires when **either** of these is true:
+1. RSS threw (network error / 404).
+2. Scrape and RSS both succeeded but each returned zero videos — observed when YouTube soft-blocks a hosting IP (e.g. Vercel) by serving 200s with empty channel pages and empty feeds. TranscriptAPI routes via different infrastructure.
 
 When RSS + TranscriptAPI both fail, the scrape-only build marks every video `isScraped: true` so a later healthy RSS pass doesn't get clobbered (create-on-insert, skip-on-update).
