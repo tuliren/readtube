@@ -97,22 +97,43 @@ describe('scrapeChannel', () => {
     expect(scraped.upcomingVideoIds).toEqual(['upcoming_stream']);
   });
 
-  it('detects scheduled premieres in the lockupViewModel shape', async () => {
+  it('extracts aired videos and detects scheduled premieres in the lockupViewModel shape', async () => {
     // Newer rollouts of the /videos tab wrap entries in
     // `lockupViewModel` rather than `videoRenderer`. Upcoming videos
     // there carry no `upcomingEventData` block — the only signal is
     // a "Premieres …" / "waiting" string inside the metadata rows.
+    // Aired videos expose title at `metadata.lockupMetadataViewModel
+    // .title.content`, relative time as one of the metadata parts,
+    // and duration as a thumbnail-overlay badge.
     function lockupItem(opts: {
       contentId: string;
       metadataRowText: string;
+      title?: string;
+      durationText?: string;
     }): Record<string, unknown> {
+      const overlays =
+        opts.durationText != null
+          ? [
+              {
+                thumbnailBottomOverlayViewModel: {
+                  badges: [{ thumbnailBadgeViewModel: { text: opts.durationText } }],
+                },
+              },
+            ]
+          : [];
       return {
         richItemRenderer: {
           content: {
             lockupViewModel: {
               contentId: opts.contentId,
+              contentImage: {
+                thumbnailViewModel: {
+                  overlays,
+                },
+              },
               metadata: {
                 lockupMetadataViewModel: {
+                  title: opts.title != null ? { content: opts.title } : undefined,
                   metadata: {
                     contentMetadataViewModel: {
                       metadataRows: [
@@ -146,7 +167,9 @@ describe('scrapeChannel', () => {
                       }),
                       lockupItem({
                         contentId: 'aired_lockup_id',
-                        metadataRowText: '2.2K views • 20 hours ago',
+                        title: 'Aired Lockup Title',
+                        durationText: '43:36',
+                        metadataRowText: '2.2K views 20 hours ago',
                       }),
                     ],
                   },
@@ -176,12 +199,19 @@ describe('scrapeChannel', () => {
 
     const scraped = await scrapeChannel('https://www.youtube.com/@test');
 
-    // The lockup shape doesn't carry the duration/title fields the
-    // legacy shape did, so we don't synthesize aired-video rows from
-    // it — the RSS feed remains the source of truth for aired
-    // videos. The only thing we extract is the upcoming signal so
-    // mergeSnapshot can drop it from the RSS-derived list.
-    expect(scraped.videos).toEqual([]);
+    // Aired lockups get extracted as videos (matching the legacy
+    // videoRenderer behavior), while upcoming entries — flagged by
+    // "Premieres …" / "waiting" text — are pulled out so
+    // mergeSnapshot can drop them from the RSS-derived list.
+    expect(scraped.videos).toEqual([
+      {
+        videoId: 'aired_lockup_id',
+        title: 'Aired Lockup Title',
+        description: '',
+        publishedAt: expect.any(Date),
+        durationSeconds: 43 * 60 + 36,
+      },
+    ]);
     expect(scraped.upcomingVideoIds).toEqual(['premiere_id']);
   });
 });

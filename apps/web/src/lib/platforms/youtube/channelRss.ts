@@ -54,6 +54,7 @@ const parser = new XMLParser({
 });
 
 export async function fetchRssFeed(rssUrl: string): Promise<RssChannel> {
+  console.info(`[youtube] Fetching RSS feed: ${rssUrl}`);
   // `cache: 'no-store'` rather than `next: { revalidate: 0 }` — the
   // workflow step runs outside a Next.js request context, so the
   // `next` options aren't valid there and the monkey-patched fetch

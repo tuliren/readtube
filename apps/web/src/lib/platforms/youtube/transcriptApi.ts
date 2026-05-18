@@ -97,6 +97,8 @@ export interface ChannelVideoMeta {
 export async function fetchChannelLatest(
   channelInput: string
 ): Promise<{ channel: ChannelMeta; videos: ChannelVideoMeta[] }> {
+  console.info(`[youtube] Fetching via TranscriptAPI /channel/latest: ${channelInput}`);
+
   const apiKey = process.env.TRANSCRIPT_API_KEY;
   if (isEmptyString(apiKey)) {
     throw new Error('TRANSCRIPT_API_KEY is not set');
