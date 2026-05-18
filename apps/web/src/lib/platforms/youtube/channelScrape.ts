@@ -142,6 +142,8 @@ export async function scrapeChannel(channelUrl: string): Promise<ScrapedChannel>
     ? channelUrl
     : `${channelUrl.replace(/\/+$/, '')}/videos`;
 
+  console.info(`[youtube] Scraping channel page: ${videosUrl}`);
+
   const response = await fetch(videosUrl, {
     headers: { 'User-Agent': YT_USER_AGENT },
     // See channelRss.ts for why we opt out of Next.js's fetch cache
@@ -206,8 +208,10 @@ type YtData = Record<string, unknown>;
 /**
  * Walks the selected tab's `richGridRenderer.contents` array. When we fetch
  * `/videos`, the Videos tab is the selected tab, and its rich grid contains
- * the channel's uploads in chronological (newest-first) order, each wrapped
- * as `richItemRenderer.content.videoRenderer`.
+ * the channel's uploads in chronological (newest-first) order. Each entry
+ * is wrapped either as the legacy `richItemRenderer.content.videoRenderer`
+ * or — on YouTube's newer rollout — as `richItemRenderer.content.lockupViewModel`.
+ * Both shapes are handled; channels can ship a mix or flip between them.
  */
 /**
  * Detect whether a `lockupViewModel` entry represents a scheduled
@@ -219,11 +223,26 @@ type YtData = Record<string, unknown>;
  * only — not part of the public module surface.
  */
 function isLockupUpcoming(lockup: YtData): boolean {
+  for (const content of collectLockupMetadataTexts(lockup)) {
+    // YouTube's localized strings for upcoming premieres / streams
+    // all carry one of these stems on the en-US rollout we scrape
+    // with. A more language-agnostic detection would require
+    // walking thumbnail overlay icons, but for now we always
+    // scrape the en-US channel page.
+    if (/Premieres?\b/i.test(content) || /\bwaiting\b/i.test(content)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function collectLockupMetadataTexts(lockup: YtData): string[] {
+  const out: string[] = [];
   const metadata = (lockup.metadata as YtData)?.lockupMetadataViewModel as YtData | undefined;
   const rows = ((metadata?.metadata as YtData)?.contentMetadataViewModel as YtData)
     ?.metadataRows as YtData[] | undefined;
   if (rows == null) {
-    return false;
+    return out;
   }
   for (const row of rows) {
     const parts = (row as YtData).metadataParts as YtData[] | undefined;
@@ -232,20 +251,83 @@ function isLockupUpcoming(lockup: YtData): boolean {
     }
     for (const part of parts) {
       const content = ((part as YtData).text as YtData)?.content as string | undefined;
-      if (content == null) {
-        continue;
-      }
-      // YouTube's localized strings for upcoming premieres / streams
-      // all carry one of these stems on the en-US rollout we scrape
-      // with. A more language-agnostic detection would require
-      // walking thumbnail overlay icons, but for now we always
-      // scrape the en-US channel page.
-      if (/Premieres?\b/i.test(content) || /\bwaiting\b/i.test(content)) {
-        return true;
+      if (content != null) {
+        out.push(content);
       }
     }
   }
-  return false;
+  return out;
+}
+
+/**
+ * Extract the title, relative-time string, and duration text from a
+ * `lockupViewModel` entry. YouTube rolled this shape out as the
+ * replacement for the legacy `videoRenderer` on channel /videos tabs.
+ * Title lives at `metadata.lockupMetadataViewModel.title.content`,
+ * relative time is one of the `metadataParts` text contents (e.g.
+ * "6 hours ago"), and duration is rendered as a thumbnail badge text
+ * (e.g. "43:36") inside `contentImage.thumbnailViewModel.overlays`.
+ */
+function extractLockupAired(lockup: YtData): ScrapedVideo | null {
+  const videoId = lockup.contentId as string | undefined;
+  if (videoId == null) {
+    return null;
+  }
+
+  const metadata = (lockup.metadata as YtData)?.lockupMetadataViewModel as YtData | undefined;
+  const title = ((metadata?.title as YtData)?.content as string | undefined) ?? UNKNOWN_VIDEO_TITLE;
+
+  // The metadata rows look like ["4.6K views", "6 hours ago"]. Pick the
+  // first text that parses as a relative time so view-count strings
+  // (and other non-time parts) don't poison the timestamp.
+  let publishedAt: Date | null = null;
+  for (const text of collectLockupMetadataTexts(lockup)) {
+    const parsed = parseRelativeTime(text);
+    if (parsed != null) {
+      publishedAt = parsed;
+      break;
+    }
+  }
+
+  const overlays = ((lockup.contentImage as YtData)?.thumbnailViewModel as YtData)?.overlays as
+    | YtData[]
+    | undefined;
+  let durationSeconds: number | null = null;
+  if (overlays != null) {
+    for (const overlay of overlays) {
+      const bottom = (overlay as YtData).thumbnailBottomOverlayViewModel as YtData | undefined;
+      if (bottom == null) {
+        continue;
+      }
+      const badges = bottom.badges as YtData[] | undefined;
+      if (badges == null) {
+        continue;
+      }
+      for (const badge of badges) {
+        const text = ((badge as YtData).thumbnailBadgeViewModel as YtData)?.text as
+          | string
+          | undefined;
+        const parsed = parseDurationText(text);
+        if (parsed != null) {
+          durationSeconds = parsed;
+          break;
+        }
+      }
+      if (durationSeconds != null) {
+        break;
+      }
+    }
+  }
+
+  // Lockup entries don't expose a descriptionSnippet — keep it empty,
+  // matching how the RSS path handles entries with no description.
+  return {
+    videoId,
+    title,
+    description: '',
+    publishedAt,
+    durationSeconds,
+  };
 }
 
 function extractVideosFromInitialData(data: YtData): {
@@ -294,8 +376,16 @@ function extractVideosFromInitialData(data: YtData): {
     const lockup = content?.lockupViewModel as YtData | undefined;
     if (lockup != null) {
       const lockupId = lockup.contentId as string | undefined;
-      if (lockupId != null && isLockupUpcoming(lockup)) {
+      if (lockupId == null) {
+        continue;
+      }
+      if (isLockupUpcoming(lockup)) {
         upcomingVideoIds.push(lockupId);
+        continue;
+      }
+      const aired = extractLockupAired(lockup);
+      if (aired != null) {
+        videos.push(aired);
       }
       continue;
     }
