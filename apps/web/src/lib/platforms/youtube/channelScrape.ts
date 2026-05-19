@@ -38,6 +38,15 @@ export interface ScrapedChannel {
    *  rather than the air time, so the channel page is the only
    *  reliable source at ingest. */
   upcomingVideoIds: string[];
+  /** Video ids the channel-page scrape identified as members-only
+   *  (entries flagged with a `BADGE_MEMBERS_ONLY` badge on the lockup,
+   *  or `BADGE_STYLE_TYPE_MEMBERS_ONLY` on the legacy videoRenderer).
+   *  Pulling them in would only burn a transcript fetch that's
+   *  guaranteed to fail — the watch page requires channel membership
+   *  to access. Surfaced separately so `mergeSnapshot` can drop the
+   *  matching RSS entry as well, even though RSS typically omits
+   *  members-only uploads. */
+  memberOnlyVideoIds: string[];
 }
 
 /**
@@ -189,18 +198,34 @@ export async function scrapeChannel(channelUrl: string): Promise<ScrapedChannel>
   const dataMatch = html.match(/var ytInitialData = ({[\s\S]*?});<\/script>/);
   if (!dataMatch) {
     // Return channel info without videos if ytInitialData is missing
-    return { channelId, name, logoUrl, handle, videos: [], upcomingVideoIds: [] };
+    return {
+      channelId,
+      name,
+      logoUrl,
+      handle,
+      videos: [],
+      upcomingVideoIds: [],
+      memberOnlyVideoIds: [],
+    };
   }
 
   let data: Record<string, unknown>;
   try {
     data = JSON.parse(dataMatch[1]) as Record<string, unknown>;
   } catch {
-    return { channelId, name, logoUrl, handle, videos: [], upcomingVideoIds: [] };
+    return {
+      channelId,
+      name,
+      logoUrl,
+      handle,
+      videos: [],
+      upcomingVideoIds: [],
+      memberOnlyVideoIds: [],
+    };
   }
 
-  const { videos, upcomingVideoIds } = extractVideosFromInitialData(data);
-  return { channelId, name, logoUrl, handle, videos, upcomingVideoIds };
+  const { videos, upcomingVideoIds, memberOnlyVideoIds } = extractVideosFromInitialData(data);
+  return { channelId, name, logoUrl, handle, videos, upcomingVideoIds, memberOnlyVideoIds };
 }
 
 type YtData = Record<string, unknown>;
@@ -230,6 +255,76 @@ function isLockupUpcoming(lockup: YtData): boolean {
     // walking thumbnail overlay icons, but for now we always
     // scrape the en-US channel page.
     if (/Premieres?\b/i.test(content) || /\bwaiting\b/i.test(content)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Detect whether a `lockupViewModel` entry represents a members-only
+ * video. The signal lives in the metadata rows as a `badgeViewModel`
+ * whose `badgeStyle` is `BADGE_MEMBERS_ONLY` (and whose `badgeText` is
+ * the localized "Members only" string). Style is more stable than
+ * the localized text — match the style first, fall back to the text
+ * for resilience.
+ */
+function isLockupMembersOnly(lockup: YtData): boolean {
+  const metadata = (lockup.metadata as YtData)?.lockupMetadataViewModel as YtData | undefined;
+  const rows = ((metadata?.metadata as YtData)?.contentMetadataViewModel as YtData)
+    ?.metadataRows as YtData[] | undefined;
+  if (rows == null) {
+    return false;
+  }
+  for (const row of rows) {
+    const badges = (row as YtData).badges as YtData[] | undefined;
+    if (badges == null) {
+      continue;
+    }
+    for (const badge of badges) {
+      const badgeView = (badge as YtData).badgeViewModel as YtData | undefined;
+      if (badgeView == null) {
+        continue;
+      }
+      const style = badgeView.badgeStyle as string | undefined;
+      if (style === 'BADGE_MEMBERS_ONLY') {
+        return true;
+      }
+      const text = badgeView.badgeText as string | undefined;
+      if (text != null && /members only/i.test(text)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Detect whether a legacy `videoRenderer` entry is members-only.
+ * The badge lives at `badges[].metadataBadgeRenderer` with
+ * `style: "BADGE_STYLE_TYPE_MEMBERS_ONLY"` (or a localized
+ * "Members only" label/tooltip).
+ */
+function isVideoRendererMembersOnly(v: YtData): boolean {
+  const badges = v.badges as YtData[] | undefined;
+  if (badges == null) {
+    return false;
+  }
+  for (const badge of badges) {
+    const renderer = (badge as YtData).metadataBadgeRenderer as YtData | undefined;
+    if (renderer == null) {
+      continue;
+    }
+    const style = renderer.style as string | undefined;
+    if (style === 'BADGE_STYLE_TYPE_MEMBERS_ONLY') {
+      return true;
+    }
+    const label = renderer.label as string | undefined;
+    const tooltip = renderer.tooltip as string | undefined;
+    if (
+      (label != null && /members only/i.test(label)) ||
+      (tooltip != null && /members only/i.test(tooltip))
+    ) {
       return true;
     }
   }
@@ -333,12 +428,13 @@ function extractLockupAired(lockup: YtData): ScrapedVideo | null {
 function extractVideosFromInitialData(data: YtData): {
   videos: ScrapedVideo[];
   upcomingVideoIds: string[];
+  memberOnlyVideoIds: string[];
 } {
   const tabs = ((data.contents as YtData)?.twoColumnBrowseResultsRenderer as YtData)?.tabs as
     | YtData[]
     | undefined;
   if (!tabs) {
-    return { videos: [], upcomingVideoIds: [] };
+    return { videos: [], upcomingVideoIds: [], memberOnlyVideoIds: [] };
   }
 
   // Find the tab YouTube marked as selected. Since we fetched /videos, this
@@ -354,7 +450,7 @@ function extractVideosFromInitialData(data: YtData): {
     return renderer.title === 'Videos';
   });
   if (selectedTab == null) {
-    return { videos: [], upcomingVideoIds: [] };
+    return { videos: [], upcomingVideoIds: [], memberOnlyVideoIds: [] };
   }
 
   const richGridContents = (((selectedTab as YtData).tabRenderer as YtData)?.content as YtData)
@@ -363,6 +459,7 @@ function extractVideosFromInitialData(data: YtData): {
 
   const videos: ScrapedVideo[] = [];
   const upcomingVideoIds: string[] = [];
+  const memberOnlyVideoIds: string[] = [];
   for (const item of items) {
     const richItem = (item as YtData).richItemRenderer as YtData | undefined;
     const content = richItem?.content as YtData | undefined;
@@ -381,6 +478,10 @@ function extractVideosFromInitialData(data: YtData): {
       }
       if (isLockupUpcoming(lockup)) {
         upcomingVideoIds.push(lockupId);
+        continue;
+      }
+      if (isLockupMembersOnly(lockup)) {
+        memberOnlyVideoIds.push(lockupId);
         continue;
       }
       const aired = extractLockupAired(lockup);
@@ -411,6 +512,16 @@ function extractVideosFromInitialData(data: YtData): {
       continue;
     }
 
+    // Members-only videos require a channel-membership signed-in
+    // session to load — the watch page returns a paywall stub and
+    // the transcript fetch is guaranteed to fail. Treat them like
+    // upcoming videos: surface the id so `mergeSnapshot` can drop a
+    // matching RSS entry too, even though RSS typically omits them.
+    if (isVideoRendererMembersOnly(v)) {
+      memberOnlyVideoIds.push(videoId);
+      continue;
+    }
+
     const titleRuns = (v.title as YtData)?.runs as YtData[] | undefined;
     const titleSimple = (v.title as YtData)?.simpleText as string | undefined;
     const title = (titleRuns?.[0]?.text as string) ?? titleSimple ?? UNKNOWN_VIDEO_TITLE;
@@ -434,5 +545,5 @@ function extractVideosFromInitialData(data: YtData): {
     });
   }
 
-  return { videos, upcomingVideoIds };
+  return { videos, upcomingVideoIds, memberOnlyVideoIds };
 }

@@ -173,6 +173,7 @@ beforeEach(async () => {
     handle: null,
     videos: [],
     upcomingVideoIds: [],
+    memberOnlyVideoIds: [],
   });
   await global.testPrisma.userSubscription.deleteMany();
   await global.testPrisma.video.deleteMany();
@@ -517,6 +518,7 @@ describe('refreshChannel', () => {
         },
       ],
       upcomingVideoIds: [],
+      memberOnlyVideoIds: [],
     });
 
     await refreshChannel(
@@ -611,6 +613,7 @@ describe('refreshChannel', () => {
       handle: null,
       videos: [],
       upcomingVideoIds: [],
+      memberOnlyVideoIds: [],
     });
 
     await refreshChannel(
@@ -704,6 +707,7 @@ describe('refreshChannel — Shorts filtering', () => {
         },
       ],
       upcomingVideoIds: [],
+      memberOnlyVideoIds: [],
     });
 
     const result = (await refreshChannel(
@@ -787,6 +791,7 @@ describe('refreshChannel — Shorts filtering', () => {
       handle: '@collide',
       videos: [],
       upcomingVideoIds: [],
+      memberOnlyVideoIds: [],
     });
     mockFetchRssFeed.mockResolvedValueOnce(makeRssFeed('Target', []));
 
@@ -872,6 +877,7 @@ describe('refreshChannelsWorkflow', () => {
       handle: null,
       videos: [],
       upcomingVideoIds: [],
+      memberOnlyVideoIds: [],
     });
 
     const result = await refreshChannelsWorkflow();

@@ -200,6 +200,11 @@ export function mergeSnapshot(feed: RssChannel, scraped: ScrapedChannel | null):
   // premieres — drop them here using the scrape's authoritative
   // `upcomingEventData` signal.
   const upcomingVideoIds = new Set<string>(scraped?.upcomingVideoIds ?? []);
+  // Members-only entries the channel-page scrape identified. The
+  // transcript path can't load these (the watch page is paywalled),
+  // so drop them from the merged list. RSS typically omits members-
+  // only uploads, but propagate the filter for safety.
+  const memberOnlyVideoIds = new Set<string>(scraped?.memberOnlyVideoIds ?? []);
   if (scraped != null) {
     for (const v of scraped.videos) {
       if (v.durationSeconds != null) {
@@ -209,7 +214,10 @@ export function mergeSnapshot(feed: RssChannel, scraped: ScrapedChannel | null):
   }
 
   const videos: SnapshotVideo[] = feed.videos
-    .filter((v) => !isYouTubeShort(v) && !upcomingVideoIds.has(v.videoId))
+    .filter(
+      (v) =>
+        !isYouTubeShort(v) && !upcomingVideoIds.has(v.videoId) && !memberOnlyVideoIds.has(v.videoId)
+    )
     .map((v) => ({
       videoId: v.videoId,
       title: v.title,

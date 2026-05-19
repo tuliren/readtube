@@ -28,6 +28,7 @@ function scrapedChannel(overrides: Partial<ScrapedChannel> = {}): ScrapedChannel
     handle: null,
     videos: [],
     upcomingVideoIds: [],
+    memberOnlyVideoIds: [],
     ...overrides,
   };
 }
@@ -205,6 +206,30 @@ describe('mergeSnapshot', () => {
     expect(snap.videos[0]!.isScraped).toBeUndefined();
     // Duration still merged from scrape.
     expect(snap.videos[0]!.durationSeconds).toBe(500);
+  });
+
+  it('drops RSS entries the scrape flagged as members-only', () => {
+    // RSS usually omits members-only uploads, but propagate the scrape
+    // filter for safety — the watch page is paywalled, so a transcript
+    // fetch is guaranteed to fail and would sticky-lock the entry.
+    const feed = rssFeed([
+      rssVideo({
+        videoId: 'members-1',
+        title: 'Members-only title',
+      }),
+      rssVideo({
+        videoId: 'public-1',
+        title: 'Public one',
+      }),
+    ]);
+    const scraped = scrapedChannel({
+      videos: [scrapedVideo({ videoId: 'public-1', durationSeconds: 500 })],
+      memberOnlyVideoIds: ['members-1'],
+    });
+
+    const snap = mergeSnapshot(feed, scraped);
+
+    expect(snap.videos.map((v) => v.videoId)).toEqual(['public-1']);
   });
 
   it('drops RSS entries the scrape flagged as upcoming premieres', () => {

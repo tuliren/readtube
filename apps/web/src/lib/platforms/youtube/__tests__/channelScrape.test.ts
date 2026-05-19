@@ -214,4 +214,160 @@ describe('scrapeChannel', () => {
     ]);
     expect(scraped.upcomingVideoIds).toEqual(['premiere_id']);
   });
+
+  it('skips members-only videos (lockupViewModel BADGE_MEMBERS_ONLY badge)', async () => {
+    // Members-only entries on the lockup rollout carry a
+    // `badgeViewModel` with `badgeStyle: "BADGE_MEMBERS_ONLY"` in
+    // one of the metadata rows. The watch page is paywalled so
+    // pulling them in would just burn a transcript fetch and
+    // sticky-lock the entry. Surface the id separately so
+    // `mergeSnapshot` can drop a matching RSS entry too.
+    const data = {
+      contents: {
+        twoColumnBrowseResultsRenderer: {
+          tabs: [
+            {
+              tabRenderer: {
+                title: 'Videos',
+                selected: true,
+                content: {
+                  richGridRenderer: {
+                    contents: [
+                      {
+                        richItemRenderer: {
+                          content: {
+                            lockupViewModel: {
+                              contentId: 'members_only_id',
+                              contentImage: {
+                                thumbnailViewModel: {
+                                  overlays: [
+                                    {
+                                      thumbnailBottomOverlayViewModel: {
+                                        badges: [{ thumbnailBadgeViewModel: { text: '15:12' } }],
+                                      },
+                                    },
+                                  ],
+                                },
+                              },
+                              metadata: {
+                                lockupMetadataViewModel: {
+                                  title: { content: 'Members Only Video' },
+                                  metadata: {
+                                    contentMetadataViewModel: {
+                                      metadataRows: [
+                                        { metadataParts: [{ text: { content: '11 hours ago' } }] },
+                                        {
+                                          badges: [
+                                            {
+                                              badgeViewModel: {
+                                                badgeText: 'Members only',
+                                                badgeStyle: 'BADGE_MEMBERS_ONLY',
+                                              },
+                                            },
+                                          ],
+                                        },
+                                      ],
+                                    },
+                                  },
+                                },
+                              },
+                            },
+                          },
+                        },
+                      },
+                      {
+                        richItemRenderer: {
+                          content: {
+                            lockupViewModel: {
+                              contentId: 'aired_public_id',
+                              contentImage: {
+                                thumbnailViewModel: {
+                                  overlays: [
+                                    {
+                                      thumbnailBottomOverlayViewModel: {
+                                        badges: [{ thumbnailBadgeViewModel: { text: '10:00' } }],
+                                      },
+                                    },
+                                  ],
+                                },
+                              },
+                              metadata: {
+                                lockupMetadataViewModel: {
+                                  title: { content: 'Aired Public Video' },
+                                  metadata: {
+                                    contentMetadataViewModel: {
+                                      metadataRows: [
+                                        {
+                                          metadataParts: [{ text: { content: '2 hours ago' } }],
+                                        },
+                                      ],
+                                    },
+                                  },
+                                },
+                              },
+                            },
+                          },
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          ],
+        },
+      },
+    };
+    const html = [
+      '<html><head>',
+      '<link rel="alternate" type="application/rss+xml" href="https://www.youtube.com/feeds/videos.xml?channel_id=UCabcdefghijklmnopqrstuv">',
+      '<meta property="og:title" content="Test Channel">',
+      '<meta property="og:image" content="https://logo.example/x.jpg">',
+      '</head><body>',
+      `<script>var ytInitialData = ${JSON.stringify(data)};</script>`,
+      '</body></html>',
+    ].join('');
+    globalThis.fetch = jest.fn(
+      async () =>
+        ({
+          ok: true,
+          text: async () => html,
+        }) as Response
+    );
+
+    const scraped = await scrapeChannel('https://www.youtube.com/@test');
+
+    expect(scraped.videos.map((v) => v.videoId)).toEqual(['aired_public_id']);
+    expect(scraped.memberOnlyVideoIds).toEqual(['members_only_id']);
+    expect(scraped.upcomingVideoIds).toEqual([]);
+  });
+
+  it('skips members-only videos (legacy videoRenderer BADGE_STYLE_TYPE_MEMBERS_ONLY)', async () => {
+    const html = buildHtml([
+      videoRenderer({ videoId: 'aired_vid' }),
+      videoRenderer({
+        videoId: 'members_vid',
+        badges: [
+          {
+            metadataBadgeRenderer: {
+              style: 'BADGE_STYLE_TYPE_MEMBERS_ONLY',
+              label: 'Members only',
+            },
+          },
+        ],
+      }),
+    ]);
+    globalThis.fetch = jest.fn(
+      async () =>
+        ({
+          ok: true,
+          text: async () => html,
+        }) as Response
+    );
+
+    const scraped = await scrapeChannel('https://www.youtube.com/@test');
+
+    expect(scraped.videos.map((v) => v.videoId)).toEqual(['aired_vid']);
+    expect(scraped.memberOnlyVideoIds).toEqual(['members_vid']);
+  });
 });

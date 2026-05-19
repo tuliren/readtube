@@ -102,6 +102,7 @@ beforeEach(async () => {
     handle: null,
     videos: [],
     upcomingVideoIds: [],
+    memberOnlyVideoIds: [],
   });
   await global.testPrisma.userSubscription.deleteMany();
   await global.testPrisma.video.deleteMany();
@@ -119,6 +120,7 @@ describe('fetchAndPersistChannelStep', () => {
       handle: '@newchannel',
       videos: [],
       upcomingVideoIds: [],
+      memberOnlyVideoIds: [],
     });
     mockFetchRssFeed.mockResolvedValueOnce(
       makeRssFeed('UCnewchannelidexample22', 'New YouTube Channel', [
@@ -171,6 +173,7 @@ describe('fetchAndPersistChannelStep', () => {
       handle: '@somehandle',
       videos: [],
       upcomingVideoIds: [],
+      memberOnlyVideoIds: [],
     });
     mockFetchRssFeed.mockResolvedValueOnce(
       makeRssFeed('UChandlechannelid12345', 'Handle Channel', [
@@ -247,6 +250,7 @@ describe('fetchAndPersistChannelStep', () => {
       handle: null,
       videos: [],
       upcomingVideoIds: [],
+      memberOnlyVideoIds: [],
     });
     mockFetchRssFeed.mockResolvedValue(
       makeRssFeed('UCidemidemchannel12345', 'Idempotent', [
