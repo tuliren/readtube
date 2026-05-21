@@ -14,6 +14,7 @@ import {
 } from '@/lib/platforms/bilibili/urls';
 import { fetchBilibiliVideoSnapshot } from '@/lib/platforms/bilibili/videoSnapshot';
 import type { ChannelSnapshot } from '@/lib/platforms/types';
+import { parseUrlLoose } from '@/lib/urls/parseLoose';
 
 export class BilibiliPlatform extends VideoPlatform {
   readonly type = VideoPlatformType.BILIBILI;
@@ -30,16 +31,15 @@ export class BilibiliPlatform extends VideoPlatform {
     if (this.matchesSourceId(trimmed)) {
       return true;
     }
-    try {
-      const host = new URL(trimmed).hostname.toLowerCase();
-      // b23.tv short links aren't accepted here because
-      // extractBilibiliVideoId is sync and can't follow the redirect
-      // to recover the BV id — claiming the URL here would produce a
-      // misleading "Invalid video URL" a step later.
-      return host.endsWith('bilibili.com');
-    } catch {
+    const url = parseUrlLoose(trimmed);
+    if (url == null) {
       return false;
     }
+    // b23.tv short links aren't accepted here because
+    // extractBilibiliVideoId is sync and can't follow the redirect
+    // to recover the BV id — claiming the URL here would produce a
+    // misleading "Invalid video URL" a step later.
+    return url.hostname.toLowerCase().endsWith('bilibili.com');
   }
 
   matchesSourceId(sourceId: string): boolean {

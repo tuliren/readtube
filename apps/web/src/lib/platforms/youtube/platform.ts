@@ -15,6 +15,7 @@ import {
   extractChannelId,
 } from '@/lib/platforms/youtube/urls';
 import { extractVideoId, fetchVideoSnapshot } from '@/lib/platforms/youtube/videoSnapshot';
+import { parseUrlLoose } from '@/lib/urls/parseLoose';
 
 export class YouTubePlatform extends VideoPlatform {
   readonly type = VideoPlatformType.YOUTUBE;
@@ -32,12 +33,12 @@ export class YouTubePlatform extends VideoPlatform {
     if (this.matchesSourceId(trimmed)) {
       return true;
     }
-    try {
-      const host = new URL(trimmed).hostname.toLowerCase();
-      return host === 'youtu.be' || host.endsWith('youtube.com');
-    } catch {
+    const url = parseUrlLoose(trimmed);
+    if (url == null) {
       return false;
     }
+    const host = url.hostname.toLowerCase();
+    return host === 'youtu.be' || host.endsWith('youtube.com');
   }
 
   matchesSourceId(sourceId: string): boolean {

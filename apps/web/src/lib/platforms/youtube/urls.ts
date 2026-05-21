@@ -8,6 +8,7 @@
  *   - channelRss.ts     → fetch YouTube's native RSS feed
  *   - transcriptApi.ts  → call TranscriptAPI's /channel/latest
  */
+import { parseUrlLoose } from '@/lib/urls/parseLoose';
 
 /** Shape of a YouTube video id: 11 URL-safe chars (A-Z, a-z, 0-9,
  *  underscore, hyphen). Single source of truth reused by URL parsing,
@@ -32,23 +33,22 @@ export function extractChannelId(input: string): string | null {
     return trimmed;
   }
 
-  try {
-    const url = new URL(trimmed);
-
-    if (!url.hostname.includes('youtube.com')) {
-      return null;
-    }
-
-    // https://youtube.com/channel/UCxxx
-    const channelMatch = url.pathname.match(/^\/channel\/(UC[\w-]{20,})/);
-    if (channelMatch) {
-      return channelMatch[1];
-    }
-
-    return null;
-  } catch {
+  const url = parseUrlLoose(trimmed);
+  if (url == null) {
     return null;
   }
+
+  if (!url.hostname.includes('youtube.com')) {
+    return null;
+  }
+
+  // https://youtube.com/channel/UCxxx
+  const channelMatch = url.pathname.match(/^\/channel\/(UC[\w-]{20,})/);
+  if (channelMatch) {
+    return channelMatch[1];
+  }
+
+  return null;
 }
 
 /**
@@ -62,28 +62,27 @@ export function extractHandle(input: string): string | null {
   if (!input || typeof input !== 'string') {
     return null;
   }
-  try {
-    const url = new URL(input.trim());
-    if (!url.hostname.includes('youtube.com')) {
-      return null;
-    }
-    let pathname: string;
-    try {
-      pathname = decodeURIComponent(url.pathname);
-    } catch {
-      // Malformed percent-encoding — leave as-is; the regex below
-      // won't match `%` so we'll fall through to returning null.
-      pathname = url.pathname;
-    }
-    // Constructed via `new RegExp` because the project's TS target
-    // (es5) rejects the `u` flag on regex literals; the flag works
-    // fine at runtime on every supported Node/browser version.
-    const handleRegex = new RegExp('^/@([\\p{L}\\p{N}._-]+)', 'u');
-    const match = pathname.match(handleRegex);
-    return match ? match[1] : null;
-  } catch {
+  const url = parseUrlLoose(input);
+  if (url == null) {
     return null;
   }
+  if (!url.hostname.includes('youtube.com')) {
+    return null;
+  }
+  let pathname: string;
+  try {
+    pathname = decodeURIComponent(url.pathname);
+  } catch {
+    // Malformed percent-encoding — leave as-is; the regex below
+    // won't match `%` so we'll fall through to returning null.
+    pathname = url.pathname;
+  }
+  // Constructed via `new RegExp` because the project's TS target
+  // (es5) rejects the `u` flag on regex literals; the flag works
+  // fine at runtime on every supported Node/browser version.
+  const handleRegex = new RegExp('^/@([\\p{L}\\p{N}._-]+)', 'u');
+  const match = pathname.match(handleRegex);
+  return match ? match[1] : null;
 }
 
 // ─── Playlist URL parsing ────────────────────────────────────────
@@ -108,19 +107,18 @@ export function extractPlaylistId(input: string): string | null {
     return trimmed;
   }
 
-  try {
-    const url = new URL(trimmed);
-    if (!url.hostname.includes('youtube.com')) {
-      return null;
-    }
-    const list = url.searchParams.get('list');
-    if (list != null && /^[A-Z]{2}[\w-]{10,}$/.test(list)) {
-      return list;
-    }
-    return null;
-  } catch {
+  const url = parseUrlLoose(trimmed);
+  if (url == null) {
     return null;
   }
+  if (!url.hostname.includes('youtube.com')) {
+    return null;
+  }
+  const list = url.searchParams.get('list');
+  if (list != null && /^[A-Z]{2}[\w-]{10,}$/.test(list)) {
+    return list;
+  }
+  return null;
 }
 
 // ─── URL builders ────────────────────────────────────────────────

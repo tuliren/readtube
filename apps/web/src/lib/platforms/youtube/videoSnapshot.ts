@@ -21,6 +21,7 @@
 import type { PlatformTranscriptResult, VideoSnapshotResult } from '@/lib/platforms/base';
 import type { TranscriptSegment, VideoSnapshot } from '@/lib/platforms/types';
 import { isEmptyString } from '@/lib/string';
+import { parseUrlLoose } from '@/lib/urls/parseLoose';
 
 import { UNKNOWN_CHANNEL_NAME } from './constants';
 import { resolveChannelId } from './transcriptApi';
@@ -49,30 +50,29 @@ export function extractVideoId(input: string): string | null {
     return trimmed;
   }
 
-  try {
-    const url = new URL(trimmed);
-    const host = url.hostname.toLowerCase();
-    if (host === 'youtu.be') {
-      const id = url.pathname.replace(/^\/+/, '').split('/')[0];
-      return YOUTUBE_VIDEO_ID_PATTERN.test(id) ? id : null;
-    }
-    if (!host.includes('youtube.com')) {
-      return null;
-    }
-    // /watch?v=<id>
-    const v = url.searchParams.get('v');
-    if (v != null && YOUTUBE_VIDEO_ID_PATTERN.test(v)) {
-      return v;
-    }
-    // /shorts/<id> or /embed/<id> or /live/<id>
-    const m = url.pathname.match(/^\/(?:shorts|embed|live)\/([\w-]{11})/);
-    if (m != null) {
-      return m[1];
-    }
-    return null;
-  } catch {
+  const url = parseUrlLoose(trimmed);
+  if (url == null) {
     return null;
   }
+  const host = url.hostname.toLowerCase();
+  if (host === 'youtu.be') {
+    const id = url.pathname.replace(/^\/+/, '').split('/')[0];
+    return YOUTUBE_VIDEO_ID_PATTERN.test(id) ? id : null;
+  }
+  if (!host.includes('youtube.com')) {
+    return null;
+  }
+  // /watch?v=<id>
+  const v = url.searchParams.get('v');
+  if (v != null && YOUTUBE_VIDEO_ID_PATTERN.test(v)) {
+    return v;
+  }
+  // /shorts/<id> or /embed/<id> or /live/<id>
+  const m = url.pathname.match(/^\/(?:shorts|embed|live)\/([\w-]{11})/);
+  if (m != null) {
+    return m[1];
+  }
+  return null;
 }
 
 /**

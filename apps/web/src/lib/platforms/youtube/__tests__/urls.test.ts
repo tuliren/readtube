@@ -24,6 +24,12 @@ describe('extractChannelId', () => {
       `https://youtube.com/channel/${VALID_CHANNEL_ID}/`,
       VALID_CHANNEL_ID,
     ],
+    ['protocol-less channel URL', `youtube.com/channel/${VALID_CHANNEL_ID}`, VALID_CHANNEL_ID],
+    [
+      'protocol-less channel URL with www',
+      `www.youtube.com/channel/${VALID_CHANNEL_ID}`,
+      VALID_CHANNEL_ID,
+    ],
   ])('extracts channel ID from %s', (_label, input, expected) => {
     expect(extractChannelId(input)).toBe(expected);
   });
@@ -44,6 +50,8 @@ describe('extractHandle', () => {
   it.each([
     ['handle URL', 'https://youtube.com/@MrBeast', 'MrBeast'],
     ['handle URL with www', 'https://www.youtube.com/@HealthyGamerGG', 'HealthyGamerGG'],
+    ['protocol-less handle URL', 'youtube.com/@mreflow', 'mreflow'],
+    ['protocol-less handle URL with www', 'www.youtube.com/@mkbhd', 'mkbhd'],
     ['handle with dots', 'https://youtube.com/@some.channel.123', 'some.channel.123'],
     [
       'Cyrillic handle',
@@ -89,6 +97,16 @@ describe('extractPlaylistId', () => {
     [
       'playlist URL without www',
       `https://youtube.com/playlist?list=${VALID_PLAYLIST_ID}`,
+      VALID_PLAYLIST_ID,
+    ],
+    [
+      'protocol-less playlist URL',
+      `youtube.com/playlist?list=${VALID_PLAYLIST_ID}`,
+      VALID_PLAYLIST_ID,
+    ],
+    [
+      'protocol-less /watch with list',
+      `www.youtube.com/watch?v=qE_Al_GcV9M&list=${VALID_PLAYLIST_ID}`,
       VALID_PLAYLIST_ID,
     ],
   ])('extracts playlist ID from %s', (_label, input, expected) => {
