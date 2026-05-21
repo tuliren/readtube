@@ -46,6 +46,9 @@ describe('extractVideoId', () => {
       `https://www.youtube.com/watch?v=${VALID_VIDEO_ID}&list=PL123`,
       VALID_VIDEO_ID,
     ],
+    ['protocol-less watch URL', `youtube.com/watch?v=${VALID_VIDEO_ID}`, VALID_VIDEO_ID],
+    ['protocol-less youtu.be URL', `youtu.be/${VALID_VIDEO_ID}`, VALID_VIDEO_ID],
+    ['protocol-less shorts URL', `www.youtube.com/shorts/${VALID_VIDEO_ID}`, VALID_VIDEO_ID],
   ])('extracts from %s', (_label, input, expected) => {
     expect(extractVideoId(input)).toBe(expected);
   });

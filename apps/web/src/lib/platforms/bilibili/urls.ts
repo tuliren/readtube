@@ -2,6 +2,7 @@
  * URL/ID parsers for Bilibili. Pure sync helpers — no network I/O.
  * Counterpart to lib/youtube/urls.ts and videoSnapshot.ts.
  */
+import { parseUrlLoose } from '@/lib/urls/parseLoose';
 
 /** Shape of a Bilibili BV id: `BV` + 10 alphanumerics. Single source
  *  of truth reused by URL parsing, `BilibiliPlatform.matchesUrl`, and
@@ -27,20 +28,19 @@ export function extractBilibiliVideoId(input: string): string | null {
     return trimmed;
   }
 
-  try {
-    const url = new URL(trimmed);
-    const host = url.hostname.toLowerCase();
-    if (!host.includes('bilibili.com')) {
-      return null;
-    }
-    const match = url.pathname.match(/\/video\/(BV[A-Za-z0-9]{10})/);
-    if (match != null) {
-      return match[1];
-    }
-    return null;
-  } catch {
+  const url = parseUrlLoose(trimmed);
+  if (url == null) {
     return null;
   }
+  const host = url.hostname.toLowerCase();
+  if (!host.includes('bilibili.com')) {
+    return null;
+  }
+  const match = url.pathname.match(/\/video\/(BV[A-Za-z0-9]{10})/);
+  if (match != null) {
+    return match[1];
+  }
+  return null;
 }
 
 /**
@@ -86,14 +86,13 @@ export function extractBilibiliChannelMid(input: string): string | null {
     return trimmed;
   }
 
-  try {
-    const url = new URL(trimmed);
-    if (url.hostname.toLowerCase() !== 'space.bilibili.com') {
-      return null;
-    }
-    const match = url.pathname.match(/^\/(\d{4,})(?:\/|$)/);
-    return match != null ? match[1] : null;
-  } catch {
+  const url = parseUrlLoose(trimmed);
+  if (url == null) {
     return null;
   }
+  if (url.hostname.toLowerCase() !== 'space.bilibili.com') {
+    return null;
+  }
+  const match = url.pathname.match(/^\/(\d{4,})(?:\/|$)/);
+  return match != null ? match[1] : null;
 }

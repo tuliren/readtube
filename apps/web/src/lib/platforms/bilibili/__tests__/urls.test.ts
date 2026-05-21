@@ -18,6 +18,8 @@ describe('extractBilibiliVideoId', () => {
       VALID_BVID,
     ],
     ['uppercased host', `https://WWW.BILIBILI.COM/video/${VALID_BVID}`, VALID_BVID],
+    ['protocol-less URL', `bilibili.com/video/${VALID_BVID}`, VALID_BVID],
+    ['protocol-less URL with www', `www.bilibili.com/video/${VALID_BVID}`, VALID_BVID],
   ])('extracts the BV id from %s', (_label, input, expected) => {
     expect(extractBilibiliVideoId(input)).toBe(expected);
   });
@@ -57,6 +59,8 @@ describe('extractBilibiliChannelMid', () => {
     ['uppercased host', 'https://SPACE.BILIBILI.COM/946974', '946974'],
     ['URL with query', 'https://space.bilibili.com/946974?foo=bar', '946974'],
     ['URL with whitespace', '   https://space.bilibili.com/946974   ', '946974'],
+    ['protocol-less space URL', 'space.bilibili.com/946974', '946974'],
+    ['protocol-less space URL with sub-path', 'space.bilibili.com/946974/dynamic', '946974'],
   ])('extracts the mid from %s', (_label, input, expected) => {
     expect(extractBilibiliChannelMid(input)).toBe(expected);
   });
