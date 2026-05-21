@@ -2,9 +2,9 @@ import { parseUrlLoose } from '../parseLoose';
 
 describe('parseUrlLoose', () => {
   it.each([
-    ['protocol URL', 'https://youtube.com/@mreflow', 'youtube.com', '/@mreflow'],
+    ['protocol URL', 'https://youtube.com/@somehandle', 'youtube.com', '/@somehandle'],
     ['http protocol', 'http://example.com/foo', 'example.com', '/foo'],
-    ['protocol-less URL', 'youtube.com/@mreflow', 'youtube.com', '/@mreflow'],
+    ['protocol-less URL', 'youtube.com/@somehandle', 'youtube.com', '/@somehandle'],
     ['protocol-less www URL', 'www.youtube.com/watch', 'www.youtube.com', '/watch'],
     ['protocol-less youtu.be', 'youtu.be/dQw4w9WgXcQ', 'youtu.be', '/dQw4w9WgXcQ'],
     ['whitespace padded', '  youtube.com/@x  ', 'youtube.com', '/@x'],

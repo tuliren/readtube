@@ -1,7 +1,7 @@
 /**
  * Lenient URL parser used by the input-side extractors (channel,
  * video, playlist). Users routinely paste a URL without the
- * scheme (e.g. `youtube.com/@mreflow`, `youtu.be/dQw4w9WgXcQ`),
+ * scheme (e.g. `youtube.com/@somehandle`, `youtu.be/dQw4w9WgXcQ`),
  * and `new URL(...)` rejects those. This helper retries with
  * `https://` prepended when the original input lacks a scheme,
  * so all extractors accept both protocol-prefixed and

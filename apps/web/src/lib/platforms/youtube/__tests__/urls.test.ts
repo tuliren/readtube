@@ -50,7 +50,7 @@ describe('extractHandle', () => {
   it.each([
     ['handle URL', 'https://youtube.com/@MrBeast', 'MrBeast'],
     ['handle URL with www', 'https://www.youtube.com/@HealthyGamerGG', 'HealthyGamerGG'],
-    ['protocol-less handle URL', 'youtube.com/@mreflow', 'mreflow'],
+    ['protocol-less handle URL', 'youtube.com/@somehandle', 'somehandle'],
     ['protocol-less handle URL with www', 'www.youtube.com/@mkbhd', 'mkbhd'],
     ['handle with dots', 'https://youtube.com/@some.channel.123', 'some.channel.123'],
     [
