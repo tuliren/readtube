@@ -58,7 +58,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     );
   }
 
-  console.error(`[videos/transcript/GET] Transcript not cached for video ${id}`);
+  console.info(`[videos/transcript/GET] Transcript not cached for video ${id}`);
   return NextResponse.json({ error: 'Not cached' }, { status: 404 });
 }
 

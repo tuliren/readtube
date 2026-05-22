@@ -98,7 +98,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     });
   }
   if (!summary) {
-    console.error(`[public/summary/GET] No cached summary for video ${id}`);
+    console.info(`[public/summary/GET] No cached summary for video ${id}`);
     return NextResponse.json({ error: 'Not cached' }, { status: 404 });
   }
 

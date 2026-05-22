@@ -82,7 +82,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   const transcript = video.transcripts[0];
   if (!transcript) {
-    console.error(`[article/GET] No transcript cached for video ${id}`);
+    console.info(`[article/GET] No transcript cached for video ${id}`);
     return NextResponse.json({ error: 'Not cached' }, { status: 404 });
   }
 
@@ -106,7 +106,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   // doesn't 500 the client downstream (parseMarkdownDocument
   // throws on null).
   if (article == null || article.content == null) {
-    console.error(
+    console.info(
       `[article/GET] No cached article for video ${id} (style=${style}, language=${target ?? 'original'})`
     );
     return NextResponse.json({ error: 'Not cached' }, { status: 404 });
