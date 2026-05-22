@@ -69,7 +69,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   const transcript = video.transcripts[0];
   if (!transcript) {
-    console.error(`[summary/GET] No transcript for video ${id}`);
+    console.info(`[summary/GET] No transcript for video ${id}`);
     return NextResponse.json({ error: 'Not cached' }, { status: 404 });
   }
 
@@ -89,7 +89,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   const summary = await findOrCloneSummary(prisma, transcript.id, target);
   if (summary == null) {
-    console.error(
+    console.info(
       `[summary/GET] No cached summary for video ${id} in language ${target ?? 'original'}`
     );
     return NextResponse.json({ error: 'Not cached' }, { status: 404 });
