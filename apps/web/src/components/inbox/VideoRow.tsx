@@ -23,12 +23,36 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatDurationSeconds } from '@/lib/format/duration';
 import type { VideoData } from '@/lib/types';
 
 import { useSidebar } from './SidebarContext';
 import VideoLibraryMenuItems from './VideoLibraryMenuItems';
 import { useTriage } from './useTriage';
+
+/**
+ * Wraps any focusable / hoverable child in a shadcn Tooltip. Replaces
+ * the HTML `title` attribute on inline badges and toolbar buttons —
+ * `title` is browser-styled, slow to appear, and inconsistent with
+ * the rest of the inbox chrome.
+ */
+function WithTooltip({
+  label,
+  children,
+  side = 'top',
+}: {
+  label: string;
+  children: React.ReactNode;
+  side?: 'top' | 'right' | 'bottom' | 'left';
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent side={side}>{label}</TooltipContent>
+    </Tooltip>
+  );
+}
 
 /**
  * Tiny presence badges for the AI artifacts attached to a video.
@@ -50,12 +74,11 @@ import { useTriage } from './useTriage';
 function ArtifactBadges({ video }: { video: VideoData }) {
   if (video.transcriptUnavailable) {
     return (
-      <span
-        className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0 text-[10px] font-medium text-amber-700"
-        title="This video has no captions, so no transcript / summary / article can be produced."
-      >
-        No transcript
-      </span>
+      <WithTooltip label="This video has no captions, so no transcript / summary / article can be produced.">
+        <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0 text-[10px] font-medium text-amber-700">
+          No transcript
+        </span>
+      </WithTooltip>
     );
   }
   // Order matches the reader's tab order (Summary, Article, Transcript)
@@ -65,6 +88,44 @@ function ArtifactBadges({ video }: { video: VideoData }) {
       <ArtifactDot label="S" present={video.hasSummary} title="Summary" />
       <ArtifactDot label="A" present={video.hasArticle} title="Article" />
       <ArtifactDot label="T" present={video.hasTranscript} title="Transcript" />
+    </span>
+  );
+}
+
+/**
+ * Idle-state badges for star / save / notes. Renders inline in the
+ * metadata row so the row can advertise its state without forcing
+ * the hover toolbar to stay pinned open on every starred or saved
+ * video.
+ */
+function StateBadges({ video }: { video: VideoData }) {
+  if (!video.isStarred && !video.isSaved && video.noteCount === 0) {
+    return null;
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      {video.isStarred && (
+        <WithTooltip label="Starred">
+          <span className="inline-flex">
+            <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-500" aria-label="Starred" />
+          </span>
+        </WithTooltip>
+      )}
+      {video.isSaved && (
+        <WithTooltip label="Saved for later">
+          <span className="inline-flex">
+            <BookmarkCheck className="h-3.5 w-3.5 text-blue-500" aria-label="Saved" />
+          </span>
+        </WithTooltip>
+      )}
+      {video.noteCount > 0 && (
+        <WithTooltip label={`${video.noteCount} note${video.noteCount === 1 ? '' : 's'}`}>
+          <span className="inline-flex items-center gap-0.5 text-amber-500">
+            <NotebookPen className="h-3.5 w-3.5 fill-amber-100" />
+            <span className="text-[10px] font-semibold leading-none">{video.noteCount}</span>
+          </span>
+        </WithTooltip>
+      )}
     </span>
   );
 }
@@ -82,14 +143,15 @@ function ArtifactDot({
     'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/15 dark:text-blue-300';
   const absentClasses = 'border-border bg-background text-muted-foreground/70';
   return (
-    <span
-      title={`${title}: ${present ? 'generated' : 'not generated yet'}`}
-      className={`inline-flex h-4 w-4 items-center justify-center rounded-full border text-[9px] font-semibold ${
-        present ? presentClasses : absentClasses
-      }`}
-    >
-      {label}
-    </span>
+    <WithTooltip label={`${title}: ${present ? 'generated' : 'not generated yet'}`}>
+      <span
+        className={`inline-flex h-4 w-4 items-center justify-center rounded-full border text-[9px] font-semibold ${
+          present ? presentClasses : absentClasses
+        }`}
+      >
+        {label}
+      </span>
+    </WithTooltip>
   );
 }
 
@@ -375,6 +437,7 @@ export default function VideoRow({
             })()}
           </span>
           <ArtifactBadges video={video} />
+          <StateBadges video={video} />
         </div>
         {video.description != null && (
           <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{video.description}</p>
@@ -386,7 +449,7 @@ export default function VideoRow({
   return (
     <li className="group">
       <div
-        className={`flex items-start gap-2 px-4 py-3 transition-colors ${
+        className={`relative flex items-start gap-2 px-4 py-3 transition-colors ${
           isSelected
             ? 'bg-blue-50 dark:bg-blue-500/15'
             : isChecked
@@ -522,145 +585,155 @@ export default function VideoRow({
             </div>
           ) : (
             <div
-              className="flex shrink-0 items-center gap-1 opacity-0 group-hover:opacity-100 data-[active=true]:opacity-100"
-              data-active={
-                video.isStarred ||
-                video.isSaved ||
-                video.noteCount > 0 ||
-                pendingSummary ||
-                pendingArticle ||
-                moreOpen
-              }
+              className="pointer-events-none absolute right-4 top-2 flex shrink-0 items-center gap-1 rounded-md bg-background/80 px-1 py-0.5 opacity-0 shadow-sm ring-1 ring-border/50 backdrop-blur-sm transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 data-[active=true]:pointer-events-auto data-[active=true]:opacity-100 dark:bg-background/70"
+              data-active={pendingSummary || pendingArticle || moreOpen}
             >
               {showGenerateSummary && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    stop(e);
-                    void handleGenerateSummary();
-                  }}
-                  disabled={pendingSummary}
-                  title={pendingSummary ? 'Generating summary…' : 'Generate summary'}
-                  aria-label={pendingSummary ? 'Generating summary' : 'Generate summary'}
-                  className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-blue-500 disabled:opacity-70"
-                >
-                  {pendingSummary ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <FileText className="h-4 w-4" />
-                  )}
-                </button>
+                <WithTooltip label={pendingSummary ? 'Generating summary…' : 'Generate summary'}>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      stop(e);
+                      void handleGenerateSummary();
+                    }}
+                    disabled={pendingSummary}
+                    aria-label={pendingSummary ? 'Generating summary' : 'Generate summary'}
+                    className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-blue-500 disabled:opacity-70"
+                  >
+                    {pendingSummary ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <FileText className="h-4 w-4" />
+                    )}
+                  </button>
+                </WithTooltip>
               )}
               {showGenerateArticle && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    stop(e);
-                    void handleGenerateArticle();
-                  }}
-                  disabled={pendingArticle}
-                  title={pendingArticle ? 'Generating article…' : 'Generate article'}
-                  aria-label={pendingArticle ? 'Generating article' : 'Generate article'}
-                  className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-blue-500 disabled:opacity-70"
-                >
-                  {pendingArticle ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Newspaper className="h-4 w-4" />
-                  )}
-                </button>
+                <WithTooltip label={pendingArticle ? 'Generating article…' : 'Generate article'}>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      stop(e);
+                      void handleGenerateArticle();
+                    }}
+                    disabled={pendingArticle}
+                    aria-label={pendingArticle ? 'Generating article' : 'Generate article'}
+                    className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-blue-500 disabled:opacity-70"
+                  >
+                    {pendingArticle ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Newspaper className="h-4 w-4" />
+                    )}
+                  </button>
+                </WithTooltip>
               )}
               {/* Notes button: always opens the inline notes panel in the list view. */}
-              <button
-                type="button"
-                onClick={(e) => {
-                  stop(e);
-                  onOpenNotes(video.id, video.title);
-                }}
-                title={
+              <WithTooltip
+                label={
                   video.noteCount > 0
                     ? `${video.noteCount} note${video.noteCount === 1 ? '' : 's'} — open`
                     : 'Add note'
                 }
-                className={`flex items-center gap-0.5 rounded p-1 hover:bg-accent hover:text-amber-500 ${
-                  video.noteCount > 0 ? 'text-amber-500' : 'text-muted-foreground'
-                }`}
-                aria-label={
-                  video.noteCount > 0
-                    ? `Open notes (${video.noteCount})`
-                    : `Add note for ${video.title}`
-                }
               >
-                <NotebookPen className={`h-4 w-4 ${video.noteCount > 0 ? 'fill-amber-100' : ''}`} />
-                {video.noteCount > 0 && (
-                  <span className="text-[10px] font-semibold leading-none">{video.noteCount}</span>
-                )}
-              </button>
-              {isUnread && (
                 <button
                   type="button"
                   onClick={(e) => {
                     stop(e);
-                    void triage.markRead(video.id);
+                    onOpenNotes(video.id, video.title);
                   }}
-                  title="Mark as read"
-                  aria-label="Mark as read"
-                  className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-emerald-500"
+                  className={`flex items-center gap-0.5 rounded p-1 hover:bg-accent hover:text-amber-500 ${
+                    video.noteCount > 0 ? 'text-amber-500' : 'text-muted-foreground'
+                  }`}
+                  aria-label={
+                    video.noteCount > 0
+                      ? `Open notes (${video.noteCount})`
+                      : `Add note for ${video.title}`
+                  }
                 >
-                  <CheckCheck className="h-4 w-4" />
+                  <NotebookPen
+                    className={`h-4 w-4 ${video.noteCount > 0 ? 'fill-amber-100' : ''}`}
+                  />
+                  {video.noteCount > 0 && (
+                    <span className="text-[10px] font-semibold leading-none">
+                      {video.noteCount}
+                    </span>
+                  )}
                 </button>
-              )}
-              <button
-                type="button"
-                onClick={(e) => {
-                  stop(e);
-                  void triage.toggleStar(video.id, video.isStarred);
-                }}
-                title={video.isStarred ? 'Unstar' : 'Star'}
-                className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-yellow-500"
-              >
-                <Star
-                  className={`h-4 w-4 ${video.isStarred ? 'fill-yellow-400 text-yellow-500' : ''}`}
-                />
-              </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  stop(e);
-                  void triage.toggleSave(video.id, video.isSaved);
-                }}
-                title={video.isSaved ? 'Remove from Read Later' : 'Read Later'}
-                className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-blue-500"
-              >
-                {video.isSaved ? (
-                  <BookmarkCheck className="h-4 w-4 text-blue-500" />
-                ) : (
-                  <Bookmark className="h-4 w-4" />
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  stop(e);
-                  void triage.archive(video.id);
-                }}
-                title="Archive"
-                className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-red-500"
-              >
-                <Archive className="h-4 w-4" />
-              </button>
-              <DropdownMenu open={moreOpen} onOpenChange={setMoreOpen}>
-                <DropdownMenuTrigger asChild>
+              </WithTooltip>
+              {isUnread && (
+                <WithTooltip label="Mark as read">
                   <button
                     type="button"
-                    onClick={stop}
-                    title="More actions"
-                    aria-label="More actions"
-                    className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+                    onClick={(e) => {
+                      stop(e);
+                      void triage.markRead(video.id);
+                    }}
+                    aria-label="Mark as read"
+                    className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-emerald-500"
                   >
-                    <MoreHorizontal className="h-4 w-4" />
+                    <CheckCheck className="h-4 w-4" />
                   </button>
-                </DropdownMenuTrigger>
+                </WithTooltip>
+              )}
+              <WithTooltip label={video.isStarred ? 'Unstar' : 'Star'}>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    stop(e);
+                    void triage.toggleStar(video.id, video.isStarred);
+                  }}
+                  aria-label={video.isStarred ? 'Unstar' : 'Star'}
+                  className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-yellow-500"
+                >
+                  <Star
+                    className={`h-4 w-4 ${video.isStarred ? 'fill-yellow-400 text-yellow-500' : ''}`}
+                  />
+                </button>
+              </WithTooltip>
+              <WithTooltip label={video.isSaved ? 'Remove from Read Later' : 'Read Later'}>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    stop(e);
+                    void triage.toggleSave(video.id, video.isSaved);
+                  }}
+                  aria-label={video.isSaved ? 'Remove from Read Later' : 'Read Later'}
+                  className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-blue-500"
+                >
+                  {video.isSaved ? (
+                    <BookmarkCheck className="h-4 w-4 text-blue-500" />
+                  ) : (
+                    <Bookmark className="h-4 w-4" />
+                  )}
+                </button>
+              </WithTooltip>
+              <WithTooltip label="Archive">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    stop(e);
+                    void triage.archive(video.id);
+                  }}
+                  aria-label="Archive"
+                  className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-red-500"
+                >
+                  <Archive className="h-4 w-4" />
+                </button>
+              </WithTooltip>
+              <DropdownMenu open={moreOpen} onOpenChange={setMoreOpen}>
+                <WithTooltip label="More actions">
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={stop}
+                      aria-label="More actions"
+                      className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </button>
+                  </DropdownMenuTrigger>
+                </WithTooltip>
                 <DropdownMenuContent align="end" className="w-48">
                   <VideoLibraryMenuItems video={video} showRemove={showRemoveFromLibrary} />
                 </DropdownMenuContent>

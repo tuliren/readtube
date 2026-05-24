@@ -3,6 +3,7 @@
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { TooltipProvider } from '@/components/ui/tooltip';
 import type { VideoData } from '@/lib/types';
 
 import BulkActionBar from './BulkActionBar';
@@ -200,33 +201,35 @@ export default function VideoList({
   const selectedArray = Array.from(checkedIds);
 
   return (
-    <div className="flex flex-col">
-      <BulkActionBar
-        selectedIds={selectedArray}
-        onClear={clearSelection}
-        showRemoveFromLibrary={showRemoveFromLibrary}
-      />
-      <ul className="divide-y divide-border">
-        {videos.map((video) => {
-          const isSelected = selectedVideoId === video.id;
-          const href = `/videos/${encodeURIComponent(video.sourceId)}?returnTo=${encodeURIComponent(returnTo)}`;
+    <TooltipProvider delayDuration={200} skipDelayDuration={100} disableHoverableContent>
+      <div className="flex flex-col">
+        <BulkActionBar
+          selectedIds={selectedArray}
+          onClear={clearSelection}
+          showRemoveFromLibrary={showRemoveFromLibrary}
+        />
+        <ul className="divide-y divide-border">
+          {videos.map((video) => {
+            const isSelected = selectedVideoId === video.id;
+            const href = `/videos/${encodeURIComponent(video.sourceId)}?returnTo=${encodeURIComponent(returnTo)}`;
 
-          return (
-            <VideoRow
-              key={video.id}
-              video={video}
-              isSelected={isSelected}
-              isChecked={checkedIds.has(video.id)}
-              onToggleChecked={toggleChecked}
-              href={href}
-              inSelectionMode={inSelectionMode}
-              onOpenNotes={onOpenNotes}
-              now={now}
-              showRemoveFromLibrary={showRemoveFromLibrary}
-            />
-          );
-        })}
-      </ul>
-    </div>
+            return (
+              <VideoRow
+                key={video.id}
+                video={video}
+                isSelected={isSelected}
+                isChecked={checkedIds.has(video.id)}
+                onToggleChecked={toggleChecked}
+                href={href}
+                inSelectionMode={inSelectionMode}
+                onOpenNotes={onOpenNotes}
+                now={now}
+                showRemoveFromLibrary={showRemoveFromLibrary}
+              />
+            );
+          })}
+        </ul>
+      </div>
+    </TooltipProvider>
   );
 }
