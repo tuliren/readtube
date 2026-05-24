@@ -201,7 +201,7 @@ export default function VideoList({
   const selectedArray = Array.from(checkedIds);
 
   return (
-    <TooltipProvider delayDuration={200}>
+    <TooltipProvider delayDuration={200} skipDelayDuration={100} disableHoverableContent>
       <div className="flex flex-col">
         <BulkActionBar
           selectedIds={selectedArray}
