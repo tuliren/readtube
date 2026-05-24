@@ -386,7 +386,7 @@ export default function VideoRow({
   return (
     <li className="group">
       <div
-        className={`flex items-start gap-2 px-4 py-3 transition-colors ${
+        className={`relative flex items-start gap-2 px-4 py-3 transition-colors ${
           isSelected
             ? 'bg-blue-50 dark:bg-blue-500/15'
             : isChecked
@@ -522,7 +522,7 @@ export default function VideoRow({
             </div>
           ) : (
             <div
-              className="flex shrink-0 items-center gap-1 opacity-0 group-hover:opacity-100 data-[active=true]:opacity-100"
+              className="pointer-events-none absolute right-4 top-2 flex shrink-0 items-center gap-1 rounded-md bg-background/80 px-1 py-0.5 opacity-0 shadow-sm ring-1 ring-border/50 backdrop-blur-sm transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 data-[active=true]:pointer-events-auto data-[active=true]:opacity-100 dark:bg-background/70"
               data-active={
                 video.isStarred ||
                 video.isSaved ||
