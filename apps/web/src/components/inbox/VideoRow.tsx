@@ -69,6 +69,35 @@ function ArtifactBadges({ video }: { video: VideoData }) {
   );
 }
 
+/**
+ * Idle-state badges for star / save / notes. Renders inline in the
+ * metadata row so the row can advertise its state without forcing
+ * the hover toolbar to stay pinned open on every starred or saved
+ * video.
+ */
+function StateBadges({ video }: { video: VideoData }) {
+  if (!video.isStarred && !video.isSaved && video.noteCount === 0) {
+    return null;
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      {video.isStarred && (
+        <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-500" aria-label="Starred" />
+      )}
+      {video.isSaved && <BookmarkCheck className="h-3.5 w-3.5 text-blue-500" aria-label="Saved" />}
+      {video.noteCount > 0 && (
+        <span
+          className="inline-flex items-center gap-0.5 text-amber-500"
+          aria-label={`${video.noteCount} note${video.noteCount === 1 ? '' : 's'}`}
+        >
+          <NotebookPen className="h-3.5 w-3.5 fill-amber-100" />
+          <span className="text-[10px] font-semibold leading-none">{video.noteCount}</span>
+        </span>
+      )}
+    </span>
+  );
+}
+
 function ArtifactDot({
   label,
   present,
@@ -375,6 +404,7 @@ export default function VideoRow({
             })()}
           </span>
           <ArtifactBadges video={video} />
+          <StateBadges video={video} />
         </div>
         {video.description != null && (
           <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{video.description}</p>
@@ -523,14 +553,7 @@ export default function VideoRow({
           ) : (
             <div
               className="pointer-events-none absolute right-4 top-2 flex shrink-0 items-center gap-1 rounded-md bg-background/80 px-1 py-0.5 opacity-0 shadow-sm ring-1 ring-border/50 backdrop-blur-sm transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 data-[active=true]:pointer-events-auto data-[active=true]:opacity-100 dark:bg-background/70"
-              data-active={
-                video.isStarred ||
-                video.isSaved ||
-                video.noteCount > 0 ||
-                pendingSummary ||
-                pendingArticle ||
-                moreOpen
-              }
+              data-active={pendingSummary || pendingArticle || moreOpen}
             >
               {showGenerateSummary && (
                 <button
