@@ -1,4 +1,6 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "turbo run build --filter=@readtube/web && turbo run db:migrate --filter=@readtube/database",
   "crons": [
     {
       "path": "/api/cron/refresh-channels",
