@@ -4,7 +4,7 @@ import {
   Archive,
   Bookmark,
   BookmarkCheck,
-  CheckCheck,
+  Check,
   FileText,
   Loader2,
   MoreHorizontal,
@@ -552,7 +552,7 @@ export default function VideoRow({
                   )}
                   {isUnread && (
                     <DropdownMenuItem onSelect={() => void triage.markRead(video.id)}>
-                      <CheckCheck className="mr-2 h-4 w-4 text-emerald-500" />
+                      <Check className="mr-2 h-4 w-4 text-emerald-500" />
                       Mark as read
                     </DropdownMenuItem>
                   )}
@@ -676,7 +676,7 @@ export default function VideoRow({
                     aria-label="Mark as read"
                     className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-emerald-500"
                   >
-                    <CheckCheck className="h-4 w-4" />
+                    <Check className="h-4 w-4" />
                   </button>
                 </WithTooltip>
               )}

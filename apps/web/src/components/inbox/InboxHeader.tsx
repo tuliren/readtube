@@ -1,7 +1,6 @@
 'use client';
 
-import { CheckIcon } from '@heroicons/react/24/outline';
-import { RefreshCw } from 'lucide-react';
+import { CheckCheck, RefreshCw } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -202,7 +201,7 @@ export default function InboxHeader({
               className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50 disabled:hover:bg-transparent"
               title="Mark all as read"
             >
-              <CheckIcon className="h-4 w-4" />
+              <CheckCheck className="h-4 w-4" />
               <span className="hidden sidebar:inline">
                 {marking ? 'Marking…' : 'Mark all as read'}
               </span>
