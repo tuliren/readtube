@@ -425,11 +425,10 @@ export default function VideoRow({
           />
         )}
 
-        <p
-          className={`col-span-2 col-start-1 row-start-1 truncate text-sm leading-snug sidebar:col-span-1 sidebar:col-start-2 ${
-            isUnread ? 'font-semibold text-foreground' : 'font-normal text-muted-foreground'
-          }`}
-        >
+        {/* Titles are always bold and full-contrast so they stay
+            scannable; the blue dot (rendered above) is the sole
+            read/unread indicator. */}
+        <p className="col-span-2 col-start-1 row-start-1 truncate text-sm font-semibold leading-snug text-foreground sidebar:col-span-1 sidebar:col-start-2">
           {video.title}
         </p>
 
@@ -447,7 +446,9 @@ export default function VideoRow({
             <StateBadges video={video} />
           </div>
           {video.description != null && (
-            <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{video.description}</p>
+            <p className="mt-1 line-clamp-2 text-xs text-muted-foreground/70">
+              {video.description}
+            </p>
           )}
         </div>
       </div>
