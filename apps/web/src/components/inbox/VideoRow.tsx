@@ -407,41 +407,49 @@ export default function VideoRow({
         <span className="mt-1.5 h-2 w-2 shrink-0" />
       )}
 
-      {video.thumbnailUrl != null && (
-        <img
-          // See VideoReader.tsx — Bilibili CDN 403s with our Referer
-          // and returns http:// URLs that would otherwise be blocked.
-          src={video.thumbnailUrl.replace(/^http:\/\//, 'https://')}
-          alt=""
-          className="mt-0.5 h-12 w-[80px] shrink-0 rounded object-cover"
-          loading="lazy"
-          referrerPolicy="no-referrer"
-        />
-      )}
+      {/* Mobile: the title takes the full first row; the thumbnail and
+          the metadata/description share the second row. Desktop
+          (`sidebar:`) restores the classic layout — the thumbnail spans
+          both rows on the left with the title beside it. Grid placement
+          drives both so a single <img> serves either arrangement. */}
+      <div className="grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2 gap-y-1 sidebar:gap-y-0.5">
+        {video.thumbnailUrl != null && (
+          <img
+            // See VideoReader.tsx — Bilibili CDN 403s with our Referer
+            // and returns http:// URLs that would otherwise be blocked.
+            src={video.thumbnailUrl.replace(/^http:\/\//, 'https://')}
+            alt=""
+            className="col-start-1 row-start-2 mt-0.5 h-12 w-[80px] rounded object-cover sidebar:row-span-2 sidebar:row-start-1"
+            loading="lazy"
+            referrerPolicy="no-referrer"
+          />
+        )}
 
-      <div className="min-w-0 flex-1">
         <p
-          className={`truncate text-sm leading-snug ${
+          className={`col-span-2 col-start-1 row-start-1 truncate text-sm leading-snug sidebar:col-span-1 sidebar:col-start-2 ${
             isUnread ? 'font-semibold text-foreground' : 'font-normal text-muted-foreground'
           }`}
         >
           {video.title}
         </p>
-        <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
-          <span>
-            {video.channelName}
-            {video.publishedAt != null ? ` · ${relativeTime(video.publishedAt, now)}` : null}
-            {(() => {
-              const duration = formatDurationSeconds(video.durationSeconds);
-              return duration != null ? ` · ${duration}` : null;
-            })()}
-          </span>
-          <ArtifactBadges video={video} />
-          <StateBadges video={video} />
+
+        <div className="col-start-2 row-start-2 min-w-0">
+          <div className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+            <span>
+              {video.channelName}
+              {video.publishedAt != null ? ` · ${relativeTime(video.publishedAt, now)}` : null}
+              {(() => {
+                const duration = formatDurationSeconds(video.durationSeconds);
+                return duration != null ? ` · ${duration}` : null;
+              })()}
+            </span>
+            <ArtifactBadges video={video} />
+            <StateBadges video={video} />
+          </div>
+          {video.description != null && (
+            <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{video.description}</p>
+          )}
         </div>
-        {video.description != null && (
-          <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{video.description}</p>
-        )}
       </div>
     </>
   );
