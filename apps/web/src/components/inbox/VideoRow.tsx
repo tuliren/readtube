@@ -407,48 +407,44 @@ export default function VideoRow({
         <span className="mt-1.5 h-2 w-2 shrink-0" />
       )}
 
+      {video.thumbnailUrl != null && (
+        // self-stretch makes the wrapper match the three-line text column's
+        // height, and the absolutely-positioned image fills it via
+        // object-cover. Stretching a div (not the <img>, a replaced element
+        // with its own intrinsic height) keeps the thumbnail from ever
+        // driving the row taller than the text — so it covers the row with
+        // no dead space on either side.
+        <div className="relative w-24 shrink-0 self-stretch overflow-hidden rounded">
+          <img
+            // See VideoReader.tsx — Bilibili CDN 403s with our Referer
+            // and returns http:// URLs that would otherwise be blocked.
+            src={video.thumbnailUrl.replace(/^http:\/\//, 'https://')}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+            loading="lazy"
+            referrerPolicy="no-referrer"
+          />
+        </div>
+      )}
+
       <div className="min-w-0 flex-1">
-        {/* Titles are always bold and full-contrast so they stay
-            scannable; the blue dot (rendered above) is the sole
-            read/unread indicator. */}
+        {/* Three stacked lines beside the thumbnail: bold title, then
+            author / time / duration, then the artifact + state badges.
+            The blue dot (rendered above) is the sole unread indicator. */}
         <p className="truncate text-sm font-semibold leading-snug text-foreground">{video.title}</p>
 
-        {/* The thumbnail sits below the title, beside the metadata and
-            description, at every width. Keeping one layout avoids the
-            dead space a taller text column leaves under a row-spanning
-            thumbnail on wide screens. */}
-        <div className="mt-1 flex items-start gap-2">
-          {video.thumbnailUrl != null && (
-            <img
-              // See VideoReader.tsx — Bilibili CDN 403s with our Referer
-              // and returns http:// URLs that would otherwise be blocked.
-              src={video.thumbnailUrl.replace(/^http:\/\//, 'https://')}
-              alt=""
-              className="mt-0.5 h-12 w-[80px] shrink-0 rounded object-cover"
-              loading="lazy"
-              referrerPolicy="no-referrer"
-            />
-          )}
+        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+          {video.channelName}
+          {video.publishedAt != null ? ` · ${relativeTime(video.publishedAt, now)}` : null}
+          {(() => {
+            const duration = formatDurationSeconds(video.durationSeconds);
+            return duration != null ? ` · ${duration}` : null;
+          })()}
+        </p>
 
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
-              <span>
-                {video.channelName}
-                {video.publishedAt != null ? ` · ${relativeTime(video.publishedAt, now)}` : null}
-                {(() => {
-                  const duration = formatDurationSeconds(video.durationSeconds);
-                  return duration != null ? ` · ${duration}` : null;
-                })()}
-              </span>
-              <ArtifactBadges video={video} />
-              <StateBadges video={video} />
-            </div>
-            {video.description != null && (
-              <p className="mt-1 line-clamp-2 text-xs text-muted-foreground/70">
-                {video.description}
-              </p>
-            )}
-          </div>
+        <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1">
+          <ArtifactBadges video={video} />
+          <StateBadges video={video} />
         </div>
       </div>
     </>
