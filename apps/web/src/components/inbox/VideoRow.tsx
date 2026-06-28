@@ -401,12 +401,6 @@ export default function VideoRow({
 
   const rowContent = (
     <>
-      {isUnread ? (
-        <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-blue-600" />
-      ) : (
-        <span className="mt-1.5 h-2 w-2 shrink-0" />
-      )}
-
       {video.thumbnailUrl != null && (
         // self-stretch makes the wrapper match the three-line text column's
         // height, and the absolutely-positioned image fills it via
@@ -453,7 +447,7 @@ export default function VideoRow({
   return (
     <li className="group">
       <div
-        className={`relative flex items-start gap-2 px-4 py-3 transition-colors ${
+        className={`relative flex items-start gap-2 py-3 pl-2 pr-4 transition-colors ${
           isSelected
             ? 'bg-blue-50 dark:bg-blue-500/15'
             : isChecked
@@ -461,22 +455,40 @@ export default function VideoRow({
               : 'hover:bg-muted'
         } ${inSelectionMode ? 'select-none' : ''}`}
       >
-        <div
-          className={`pt-1 ${inSelectionMode || isChecked ? '' : 'hidden sidebar:block'}`}
-          onClick={(e) => {
-            stop(e);
-            onToggleChecked(video.id, !isChecked, e.shiftKey);
-          }}
-          role="presentation"
-        >
-          <Checkbox
-            checked={isChecked}
-            // Click is handled by the wrapper div so we can read shiftKey
-            // for range selection. Prevent the default toggle here.
-            onCheckedChange={() => {}}
-            aria-label={`Select ${video.title}`}
-            className={`pointer-events-none ${isChecked || inSelectionMode ? '' : 'opacity-0 group-hover:opacity-100'}`}
-          />
+        {/* Left gutter: the unread dot and the multi-select checkbox stacked
+            in one narrow column instead of each claiming a horizontal slot.
+            self-stretch matches the row height; the three equal cells put the
+            dot in the top third (level with the title), the checkbox in the
+            middle third (level with the metadata), and leave the bottom third
+            empty. */}
+        <div className="flex w-4 shrink-0 flex-col self-stretch">
+          <div className="flex flex-1 items-center justify-center">
+            {isUnread && <span className="h-2 w-2 rounded-full bg-blue-600" />}
+          </div>
+          <div
+            className={`flex flex-1 items-center justify-center ${
+              inSelectionMode || isChecked ? '' : 'pointer-events-none sidebar:pointer-events-auto'
+            }`}
+            onClick={(e) => {
+              stop(e);
+              onToggleChecked(video.id, !isChecked, e.shiftKey);
+            }}
+            role="presentation"
+          >
+            <Checkbox
+              checked={isChecked}
+              // Click is handled by the wrapper div so we can read shiftKey
+              // for range selection. Prevent the default toggle here.
+              onCheckedChange={() => {}}
+              aria-label={`Select ${video.title}`}
+              className={`pointer-events-none ${
+                inSelectionMode || isChecked
+                  ? ''
+                  : 'hidden opacity-0 group-hover:opacity-100 sidebar:block'
+              }`}
+            />
+          </div>
+          <div className="flex-1" />
         </div>
 
         {inSelectionMode ? (
