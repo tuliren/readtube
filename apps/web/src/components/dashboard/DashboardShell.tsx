@@ -2,8 +2,7 @@
 
 import { UserButton } from '@clerk/nextjs';
 import { AdjustmentsHorizontalIcon } from '@heroicons/react/24/outline';
-import { CheckIcon } from '@heroicons/react/24/outline';
-import { Menu, PanelLeft, RefreshCw } from 'lucide-react';
+import { CheckCheck, Menu, PanelLeft, RefreshCw } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -412,7 +411,7 @@ function MobileTopBar({
             aria-label="Mark all as read"
             title="Mark all as read"
           >
-            <CheckIcon className="h-5 w-5" />
+            <CheckCheck className="h-5 w-5" />
           </button>
         )}
         <ThemeSelector />

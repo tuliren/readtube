@@ -94,7 +94,13 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             signInFallbackRedirectUrl="/inbox"
             signUpFallbackRedirectUrl="/inbox"
             appearance={{
-              layout: {
+              // Clerk Core 3 renamed `appearance.layout` to `appearance.options`.
+              // Building locally hides this: `@clerk/ui` (which augments the
+              // appearance type via ClerkAppearanceRegistry) isn't resolved
+              // here, so `appearance` collapses to `any`. A clean install
+              // (e.g. Vercel) resolves it and the strict `Appearance<Theme>`
+              // rejects the old `layout` key.
+              options: {
                 privacyPageUrl: '/privacy',
                 termsPageUrl: '/terms',
               },

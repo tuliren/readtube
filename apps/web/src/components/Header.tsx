@@ -50,6 +50,10 @@ const NON_HOME_NAVIGATION: NavigationItem[] = [{ name: 'Home', href: '/' }];
 
 export default function Header({ onHomePage, compact = false, centerSlot }: Props = {}) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  // Selecting any item navigates (or opens a new tab) but leaves the
+  // full-screen mobile panel covering the page, so the route change
+  // looks like a no-op. Close the panel on every item click.
+  const closeMobileMenu = () => setMobileMenuOpen(false);
   const { isSignedIn } = useAuth();
   const pathname = usePathname();
   const isHome = onHomePage ?? pathname === '/';
@@ -147,7 +151,7 @@ export default function Header({ onHomePage, compact = false, centerSlot }: Prop
             </Link>
             <button
               type="button"
-              onClick={() => setMobileMenuOpen(false)}
+              onClick={closeMobileMenu}
               className="-m-2.5 rounded-md p-2.5 text-gray-700 dark:text-slate-300"
             >
               <span className="sr-only">Close menu</span>
@@ -158,18 +162,28 @@ export default function Header({ onHomePage, compact = false, centerSlot }: Prop
             <div className="-my-6 divide-y divide-gray-500/10 dark:divide-slate-700">
               <div className="space-y-2 py-6">
                 {navigation.map((item) => (
-                  <Link key={item.name} href={item.href} className={mobileLinkClass}>
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    className={mobileLinkClass}
+                    onClick={closeMobileMenu}
+                  >
                     {item.name}
                   </Link>
                 ))}
                 {!isSignedIn && (
-                  <Link href="/sign-in" className={`w-full text-left ${mobileLinkClass}`}>
+                  <Link
+                    href="/sign-in"
+                    className={`w-full text-left ${mobileLinkClass}`}
+                    onClick={closeMobileMenu}
+                  >
                     Sign in
                   </Link>
                 )}
                 <GithubLink
                   className={`flex items-center gap-2 ${mobileLinkClass}`}
                   label="GitHub"
+                  onClick={closeMobileMenu}
                 />
                 {/*<ProductHuntButton height={35} />*/}
               </div>

@@ -4,7 +4,7 @@ import {
   Archive,
   Bookmark,
   BookmarkCheck,
-  CheckCheck,
+  Check,
   FileText,
   Loader2,
   MoreHorizontal,
@@ -401,47 +401,45 @@ export default function VideoRow({
 
   const rowContent = (
     <>
-      {isUnread ? (
-        <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-blue-600" />
-      ) : (
-        <span className="mt-1.5 h-2 w-2 shrink-0" />
-      )}
-
       {video.thumbnailUrl != null && (
-        <img
-          // See VideoReader.tsx — Bilibili CDN 403s with our Referer
-          // and returns http:// URLs that would otherwise be blocked.
-          src={video.thumbnailUrl.replace(/^http:\/\//, 'https://')}
-          alt=""
-          className="mt-0.5 h-12 w-[80px] shrink-0 rounded object-cover"
-          loading="lazy"
-          referrerPolicy="no-referrer"
-        />
+        // self-stretch makes the wrapper match the three-line text column's
+        // height, and the absolutely-positioned image fills it via
+        // object-cover. Stretching a div (not the <img>, a replaced element
+        // with its own intrinsic height) keeps the thumbnail from ever
+        // driving the row taller than the text — so it covers the row with
+        // no dead space on either side.
+        <div className="relative w-24 shrink-0 self-stretch overflow-hidden rounded">
+          <img
+            // See VideoReader.tsx — Bilibili CDN 403s with our Referer
+            // and returns http:// URLs that would otherwise be blocked.
+            src={video.thumbnailUrl.replace(/^http:\/\//, 'https://')}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+            loading="lazy"
+            referrerPolicy="no-referrer"
+          />
+        </div>
       )}
 
       <div className="min-w-0 flex-1">
-        <p
-          className={`truncate text-sm leading-snug ${
-            isUnread ? 'font-semibold text-foreground' : 'font-normal text-muted-foreground'
-          }`}
-        >
-          {video.title}
+        {/* Three stacked lines beside the thumbnail: bold title, then
+            author / time / duration, then the artifact + state badges.
+            The blue dot (rendered above) is the sole unread indicator. */}
+        <p className="truncate text-sm font-semibold leading-snug text-foreground">{video.title}</p>
+
+        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+          {video.channelName}
+          {video.publishedAt != null ? ` · ${relativeTime(video.publishedAt, now)}` : null}
+          {(() => {
+            const duration = formatDurationSeconds(video.durationSeconds);
+            return duration != null ? ` · ${duration}` : null;
+          })()}
         </p>
-        <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
-          <span>
-            {video.channelName}
-            {video.publishedAt != null ? ` · ${relativeTime(video.publishedAt, now)}` : null}
-            {(() => {
-              const duration = formatDurationSeconds(video.durationSeconds);
-              return duration != null ? ` · ${duration}` : null;
-            })()}
-          </span>
+
+        <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1">
           <ArtifactBadges video={video} />
           <StateBadges video={video} />
         </div>
-        {video.description != null && (
-          <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{video.description}</p>
-        )}
       </div>
     </>
   );
@@ -449,7 +447,7 @@ export default function VideoRow({
   return (
     <li className="group">
       <div
-        className={`relative flex items-start gap-2 px-4 py-3 transition-colors ${
+        className={`relative flex items-start gap-2 py-3 pl-2 pr-4 transition-colors ${
           isSelected
             ? 'bg-blue-50 dark:bg-blue-500/15'
             : isChecked
@@ -457,22 +455,40 @@ export default function VideoRow({
               : 'hover:bg-muted'
         } ${inSelectionMode ? 'select-none' : ''}`}
       >
-        <div
-          className={`pt-1 ${inSelectionMode || isChecked ? '' : 'hidden sidebar:block'}`}
-          onClick={(e) => {
-            stop(e);
-            onToggleChecked(video.id, !isChecked, e.shiftKey);
-          }}
-          role="presentation"
-        >
-          <Checkbox
-            checked={isChecked}
-            // Click is handled by the wrapper div so we can read shiftKey
-            // for range selection. Prevent the default toggle here.
-            onCheckedChange={() => {}}
-            aria-label={`Select ${video.title}`}
-            className={`pointer-events-none ${isChecked || inSelectionMode ? '' : 'opacity-0 group-hover:opacity-100'}`}
-          />
+        {/* Left gutter: the unread dot and the multi-select checkbox stacked
+            in one narrow column instead of each claiming a horizontal slot.
+            self-stretch matches the row height; the three equal cells put the
+            dot in the top third (level with the title), the checkbox in the
+            middle third (level with the metadata), and leave the bottom third
+            empty. */}
+        <div className="flex w-4 shrink-0 flex-col self-stretch">
+          <div className="flex flex-1 items-center justify-center">
+            {isUnread && <span className="h-2 w-2 rounded-full bg-blue-600" />}
+          </div>
+          <div
+            className={`flex flex-1 items-center justify-center ${
+              inSelectionMode || isChecked ? '' : 'pointer-events-none sidebar:pointer-events-auto'
+            }`}
+            onClick={(e) => {
+              stop(e);
+              onToggleChecked(video.id, !isChecked, e.shiftKey);
+            }}
+            role="presentation"
+          >
+            <Checkbox
+              checked={isChecked}
+              // Click is handled by the wrapper div so we can read shiftKey
+              // for range selection. Prevent the default toggle here.
+              onCheckedChange={() => {}}
+              aria-label={`Select ${video.title}`}
+              className={`pointer-events-none ${
+                inSelectionMode || isChecked
+                  ? ''
+                  : 'hidden opacity-0 group-hover:opacity-100 sidebar:block'
+              }`}
+            />
+          </div>
+          <div className="flex-1" />
         </div>
 
         {inSelectionMode ? (
@@ -548,7 +564,7 @@ export default function VideoRow({
                   )}
                   {isUnread && (
                     <DropdownMenuItem onSelect={() => void triage.markRead(video.id)}>
-                      <CheckCheck className="mr-2 h-4 w-4 text-emerald-500" />
+                      <Check className="mr-2 h-4 w-4 text-emerald-500" />
                       Mark as read
                     </DropdownMenuItem>
                   )}
@@ -672,7 +688,7 @@ export default function VideoRow({
                     aria-label="Mark as read"
                     className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-emerald-500"
                   >
-                    <CheckCheck className="h-4 w-4" />
+                    <Check className="h-4 w-4" />
                   </button>
                 </WithTooltip>
               )}
