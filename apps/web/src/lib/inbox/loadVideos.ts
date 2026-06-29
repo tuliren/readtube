@@ -101,27 +101,47 @@ export async function loadInboxVideos(
 
   const sortDirection = query.sort === 'oldest' ? 'asc' : 'desc';
 
-  // Run count first so we can clamp the requested page against the
-  // actual result set BEFORE running findMany. Without this, a
-  // bookmark like /inbox?starred=1&page=5 against a Starred bucket
-  // that has since shrunk to 30 videos would return zero rows for
-  // skip=100 — leaving the user looking at "Page 5 of 2" with an
-  // empty list. Clamping serializes the two queries (one extra
-  // round-trip) but the cost is small (~5ms) for a properly indexed
-  // COUNT(*).
+  // Order by the *effective* publish date — published_at when present,
+  // otherwise created_at (when we first learned about the video). A
+  // standalone video added for a subscribed channel whose watch-page
+  // scrape couldn't recover a publish date lands with published_at =
+  // null; ordering by raw published_at with NULLS LAST would bury it on
+  // the very last page of the channel even though the user just added
+  // it (T-509). Sorting by COALESCE(published_at, created_at) keeps such
+  // a video on the same timeline as everything else — consistent with
+  // `effectivePublishDate` and the watermark SQL in lib/subscriptions.
   //
-  // When total is 0 we still want to surface page 1 (the pagination
+  // Prisma can't ORDER BY a COALESCE expression, so (like
+  // loadLibraryScope below) we resolve the ordered id list in JS from a
+  // lightweight id+dates fetch, then read one page of full rows by id.
+  const ordered = await prisma.video.findMany({
+    where,
+    select: { id: true, published_at: true, created_at: true },
+  });
+  ordered.sort((a, b) => {
+    const delta = effectivePublishDate(a).getTime() - effectivePublishDate(b).getTime();
+    if (delta !== 0) {
+      return sortDirection === 'asc' ? delta : -delta;
+    }
+    // Deterministic tiebreak so pagination stays consistent across
+    // requests when two videos share an effective date.
+    return a.id < b.id ? 1 : a.id > b.id ? -1 : 0;
+  });
+
+  // Clamp the requested page against the actual result size BEFORE
+  // slicing. Without this, a bookmark like /inbox?starred=1&page=5
+  // against a bucket that has since shrunk to 30 videos would slice an
+  // empty window — leaving the user looking at "Page 5 of 2" with an
+  // empty list. When total is 0 we still surface page 1 (the pagination
   // control hides itself when total <= PAGE_SIZE anyway).
-  const total = await prisma.video.count({ where });
+  const total = ordered.length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const page = Math.min(requestedPage, totalPages);
   const skip = (page - 1) * PAGE_SIZE;
+  const pageIds = ordered.slice(skip, skip + PAGE_SIZE).map((v) => v.id);
 
-  const videos = await prisma.video.findMany({
-    where,
-    // Sort nulls to the end regardless of direction so a video with
-    // an unknown publish date never masquerades as the newest entry.
-    orderBy: { published_at: { sort: sortDirection, nulls: 'last' } },
+  const pageRows = await prisma.video.findMany({
+    where: { id: { in: pageIds } },
     select: {
       id: true,
       source_id: true,
@@ -165,9 +185,14 @@ export async function loadInboxVideos(
         },
       },
     },
-    skip,
-    take: PAGE_SIZE,
   });
+
+  // findMany ignores the id-list order, so re-sort the page rows into
+  // the effective-date order computed above.
+  const rowById = new Map(pageRows.map((v) => [v.id, v]));
+  const videos = pageIds
+    .map((id) => rowById.get(id))
+    .filter((v): v is NonNullable<typeof v> => v != null);
 
   type VideoRow = (typeof videos)[number];
   const readAtFor = (v: VideoRow): Date | null => {
