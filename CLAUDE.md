@@ -11,10 +11,8 @@ Turn YouTube subscriptions into a personal substack. Consume videos efficiently 
 - Always use curly braces after `if` statements.
 - Always think about adding unit tests for new features and bug fixes. Aim for good coverage on critical parsing logic and workflows. But skip unit tests if it involves complicated mocking or stubs.
 - When checking whether a value exists or is absent, use `if (x == null)` or `if (x != null)` instead of `if (!x)` or `if (!!x)`. This avoids implicit type coercion, which can mask bugs when `x` is a valid falsy value like `0`, `""`, or `false`.
-  - For review agent, it's fine to not always following this rule, especially for existing code.
 - In unit tests, use `it.each` to group similar test cases together. Do not use "should" in test descriptions.
 - When introducing a database schema change, follow the workflow in `packages/database/README.md`. The short version: edit `packages/database/prisma/schema.prisma`, run `yarn db:create-migration` (which creates both an up and a down migration via the custom `bin/create-migration.sh` wrapper), inspect the generated SQL — Prisma's diff doesn't fully understand the `Unsupported("tsvector")` generated column or the raw-SQL ANN/GIN indexes, so you may need to delete spurious DROP/RECREATE INDEX statements by hand — and then apply with `yarn db:deploy`.
-  - For review agent, it is fine to see migration files in a PR. Those files are added by human engineer.
 - Never modify any existing migration files.
 - When writing Prisma `upsert` statement, always ensure the unique fields have the same values in the `where` and `create` options. This enables Prisma to use native Postgres `upsert` statement.
 - When a React component file is long, separate subcomponents into their own component files.
@@ -41,14 +39,14 @@ When RSS + TranscriptAPI both fail, the scrape-only build marks every video `isS
 
 ## Scheduled premieres / upcoming livestreams
 
-Future-dated videos are filtered out of every channel-ingest path: `channelScrape.ts` skips entries carrying `upcomingEventData`, while `channelRss.ts` and TranscriptAPI's `fetchChannelLatest` drop entries whose `published` is strictly after `Date.now()`. The result is that a refresh-channels pass never pulls scheduled videos into the system.
+Channel-ingest paths drop future-dated videos: `channelScrape.ts` skips `upcomingEventData` entries; `channelRss.ts` and TranscriptAPI's `fetchChannelLatest` drop `published > now`. So refreshes never pull in scheduled videos.
+
+For individually-added videos that are (or turn) scheduled, `ensureTranscript` probes the watch page (`scheduledVideo.ts`) before flipping the sticky `transcript_unavailable` flag — scrape's `isUpcoming` + `liveBroadcastDetails.startTimestamp` is authoritative, TranscriptAPI `/channel/latest` a fallback. Detected ones return `425` (`code: 'scheduled'`) so the reader shows a toast instead of sticky-locking.
 
 ## Members-only videos
 
-Members-only uploads are filtered out at scrape time via `channelScrape.ts`: the `lockupViewModel` shape carries a `badgeViewModel` with `badgeStyle: "BADGE_MEMBERS_ONLY"` in its metadata rows, and the legacy `videoRenderer` shape uses `metadataBadgeRenderer.style: "BADGE_STYLE_TYPE_MEMBERS_ONLY"`. Either signal pulls the id out of `videos` and onto `memberOnlyVideoIds`, which `mergeSnapshot` then uses to drop any matching RSS entry as well (RSS typically omits members-only uploads, but the filter is propagated for safety). The watch page is paywalled, so attempting to ingest them would only burn a transcript fetch and sticky-lock the entry as captionless.
-
-For individually-added videos that *are* scheduled (or videos that flipped to scheduled between ingest and the user's first transcript click), `ensureTranscript` probes the watch page via `lib/platforms/youtube/scheduledVideo.ts` before flipping the sticky `transcript_unavailable` flag. The scrape's `"isUpcoming":true` flag plus `liveBroadcastDetails.startTimestamp` is the authoritative signal; TranscriptAPI `/channel/latest` (using `published > now`) is a best-effort fallback when the scrape is unreachable — premieres of pre-uploaded videos may slip past the fallback because their `published` carries the upload time, not the air time. When detected, the route returns `425 Too Early` with `code: 'scheduled'` instead of `410`, and the reader surfaces a toast warning rather than sticky-locking the tabs.
+`channelScrape.ts` drops members-only uploads (badge `BADGE_MEMBERS_ONLY` / `BADGE_STYLE_TYPE_MEMBERS_ONLY`) into `memberOnlyVideoIds`, which `mergeSnapshot` uses to drop matching RSS entries too. Their watch pages are paywalled — ingesting would only burn a transcript fetch and sticky-lock the entry as captionless.
 
 ## Generation usage & quota
 
-Usage is metered off the `UserRequest` audit log — there's no separate counter table. `lib/usage/quota.ts` derives everything: `MONTHLY_GENERATION_QUOTA` is the per-user monthly allotment, `getGenerationUsage` counts the current calendar month's transcript generations against it (UTC month boundaries, `created_at` filter), and `getLifetimeUsage` groups all-time counts by type. Only `TRANSCRIPT` requests count toward the quota — a transcript fetch is the upstream-cost unit; summary/article generations layer on top and are tracked separately but don't draw it down. Both metrics count every row of the relevant type regardless of `outcome`, because a `UserRequest` row is only written when work actually happened (cache hits / zero-cost short-circuits aren't logged). Surfaced read-only on `/usage` (linked from the profile menu). **No enforcement yet** — the quota is informational; warnings and hard limits are future work under the "Add payment" milestone.
+Metered off the `UserRequest` audit log (no counter table); `lib/usage/quota.ts` derives it. Only `TRANSCRIPT` requests count toward `MONTHLY_GENERATION_QUOTA` (`getGenerationUsage`, UTC calendar month); `getLifetimeUsage` groups all-time counts by type. Rows are only written when work actually happened, so every row counts regardless of `outcome`. Surfaced read-only on `/usage`; no enforcement yet.
