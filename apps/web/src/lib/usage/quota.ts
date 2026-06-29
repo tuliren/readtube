@@ -14,7 +14,7 @@ import { type PrismaClient, UserRequestType } from '@readtube/database';
  * they stand before enforcement (warnings / hard limits) lands. Tune
  * freely — no code below or above this number changes behavior yet.
  */
-export const MONTHLY_GENERATION_QUOTA = 100;
+export const MONTHLY_GENERATION_QUOTA = 500;
 
 export interface GenerationUsage {
   /** Transcript generations the user has spent in the current month. */
