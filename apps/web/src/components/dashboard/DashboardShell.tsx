@@ -1,7 +1,7 @@
 'use client';
 
 import { UserButton } from '@clerk/nextjs';
-import { AdjustmentsHorizontalIcon } from '@heroicons/react/24/outline';
+import { AdjustmentsHorizontalIcon, ChartBarIcon } from '@heroicons/react/24/outline';
 import { CheckCheck, Menu, PanelLeft, RefreshCw } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -169,6 +169,11 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
                   <UserButton>
                     <UserButton.MenuItems>
                       <UserButton.Link
+                        label="Usage"
+                        labelIcon={<ChartBarIcon className="h-4 w-4" />}
+                        href="/usage"
+                      />
+                      <UserButton.Link
                         label="Settings"
                         labelIcon={<AdjustmentsHorizontalIcon className="h-4 w-4" />}
                         href="/settings"
@@ -230,6 +235,11 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
               {collapsed && <ThemeSelector side="right" />}
               <UserButton>
                 <UserButton.MenuItems>
+                  <UserButton.Link
+                    label="Usage"
+                    labelIcon={<ChartBarIcon className="h-4 w-4" />}
+                    href="/usage"
+                  />
                   <UserButton.Link
                     label="Settings"
                     labelIcon={<AdjustmentsHorizontalIcon className="h-4 w-4" />}
