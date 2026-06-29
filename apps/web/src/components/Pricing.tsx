@@ -51,6 +51,7 @@ const PRICING_TIERS: Tier[] = [
     description:
       'For people who follow a steady set of channels and want to read instead of watch.',
     features: [
+      '7 days free trial',
       'Personal RSS-style inbox',
       'Summary and article generation',
       '500 video transcription per month',
@@ -66,16 +67,13 @@ const PRICING_TIERS: Tier[] = [
     name: 'Scholar',
     id: 'tier-scholar',
     href: '/sign-up',
-    price: { monthly: 25, annually: 180 },
+    price: { monthly: 30, annually: 180 },
     description: 'For researchers and lifelong learners building a deep personal archive.',
     features: [
-      'Personal RSS-style inbox',
-      'Summary and article generation',
+      'All features included in Curator',
       '2,000 video transcription per month',
-      'Track 500 channels and playlists',
+      'Track 100 channels and playlists',
       'Save 10,000 standalone videos',
-      'Export as markdown',
-      'Unlimited notes and highlights (coming soon)',
     ],
     available: false,
   },
