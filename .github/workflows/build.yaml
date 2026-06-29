@@ -48,16 +48,16 @@ jobs:
           --health-retries 10
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
       - name: Enable corepack
         run: corepack enable
       - name: Setup node
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: yarn
       - name: Cache node_modules
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         id: node-modules-cache
         with:
           path: |
@@ -70,7 +70,7 @@ jobs:
         if: steps.node-modules-cache.outputs.cache-hit != 'true'
         run: yarn install --immutable
       - name: Cache turbo
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .turbo
           key: turbo-${{ runner.os }}-${{ github.ref_name }}-${{ github.sha }}

@@ -22,7 +22,7 @@ Everything is TypeScript.
 
 ## Prerequisites
 
-- Node.js `>= 20`
+- Node.js `>= 22`
 - Yarn `4.9.1` (pinned via `packageManager`)
 - Docker (for integration tests — uses [Testcontainers](https://testcontainers.com/))
 - A running Postgres instance for local development
