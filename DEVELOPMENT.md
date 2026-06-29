@@ -134,59 +134,14 @@ The script environment (`development` or `production`) is exposed as `SCRIPT_ENV
 
 ## Tuning article generation
 
-Article generation has two strategies — single-pass (one LLM call writes the whole article) and map-reduce (split the transcript into sections, generate each in parallel, then a small reduce pass consolidates the outline). Selection and sizing are controlled by a small set of constants in `apps/web/src/constants.ts`. No other code needs to change to retune.
+Article generation picks between **single-pass** (one LLM call) and **map-reduce** (split the transcript into sections, generate in parallel, then a reduce pass consolidates the outline). Every knob lives in `apps/web/src/constants.ts` and is documented inline — the highlights:
 
-### Strategy threshold
+- `MAP_REDUCE_THRESHOLD_MINUTES` — at/above uses map-reduce, below uses single-pass. Falls back to transcript reading time when `durationSeconds` is missing; set huge to disable map-reduce.
+- `SECTION_TARGET_WORDS` — the one knob for section size; `MIN/MAX_SECTION_WORDS` derive from it (0.5×/2×). Lower for more, smaller sections.
+- `MAX_SECTIONS`, `MAX_PARALLEL_SECTIONS`, `EMBED_WINDOW_WORDS`, `TOPIC_BOUNDARY_DISTANCE` — map-reduce caps, per-section concurrency, and the topic-shift cosine threshold (lower → more semantic cuts).
+- `MAX_PRESTREAM_ATTEMPTS`, `STREAM_INACTIVITY_TIMEOUT_MS` — retry + watchdog around `streamText`; raise the timeout if slow-but-healthy streams trip the watchdog.
 
-```ts
-// apps/web/src/constants.ts
-export const MAP_REDUCE_THRESHOLD_MINUTES = 20;
-```
-
-Videos with `durationSeconds >= MAP_REDUCE_THRESHOLD_MINUTES * 60` use map-reduce; everything below uses single-pass. When the platform-reported `durationSeconds` is missing, the same threshold compares against the transcript's estimated reading time (`countWords(transcript) / READING_WPM`), so a long transcript without a duration still routes correctly. Set it to a huge number to disable map-reduce entirely.
-
-### Section sizing
-
-`SECTION_TARGET_WORDS` is the single knob that drives section count and size. `MIN_SECTION_WORDS` and `MAX_SECTION_WORDS` derive from it (0.5× / 2×) so changing the target really moves the bounds.
-
-```ts
-export const SECTION_TARGET_WORDS = 600;       // ~4 min of speech
-export const MIN_SECTION_WORDS = Math.floor(SECTION_TARGET_WORDS * 0.5);
-export const MAX_SECTION_WORDS = SECTION_TARGET_WORDS * 2;
-```
-
-Lower the target for more granular sections, raise it for fewer / larger ones. Word counting uses `Intl.Segmenter` (see `lib/format/wordCount.ts`), so the same numerical value works correctly across CJK and whitespace-delimited languages.
-
-Other map-reduce tunables (in the same file):
-
-- `MAX_SECTIONS` — sanity cap; trailing windows merge into the last section if hit.
-- `MAX_PARALLEL_SECTIONS` — concurrency for the per-section LLM calls.
-- `EMBED_WINDOW_WORDS` — fine-grained windows used by the topic-boundary detector.
-- `TOPIC_BOUNDARY_DISTANCE` — cosine-distance threshold for "this is a topic shift". Lower → more semantic cuts.
-
-### Reading the grouping log
-
-Every map-reduce run emits one `console.info` summary that explains exactly how it picked its section count:
-
-```
-[articleWorkflow:map-reduce] section grouping summary {
-  windows, totalWords, sections,
-  bounds: { target, min, max },
-  distances: { min, max, mean, threshold },
-  cutReasons: { 'topic-shift', 'max-words', 'last', 'fallback' },
-  perSection: [ { idx, windows, words, reason, distAtCut }, ... ]
-}
-```
-
-Quick reads:
-
-- `cutReasons.max-words > 0` and `topic-shift = 0` — bounds are doing the work; no semantic shifts found. Lower `TOPIC_BOUNDARY_DISTANCE` if you want more semantic cuts, or accept the result on monotopic content.
-- One section with `reason: 'last'` and `distances.max < threshold` — the entire transcript is semantically tight and fits inside `MAX_SECTION_WORDS`. Lower `SECTION_TARGET_WORDS` to force splits.
-- `(fallback)` in the log label — embedding pipeline failed; the run used deterministic word-count chunking. Investigate the embedding error.
-
-### Other generation knobs
-
-`MAX_PRESTREAM_ATTEMPTS` and `STREAM_INACTIVITY_TIMEOUT_MS` (also in `constants.ts`) control the retry + watchdog around every `streamText` call. Raise the timeout if you see watchdog aborts on slow but functional streams.
+Each map-reduce run logs one `[articleWorkflow:map-reduce] section grouping summary` (`console.info`) with window/word/section counts, distance stats, and per-section cut reasons — read it to see why a section count was chosen. A `(fallback)` label means the embedding pipeline failed and deterministic word-count chunking was used.
 
 ## Deployment
 
