@@ -399,47 +399,80 @@ export default function VideoRow({
     }
   }
 
-  const rowContent = (
-    <>
-      {video.thumbnailUrl != null && (
-        // self-stretch makes the wrapper match the three-line text column's
-        // height, and the absolutely-positioned image fills it via
-        // object-cover. Stretching a div (not the <img>, a replaced element
-        // with its own intrinsic height) keeps the thumbnail from ever
-        // driving the row taller than the text — so it covers the row with
-        // no dead space on either side.
-        <div className="relative w-24 shrink-0 self-stretch overflow-hidden rounded">
-          <img
-            // See VideoReader.tsx — Bilibili CDN 403s with our Referer
-            // and returns http:// URLs that would otherwise be blocked.
-            src={video.thumbnailUrl.replace(/^http:\/\//, 'https://')}
-            alt=""
-            className="absolute inset-0 h-full w-full object-cover"
-            loading="lazy"
-            referrerPolicy="no-referrer"
-          />
-        </div>
-      )}
+  const title = (
+    <p className="truncate text-sm font-semibold leading-snug text-foreground">{video.title}</p>
+  );
 
+  const metadataText = (
+    <>
+      {video.channelName}
+      {video.publishedAt != null ? ` · ${relativeTime(video.publishedAt, now)}` : null}
+      {(() => {
+        const duration = formatDurationSeconds(video.durationSeconds);
+        return duration != null ? ` · ${duration}` : null;
+      })()}
+    </>
+  );
+
+  const badges = (
+    <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1">
+      <ArtifactBadges video={video} />
+      <StateBadges video={video} />
+    </div>
+  );
+
+  const thumbnail =
+    video.thumbnailUrl != null ? (
+      // self-stretch makes the wrapper match its text column's height, and
+      // the absolutely-positioned image fills it via object-cover. Stretching
+      // a div (not the <img>, a replaced element with its own intrinsic
+      // height) keeps the thumbnail from ever driving the row taller than the
+      // text — so it covers the row with no dead space on either side. On
+      // mobile the thumbnail sits beside the two-line metadata column instead
+      // of the full three-line text column, so it's narrower (w-16 ≈ 16:9 at
+      // two text rows) to keep its proportions sensible.
+      <div
+        className={`relative shrink-0 self-stretch overflow-hidden rounded ${
+          isMobile ? 'w-16' : 'w-24'
+        }`}
+      >
+        <img
+          // See VideoReader.tsx — Bilibili CDN 403s with our Referer
+          // and returns http:// URLs that would otherwise be blocked.
+          src={video.thumbnailUrl.replace(/^http:\/\//, 'https://')}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover"
+          loading="lazy"
+          referrerPolicy="no-referrer"
+        />
+      </div>
+    ) : null;
+
+  // Mobile stacks the title on its own full-width line, then puts the
+  // thumbnail beside a two-line metadata + badges column below it. Desktop
+  // keeps the thumbnail on the left spanning all three text lines (title,
+  // metadata, badges). The blue unread dot lives in the left gutter in both.
+  const rowContent = isMobile ? (
+    <div className="min-w-0 flex-1">
+      {title}
+      <div className="mt-1 flex items-start gap-2">
+        {thumbnail}
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-xs text-muted-foreground">{metadataText}</p>
+          {badges}
+        </div>
+      </div>
+    </div>
+  ) : (
+    <>
+      {thumbnail}
       <div className="min-w-0 flex-1">
         {/* Three stacked lines beside the thumbnail: bold title, then
             author / time / duration, then the artifact + state badges.
             The blue dot (rendered above) is the sole unread indicator. */}
-        <p className="truncate text-sm font-semibold leading-snug text-foreground">{video.title}</p>
-
-        <p className="mt-0.5 truncate text-xs text-muted-foreground">
-          {video.channelName}
-          {video.publishedAt != null ? ` · ${relativeTime(video.publishedAt, now)}` : null}
-          {(() => {
-            const duration = formatDurationSeconds(video.durationSeconds);
-            return duration != null ? ` · ${duration}` : null;
-          })()}
-        </p>
-
-        <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1">
-          <ArtifactBadges video={video} />
-          <StateBadges video={video} />
-        </div>
+        {title}
+        <p className="mt-0.5 truncate text-xs text-muted-foreground">{metadataText}</p>
+        {badges}
       </div>
     </>
   );
