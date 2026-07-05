@@ -24,6 +24,7 @@ import { isEmptyString } from '@/lib/string';
 import { parseUrlLoose } from '@/lib/urls/parseLoose';
 
 import { UNKNOWN_CHANNEL_NAME } from './constants';
+import { parseIsoDurationSeconds } from './isoDuration';
 import { resolveChannelId } from './transcriptApi';
 import { YOUTUBE_VIDEO_ID_PATTERN, buildThumbnailUrl } from './urls';
 
@@ -75,24 +76,9 @@ export function extractVideoId(input: string): string | null {
   return null;
 }
 
-/**
- * Parses ISO-8601 duration (e.g. "PT1H2M3S", "PT45S") into seconds.
- * Returns null if the input is missing or malformed.
- */
-export function parseIsoDurationSeconds(iso: string | null | undefined): number | null {
-  if (iso == null) {
-    return null;
-  }
-  const m = iso.match(/^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/);
-  if (m == null) {
-    return null;
-  }
-  const hours = m[1] != null ? parseInt(m[1], 10) : 0;
-  const mins = m[2] != null ? parseInt(m[2], 10) : 0;
-  const secs = m[3] != null ? parseInt(m[3], 10) : 0;
-  const total = hours * 3600 + mins * 60 + secs;
-  return total > 0 ? total : null;
-}
+// Moved to ./isoDuration so dataApi.ts can share it without importing
+// this module; re-exported to keep existing import sites working.
+export { parseIsoDurationSeconds };
 
 /** HTML entity decode for the small set that shows up in og meta tags. */
 function decodeHtmlEntities(s: string): string {
