@@ -1,6 +1,6 @@
 import { VideoPlatformType, prisma } from '@readtube/database';
 
-import { trackContentAdded } from '@/lib/analytics/events';
+import { trackContentAdded, trackYouTubeFetch } from '@/lib/analytics/events';
 import type { RssChannel } from '@/lib/platforms/youtube/channelRss';
 import { fetchRssFeed, isYouTubeShort } from '@/lib/platforms/youtube/channelRss';
 import { UNKNOWN_CHANNEL_NAME } from '@/lib/platforms/youtube/constants';
@@ -69,6 +69,7 @@ export async function fetchPlaylistData(playlistId: string): Promise<PlaylistFee
     try {
       const playlist = await fetchPlaylistViaDataApi(playlistId);
       if (playlist.videos.length > 0) {
+        void trackYouTubeFetch('playlist', 'data_api');
         return {
           channelId: playlist.channelId,
           channelName: playlist.channelName,
@@ -85,6 +86,7 @@ export async function fetchPlaylistData(playlistId: string): Promise<PlaylistFee
   // Attempt 1: RSS feed
   try {
     const rss: RssChannel = await fetchRssFeed(buildPlaylistRssUrl(playlistId));
+    void trackYouTubeFetch('playlist', 'rss');
     return {
       channelId: rss.channelId,
       // For playlist RSS feeds the feed-level <title> is the playlist
@@ -110,6 +112,7 @@ export async function fetchPlaylistData(playlistId: string): Promise<PlaylistFee
 
   // Attempt 2: page scrape
   const scraped = await scrapePlaylist(playlistId);
+  void trackYouTubeFetch('playlist', 'scrape');
   return {
     channelId: scraped.channelId,
     channelName: scraped.channelName,
