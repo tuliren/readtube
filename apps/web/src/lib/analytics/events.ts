@@ -17,14 +17,14 @@
  * Emitters never throw (analytics must not break a request or a
  * workflow step) but they ARE awaited by callers: outside an HTTP
  * request there's no `waitUntil` to flush the send, so the caller has
- * to await for the event to actually leave. They stay silent unless
- * `VERCEL_URL` is set — true on every Vercel runtime (production,
- * preview, and the Workflow/cron runtime) and absent for local dev,
- * the `scripts/` probes, and Jest — so nothing spams the console or
- * the network there.
+ * to await for the event to actually leave. They stay silent in the
+ * development environment (`VERCEL_ENV` unset or `development`), so
+ * local dev, the `scripts/` probes, and Jest emit nothing.
  */
 import { VideoPlatformType } from '@readtube/database';
 import { track } from '@vercel/analytics/server';
+
+import { VercelEnv, getVercelEnv } from '@/lib/vercelEnv';
 
 export type ContentGenerationType = 'transcript' | 'summary' | 'article';
 export type GenerationOutcome = 'generated' | 'unavailable' | 'failed';
@@ -56,10 +56,11 @@ function hasAmbientRequestHeaders(): boolean {
 }
 
 async function emit(name: string, properties: Record<string, string>): Promise<void> {
-  // `VERCEL_URL` is `track()`'s endpoint and is set on every Vercel
-  // runtime; its absence means local dev / scripts / tests, where we
-  // emit nothing.
-  if (process.env.VERCEL_URL == null) {
+  // Production + preview emit; local dev, the `scripts/` probes, and
+  // Jest have `VERCEL_ENV` unset (→ development) and stay silent. This
+  // is a system env var present on every Vercel runtime, the Workflow
+  // and cron ones included, so background emits aren't gated out.
+  if (getVercelEnv(process.env.VERCEL_ENV) === VercelEnv.DEVELOPMENT) {
     return;
   }
   try {

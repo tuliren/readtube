@@ -27,8 +27,8 @@ describe('event emission gating', () => {
     process.env = originalEnv;
   });
 
-  it('emits when VERCEL_URL is set (any Vercel runtime)', async () => {
-    process.env = { ...originalEnv, VERCEL_URL: 'readtube.vercel.app' };
+  it.each([['production'], ['preview']])('emits on Vercel %s', async (vercelEnv) => {
+    process.env = { ...originalEnv, VERCEL_ENV: vercelEnv };
 
     await trackYouTubeFetch('channel', 'data_api');
 
@@ -41,9 +41,15 @@ describe('event emission gating', () => {
     );
   });
 
-  it('stays silent when VERCEL_URL is absent (local/scripts/tests)', async () => {
+  it.each([
+    ['development', 'development'],
+    ['unset VERCEL_ENV (local/scripts/tests)', undefined],
+  ])('stays silent for %s', async (_label, vercelEnv) => {
     process.env = { ...originalEnv };
-    delete process.env.VERCEL_URL;
+    delete process.env.VERCEL_ENV;
+    if (vercelEnv != null) {
+      process.env.VERCEL_ENV = vercelEnv;
+    }
 
     await trackYouTubeFetch('channel', 'rss');
 
@@ -51,7 +57,7 @@ describe('event emission gating', () => {
   });
 
   it('never rejects even when track throws', async () => {
-    process.env = { ...originalEnv, VERCEL_URL: 'readtube.vercel.app' };
+    process.env = { ...originalEnv, VERCEL_ENV: 'production' };
     (track as jest.Mock).mockRejectedValueOnce(new Error('collector down'));
 
     await expect(trackYouTubeFetch('video', 'scrape')).resolves.toBeUndefined();
