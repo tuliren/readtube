@@ -4,6 +4,8 @@
 
 Every YouTube read goes through the official **Data API v3** first (our own GCP project's key, `YOUTUBE_API_KEY`; free 10,000 units/day) and falls back to the legacy sources only when the key is unset or the Data API attempt fails. Transcripts are the exception: the Data API's captions endpoint is owner-OAuth-only, so TranscriptAPI is primary there. All Data API calls live in `apps/web/src/lib/platforms/youtube/dataApi.ts`.
 
+> **TODO — delete the scrape and RSS fallbacks.** With the Data API primary, `channelScrape.ts`, `channelRss.ts`, and `playlistScrape.ts` (plus the `mergeSnapshot` / `buildSnapshotFromScrape` / `isScraped` machinery in `channelSnapshot.ts`) are only exercised when the Data API is unavailable. Once the `youtube_fetch` analytics (see "Analytics events") confirm the Data API serves ~100% of production traffic, remove scrape entirely (its enrichment fields — duration, logo, handle, premiere/members filtering, older-than-15 videos — are all covered by the Data API) and drop RSS as a fetch source, keeping only `Data API → TranscriptAPI` as the fallback chain. RSS is the least reliable tier anyway: YouTube soft-blocks hosting IPs by returning empty 200s (the reason the zero-video TranscriptAPI fallback exists). Keep RSS longest if a fully-independent, non-GCP failure domain is still wanted; scrape has no such argument and should go first.
+
 Notation: `A → B` means B runs after A (within a tier) or only if A failed (between fallback tiers); `A ∥ B` means A and B are fetched **in parallel**.
 
 | Operation | Primary (Data API) | Fallback chain | Quota units |
