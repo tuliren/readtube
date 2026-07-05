@@ -295,7 +295,7 @@ export interface DataApiChannelRef {
  * (channelSnapshot.ts) catches and falls back to scrape + RSS.
  */
 export async function fetchChannelViaDataApi(ref: DataApiChannelRef): Promise<ChannelSnapshot> {
-  const refParams =
+  const refParams: Record<string, string> | null =
     ref.channelId != null
       ? { id: ref.channelId }
       : ref.handle != null
