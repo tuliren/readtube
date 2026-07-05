@@ -1,4 +1,10 @@
-import { GenerationStatus, Prisma, UserRequestOutcome, prisma } from '@readtube/database';
+import {
+  GenerationStatus,
+  Prisma,
+  UserRequestOutcome,
+  UserRequestType,
+  prisma,
+} from '@readtube/database';
 import { FatalError, getWorkflowMetadata, getWritable } from 'workflow';
 
 import { DEFAULT_AI_MODEL } from '@/constants';
@@ -124,6 +130,7 @@ export async function persistArticleStep(
   if (input.userRequestId != null) {
     try {
       await completeUserRequest(prisma, input.userRequestId, {
+        type: UserRequestType.ARTICLE,
         outcome: UserRequestOutcome.GENERATED,
         usage: input.usage,
         articleId,
@@ -156,6 +163,7 @@ export async function revertArticleRowStep(
   if (input.userRequestId != null) {
     try {
       await completeUserRequest(prisma, input.userRequestId, {
+        type: UserRequestType.ARTICLE,
         outcome: UserRequestOutcome.FAILED,
         errorMessage: errorMessage ?? 'Article workflow failed.',
       });
