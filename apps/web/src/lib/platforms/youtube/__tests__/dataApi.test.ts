@@ -1,8 +1,11 @@
+import { MembersOnlyVideoError } from '@/lib/platforms/types';
+
 import { fetchChannelViaDataApi, fetchVideoViaDataApi, isDataApiConfigured } from '../dataApi';
 
 const CHANNEL_ID = 'UCBJycsmduvYEL83R_U4JriQ';
 const UPLOADS_PLAYLIST_ID = `UU${CHANNEL_ID.slice(2)}`;
 const SHORTS_PLAYLIST_ID = `UUSH${CHANNEL_ID.slice(2)}`;
+const MEMBERS_PLAYLIST_ID = `UUMO${CHANNEL_ID.slice(2)}`;
 const VIDEO_ID = 'dQw4w9WgXcQ';
 const SHORT_ID = 'shortvideo1';
 
@@ -311,6 +314,7 @@ describe('fetchVideoViaDataApi', () => {
     mockDataApi({
       videos: { items: [buildVideoItem(VIDEO_ID)] },
       channels: buildChannelsResponse(),
+      [`playlistItems|playlistId=${MEMBERS_PLAYLIST_ID}`]: 404,
     });
 
     const snapshot = await fetchVideoViaDataApi(VIDEO_ID);
@@ -335,6 +339,7 @@ describe('fetchVideoViaDataApi', () => {
     mockDataApi({
       videos: { items: [buildVideoItem(VIDEO_ID)] },
       channels: 500,
+      [`playlistItems|playlistId=${MEMBERS_PLAYLIST_ID}`]: 404,
     });
 
     const snapshot = await fetchVideoViaDataApi(VIDEO_ID);
@@ -345,6 +350,33 @@ describe('fetchVideoViaDataApi', () => {
       handle: null,
       logoUrl: null,
     });
+  });
+
+  it('throws MembersOnlyVideoError when the video is in the members-only playlist', async () => {
+    mockDataApi({
+      videos: { items: [buildVideoItem(VIDEO_ID)] },
+      channels: buildChannelsResponse(),
+      [`playlistItems|playlistId=${MEMBERS_PLAYLIST_ID}`]: {
+        items: [{ id: 'members-playlist-item' }],
+      },
+    });
+
+    await expect(fetchVideoViaDataApi(VIDEO_ID)).rejects.toThrow(MembersOnlyVideoError);
+  });
+
+  it.each([
+    ['playlist does not exist (channel has no members content)', 404],
+    ['check fails transiently', 500],
+  ])('treats the video as addable when the members-only %s', async (_label, status) => {
+    mockDataApi({
+      videos: { items: [buildVideoItem(VIDEO_ID)] },
+      channels: buildChannelsResponse(),
+      [`playlistItems|playlistId=${MEMBERS_PLAYLIST_ID}`]: status,
+    });
+
+    const snapshot = await fetchVideoViaDataApi(VIDEO_ID);
+
+    expect(snapshot.videoId).toBe(VIDEO_ID);
   });
 
   it('throws when the video does not exist', async () => {

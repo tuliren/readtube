@@ -15,18 +15,29 @@
  * Quota cost per call (default project quota is 10,000 units/day):
  *   - channel snapshot: 4 units (channels 1 + uploads playlistItems 1
  *     + shorts playlistItems 1 + videos 1)
- *   - video snapshot: 2 units (videos 1 + channels 1)
+ *   - video snapshot: 3 units (videos 1 + members-only playlistItems 1
+ *     + channels 1)
  *
- * Known fidelity gap vs the scrape path: the Data API exposes no
- * members-only signal, so a members-only upload can slip into a
- * channel snapshot (the scrape path drops them via the
- * BADGE_MEMBERS_ONLY badge). The cost is one wasted transcript fetch
- * on a rare video class — accepted in exchange for not depending on
- * the scrape.
+ * Members-only videos (verified empirically against channels with
+ * members content): the `UU…` uploads playlist structurally excludes
+ * them, so they can never enter a channel snapshot through this path
+ * — no badge scraping needed. They live in their own playlist family
+ * (`UUMF…` long-form, `UUMV…` live, `UUMS…` shorts, `UUMO…` = union
+ * of all three), which is also the *only* API-side signal:
+ * `videos.list` returns them as indistinguishable public videos. The
+ * add-video path therefore checks the `UUMO…` playlist and rejects
+ * members-only videos with `MembersOnlyVideoError` — ingesting one
+ * would only sticky-lock `transcript_unavailable` on a row whose
+ * transcript fetch is guaranteed to fail.
  *
  * Docs: https://developers.google.com/youtube/v3/docs
  */
-import type { ChannelSnapshot, SnapshotVideo, VideoSnapshot } from '@/lib/platforms/types';
+import {
+  type ChannelSnapshot,
+  MembersOnlyVideoError,
+  type SnapshotVideo,
+  type VideoSnapshot,
+} from '@/lib/platforms/types';
 import { isEmptyString } from '@/lib/string';
 
 import { UNKNOWN_CHANNEL_NAME, UNKNOWN_VIDEO_TITLE } from './constants';
@@ -276,6 +287,36 @@ async function fetchUploadedVideos(
   return videos;
 }
 
+/**
+ * True when the video sits in the channel's members-only playlist
+ * (`UUMO…` — the union of members long-form/live/shorts). This is
+ * the only API-side members-only signal: `videos.list` returns such
+ * videos as indistinguishable public videos, and the `UU…` uploads
+ * playlist simply omits them.
+ *
+ * Best-effort: a 404 means the channel has no members content, and
+ * any other failure is logged and treated as "not members-only" —
+ * a flaky bonus check must never block a legitimate add.
+ */
+async function isMembersOnlyVideo(videoId: string, channelId: string): Promise<boolean> {
+  const membersPlaylistId = `UUMO${channelId.slice(2)}`;
+  try {
+    const res = await dataApiFetch<PlaylistItemsListResponse>('playlistItems', {
+      part: 'id',
+      playlistId: membersPlaylistId,
+      videoId,
+      maxResults: '1',
+    });
+    return (res.items ?? []).length > 0;
+  } catch (err) {
+    if (err instanceof DataApiError && err.status === 404) {
+      return false;
+    }
+    console.warn(`[youtube] Data API members-only check failed for ${videoId}:`, err);
+    return false;
+  }
+}
+
 // ── Exported fetchers ──────────────────────────────────────────────
 
 /**
@@ -355,30 +396,44 @@ export async function fetchVideoViaDataApi(videoId: string): Promise<VideoSnapsh
   if (isEmptyString(snippet.title) || isEmptyString(snippet.channelId)) {
     throw new Error(`YouTube Data API video ${videoId} is missing title or channel id`);
   }
+  // Captured as locals because the narrowing from the guard above
+  // doesn't survive into the enrichment closure below.
+  const title = snippet.title;
+  const channelId = snippet.channelId;
 
   let handle: string | null = null;
   let logoUrl: string | null = null;
-  try {
-    const channelsRes = await dataApiFetch<ChannelsListResponse>('channels', {
-      part: 'snippet',
-      id: snippet.channelId,
-    });
-    const channelSnippet = channelsRes.items?.[0]?.snippet;
-    handle = extractHandleFromCustomUrl(channelSnippet?.customUrl);
-    logoUrl = pickThumbnailUrl(channelSnippet?.thumbnails);
-  } catch (err) {
-    console.warn(`[youtube] Data API channel enrichment failed for ${snippet.channelId}:`, err);
+  const [membersOnly] = await Promise.all([
+    isMembersOnlyVideo(videoId, channelId),
+    (async () => {
+      try {
+        const channelsRes = await dataApiFetch<ChannelsListResponse>('channels', {
+          part: 'snippet',
+          id: channelId,
+        });
+        const channelSnippet = channelsRes.items?.[0]?.snippet;
+        handle = extractHandleFromCustomUrl(channelSnippet?.customUrl);
+        logoUrl = pickThumbnailUrl(channelSnippet?.thumbnails);
+      } catch (err) {
+        console.warn(`[youtube] Data API channel enrichment failed for ${channelId}:`, err);
+      }
+    })(),
+  ]);
+  if (membersOnly) {
+    throw new MembersOnlyVideoError(
+      'This video is members-only. Its transcript is only available to channel members, so it cannot be added.'
+    );
   }
 
   return {
     videoId,
-    title: snippet.title,
+    title,
     description: snippet.description ?? '',
     thumbnailUrl: pickThumbnailUrl(snippet.thumbnails) ?? buildThumbnailUrl(videoId),
     publishedAt: parsePublishedAt(snippet.publishedAt),
     durationSeconds: parseIsoDurationSeconds(item.contentDetails?.duration),
     channel: {
-      sourceId: snippet.channelId,
+      sourceId: channelId,
       name: snippet.channelTitle ?? UNKNOWN_CHANNEL_NAME,
       handle,
       logoUrl,

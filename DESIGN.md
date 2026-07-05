@@ -21,7 +21,7 @@ TranscriptAPI fires when **either** of these is true:
 
 When RSS + TranscriptAPI both fail, the scrape-only build marks every video `isScraped: true` so a later healthy RSS pass doesn't get clobbered (create-on-insert, skip-on-update).
 
-`fetchVideoSnapshot` (`videoSnapshot.ts`, add-video flow) uses the same priority: Data API (videos.list + best-effort channels.list for handle/logo, ~2 units) → watch-page scrape → TranscriptAPI.
+`fetchVideoSnapshot` (`videoSnapshot.ts`, add-video flow) uses the same priority: Data API (videos.list + members-only `UUMO…` check + best-effort channels.list for handle/logo, ~3 units) → watch-page scrape → TranscriptAPI. Members-only videos are rejected outright — see "Members-only videos" below.
 
 ## Scheduled premieres / upcoming livestreams
 
@@ -31,9 +31,11 @@ For individually-added videos that are (or turn) scheduled, `ensureTranscript` p
 
 ## Members-only videos
 
-`channelScrape.ts` drops members-only uploads (badge `BADGE_MEMBERS_ONLY` / `BADGE_STYLE_TYPE_MEMBERS_ONLY`) into `memberOnlyVideoIds`, which `mergeSnapshot` uses to drop matching RSS entries too. Their watch pages are paywalled — ingesting would only burn a transcript fetch and sticky-lock the entry as captionless.
+Ingesting a members-only video is always a mistake: the watch page is paywalled, so the transcript fetch is guaranteed to fail and sticky-locks the entry as captionless.
 
-Known gap: the Data API exposes no members-only signal, so the primary tier can let one slip through (costing a doomed transcript fetch on a rare video class). Accepted in exchange for not depending on the scrape.
+**Data API path (primary).** Verified empirically (two channels with fresh members-only uploads): the `UU…` uploads playlist structurally excludes members-only videos, so they can never enter a channel snapshot via the Data API. Members-only content lives in its own undocumented-but-stable playlist family — `UUMF…` (long-form), `UUMV…` (live), `UUMS…` (shorts), `UUMO…` (union of all three; 404 = channel has no members content). That family is also the **only** API-side signal: `videos.list` returns members-only videos as indistinguishable public videos (`privacyStatus: public`), and oEmbed returns 200. The add-video flow therefore checks `UUMO…` (`isMembersOnlyVideo` in `dataApi.ts`, best-effort, 1 quota unit) and rejects with `MembersOnlyVideoError` → `AddVideoError('MEMBERS_ONLY')` → HTTP 400. The rejection is deliberately not swallowed by the video-snapshot fallback chain — the paywalled watch page still serves og meta tags and would happily ingest the doomed row.
+
+**Scrape/RSS fallback path.** `channelScrape.ts` drops members-only uploads (badge `BADGE_MEMBERS_ONLY` / `BADGE_STYLE_TYPE_MEMBERS_ONLY`) into `memberOnlyVideoIds`, which `mergeSnapshot` uses to drop matching RSS entries too (the channel `/videos` tab, unlike the `UU…` playlist, does list members-only videos).
 
 ## Generation usage & quota
 

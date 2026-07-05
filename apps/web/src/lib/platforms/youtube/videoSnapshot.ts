@@ -23,7 +23,11 @@
  * `subtitles/index.ts` / `subtitles/fetchVia*.ts`.
  */
 import type { PlatformTranscriptResult, VideoSnapshotResult } from '@/lib/platforms/base';
-import type { TranscriptSegment, VideoSnapshot } from '@/lib/platforms/types';
+import {
+  MembersOnlyVideoError,
+  type TranscriptSegment,
+  type VideoSnapshot,
+} from '@/lib/platforms/types';
 import { isEmptyString } from '@/lib/string';
 import { parseUrlLoose } from '@/lib/urls/parseLoose';
 
@@ -325,6 +329,11 @@ async function fetchViaTranscriptApi(
  * Returns null when `YOUTUBE_API_KEY` isn't configured or the call
  * fails (quota, network, unknown video), so the orchestrator falls
  * through to the watch-page scrape.
+ *
+ * `MembersOnlyVideoError` is rethrown rather than swallowed: falling
+ * back would defeat the rejection, because the paywalled watch page
+ * still serves og meta tags and would ingest a video whose
+ * transcript fetch is guaranteed to fail.
  */
 async function tryFetchViaDataApi(videoId: string): Promise<VideoSnapshot | null> {
   if (!isDataApiConfigured()) {
@@ -333,6 +342,9 @@ async function tryFetchViaDataApi(videoId: string): Promise<VideoSnapshot | null
   try {
     return await fetchVideoViaDataApi(videoId);
   } catch (err) {
+    if (err instanceof MembersOnlyVideoError) {
+      throw err;
+    }
     console.warn(
       `[videoSnapshot] Data API failed for ${videoId} — falling back to watch page:`,
       err

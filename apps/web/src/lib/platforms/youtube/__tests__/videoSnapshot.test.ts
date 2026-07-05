@@ -1,3 +1,5 @@
+import { MembersOnlyVideoError } from '@/lib/platforms/types';
+
 import { extractVideoId, fetchVideoSnapshot, parseIsoDurationSeconds } from '../videoSnapshot';
 
 const VALID_VIDEO_ID = 'dQw4w9WgXcQ';
@@ -292,6 +294,10 @@ describe('fetchVideoSnapshot orchestration', () => {
           }),
         });
       }
+      if (url.startsWith('https://www.googleapis.com/youtube/v3/playlistItems')) {
+        // Members-only check — playlist doesn't exist (no members content).
+        return Promise.resolve({ ok: false, status: 404, text: async () => '' });
+      }
       throw new Error(`Unexpected fetch URL: ${url}`);
     });
 
@@ -302,6 +308,47 @@ describe('fetchVideoSnapshot orchestration', () => {
     expect(result.snapshot.durationSeconds).toBe(213);
     expect(result.snapshot.channel.handle).toBe('@mkbhd');
     expect(result.snapshot.channel.logoUrl).toBe('https://yt3.googleusercontent.com/logo=s800');
+    const calledUrls = (globalThis.fetch as jest.Mock).mock.calls.map(([u]) => u as string);
+    expect(calledUrls.some((u) => u === watchUrl || u === oembedUrl)).toBe(false);
+  });
+
+  it('rejects members-only videos without falling back to the watch page', async () => {
+    process.env.YOUTUBE_API_KEY = 'yt-key';
+    (globalThis.fetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.startsWith('https://www.googleapis.com/youtube/v3/videos')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            items: [
+              {
+                id: VALID_VIDEO_ID,
+                snippet: {
+                  title: 'Members Only Video',
+                  publishedAt: '2024-06-01T00:00:00Z',
+                  channelId: 'UCBJycsmduvYEL83R_U4JriQ',
+                  channelTitle: 'MKBHD',
+                  liveBroadcastContent: 'none',
+                },
+                contentDetails: { duration: 'PT10M' },
+              },
+            ],
+          }),
+        });
+      }
+      if (url.startsWith('https://www.googleapis.com/youtube/v3/channels')) {
+        return Promise.resolve({ ok: true, json: async () => ({ items: [] }) });
+      }
+      if (url.startsWith('https://www.googleapis.com/youtube/v3/playlistItems')) {
+        // Members-only check — the video IS in the UUMO playlist.
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ items: [{ id: 'members-playlist-item' }] }),
+        });
+      }
+      throw new Error(`Unexpected fetch URL: ${url}`);
+    });
+
+    await expect(fetchVideoSnapshot(VALID_VIDEO_ID)).rejects.toThrow(MembersOnlyVideoError);
     const calledUrls = (globalThis.fetch as jest.Mock).mock.calls.map(([u]) => u as string);
     expect(calledUrls.some((u) => u === watchUrl || u === oembedUrl)).toBe(false);
   });

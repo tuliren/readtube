@@ -69,6 +69,23 @@ export interface ChannelSnapshot {
   videos: SnapshotVideo[];
 }
 
+/**
+ * Thrown by a platform's video snapshot fetcher when the video is
+ * members-only / paywalled. Adding it would only create a row whose
+ * transcript fetch is guaranteed to fail and sticky-lock
+ * `transcript_unavailable`, so the add-video flow rejects it with a
+ * clear user-facing error instead. Platform-neutral so the add-video
+ * workflow can catch it without importing platform-specific modules.
+ */
+export class MembersOnlyVideoError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'MembersOnlyVideoError';
+    // See SubtitleFetchError below for why this is required.
+    Object.setPrototypeOf(this, MembersOnlyVideoError.prototype);
+  }
+}
+
 /** Platform-neutral transcript segment emitted by every platform's transcript fetcher. */
 export interface TranscriptSegment {
   startMs: number;
