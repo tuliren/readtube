@@ -3,6 +3,7 @@ import { VideoPlatformType, prisma } from '@readtube/database';
 import type { RssChannel } from '@/lib/platforms/youtube/channelRss';
 import { fetchRssFeed, isYouTubeShort } from '@/lib/platforms/youtube/channelRss';
 import { UNKNOWN_CHANNEL_NAME } from '@/lib/platforms/youtube/constants';
+import { fetchPlaylistViaDataApi, isDataApiConfigured } from '@/lib/platforms/youtube/dataApi';
 import { PrivatePlaylistError, scrapePlaylist } from '@/lib/platforms/youtube/playlistScrape';
 import { buildPlaylistRssUrl, buildRssUrl, extractPlaylistId } from '@/lib/platforms/youtube/urls';
 import { isEmptyString } from '@/lib/string';
@@ -47,11 +48,39 @@ interface PlaylistFeed {
 }
 
 /**
- * Try RSS first (cheap, structured) then fall back to page scrape
- * (works for all playlist types). RSS returns 404 for user-created
- * playlists, mix playlists, and many PL-prefixed lists.
+ * Try the official Data API first (full fidelity: publish dates AND
+ * durations — the legacy sources each expose only one of the two;
+ * auto-generated Mixes work too), then RSS (cheap, structured), then
+ * the page scrape (works for all playlist types). RSS returns 404
+ * for user-created playlists, mix playlists, and many PL-prefixed
+ * lists. Private playlists are invisible to the Data API, so those
+ * land in the RSS/scrape tiers — the scrape is what raises
+ * PrivatePlaylistError.
+ *
+ * Exported for unit testing.
  */
-async function fetchPlaylistData(playlistId: string): Promise<PlaylistFeed> {
+export async function fetchPlaylistData(playlistId: string): Promise<PlaylistFeed> {
+  // Attempt 0: official Data API. Zero videos falls through — the
+  // legacy tiers behave identically for genuinely-empty playlists,
+  // and this keeps the empty-result handling consistent with the
+  // channel snapshot orchestrator.
+  if (isDataApiConfigured()) {
+    try {
+      const playlist = await fetchPlaylistViaDataApi(playlistId);
+      if (playlist.videos.length > 0) {
+        return {
+          channelId: playlist.channelId,
+          channelName: playlist.channelName,
+          name: playlist.title,
+          videos: playlist.videos,
+        };
+      }
+      console.warn('[add-playlist] Data API returned zero videos — trying RSS/scrape');
+    } catch (err) {
+      console.warn('[add-playlist] Data API failed — falling back to RSS/scrape:', err);
+    }
+  }
+
   // Attempt 1: RSS feed
   try {
     const rss: RssChannel = await fetchRssFeed(buildPlaylistRssUrl(playlistId));
@@ -98,10 +127,10 @@ async function fetchPlaylistData(playlistId: string): Promise<PlaylistFeed> {
 }
 
 /**
- * Adds a YouTube playlist to the user's library. Tries the playlist
- * RSS feed first, then falls back to scraping the playlist page.
- * Creates a Playlist row and for each video upserts a shadow Channel
- * + Video + PlaylistVideo row.
+ * Adds a YouTube playlist to the user's library. Tries the Data API
+ * first, then the playlist RSS feed, then scraping the playlist page
+ * (see fetchPlaylistData). Creates a Playlist row and for each video
+ * upserts a shadow Channel + Video + PlaylistVideo row.
  *
  * The playlist name comes from the feed/page title. If a playlist
  * with that name already exists for the user, a numeric suffix is

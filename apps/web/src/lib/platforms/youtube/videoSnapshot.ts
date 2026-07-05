@@ -4,6 +4,10 @@
  * flow in `lib/workflows/add-video`.
  *
  * Strategy is orchestrated here:
+ *   0. `fetchVideoViaDataApi` — the official Data API, keyed by our
+ *      own GCP project (`YOUTUBE_API_KEY`). Full metadata including
+ *      channel logo, immune to the watch-page rate limiting below.
+ *      Only runs when the key is configured.
  *   1. `fetchViaWatchPage` — scrape `https://www.youtube.com/watch?v=…`.
  *      No API key, richest data (description, duration, publish date),
  *      but YouTube rate-limits Vercel's egress IPs with 429.
@@ -19,11 +23,17 @@
  * `subtitles/index.ts` / `subtitles/fetchVia*.ts`.
  */
 import type { PlatformTranscriptResult, VideoSnapshotResult } from '@/lib/platforms/base';
-import type { TranscriptSegment, VideoSnapshot } from '@/lib/platforms/types';
+import {
+  MembersOnlyVideoError,
+  type TranscriptSegment,
+  type VideoSnapshot,
+} from '@/lib/platforms/types';
 import { isEmptyString } from '@/lib/string';
 import { parseUrlLoose } from '@/lib/urls/parseLoose';
 
 import { UNKNOWN_CHANNEL_NAME } from './constants';
+import { fetchVideoViaDataApi, isDataApiConfigured } from './dataApi';
+import { parseIsoDurationSeconds } from './isoDuration';
 import { resolveChannelId } from './transcriptApi';
 import { YOUTUBE_VIDEO_ID_PATTERN, buildThumbnailUrl } from './urls';
 
@@ -75,24 +85,9 @@ export function extractVideoId(input: string): string | null {
   return null;
 }
 
-/**
- * Parses ISO-8601 duration (e.g. "PT1H2M3S", "PT45S") into seconds.
- * Returns null if the input is missing or malformed.
- */
-export function parseIsoDurationSeconds(iso: string | null | undefined): number | null {
-  if (iso == null) {
-    return null;
-  }
-  const m = iso.match(/^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/);
-  if (m == null) {
-    return null;
-  }
-  const hours = m[1] != null ? parseInt(m[1], 10) : 0;
-  const mins = m[2] != null ? parseInt(m[2], 10) : 0;
-  const secs = m[3] != null ? parseInt(m[3], 10) : 0;
-  const total = hours * 3600 + mins * 60 + secs;
-  return total > 0 ? total : null;
-}
+// Moved to ./isoDuration so dataApi.ts can share it without importing
+// this module; re-exported to keep existing import sites working.
+export { parseIsoDurationSeconds };
 
 /** HTML entity decode for the small set that shows up in og meta tags. */
 function decodeHtmlEntities(s: string): string {
@@ -330,14 +325,48 @@ async function fetchViaTranscriptApi(
 }
 
 /**
- * Fetch a YouTube video's metadata for the add-video flow. Tries
- * the watch-page scrape first; falls back to TranscriptAPI when the
- * watch page is unreachable (e.g. YouTube 429-ing the Vercel egress
- * IP pool). The fallback also returns the transcript, which the
+ * Strategy 0: the official Data API, keyed by our own GCP project.
+ * Returns null when `YOUTUBE_API_KEY` isn't configured or the call
+ * fails (quota, network, unknown video), so the orchestrator falls
+ * through to the watch-page scrape.
+ *
+ * `MembersOnlyVideoError` is rethrown rather than swallowed: falling
+ * back would defeat the rejection, because the paywalled watch page
+ * still serves og meta tags and would ingest a video whose
+ * transcript fetch is guaranteed to fail.
+ */
+async function tryFetchViaDataApi(videoId: string): Promise<VideoSnapshot | null> {
+  if (!isDataApiConfigured()) {
+    return null;
+  }
+  try {
+    return await fetchVideoViaDataApi(videoId);
+  } catch (err) {
+    if (err instanceof MembersOnlyVideoError) {
+      throw err;
+    }
+    console.warn(
+      `[videoSnapshot] Data API failed for ${videoId} — falling back to watch page:`,
+      err
+    );
+    return null;
+  }
+}
+
+/**
+ * Fetch a YouTube video's metadata for the add-video flow. Tries the
+ * official Data API first (when `YOUTUBE_API_KEY` is set), then the
+ * watch-page scrape, then TranscriptAPI when the watch page is
+ * unreachable (e.g. YouTube 429-ing the Vercel egress IP pool). The
+ * TranscriptAPI fallback also returns the transcript, which the
  * caller persists to avoid an immediate re-fetch on first reader
  * open.
  */
 export async function fetchVideoSnapshot(videoId: string): Promise<VideoSnapshotResult> {
+  const dataApiSnapshot = await tryFetchViaDataApi(videoId);
+  if (dataApiSnapshot != null) {
+    return { snapshot: dataApiSnapshot, prefetchedTranscript: null };
+  }
   const watchPageSnapshot = await fetchViaWatchPage(videoId);
   if (watchPageSnapshot != null) {
     return { snapshot: watchPageSnapshot, prefetchedTranscript: null };

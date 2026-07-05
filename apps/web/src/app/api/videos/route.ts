@@ -98,7 +98,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(result, { status: result.createdStandalone ? 201 : 200 });
   } catch (err) {
     if (err instanceof AddVideoError) {
-      const status = err.code === 'INVALID_URL' ? 400 : 502;
+      // MEMBERS_ONLY is a permanent client-side condition (the video
+      // can't be added), not an upstream failure — 400, not 502.
+      const status = err.code === 'INVALID_URL' || err.code === 'MEMBERS_ONLY' ? 400 : 502;
       console.error(`[videos/POST] AddVideoError (${err.code}) for ${input}:`, err);
       return NextResponse.json({ error: err.message }, { status });
     }

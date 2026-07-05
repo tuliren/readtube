@@ -1,3 +1,5 @@
+import { MembersOnlyVideoError } from '@/lib/platforms/types';
+
 import { extractVideoId, fetchVideoSnapshot, parseIsoDurationSeconds } from '../videoSnapshot';
 
 const VALID_VIDEO_ID = 'dQw4w9WgXcQ';
@@ -96,6 +98,9 @@ describe('fetchVideoSnapshot orchestration', () => {
 
   beforeEach(() => {
     process.env = { ...originalEnv, TRANSCRIPT_API_KEY: 'test-key' };
+    // Most tests exercise the watch-page/TranscriptAPI chain — keep
+    // the Data API tier off unless a test opts in explicitly.
+    delete process.env.YOUTUBE_API_KEY;
     jest.spyOn(globalThis, 'fetch');
     // Don't pollute test output with the expected warn/info logs.
     jest.spyOn(console, 'warn').mockImplementation(() => {});
@@ -245,6 +250,136 @@ describe('fetchVideoSnapshot orchestration', () => {
     await expect(fetchVideoSnapshot(VALID_VIDEO_ID)).rejects.toThrow(
       'TranscriptAPI /youtube/transcript 502: bad gateway'
     );
+  });
+
+  it('uses the Data API first when YOUTUBE_API_KEY is set and skips the watch page', async () => {
+    process.env.YOUTUBE_API_KEY = 'yt-key';
+    (globalThis.fetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.startsWith('https://www.googleapis.com/youtube/v3/videos')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            items: [
+              {
+                id: VALID_VIDEO_ID,
+                snippet: {
+                  title: 'Data API Title',
+                  description: 'Data API description',
+                  publishedAt: '2024-06-01T00:00:00Z',
+                  channelId: 'UCBJycsmduvYEL83R_U4JriQ',
+                  channelTitle: 'MKBHD',
+                  liveBroadcastContent: 'none',
+                  thumbnails: { high: { url: 'https://i.ytimg.com/vi/xx/hqdefault.jpg' } },
+                },
+                contentDetails: { duration: 'PT3M33S' },
+              },
+            ],
+          }),
+        });
+      }
+      if (url.startsWith('https://www.googleapis.com/youtube/v3/channels')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            items: [
+              {
+                id: 'UCBJycsmduvYEL83R_U4JriQ',
+                snippet: {
+                  title: 'MKBHD',
+                  customUrl: '@mkbhd',
+                  thumbnails: { high: { url: 'https://yt3.googleusercontent.com/logo=s800' } },
+                },
+              },
+            ],
+          }),
+        });
+      }
+      if (url.startsWith('https://www.googleapis.com/youtube/v3/playlistItems')) {
+        // Members-only check — playlist doesn't exist (no members content).
+        return Promise.resolve({ ok: false, status: 404, text: async () => '' });
+      }
+      throw new Error(`Unexpected fetch URL: ${url}`);
+    });
+
+    const result = await fetchVideoSnapshot(VALID_VIDEO_ID);
+
+    expect(result.prefetchedTranscript).toBeNull();
+    expect(result.snapshot.title).toBe('Data API Title');
+    expect(result.snapshot.durationSeconds).toBe(213);
+    expect(result.snapshot.channel.handle).toBe('@mkbhd');
+    expect(result.snapshot.channel.logoUrl).toBe('https://yt3.googleusercontent.com/logo=s800');
+    const calledUrls = (globalThis.fetch as jest.Mock).mock.calls.map(([u]) => u as string);
+    expect(calledUrls.some((u) => u === watchUrl || u === oembedUrl)).toBe(false);
+  });
+
+  it('rejects members-only videos without falling back to the watch page', async () => {
+    process.env.YOUTUBE_API_KEY = 'yt-key';
+    (globalThis.fetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.startsWith('https://www.googleapis.com/youtube/v3/videos')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            items: [
+              {
+                id: VALID_VIDEO_ID,
+                snippet: {
+                  title: 'Members Only Video',
+                  publishedAt: '2024-06-01T00:00:00Z',
+                  channelId: 'UCBJycsmduvYEL83R_U4JriQ',
+                  channelTitle: 'MKBHD',
+                  liveBroadcastContent: 'none',
+                },
+                contentDetails: { duration: 'PT10M' },
+              },
+            ],
+          }),
+        });
+      }
+      if (url.startsWith('https://www.googleapis.com/youtube/v3/channels')) {
+        return Promise.resolve({ ok: true, json: async () => ({ items: [] }) });
+      }
+      if (url.startsWith('https://www.googleapis.com/youtube/v3/playlistItems')) {
+        // Members-only check — the video IS in the UUMO playlist.
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ items: [{ id: 'members-playlist-item' }] }),
+        });
+      }
+      throw new Error(`Unexpected fetch URL: ${url}`);
+    });
+
+    await expect(fetchVideoSnapshot(VALID_VIDEO_ID)).rejects.toThrow(MembersOnlyVideoError);
+    const calledUrls = (globalThis.fetch as jest.Mock).mock.calls.map(([u]) => u as string);
+    expect(calledUrls.some((u) => u === watchUrl || u === oembedUrl)).toBe(false);
+  });
+
+  it('falls back to the watch page when the Data API fails', async () => {
+    process.env.YOUTUBE_API_KEY = 'yt-key';
+    (globalThis.fetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.startsWith('https://www.googleapis.com/youtube/v3/videos')) {
+        return Promise.resolve({ ok: false, status: 403, text: async () => 'quotaExceeded' });
+      }
+      if (url === oembedUrl) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            title: 'oEmbed Title',
+            author_name: 'MKBHD',
+            author_url: 'https://www.youtube.com/@MarquesBrownlee',
+            thumbnail_url: 'https://i.ytimg.com/vi/xx/hqdefault.jpg',
+          }),
+        });
+      }
+      if (url === watchUrl) {
+        return Promise.resolve({ ok: true, status: 200, text: async () => buildWatchPageHtml() });
+      }
+      throw new Error(`Unexpected fetch URL: ${url}`);
+    });
+
+    const result = await fetchVideoSnapshot(VALID_VIDEO_ID);
+
+    expect(result.snapshot.title).toBe('oEmbed Title');
+    expect(result.snapshot.channel.sourceId).toBe('UCBJycsmduvYEL83R_U4JriQ');
   });
 
   it('throws on TranscriptAPI fallback when metadata block is missing', async () => {

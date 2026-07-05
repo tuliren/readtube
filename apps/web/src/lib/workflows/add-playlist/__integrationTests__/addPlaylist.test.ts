@@ -51,6 +51,9 @@ async function resetDb() {
 beforeEach(async () => {
   mockFetchRssFeed.mockReset();
   mockScrapePlaylist.mockReset();
+  // These tests exercise the RSS/scrape fallback chain — keep the
+  // Data API tier off even if the environment has a key set.
+  delete process.env.YOUTUBE_API_KEY;
   // Default: RSS 404s so we go through the scrape path.
   mockFetchRssFeed.mockRejectedValue(new Error('RSS fetch failed: 404 Not Found'));
   await resetDb();

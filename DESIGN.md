@@ -1,15 +1,34 @@
 # App Choices
 
+## YouTube data fetching overview
+
+Every YouTube read goes through the official **Data API v3** first (our own GCP project's key, `YOUTUBE_API_KEY`; free 10,000 units/day) and falls back to the legacy sources only when the key is unset or the Data API attempt fails. Transcripts are the exception: the Data API's captions endpoint is owner-OAuth-only, so TranscriptAPI is primary there. All Data API calls live in `apps/web/src/lib/platforms/youtube/dataApi.ts`.
+
+Notation: `A → B` means B runs after A (within a tier) or only if A failed (between fallback tiers); `A ∥ B` means A and B are fetched **in parallel**.
+
+| Operation | Primary (Data API) | Fallback chain | Quota units |
+|---|---|---|---|
+| Add channel — `/channel/UC…` URL or bare UC id | `channels.list id=` → uploads `playlistItems.list` → (`UUSH…` `playlistItems.list` ∥ `videos.list`) | (scrape ∥ RSS) merged → TranscriptAPI `/channel/latest` → scrape-only | 4 |
+| Add channel — `@handle` URL | same, `channels.list forHandle=` resolves the handle | scrape **first** (resolves UC id) → RSS → TranscriptAPI → scrape-only | 4 |
+| Refresh channel (cron; each channel at most once per `STALE_DAYS`) | same as add channel | same as UC-id add channel | 4 |
+| Add playlist | `playlists.list` → `playlistItems.list` → `videos.list` | playlist RSS → playlist page scrape | 3 |
+| Add video | `videos.list` → (`UUMO…` members-only check ∥ `channels.list` handle/logo) | (watch page ∥ oEmbed) → TranscriptAPI (bundles the transcript) | 3 |
+| Scheduled-video detection (`ensureTranscript`, before sticky-locking `transcript_unavailable`) | `videos.list` (`liveBroadcastContent` + `liveStreamingDetails.scheduledStartTime`) | watch-page scrape → TranscriptAPI `/channel/latest` | 1 |
+| Transcript fetch | — (captions are owner-OAuth-only, impossible with an API key) | TranscriptAPI (primary) | — |
+
+Shared behavior:
+
+- Adding an already-fresh channel (cache hit) fetches nothing.
+- The Data API tier falls through to the fallback chain when the key is unset, the input can't be expressed as an API query (no UC id / `@handle`), the call fails (quota, network, not found), or it returns zero videos.
+- Private playlists are invisible to `playlists.list`, so they land in the playlist fallback chain (the page scrape is what detects them and raises `PRIVATE_PLAYLIST`). Auto-generated Mixes (`RD…`) are served by the Data API (verified live), with per-video uploader channels correctly attributed.
+- Shorts filtering: channel paths use the shorts-only `UUSH…` playlist (404 = channel has no Shorts), falling back to a ≤60s duration heuristic; the playlist path uses the duration heuristic directly, since a playlist can mix videos from many owner channels.
+- Live/upcoming broadcasts (`liveBroadcastContent !== 'none'`), non-public playlist entries, and future-dated videos are dropped on every Data API path.
+
 ## Channel snapshot fetching
 
-`fetchChannelSnapshot` (`apps/web/src/lib/platforms/youtube/channelSnapshot.ts`) combines three sources. Scrape always contributes channel handle, logo, and per-video duration. The video list comes from RSS (primary), with TranscriptAPI `/channel/latest` as a fallback, and a scrape-only build as the last resort.
+`fetchChannelSnapshot` (`apps/web/src/lib/platforms/youtube/channelSnapshot.ts`) implements the channel rows of the overview table above. On success the Data API produces the complete snapshot alone — channel name/handle/logo plus up to 50 recent uploads with full descriptions, exact publish times, and durations.
 
-| Trigger | Scrape | RSS | TranscriptAPI |
-|---|---|---|---|
-| Add channel, cache hit | — | — | — |
-| Add channel, `/channel/UC…` URL or bare UC ID | always (parallel) | primary | fallback (see below) |
-| Add channel, `@handle` URL | always, **first** (resolves UC ID) | after scrape resolves UC | fallback (see below) |
-| Refresh channel | always (parallel) | primary | fallback (see below) |
+The fallback chain combines three sources. Scrape always contributes channel handle, logo, and per-video duration. The video list comes from RSS (primary), with TranscriptAPI `/channel/latest` as a fallback, and a scrape-only build as the last resort.
 
 TranscriptAPI fires when **either** of these is true:
 1. RSS threw (network error / 404).
@@ -17,15 +36,23 @@ TranscriptAPI fires when **either** of these is true:
 
 When RSS + TranscriptAPI both fail, the scrape-only build marks every video `isScraped: true` so a later healthy RSS pass doesn't get clobbered (create-on-insert, skip-on-update).
 
+## Playlist fetching
+
+`fetchPlaylistData` (`apps/web/src/lib/workflows/add-playlist/index.ts`) implements the add-playlist row of the overview table. The Data API tier is strictly richer than both legacy sources combined — the RSS path has publish dates but no durations, the scrape path has durations but no publish dates; the Data API has both, plus full descriptions and the per-video uploader channel (playlists can mix videos from many channels). Private playlists fall through to RSS/scrape as described above.
+
 ## Scheduled premieres / upcoming livestreams
 
 Channel-ingest paths drop future-dated videos: `channelScrape.ts` skips `upcomingEventData` entries; `channelRss.ts` and TranscriptAPI's `fetchChannelLatest` drop `published > now`. So refreshes never pull in scheduled videos.
 
-For individually-added videos that are (or turn) scheduled, `ensureTranscript` probes the watch page (`scheduledVideo.ts`) before flipping the sticky `transcript_unavailable` flag — scrape's `isUpcoming` + `liveBroadcastDetails.startTimestamp` is authoritative, TranscriptAPI `/channel/latest` a fallback. Detected ones return `425` (`code: 'scheduled'`) so the reader shows a toast instead of sticky-locking.
+For individually-added videos that are (or turn) scheduled, `ensureTranscript` probes the video (`scheduledVideo.ts`) before flipping the sticky `transcript_unavailable` flag. The Data API is primary (`liveBroadcastContent: 'upcoming'` + `liveStreamingDetails.scheduledStartTime`, authoritative both ways when it answers; a video missing from the response — deleted/private — is treated as indeterminate, not as "not scheduled"). Fallbacks: watch-page scrape (`isUpcoming` + `liveBroadcastDetails.startTimestamp`), then TranscriptAPI `/channel/latest`. Detected ones return `425` (`code: 'scheduled'`) so the reader shows a toast instead of sticky-locking.
 
 ## Members-only videos
 
-`channelScrape.ts` drops members-only uploads (badge `BADGE_MEMBERS_ONLY` / `BADGE_STYLE_TYPE_MEMBERS_ONLY`) into `memberOnlyVideoIds`, which `mergeSnapshot` uses to drop matching RSS entries too. Their watch pages are paywalled — ingesting would only burn a transcript fetch and sticky-lock the entry as captionless.
+Ingesting a members-only video is always a mistake: the watch page is paywalled, so the transcript fetch is guaranteed to fail and sticky-locks the entry as captionless.
+
+**Data API path (primary).** Verified empirically (two channels with fresh members-only uploads): the `UU…` uploads playlist structurally excludes members-only videos, so they can never enter a channel snapshot via the Data API. Members-only content lives in its own undocumented-but-stable playlist family — `UUMF…` (long-form), `UUMV…` (live), `UUMS…` (shorts), `UUMO…` (union of all three; 404 = channel has no members content). That family is also the **only** API-side signal: `videos.list` returns members-only videos as indistinguishable public videos (`privacyStatus: public`), and oEmbed returns 200. The add-video flow therefore checks `UUMO…` (`isMembersOnlyVideo` in `dataApi.ts`, best-effort, 1 quota unit) and rejects with `MembersOnlyVideoError` → `AddVideoError('MEMBERS_ONLY')` → HTTP 400. The rejection is deliberately not swallowed by the video-snapshot fallback chain — the paywalled watch page still serves og meta tags and would happily ingest the doomed row.
+
+**Scrape/RSS fallback path.** `channelScrape.ts` drops members-only uploads (badge `BADGE_MEMBERS_ONLY` / `BADGE_STYLE_TYPE_MEMBERS_ONLY`) into `memberOnlyVideoIds`, which `mergeSnapshot` uses to drop matching RSS entries too (the channel `/videos` tab, unlike the `UU…` playlist, does list members-only videos).
 
 ## Generation usage & quota
 

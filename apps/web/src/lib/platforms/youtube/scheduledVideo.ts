@@ -5,7 +5,13 @@
  * doesn't sticky-flag a future-dated video as `transcript_unavailable`
  * — its captions don't exist *yet*, but they will once it airs.
  *
- * Two detection strategies, mirroring the rest of the YouTube module:
+ * Three detection strategies, mirroring the rest of the YouTube
+ * module:
+ *
+ *  0. Official Data API (`videos.list`, 1 quota unit) — an explicit
+ *     `liveBroadcastContent: 'upcoming'` flag plus
+ *     `liveStreamingDetails.scheduledStartTime`. Authoritative both
+ *     ways when it answers. Only runs when `YOUTUBE_API_KEY` is set.
  *
  *  1. Scrape the watch page (`https://www.youtube.com/watch?v=<id>`).
  *     The HTML carries an unambiguous `"isUpcoming":true` flag plus a
@@ -21,21 +27,25 @@
  */
 import { isEmptyString } from '@/lib/string';
 
+import { fetchScheduledStatusViaDataApi, isDataApiConfigured } from './dataApi';
+
 const YT_USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 export interface ScheduledStatus {
-  /** Either the watch-page scrape said `isUpcoming:true`, or the
-   *  TranscriptAPI fallback saw a `published` strictly after `now`. */
+  /** The Data API said `liveBroadcastContent: 'upcoming'`, the
+   *  watch-page scrape said `isUpcoming:true`, or the TranscriptAPI
+   *  fallback saw a `published` strictly after `now`. */
   isScheduled: boolean;
   /** Best-effort scheduled-start time. Pulled from
-   *  `liveBroadcastDetails.startTimestamp` (scrape) or `published`
+   *  `liveStreamingDetails.scheduledStartTime` (Data API),
+   *  `liveBroadcastDetails.startTimestamp` (scrape), or `published`
    *  (TranscriptAPI). Null when no signal carried a parseable date. */
   scheduledStartTime: Date | null;
-  /** Which strategy actually answered. `none` means both signals
-   *  were unreachable / inconclusive and the caller should treat the
+  /** Which strategy actually answered. `none` means every signal
+   *  was unreachable / inconclusive and the caller should treat the
    *  result as "not detected as scheduled". */
-  source: 'scrape' | 'transcriptApi' | 'none';
+  source: 'dataApi' | 'scrape' | 'transcriptApi' | 'none';
 }
 
 /**
@@ -78,6 +88,33 @@ export function parseScheduledFromHtml(html: string): ScheduledStatus {
   // worth flagging as scheduled so the caller doesn't flip the
   // sticky transcript-unavailable bit.
   return { isScheduled: true, scheduledStartTime: null, source: 'scrape' };
+}
+
+/**
+ * Strategy 0: the official Data API. Returns null — indeterminate,
+ * fall through to the scrape — when the key isn't configured, the
+ * request fails, or the video is missing from the response (deleted /
+ * private videos are omitted, which must not be read as "not
+ * scheduled").
+ */
+async function detectViaDataApi(videoId: string): Promise<ScheduledStatus | null> {
+  if (!isDataApiConfigured()) {
+    return null;
+  }
+  try {
+    const status = await fetchScheduledStatusViaDataApi(videoId);
+    if (status == null) {
+      return null;
+    }
+    return {
+      isScheduled: status.isUpcoming,
+      scheduledStartTime: status.scheduledStartTime,
+      source: 'dataApi',
+    };
+  } catch (err) {
+    console.warn(`[scheduledVideo] Data API check failed for ${videoId}:`, err);
+    return null;
+  }
 }
 
 async function detectViaWatchPage(videoId: string): Promise<ScheduledStatus | null> {
@@ -152,20 +189,26 @@ async function detectViaTranscriptApi(
 }
 
 /**
- * Try the watch-page scrape first; fall back to TranscriptAPI's
- * `/channel/latest` when the scrape is unreachable or its HTML
- * carried no scheduled signal. Returns `{ source: 'none' }` when
- * both strategies came back empty — the caller should treat that
- * as "video is not scheduled" (the conservative default).
+ * Try the Data API first (authoritative both ways when it answers),
+ * then the watch-page scrape, then TranscriptAPI's `/channel/latest`
+ * when the scrape is unreachable or its HTML carried no scheduled
+ * signal. Returns `{ source: 'none' }` when every strategy came back
+ * empty — the caller should treat that as "video is not scheduled"
+ * (the conservative default).
  *
  * `channelSourceId` is optional; pass the owning channel's UC id
  * when known so the TranscriptAPI fallback can fire. Without it,
- * only the scrape path runs.
+ * only the Data API and scrape paths run.
  */
 export async function detectScheduledVideo(
   videoId: string,
   options: { channelSourceId?: string | null } = {}
 ): Promise<ScheduledStatus> {
+  const dataApi = await detectViaDataApi(videoId);
+  if (dataApi != null) {
+    return dataApi;
+  }
+
   const scrape = await detectViaWatchPage(videoId);
   if (scrape != null && scrape.isScheduled) {
     return scrape;

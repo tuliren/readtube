@@ -2,6 +2,7 @@ import { prisma } from '@readtube/database';
 
 import { hasChannelHandleConflict } from '@/lib/channels/handleConflict';
 import { detectPlatform } from '@/lib/platforms';
+import { MembersOnlyVideoError } from '@/lib/platforms/types';
 import { isEmptyString } from '@/lib/string';
 import { persistTranscript } from '@/lib/transcripts/ensureTranscript';
 
@@ -21,7 +22,7 @@ export interface AddVideoResult {
 export class AddVideoError extends Error {
   constructor(
     message: string,
-    public readonly code: 'INVALID_URL' | 'FETCH_FAILED'
+    public readonly code: 'INVALID_URL' | 'FETCH_FAILED' | 'MEMBERS_ONLY'
   ) {
     super(message);
     this.name = 'AddVideoError';
@@ -66,6 +67,9 @@ export async function addVideoForUser(args: {
     snapshot = result.snapshot;
     prefetchedTranscript = result.prefetchedTranscript;
   } catch (err) {
+    if (err instanceof MembersOnlyVideoError) {
+      throw new AddVideoError(err.message, 'MEMBERS_ONLY');
+    }
     throw new AddVideoError(
       err instanceof Error ? err.message : 'Failed to fetch video metadata',
       'FETCH_FAILED'

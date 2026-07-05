@@ -1,4 +1,10 @@
-import { parseScheduledFromHtml } from '../scheduledVideo';
+import { fetchScheduledStatusViaDataApi, isDataApiConfigured } from '../dataApi';
+import { detectScheduledVideo, parseScheduledFromHtml } from '../scheduledVideo';
+
+jest.mock('../dataApi', () => ({
+  isDataApiConfigured: jest.fn(),
+  fetchScheduledStatusViaDataApi: jest.fn(),
+}));
 
 describe('parseScheduledFromHtml', () => {
   it.each([
@@ -41,6 +47,80 @@ describe('parseScheduledFromHtml', () => {
     const result = parseScheduledFromHtml(html);
     expect(result.isScheduled).toBe(false);
     expect(result.scheduledStartTime).toBeNull();
+    expect(result.source).toBe('scrape');
+  });
+});
+
+describe('detectScheduledVideo orchestration', () => {
+  const VIDEO_ID = 'dQw4w9WgXcQ';
+  const watchUrl = `https://www.youtube.com/watch?v=${VIDEO_ID}`;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.spyOn(globalThis, 'fetch');
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    jest.spyOn(console, 'info').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  function mockWatchPage(html: string): void {
+    (globalThis.fetch as jest.Mock).mockImplementation((url: string) => {
+      if (url === watchUrl) {
+        return Promise.resolve({ ok: true, text: async () => html });
+      }
+      throw new Error(`Unexpected fetch URL: ${url}`);
+    });
+  }
+
+  it.each([
+    [
+      'an upcoming premiere',
+      { isUpcoming: true, scheduledStartTime: new Date('2026-08-01T15:00:00Z') },
+      true,
+    ],
+    ['a regular video', { isUpcoming: false, scheduledStartTime: null }, false],
+  ])(
+    'trusts the Data API for %s without fetching the watch page',
+    async (_label, apiStatus, expectedScheduled) => {
+      (isDataApiConfigured as jest.Mock).mockReturnValue(true);
+      (fetchScheduledStatusViaDataApi as jest.Mock).mockResolvedValue(apiStatus);
+
+      const result = await detectScheduledVideo(VIDEO_ID);
+
+      expect(result.isScheduled).toBe(expectedScheduled);
+      expect(result.scheduledStartTime).toEqual(apiStatus.scheduledStartTime);
+      expect(result.source).toBe('dataApi');
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each([
+    ['is indeterminate (video missing)', () => Promise.resolve(null)],
+    ['throws (quota, network)', () => Promise.reject(new Error('quotaExceeded'))],
+  ])('falls back to the watch-page scrape when the Data API %s', async (_label, impl) => {
+    (isDataApiConfigured as jest.Mock).mockReturnValue(true);
+    (fetchScheduledStatusViaDataApi as jest.Mock).mockImplementation(impl);
+    mockWatchPage(
+      '"isUpcoming":true "liveBroadcastDetails":{"startTimestamp":"2026-08-01T15:00:00+00:00"}'
+    );
+
+    const result = await detectScheduledVideo(VIDEO_ID);
+
+    expect(result.isScheduled).toBe(true);
+    expect(result.source).toBe('scrape');
+  });
+
+  it('does not call the Data API when YOUTUBE_API_KEY is not configured', async () => {
+    (isDataApiConfigured as jest.Mock).mockReturnValue(false);
+    mockWatchPage('nothing relevant');
+
+    const result = await detectScheduledVideo(VIDEO_ID);
+
+    expect(fetchScheduledStatusViaDataApi).not.toHaveBeenCalled();
+    expect(result.isScheduled).toBe(false);
     expect(result.source).toBe('scrape');
   });
 });
