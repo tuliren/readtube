@@ -4,6 +4,8 @@ module.exports = {
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
     '^@tests/(.*)$': '<rootDir>/tests/$1',
+    // ESM-only package Jest can't parse; the emitter no-ops in tests.
+    '^@vercel/analytics/server$': '<rootDir>/tests/mocks/vercelAnalyticsServer.ts',
   },
   testMatch: ['<rootDir>/**/__integrationTests__/*.test.ts'],
   testTimeout: 60000,

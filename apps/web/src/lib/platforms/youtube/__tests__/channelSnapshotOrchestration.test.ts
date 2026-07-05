@@ -4,6 +4,7 @@
  * fetchers are module-mocked; the pure merge logic is covered in
  * channelSnapshot.test.ts.
  */
+import { trackYouTubeFetch } from '@/lib/analytics/events';
 import type { ChannelSnapshot } from '@/lib/platforms/types';
 import { fetchRssFeed } from '@/lib/platforms/youtube/channelRss';
 import { scrapeChannel } from '@/lib/platforms/youtube/channelScrape';
@@ -11,6 +12,9 @@ import { fetchChannelSnapshot } from '@/lib/platforms/youtube/channelSnapshot';
 import { fetchChannelViaDataApi, isDataApiConfigured } from '@/lib/platforms/youtube/dataApi';
 import { fetchChannelLatest } from '@/lib/platforms/youtube/transcriptApi';
 
+jest.mock('@/lib/analytics/events', () => ({
+  trackYouTubeFetch: jest.fn(),
+}));
 jest.mock('@/lib/platforms/youtube/dataApi', () => ({
   isDataApiConfigured: jest.fn(),
   fetchChannelViaDataApi: jest.fn(),
@@ -169,5 +173,87 @@ describe('fetchChannelSnapshot orchestration', () => {
 
     expect(fetchChannelViaDataApi).not.toHaveBeenCalled();
     expect(scrapeChannel).toHaveBeenCalled();
+  });
+
+  describe('youtube_fetch analytics source', () => {
+    it('tags the Data API tier as data_api', async () => {
+      (isDataApiConfigured as jest.Mock).mockReturnValue(true);
+      (fetchChannelViaDataApi as jest.Mock).mockResolvedValue(dataApiSnapshot());
+
+      await fetchChannelSnapshot({ channelPageUrl: CHANNEL_PAGE_URL, rssUrl: RSS_URL });
+
+      expect(trackYouTubeFetch).toHaveBeenCalledWith('channel', 'data_api');
+    });
+
+    it('tags the RSS tier as rss', async () => {
+      (isDataApiConfigured as jest.Mock).mockReturnValue(false);
+      mockScrapeAndRssSuccess();
+
+      await fetchChannelSnapshot({ channelPageUrl: CHANNEL_PAGE_URL, rssUrl: RSS_URL });
+
+      expect(trackYouTubeFetch).toHaveBeenCalledWith('channel', 'rss');
+    });
+
+    it('tags the TranscriptAPI fallback as transcript_api when RSS fails', async () => {
+      (isDataApiConfigured as jest.Mock).mockReturnValue(false);
+      (scrapeChannel as jest.Mock).mockResolvedValue({
+        channelId: CHANNEL_ID,
+        name: 'Scraped Channel',
+        logoUrl: null,
+        handle: '@scraped',
+        videos: [],
+        upcomingVideoIds: [],
+        memberOnlyVideoIds: [],
+      });
+      (fetchRssFeed as jest.Mock).mockRejectedValue(new Error('RSS 404'));
+      (fetchChannelLatest as jest.Mock).mockResolvedValue({
+        channel: { channelId: CHANNEL_ID, title: 'TApi Channel' },
+        videos: [
+          {
+            videoId: 'tapivideo01',
+            title: 'TApi Video',
+            description: 'd',
+            publishedAt: new Date('2024-06-02T00:00:00Z'),
+            thumbnailUrl: null,
+            link: 'https://www.youtube.com/watch?v=tapivideo01',
+          },
+        ],
+      });
+
+      const snapshot = await fetchChannelSnapshot({
+        channelPageUrl: CHANNEL_PAGE_URL,
+        rssUrl: RSS_URL,
+      });
+
+      expect(snapshot.videos.map((v) => v.videoId)).toEqual(['tapivideo01']);
+      expect(trackYouTubeFetch).toHaveBeenCalledWith('channel', 'transcript_api');
+    });
+
+    it('tags the scrape-only fallback as scrape', async () => {
+      (isDataApiConfigured as jest.Mock).mockReturnValue(false);
+      (scrapeChannel as jest.Mock).mockResolvedValue({
+        channelId: CHANNEL_ID,
+        name: 'Scraped Channel',
+        logoUrl: null,
+        handle: '@scraped',
+        videos: [
+          {
+            videoId: 'scrapevid01',
+            title: 'Scraped',
+            description: '',
+            publishedAt: null,
+            durationSeconds: 300,
+          },
+        ],
+        upcomingVideoIds: [],
+        memberOnlyVideoIds: [],
+      });
+      (fetchRssFeed as jest.Mock).mockRejectedValue(new Error('RSS 404'));
+      (fetchChannelLatest as jest.Mock).mockRejectedValue(new Error('TApi down'));
+
+      await fetchChannelSnapshot({ channelPageUrl: CHANNEL_PAGE_URL, rssUrl: RSS_URL });
+
+      expect(trackYouTubeFetch).toHaveBeenCalledWith('channel', 'scrape');
+    });
   });
 });
