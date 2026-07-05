@@ -225,7 +225,7 @@ export async function addVideoForUser(args: {
   // Only count a genuinely-new library entry — re-adding a video the
   // user already has (createdStandalone === false) isn't new content.
   if (createdStandalone) {
-    void trackContentAdded('video', platformLabel(platform.type));
+    await trackContentAdded('video', platformLabel(platform.type));
   }
 
   return {

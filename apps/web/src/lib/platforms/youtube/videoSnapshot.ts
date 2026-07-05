@@ -366,15 +366,15 @@ async function tryFetchViaDataApi(videoId: string): Promise<VideoSnapshot | null
 export async function fetchVideoSnapshot(videoId: string): Promise<VideoSnapshotResult> {
   const dataApiSnapshot = await tryFetchViaDataApi(videoId);
   if (dataApiSnapshot != null) {
-    void trackYouTubeFetch('video', 'data_api');
+    await trackYouTubeFetch('video', 'data_api');
     return { snapshot: dataApiSnapshot, prefetchedTranscript: null };
   }
   const watchPageSnapshot = await fetchViaWatchPage(videoId);
   if (watchPageSnapshot != null) {
-    void trackYouTubeFetch('video', 'scrape');
+    await trackYouTubeFetch('video', 'scrape');
     return { snapshot: watchPageSnapshot, prefetchedTranscript: null };
   }
   const result = await fetchViaTranscriptApi(videoId);
-  void trackYouTubeFetch('video', 'transcript_api');
+  await trackYouTubeFetch('video', 'transcript_api');
   return result;
 }

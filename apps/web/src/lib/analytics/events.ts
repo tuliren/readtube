@@ -14,15 +14,17 @@
  *     which tier served it (Data API vs the scrape / RSS / TranscriptAPI
  *     fallbacks). This is how we watch how often the fallbacks fire.
  *
- * All emitters are fire-and-forget and never throw: analytics must not
- * be able to break a request or a workflow step. They also stay silent
- * outside real Vercel deployments (local dev, probe scripts, tests have
- * no `VERCEL_ENV`), so nothing spams the console or the network there.
+ * Emitters never throw (analytics must not break a request or a
+ * workflow step) but they ARE awaited by callers: outside an HTTP
+ * request there's no `waitUntil` to flush the send, so the caller has
+ * to await for the event to actually leave. They stay silent unless
+ * `VERCEL_URL` is set — true on every Vercel runtime (production,
+ * preview, and the Workflow/cron runtime) and absent for local dev,
+ * the `scripts/` probes, and Jest — so nothing spams the console or
+ * the network there.
  */
 import { VideoPlatformType } from '@readtube/database';
 import { track } from '@vercel/analytics/server';
-
-import { VercelEnv, getVercelEnv } from '@/lib/vercelEnv';
 
 export type ContentGenerationType = 'transcript' | 'summary' | 'article';
 export type GenerationOutcome = 'generated' | 'unavailable' | 'failed';
@@ -33,16 +35,40 @@ export type ContentPlatform = 'youtube' | 'bilibili';
 export type YouTubeFetchType = 'channel' | 'video' | 'playlist' | 'scheduled';
 export type YouTubeFetchSource = 'data_api' | 'rss' | 'scrape' | 'transcript_api';
 
+// Vercel populates this global with the per-request context (visitor
+// headers + `waitUntil`) during an HTTP request. `@vercel/analytics`'s
+// `track()` reads visitor headers from it — but it's absent in
+// Workflow/cron steps, and without any headers value `track()` throws
+// "No session context found". We mirror the library's own lookup so we
+// can tell whether to let it auto-read real headers (request scope) or
+// hand it an empty headers object (workflow/cron) to still send.
+const REQUEST_CONTEXT_SYMBOL = Symbol.for('@vercel/request-context');
+
+interface RequestContextStore {
+  get?: () => { headers?: unknown } | undefined;
+}
+
+function hasAmbientRequestHeaders(): boolean {
+  const store = (globalThis as Record<symbol, RequestContextStore | undefined>)[
+    REQUEST_CONTEXT_SYMBOL
+  ];
+  return store?.get?.()?.headers != null;
+}
+
 async function emit(name: string, properties: Record<string, string>): Promise<void> {
-  // Only real Vercel deployments (production + preview) emit. Local
-  // dev, the `scripts/` probes, and the Jest runner have no
-  // `VERCEL_ENV`, so they short-circuit here — no dev-mode console
-  // logging from `track`, no network calls in tests.
-  if (getVercelEnv(process.env.VERCEL_ENV) === VercelEnv.DEVELOPMENT) {
+  // `VERCEL_URL` is `track()`'s endpoint and is set on every Vercel
+  // runtime; its absence means local dev / scripts / tests, where we
+  // emit nothing.
+  if (process.env.VERCEL_URL == null) {
     return;
   }
   try {
-    await track(name, properties);
+    // In a request, pass no options so `track()` auto-reads the real
+    // visitor headers from the ambient context (and flushes via
+    // `waitUntil`). In a Workflow/cron step there's no such context, so
+    // pass an empty headers object — enough to satisfy `track()`'s
+    // headers requirement so the event still sends (unattributed).
+    await track(name, properties, hasAmbientRequestHeaders() ? undefined : { headers: {} });
   } catch {
     // Best-effort — swallow everything.
   }

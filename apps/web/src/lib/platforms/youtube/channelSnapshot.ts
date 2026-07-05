@@ -68,7 +68,7 @@ export async function fetchChannelSnapshot(args: {
 
   const dataApiSnapshot = await tryDataApiSnapshot(args.channelPageUrl);
   if (dataApiSnapshot != null) {
-    void trackYouTubeFetch('channel', 'data_api');
+    await trackYouTubeFetch('channel', 'data_api');
     return dataApiSnapshot;
   }
 
@@ -132,7 +132,7 @@ export async function fetchChannelSnapshot(args: {
   }
 
   if (feed != null) {
-    void trackYouTubeFetch('channel', feedSource);
+    await trackYouTubeFetch('channel', feedSource);
     return mergeSnapshot(feed, scraped);
   }
 
@@ -140,7 +140,7 @@ export async function fetchChannelSnapshot(args: {
   if (scraped == null) {
     throw new Error('RSS, TranscriptAPI, and scrape all failed — cannot fetch channel data');
   }
-  void trackYouTubeFetch('channel', 'scrape');
+  await trackYouTubeFetch('channel', 'scrape');
   return buildSnapshotFromScrape(scraped);
 }
 

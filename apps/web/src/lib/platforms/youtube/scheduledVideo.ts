@@ -218,7 +218,7 @@ export async function detectScheduledVideo(
   const status = await resolveScheduledStatus(videoId, options);
   // `none` means no source answered — nothing was actually fetched.
   if (status.source !== 'none') {
-    void trackYouTubeFetch('scheduled', SCHEDULED_SOURCE_LABEL[status.source]);
+    await trackYouTubeFetch('scheduled', SCHEDULED_SOURCE_LABEL[status.source]);
   }
   return status;
 }

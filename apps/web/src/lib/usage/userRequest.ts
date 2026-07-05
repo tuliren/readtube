@@ -106,16 +106,19 @@ const GENERATION_OUTCOME_LABEL: Record<UserRequestOutcome, GenerationOutcome> = 
 
 /**
  * Fire the `content_generated` analytics event for a terminal outcome.
- * Fire-and-forget — the audit write must not wait on (or be broken by)
- * analytics. Emitted from every place that writes a *terminal* outcome
- * so each generation is counted exactly once:
+ * Emitted from every place that writes a *terminal* outcome so each
+ * generation is counted exactly once:
  *   - transcript rows are always terminal;
  *   - summary/article FAILED/UNAVAILABLE rows written pre-flight are
  *     terminal, while the in-flight GENERATED insert is not (it's
  *     completed later via `completeUserRequest`).
+ *
+ * Awaited by callers (the emitter never throws): the summary/article
+ * completions run in Workflow steps with no `waitUntil`, so the event
+ * only sends if we wait for it.
  */
-function emitGenerationEvent(type: UserRequestType, outcome: UserRequestOutcome): void {
-  void trackContentGenerated(GENERATION_TYPE_LABEL[type], GENERATION_OUTCOME_LABEL[outcome]);
+function emitGenerationEvent(type: UserRequestType, outcome: UserRequestOutcome): Promise<void> {
+  return trackContentGenerated(GENERATION_TYPE_LABEL[type], GENERATION_OUTCOME_LABEL[outcome]);
 }
 
 export async function recordTranscriptRequest(
@@ -138,7 +141,7 @@ export async function recordTranscriptRequest(
     select: { id: true },
   });
   // Transcript rows are always terminal (GENERATED or UNAVAILABLE).
-  emitGenerationEvent(UserRequestType.TRANSCRIPT, params.outcome);
+  await emitGenerationEvent(UserRequestType.TRANSCRIPT, params.outcome);
   return row;
 }
 
@@ -169,7 +172,7 @@ export async function recordSummaryRequest(
   // Only pre-flight terminal rows (e.g. transcript-unavailable FAILED)
   // count here; the in-flight GENERATED insert is completed later.
   if (!isAsyncStart) {
-    emitGenerationEvent(UserRequestType.SUMMARY, params.outcome);
+    await emitGenerationEvent(UserRequestType.SUMMARY, params.outcome);
   }
   return row;
 }
@@ -197,7 +200,7 @@ export async function recordArticleRequest(
     select: { id: true },
   });
   if (!isAsyncStart) {
-    emitGenerationEvent(UserRequestType.ARTICLE, params.outcome);
+    await emitGenerationEvent(UserRequestType.ARTICLE, params.outcome);
   }
   return row;
 }
@@ -218,7 +221,7 @@ export async function completeUserRequest(
   // function for force/per-field regens (they pass no request id), so
   // those opt out of both the audit row and the analytics event —
   // consistent with how quota is metered off `UserRequest`.
-  emitGenerationEvent(params.type, params.outcome);
+  await emitGenerationEvent(params.type, params.outcome);
   if (requestId == null || requestId === '') {
     return;
   }

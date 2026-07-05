@@ -69,7 +69,7 @@ export async function fetchPlaylistData(playlistId: string): Promise<PlaylistFee
     try {
       const playlist = await fetchPlaylistViaDataApi(playlistId);
       if (playlist.videos.length > 0) {
-        void trackYouTubeFetch('playlist', 'data_api');
+        await trackYouTubeFetch('playlist', 'data_api');
         return {
           channelId: playlist.channelId,
           channelName: playlist.channelName,
@@ -86,7 +86,7 @@ export async function fetchPlaylistData(playlistId: string): Promise<PlaylistFee
   // Attempt 1: RSS feed
   try {
     const rss: RssChannel = await fetchRssFeed(buildPlaylistRssUrl(playlistId));
-    void trackYouTubeFetch('playlist', 'rss');
+    await trackYouTubeFetch('playlist', 'rss');
     return {
       channelId: rss.channelId,
       // For playlist RSS feeds the feed-level <title> is the playlist
@@ -112,7 +112,7 @@ export async function fetchPlaylistData(playlistId: string): Promise<PlaylistFee
 
   // Attempt 2: page scrape
   const scraped = await scrapePlaylist(playlistId);
-  void trackYouTubeFetch('playlist', 'scrape');
+  await trackYouTubeFetch('playlist', 'scrape');
   return {
     channelId: scraped.channelId,
     channelName: scraped.channelName,
@@ -301,7 +301,7 @@ export async function addPlaylistForUser(args: {
 
   // Reached only on a fresh add — the idempotent "already have this
   // playlist" case returns early above. Playlists are YouTube-only.
-  void trackContentAdded('playlist', 'youtube');
+  await trackContentAdded('playlist', 'youtube');
 
   return { playlistId: playlist.id, playlistName: name, videosProcessed };
 }
