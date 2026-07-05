@@ -19,6 +19,7 @@
  * outside real Vercel deployments (local dev, probe scripts, tests have
  * no `VERCEL_ENV`), so nothing spams the console or the network there.
  */
+import { VideoPlatformType } from '@readtube/database';
 import { track } from '@vercel/analytics/server';
 
 import { VercelEnv, getVercelEnv } from '@/lib/vercelEnv';
@@ -57,6 +58,11 @@ export function trackContentGenerated(
   outcome: GenerationOutcome
 ): Promise<void> {
   return emit('content_generated', { type, outcome });
+}
+
+/** Map the DB platform enum to the analytics property value. */
+export function platformLabel(type: VideoPlatformType): ContentPlatform {
+  return type === VideoPlatformType.BILIBILI ? 'bilibili' : 'youtube';
 }
 
 /** A user added a video / playlist / channel to their library. */

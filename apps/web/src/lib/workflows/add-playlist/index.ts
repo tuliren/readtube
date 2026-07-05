@@ -1,5 +1,6 @@
 import { VideoPlatformType, prisma } from '@readtube/database';
 
+import { trackContentAdded } from '@/lib/analytics/events';
 import type { RssChannel } from '@/lib/platforms/youtube/channelRss';
 import { fetchRssFeed, isYouTubeShort } from '@/lib/platforms/youtube/channelRss';
 import { UNKNOWN_CHANNEL_NAME } from '@/lib/platforms/youtube/constants';
@@ -294,6 +295,10 @@ export async function addPlaylistForUser(args: {
       data: { read_at: readAt },
     });
   }
+
+  // Reached only on a fresh add — the idempotent "already have this
+  // playlist" case returns early above. Playlists are YouTube-only.
+  void trackContentAdded('playlist', 'youtube');
 
   return { playlistId: playlist.id, playlistName: name, videosProcessed };
 }
