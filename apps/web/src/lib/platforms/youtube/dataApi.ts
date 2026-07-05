@@ -500,10 +500,11 @@ export interface DataApiPlaylist {
  * heuristic — the UUSH shorts-playlist trick doesn't transfer here
  * because a playlist can mix videos from many owner channels.
  *
- * Throws when the playlist is invisible to the API — nonexistent,
- * private, or an auto-generated Mix (RD…) — so the caller can fall
- * back to RSS/scrape, which still handles Mixes and produces the
- * proper private-playlist error.
+ * Throws when the playlist is invisible to the API — nonexistent or
+ * private — so the caller can fall back to RSS/scrape, which is what
+ * produces the proper private-playlist error. (Auto-generated Mixes
+ * (RD…) ARE served by the API — verified live — including per-video
+ * uploader channels.)
  */
 export async function fetchPlaylistViaDataApi(playlistId: string): Promise<DataApiPlaylist> {
   console.info(`[youtube] Fetching playlist via Data API: ${playlistId}`);

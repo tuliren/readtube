@@ -18,7 +18,7 @@ Shared behavior:
 
 - Adding an already-fresh channel (cache hit) fetches nothing.
 - The Data API tier falls through to the fallback chain when the key is unset, the input can't be expressed as an API query (no UC id / `@handle`), the call fails (quota, network, not found), or it returns zero videos.
-- Auto-generated Mixes (`RD…`) and private playlists are invisible to `playlists.list`, so they are always served by the playlist fallback chain (the page scrape is what detects private playlists and raises `PRIVATE_PLAYLIST`).
+- Private playlists are invisible to `playlists.list`, so they land in the playlist fallback chain (the page scrape is what detects them and raises `PRIVATE_PLAYLIST`). Auto-generated Mixes (`RD…`) are served by the Data API (verified live), with per-video uploader channels correctly attributed.
 - Shorts filtering: channel paths use the shorts-only `UUSH…` playlist (404 = channel has no Shorts), falling back to a ≤60s duration heuristic; the playlist path uses the duration heuristic directly, since a playlist can mix videos from many owner channels.
 - Live/upcoming broadcasts (`liveBroadcastContent !== 'none'`), non-public playlist entries, and future-dated videos are dropped on every Data API path.
 
@@ -36,7 +36,7 @@ When RSS + TranscriptAPI both fail, the scrape-only build marks every video `isS
 
 ## Playlist fetching
 
-`fetchPlaylistData` (`apps/web/src/lib/workflows/add-playlist/index.ts`) implements the add-playlist row of the overview table. The Data API tier is strictly richer than both legacy sources combined — the RSS path has publish dates but no durations, the scrape path has durations but no publish dates; the Data API has both, plus full descriptions and the per-video uploader channel (playlists can mix videos from many channels). Mixes and private playlists fall through to RSS/scrape as described above.
+`fetchPlaylistData` (`apps/web/src/lib/workflows/add-playlist/index.ts`) implements the add-playlist row of the overview table. The Data API tier is strictly richer than both legacy sources combined — the RSS path has publish dates but no durations, the scrape path has durations but no publish dates; the Data API has both, plus full descriptions and the per-video uploader channel (playlists can mix videos from many channels). Private playlists fall through to RSS/scrape as described above.
 
 ## Scheduled premieres / upcoming livestreams
 

@@ -49,12 +49,12 @@ interface PlaylistFeed {
 
 /**
  * Try the official Data API first (full fidelity: publish dates AND
- * durations — the legacy sources each expose only one of the two),
- * then RSS (cheap, structured), then the page scrape (works for all
- * playlist types). RSS returns 404 for user-created playlists, mix
- * playlists, and many PL-prefixed lists. Private playlists and
- * auto-generated Mixes (RD…) are invisible to the Data API, so those
- * always land in the RSS/scrape tiers — the scrape is what raises
+ * durations — the legacy sources each expose only one of the two;
+ * auto-generated Mixes work too), then RSS (cheap, structured), then
+ * the page scrape (works for all playlist types). RSS returns 404
+ * for user-created playlists, mix playlists, and many PL-prefixed
+ * lists. Private playlists are invisible to the Data API, so those
+ * land in the RSS/scrape tiers — the scrape is what raises
  * PrivatePlaylistError.
  *
  * Exported for unit testing.
