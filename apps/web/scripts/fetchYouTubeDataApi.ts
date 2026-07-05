@@ -17,12 +17,17 @@
  *   apps/web/scripts/runScriptWithEnv.sh development \
  *     scripts/fetchYouTubeDataApi.ts --video dQw4w9WgXcQ
  *
- * Exactly one of `--channel`, `--handle`, or `--video` must be given.
+ *   apps/web/scripts/runScriptWithEnv.sh development \
+ *     scripts/fetchYouTubeDataApi.ts --playlist PLBCF2DAC6FFB574DE
+ *
+ * Exactly one of `--channel`, `--handle`, `--video`, or `--playlist`
+ * must be given.
  */
 import { program } from 'commander';
 
 import {
   fetchChannelViaDataApi,
+  fetchPlaylistViaDataApi,
   fetchVideoViaDataApi,
   isDataApiConfigured,
 } from '@/lib/platforms/youtube/dataApi';
@@ -40,17 +45,19 @@ if (process.env.SCRIPT_ENV !== 'development' && process.env.SCRIPT_ENV !== 'prod
     .option('--channel <value>', 'Bare UC-prefixed channel id (e.g. UCY1kMZp36IQSyNx_9h4mpCg)')
     .option('--handle <value>', 'Channel handle (e.g. @mkbhd)')
     .option('--video <value>', 'Bare 11-char video id (e.g. dQw4w9WgXcQ)')
+    .option('--playlist <value>', 'Bare playlist id (e.g. PLBCF2DAC6FFB574DE)')
     .parse(process.argv);
 
-  const { channel, handle, video } = program.opts<{
+  const { channel, handle, video, playlist } = program.opts<{
     channel?: string;
     handle?: string;
     video?: string;
+    playlist?: string;
   }>();
 
-  const provided = [channel, handle, video].filter((v) => v != null);
+  const provided = [channel, handle, video, playlist].filter((v) => v != null);
   if (provided.length !== 1) {
-    console.error('Provide exactly one of --channel, --handle, or --video.');
+    console.error('Provide exactly one of --channel, --handle, --video, or --playlist.');
     process.exit(1);
   }
 
@@ -64,6 +71,13 @@ if (process.env.SCRIPT_ENV !== 'development' && process.env.SCRIPT_ENV !== 'prod
     const snapshot = await fetchVideoViaDataApi(video);
     console.info(`Done in ${Date.now() - start}ms`);
     console.info(JSON.stringify(snapshot, null, 2));
+  } else if (playlist != null) {
+    const result = await fetchPlaylistViaDataApi(playlist);
+    console.info(`Done in ${Date.now() - start}ms`);
+    console.info(JSON.stringify(result, null, 2));
+    console.info(
+      `playlist=${result.title} owner=${result.channelName} videos=${result.videos.length}`
+    );
   } else {
     const snapshot = await fetchChannelViaDataApi(
       channel != null ? { channelId: channel } : { handle: handle as string }
