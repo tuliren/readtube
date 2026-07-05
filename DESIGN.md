@@ -58,6 +58,18 @@ Ingesting a members-only video is always a mistake: the watch page is paywalled,
 
 Metered off the `UserRequest` audit log (no counter table); `lib/usage/quota.ts` derives it. Only `TRANSCRIPT` requests count toward `MONTHLY_GENERATION_QUOTA` (`getGenerationUsage`, UTC calendar month); `getLifetimeUsage` groups all-time counts by type. Rows are only written when work actually happened, so every row counts regardless of `outcome`. Surfaced read-only on `/usage`; no enforcement yet.
 
+## Analytics events
+
+Server-side Vercel Web Analytics custom events (`lib/analytics/events.ts`, via `@vercel/analytics/server`). Vercel caps a custom event at **2 properties**, so concerns are split across three event names rather than one:
+
+| Event | Properties | Emitted from |
+|---|---|---|
+| `content_generated` | `type` (transcript/summary/article), `outcome` (generated/unavailable/failed) | the `UserRequest` audit writers (`lib/usage/userRequest.ts`) — the one choke point that sees every terminal outcome, so it counts the same generations the quota does (opt-out regens excluded) |
+| `content_added` | `type` (video/playlist/channel), `platform` (youtube/bilibili) | each flow's genuine new-add seam: `addVideoForUser` (new standalone entry), `addPlaylistForUser` (fresh playlist), `finishSubscribe` (new channel subscription) |
+| `youtube_fetch` | `type` (channel/video/playlist/scheduled), `source` (data_api/rss/scrape/transcript_api) | the four fetch orchestrators, tagged with the tier that actually served the request — this is how we watch how often the fallbacks fire behind the Data API |
+
+Emission is fire-and-forget and never throws — analytics must not break a request or workflow step. It also stays silent unless `VERCEL_ENV` is `production`/`preview`, so local dev, the `scripts/` probes, and the test runner emit nothing.
+
 ## Tuning article generation
 
 Article generation picks between **single-pass** (one LLM call) and **map-reduce** (split the transcript into sections, generate in parallel, then a reduce pass consolidates the outline). Every knob lives in `apps/web/src/constants.ts` and is documented inline — the highlights:

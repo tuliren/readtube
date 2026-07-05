@@ -1,3 +1,4 @@
+import { type YouTubeFetchSource, trackYouTubeFetch } from '@/lib/analytics/events';
 import type { ChannelSnapshot, SnapshotVideo } from '@/lib/platforms/types';
 import { type RssChannel, fetchRssFeed, isYouTubeShort } from '@/lib/platforms/youtube/channelRss';
 import { type ScrapedChannel, scrapeChannel } from '@/lib/platforms/youtube/channelScrape';
@@ -67,11 +68,16 @@ export async function fetchChannelSnapshot(args: {
 
   const dataApiSnapshot = await tryDataApiSnapshot(args.channelPageUrl);
   if (dataApiSnapshot != null) {
+    void trackYouTubeFetch('channel', 'data_api');
     return dataApiSnapshot;
   }
 
   let scraped: ScrapedChannel | null = null;
   let feed: RssChannel | null = null;
+  // Which source produced `feed` — 'rss' by default, 'transcript_api'
+  // when the RSS-failure or zero-video fallback took over. Used only
+  // for the analytics event.
+  let feedSource: YouTubeFetchSource = 'rss';
   let triedTranscriptApi = false;
 
   if (args.rssUrl != null) {
@@ -91,6 +97,7 @@ export async function fetchChannelSnapshot(args: {
     } else {
       console.warn('[channelSnapshot] RSS failed:', rssResult.reason);
       feed = await tryTranscriptApiFallback(scraped, args.channelPageUrl);
+      feedSource = 'transcript_api';
       triedTranscriptApi = true;
     }
   } else {
@@ -101,6 +108,7 @@ export async function fetchChannelSnapshot(args: {
     } catch (err) {
       console.warn('[channelSnapshot] RSS failed:', err);
       feed = await tryTranscriptApiFallback(scraped, args.channelPageUrl);
+      feedSource = 'transcript_api';
       triedTranscriptApi = true;
     }
   }
@@ -119,10 +127,12 @@ export async function fetchChannelSnapshot(args: {
     const fallback = await tryTranscriptApiFallback(scraped, args.channelPageUrl);
     if (fallback != null && fallback.videos.length > 0) {
       feed = fallback;
+      feedSource = 'transcript_api';
     }
   }
 
   if (feed != null) {
+    void trackYouTubeFetch('channel', feedSource);
     return mergeSnapshot(feed, scraped);
   }
 
@@ -130,6 +140,7 @@ export async function fetchChannelSnapshot(args: {
   if (scraped == null) {
     throw new Error('RSS, TranscriptAPI, and scrape all failed — cannot fetch channel data');
   }
+  void trackYouTubeFetch('channel', 'scrape');
   return buildSnapshotFromScrape(scraped);
 }
 

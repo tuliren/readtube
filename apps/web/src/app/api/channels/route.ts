@@ -3,6 +3,7 @@ import { prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 import { start } from 'workflow/api';
 
+import { platformLabel, trackContentAdded } from '@/lib/analytics/events';
 import { isChannelFresh } from '@/lib/channels/staleness';
 import { ensureUserExists } from '@/lib/db/user';
 import { detectChannelSource } from '@/lib/platforms';
@@ -202,6 +203,11 @@ async function finishSubscribe(userId: string, channelId: string) {
     },
   });
   const unreadCount = await countUnreadVideos(prisma, userId, channelId, initialReadAt);
+
+  // Single choke point for both the fast and slow subscribe paths; the
+  // route rejects duplicate subscriptions with 409 before reaching
+  // here, so this counts genuinely-new channel adds.
+  void trackContentAdded('channel', platformLabel(channelRow.source_type));
 
   return NextResponse.json(
     {

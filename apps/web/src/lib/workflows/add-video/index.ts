@@ -1,5 +1,6 @@
 import { prisma } from '@readtube/database';
 
+import { platformLabel, trackContentAdded } from '@/lib/analytics/events';
 import { hasChannelHandleConflict } from '@/lib/channels/handleConflict';
 import { detectPlatform } from '@/lib/platforms';
 import { MembersOnlyVideoError } from '@/lib/platforms/types';
@@ -219,6 +220,12 @@ export async function addVideoForUser(args: {
       // ensureTranscript path.
       console.error('[addVideoForUser] failed to persist prefetched transcript:', err);
     }
+  }
+
+  // Only count a genuinely-new library entry — re-adding a video the
+  // user already has (createdStandalone === false) isn't new content.
+  if (createdStandalone) {
+    void trackContentAdded('video', platformLabel(platform.type));
   }
 
   return {
