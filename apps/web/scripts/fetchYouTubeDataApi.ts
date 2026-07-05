@@ -27,8 +27,11 @@ import {
   isDataApiConfigured,
 } from '@/lib/platforms/youtube/dataApi';
 
-if (process.env.SCRIPT_ENV !== 'development') {
-  console.error('This script can only be run in development environment.');
+// Read-only against the external YouTube API (no database access),
+// so unlike the snapshot scripts it is safe to run with the
+// production env too — useful for verifying the production API key.
+if (process.env.SCRIPT_ENV !== 'development' && process.env.SCRIPT_ENV !== 'production') {
+  console.error('This script must be run via runScriptWithEnv.sh (development or production).');
   process.exit(1);
 }
 
