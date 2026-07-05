@@ -1,8 +1,14 @@
 import type { ChannelSnapshot, SnapshotVideo } from '@/lib/platforms/types';
 import { type RssChannel, fetchRssFeed, isYouTubeShort } from '@/lib/platforms/youtube/channelRss';
 import { type ScrapedChannel, scrapeChannel } from '@/lib/platforms/youtube/channelScrape';
+import { fetchChannelViaDataApi, isDataApiConfigured } from '@/lib/platforms/youtube/dataApi';
 import { fetchChannelLatest } from '@/lib/platforms/youtube/transcriptApi';
-import { buildRssUrl, buildThumbnailUrl } from '@/lib/platforms/youtube/urls';
+import {
+  buildRssUrl,
+  buildThumbnailUrl,
+  extractChannelId,
+  extractHandle,
+} from '@/lib/platforms/youtube/urls';
 
 // Re-exported so existing `@/lib/platforms/youtube/channelSnapshot` imports keep
 // working after ChannelSnapshot moved to `@/lib/platforms/types`.
@@ -13,11 +19,19 @@ const SHORTS_DURATION_THRESHOLD = 60;
 
 /**
  * Single entry point for both "subscribe to a new channel" and
- * "refresh an existing channel". RSS is the source of truth for the
- * video list (full descriptions, real publish times, canonical
- * `/shorts/<id>` vs `/watch?v=<id>` links). Scrape contributes only
- * the fields RSS doesn't expose: per-video duration, channel logo,
- * and channel handle.
+ * "refresh an existing channel".
+ *
+ * When `YOUTUBE_API_KEY` is set, the official Data API is tried
+ * first and, on success, produces the complete snapshot on its own
+ * (full descriptions, exact publish times, durations, channel
+ * handle + logo) — no scrape, RSS, or TranscriptAPI call is made.
+ * Everything below describes the fallback chain that runs when the
+ * key is missing or the Data API attempt fails.
+ *
+ * RSS is the source of truth for the video list (full descriptions,
+ * real publish times, canonical `/shorts/<id>` vs `/watch?v=<id>`
+ * links). Scrape contributes only the fields RSS doesn't expose:
+ * per-video duration, channel logo, and channel handle.
  *
  * When both URLs are known up-front (refresh path, or initial
  * subscription via a `/channel/UCxxx` URL), we fire both requests in
@@ -50,6 +64,11 @@ export async function fetchChannelSnapshot(args: {
   rssUrl?: string;
 }): Promise<ChannelSnapshot> {
   console.info(`Fetching channel snapshot for ${args.channelPageUrl}`);
+
+  const dataApiSnapshot = await tryDataApiSnapshot(args.channelPageUrl);
+  if (dataApiSnapshot != null) {
+    return dataApiSnapshot;
+  }
 
   let scraped: ScrapedChannel | null = null;
   let feed: RssChannel | null = null;
@@ -112,6 +131,51 @@ export async function fetchChannelSnapshot(args: {
     throw new Error('RSS, TranscriptAPI, and scrape all failed — cannot fetch channel data');
   }
   return buildSnapshotFromScrape(scraped);
+}
+
+/**
+ * Primary tier: the official YouTube Data API, keyed by our own GCP
+ * project (`YOUTUBE_API_KEY`). Served from Google's API
+ * infrastructure, so it is immune to the soft-blocking that hits the
+ * scrape and RSS paths on hosting IPs, and it needs no third-party
+ * service.
+ *
+ * Returns null — sending the caller down the scrape/RSS/TranscriptAPI
+ * chain — when:
+ *   - the key isn't configured;
+ *   - the page URL carries neither a UC id nor an @handle (the Data
+ *     API can't resolve legacy /user/ URLs);
+ *   - the API call fails (quota exhausted, network error, unknown
+ *     channel);
+ *   - the API reports zero videos. A genuinely-empty channel also
+ *     yields zero from the fallback chain, so deferring costs only
+ *     the extra requests while keeping the zero-video paranoia the
+ *     soft-block workaround established.
+ */
+async function tryDataApiSnapshot(channelPageUrl: string): Promise<ChannelSnapshot | null> {
+  if (!isDataApiConfigured()) {
+    return null;
+  }
+  const channelId = extractChannelId(channelPageUrl);
+  const handle = channelId == null ? extractHandle(channelPageUrl) : null;
+  if (channelId == null && handle == null) {
+    console.warn(`[channelSnapshot] Data API skipped — no UC id or @handle in ${channelPageUrl}`);
+    return null;
+  }
+  try {
+    const snapshot = await fetchChannelViaDataApi(
+      channelId != null ? { channelId } : { handle: `@${handle}` }
+    );
+    if (snapshot.videos.length === 0) {
+      console.warn('[channelSnapshot] Data API returned zero videos — trying scrape + RSS');
+      return null;
+    }
+    console.info('[channelSnapshot] Data API snapshot succeeded');
+    return snapshot;
+  } catch (err) {
+    console.warn('[channelSnapshot] Data API failed — falling back to scrape + RSS:', err);
+    return null;
+  }
 }
 
 /**
