@@ -1,6 +1,11 @@
 import { MembersOnlyVideoError } from '@/lib/platforms/types';
 
-import { fetchChannelViaDataApi, fetchVideoViaDataApi, isDataApiConfigured } from '../dataApi';
+import {
+  fetchChannelViaDataApi,
+  fetchPlaylistViaDataApi,
+  fetchVideoViaDataApi,
+  isDataApiConfigured,
+} from '../dataApi';
 
 const CHANNEL_ID = 'UCBJycsmduvYEL83R_U4JriQ';
 const UPLOADS_PLAYLIST_ID = `UU${CHANNEL_ID.slice(2)}`;
@@ -389,5 +394,110 @@ describe('fetchVideoViaDataApi', () => {
     delete process.env.YOUTUBE_API_KEY;
 
     await expect(fetchVideoViaDataApi(VIDEO_ID)).rejects.toThrow('YOUTUBE_API_KEY is not set');
+  });
+});
+
+describe('fetchPlaylistViaDataApi', () => {
+  const originalEnv = process.env;
+  const PLAYLIST_ID = 'PLtestplaylist12';
+
+  beforeEach(() => {
+    process.env = { ...originalEnv, YOUTUBE_API_KEY: 'yt-key' };
+    jest.spyOn(globalThis, 'fetch');
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    jest.spyOn(console, 'info').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+    jest.restoreAllMocks();
+  });
+
+  function buildPlaylistEntry(videoId: string, privacyStatus = 'public'): JsonBody {
+    return {
+      snippet: {
+        title: `Item ${videoId}`,
+        description: `Item desc ${videoId}`,
+        videoOwnerChannelId: 'UCowner0000000000000000',
+        videoOwnerChannelTitle: 'Owner From Item',
+      },
+      contentDetails: { videoId, videoPublishedAt: '2024-05-01T00:00:00Z' },
+      status: { privacyStatus },
+    };
+  }
+
+  it('builds a playlist with durations, publish dates, and per-video uploader channels', async () => {
+    mockDataApi({
+      playlists: {
+        items: [
+          {
+            id: PLAYLIST_ID,
+            snippet: {
+              title: 'My Curated List',
+              channelId: CHANNEL_ID,
+              channelTitle: 'Playlist Owner',
+            },
+          },
+        ],
+      },
+      [`playlistItems|playlistId=${PLAYLIST_ID}`]: {
+        items: [
+          buildPlaylistEntry(VIDEO_ID),
+          buildPlaylistEntry(SHORT_ID),
+          buildPlaylistEntry('privatevid1', 'private'),
+          buildPlaylistEntry('upcomingvi1'),
+        ],
+      },
+      videos: {
+        items: [
+          buildVideoItem(VIDEO_ID),
+          buildVideoItem(SHORT_ID, { duration: 'PT45S' }),
+          buildVideoItem('upcomingvi1', { liveBroadcastContent: 'upcoming' }),
+        ],
+      },
+    });
+
+    const playlist = await fetchPlaylistViaDataApi(PLAYLIST_ID);
+
+    expect(playlist.title).toBe('My Curated List');
+    expect(playlist.channelId).toBe(CHANNEL_ID);
+    expect(playlist.channelName).toBe('Playlist Owner');
+    // Short (≤60s), private entry, and upcoming broadcast are dropped.
+    expect(playlist.videos.map((v) => v.videoId)).toEqual([VIDEO_ID]);
+    expect(playlist.videos[0]).toEqual({
+      videoId: VIDEO_ID,
+      title: `Video ${VIDEO_ID}`,
+      description: `Description of ${VIDEO_ID}`,
+      publishedAt: new Date('2024-06-01T00:00:00Z'),
+      thumbnailUrl: `https://i.ytimg.com/vi/${VIDEO_ID}/hqdefault.jpg`,
+      durationSeconds: 630,
+      // Uploader from videos.list, not the playlist owner.
+      channelId: CHANNEL_ID,
+      channelName: 'Marques Brownlee',
+    });
+  });
+
+  it('returns an empty video list for an empty playlist without calling videos.list', async () => {
+    mockDataApi({
+      playlists: {
+        items: [
+          {
+            id: PLAYLIST_ID,
+            snippet: { title: 'Empty', channelId: CHANNEL_ID, channelTitle: 'Owner' },
+          },
+        ],
+      },
+      [`playlistItems|playlistId=${PLAYLIST_ID}`]: { items: [] },
+    });
+
+    const playlist = await fetchPlaylistViaDataApi(PLAYLIST_ID);
+
+    expect(playlist.videos).toEqual([]);
+  });
+
+  it('throws when the playlist is invisible to the API (private, Mix, or nonexistent)', async () => {
+    mockDataApi({ playlists: { items: [] } });
+
+    await expect(fetchPlaylistViaDataApi(PLAYLIST_ID)).rejects.toThrow('returned no playlist');
   });
 });

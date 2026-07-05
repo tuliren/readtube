@@ -17,6 +17,7 @@
  *     + shorts playlistItems 1 + videos 1)
  *   - video snapshot: 3 units (videos 1 + members-only playlistItems 1
  *     + channels 1)
+ *   - playlist fetch: 3 units (playlists 1 + playlistItems 1 + videos 1)
  *
  * Members-only videos (verified empirically against channels with
  * members content): the `UU…` uploads playlist structurally excludes
@@ -102,8 +103,28 @@ interface ChannelsListResponse {
 
 interface PlaylistItemsListResponse {
   items?: Array<{
-    contentDetails?: { videoId?: string };
+    snippet?: {
+      title?: string;
+      description?: string;
+      thumbnails?: ThumbnailMap;
+      /** The video's actual uploader — not the playlist owner. */
+      videoOwnerChannelId?: string;
+      videoOwnerChannelTitle?: string;
+    };
+    contentDetails?: { videoId?: string; videoPublishedAt?: string };
     status?: { privacyStatus?: string };
+  }>;
+}
+
+interface PlaylistsListResponse {
+  items?: Array<{
+    id?: string;
+    snippet?: {
+      title?: string;
+      /** The playlist owner's channel. */
+      channelId?: string;
+      channelTitle?: string;
+    };
   }>;
 }
 
@@ -438,5 +459,134 @@ export async function fetchVideoViaDataApi(videoId: string): Promise<VideoSnapsh
       handle,
       logoUrl,
     },
+  };
+}
+
+/**
+ * A playlist entry ready for the add-playlist flow. `channelId` /
+ * `channelName` are the video's actual uploader (a playlist can mix
+ * videos from many channels) — not the playlist owner. Field-for-field
+ * compatible with add-playlist's internal PlaylistVideo shape.
+ */
+export interface DataApiPlaylistVideo {
+  videoId: string;
+  title: string;
+  description: string;
+  publishedAt: Date | null;
+  thumbnailUrl: string | null;
+  durationSeconds: number | null;
+  channelId: string | null;
+  channelName: string | null;
+}
+
+export interface DataApiPlaylist {
+  title: string;
+  /** The playlist owner's channel. */
+  channelId: string;
+  channelName: string;
+  videos: DataApiPlaylistVideo[];
+}
+
+/**
+ * Fetch a playlist's metadata + up to 50 entries for the add-playlist
+ * flow. Richer than both legacy sources combined: the RSS path has
+ * publish dates but no durations, the scrape path has durations but
+ * no publish dates — this has both, plus full descriptions and the
+ * per-video uploader channel.
+ *
+ * Filtering matches the channel-uploads path where it applies:
+ * non-public entries, live/upcoming broadcasts, and future-dated
+ * videos are dropped. Shorts are dropped by the ≤60s duration
+ * heuristic — the UUSH shorts-playlist trick doesn't transfer here
+ * because a playlist can mix videos from many owner channels.
+ *
+ * Throws when the playlist is invisible to the API — nonexistent,
+ * private, or an auto-generated Mix (RD…) — so the caller can fall
+ * back to RSS/scrape, which still handles Mixes and produces the
+ * proper private-playlist error.
+ */
+export async function fetchPlaylistViaDataApi(playlistId: string): Promise<DataApiPlaylist> {
+  console.info(`[youtube] Fetching playlist via Data API: ${playlistId}`);
+
+  const playlistsRes = await dataApiFetch<PlaylistsListResponse>('playlists', {
+    part: 'snippet',
+    id: playlistId,
+  });
+  const playlist = playlistsRes.items?.[0];
+  if (playlist?.snippet == null) {
+    throw new Error(`YouTube Data API returned no playlist for ${playlistId}`);
+  }
+
+  const itemsRes = await dataApiFetch<PlaylistItemsListResponse>('playlistItems', {
+    part: 'snippet,contentDetails,status',
+    playlistId,
+    maxResults: String(MAX_RESULTS),
+  });
+  const publicItems = (itemsRes.items ?? []).filter(
+    (item) => item.status?.privacyStatus === 'public' && item.contentDetails?.videoId != null
+  );
+
+  const videoIds = publicItems
+    .map((item) => item.contentDetails?.videoId)
+    .filter((id): id is string => id != null);
+  const videosRes =
+    videoIds.length > 0
+      ? await dataApiFetch<VideosListResponse>('videos', {
+          part: 'snippet,contentDetails',
+          id: videoIds.join(','),
+        })
+      : { items: [] };
+  const detailsById = new Map(
+    (videosRes.items ?? [])
+      .filter((item) => item.id != null)
+      .map((item) => [item.id as string, item])
+  );
+
+  const now = Date.now();
+  const videos: DataApiPlaylistVideo[] = [];
+  for (const item of publicItems) {
+    const videoId = item.contentDetails?.videoId;
+    if (videoId == null) {
+      continue;
+    }
+    const details = detailsById.get(videoId);
+    // Missing from videos.list despite a public playlist entry —
+    // deleted between the two calls, or otherwise inaccessible.
+    if (details?.snippet == null) {
+      continue;
+    }
+    if ((details.snippet.liveBroadcastContent ?? 'none') !== 'none') {
+      continue;
+    }
+    const durationSeconds = parseIsoDurationSeconds(details.contentDetails?.duration);
+    if (durationSeconds != null && durationSeconds <= SHORTS_DURATION_THRESHOLD) {
+      continue;
+    }
+    const publishedAt =
+      parsePublishedAt(details.snippet.publishedAt) ??
+      parsePublishedAt(item.contentDetails?.videoPublishedAt);
+    if (publishedAt != null && publishedAt.getTime() > now) {
+      continue;
+    }
+    videos.push({
+      videoId,
+      title: details.snippet.title ?? item.snippet?.title ?? UNKNOWN_VIDEO_TITLE,
+      description: details.snippet.description ?? item.snippet?.description ?? '',
+      publishedAt,
+      thumbnailUrl:
+        pickThumbnailUrl(details.snippet.thumbnails) ??
+        pickThumbnailUrl(item.snippet?.thumbnails) ??
+        buildThumbnailUrl(videoId),
+      durationSeconds,
+      channelId: details.snippet.channelId ?? item.snippet?.videoOwnerChannelId ?? null,
+      channelName: details.snippet.channelTitle ?? item.snippet?.videoOwnerChannelTitle ?? null,
+    });
+  }
+
+  return {
+    title: playlist.snippet.title ?? '',
+    channelId: playlist.snippet.channelId ?? '',
+    channelName: playlist.snippet.channelTitle ?? UNKNOWN_CHANNEL_NAME,
+    videos,
   };
 }
