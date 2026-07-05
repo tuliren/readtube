@@ -4,14 +4,16 @@
 
 Every YouTube read goes through the official **Data API v3** first (our own GCP project's key, `YOUTUBE_API_KEY`; free 10,000 units/day) and falls back to the legacy sources only when the key is unset or the Data API attempt fails. Transcripts are the exception: the Data API's captions endpoint is owner-OAuth-only, so TranscriptAPI is primary there. All Data API calls live in `apps/web/src/lib/platforms/youtube/dataApi.ts`.
 
+Notation: `A → B` means B runs after A (within a tier) or only if A failed (between fallback tiers); `A ∥ B` means A and B are fetched **in parallel**.
+
 | Operation | Primary (Data API) | Fallback chain | Quota units |
 |---|---|---|---|
-| Add channel — `/channel/UC…` URL or bare UC id | `channels.list id=` → uploads + `UUSH…` `playlistItems.list` → `videos.list` | scrape ∥ RSS merge → TranscriptAPI `/channel/latest` → scrape-only | 4 |
+| Add channel — `/channel/UC…` URL or bare UC id | `channels.list id=` → uploads `playlistItems.list` → (`UUSH…` `playlistItems.list` ∥ `videos.list`) | (scrape ∥ RSS) merged → TranscriptAPI `/channel/latest` → scrape-only | 4 |
 | Add channel — `@handle` URL | same, `channels.list forHandle=` resolves the handle | scrape **first** (resolves UC id) → RSS → TranscriptAPI → scrape-only | 4 |
-| Refresh channel (cron; each channel at most once per `STALE_DAYS`) | same as add channel | same as add channel | 4 |
+| Refresh channel (cron; each channel at most once per `STALE_DAYS`) | same as add channel | same as UC-id add channel | 4 |
 | Add playlist | `playlists.list` → `playlistItems.list` → `videos.list` | playlist RSS → playlist page scrape | 3 |
-| Add video | `videos.list` + `UUMO…` members-only check + `channels.list` (handle/logo) | watch page + oEmbed → TranscriptAPI (bundles the transcript) | 3 |
-| Scheduled-video detection (`ensureTranscript`, before sticky-locking `transcript_unavailable`) | — (not yet migrated) | watch-page scrape → TranscriptAPI `/channel/latest` | — |
+| Add video | `videos.list` → (`UUMO…` members-only check ∥ `channels.list` handle/logo) | (watch page ∥ oEmbed) → TranscriptAPI (bundles the transcript) | 3 |
+| Scheduled-video detection (`ensureTranscript`, before sticky-locking `transcript_unavailable`) | `videos.list` (`liveBroadcastContent` + `liveStreamingDetails.scheduledStartTime`) | watch-page scrape → TranscriptAPI `/channel/latest` | 1 |
 | Transcript fetch | — (captions are owner-OAuth-only, impossible with an API key) | TranscriptAPI (primary) | — |
 
 Shared behavior:
@@ -42,7 +44,7 @@ When RSS + TranscriptAPI both fail, the scrape-only build marks every video `isS
 
 Channel-ingest paths drop future-dated videos: `channelScrape.ts` skips `upcomingEventData` entries; `channelRss.ts` and TranscriptAPI's `fetchChannelLatest` drop `published > now`. So refreshes never pull in scheduled videos.
 
-For individually-added videos that are (or turn) scheduled, `ensureTranscript` probes the watch page (`scheduledVideo.ts`) before flipping the sticky `transcript_unavailable` flag — scrape's `isUpcoming` + `liveBroadcastDetails.startTimestamp` is authoritative, TranscriptAPI `/channel/latest` a fallback. Detected ones return `425` (`code: 'scheduled'`) so the reader shows a toast instead of sticky-locking.
+For individually-added videos that are (or turn) scheduled, `ensureTranscript` probes the video (`scheduledVideo.ts`) before flipping the sticky `transcript_unavailable` flag. The Data API is primary (`liveBroadcastContent: 'upcoming'` + `liveStreamingDetails.scheduledStartTime`, authoritative both ways when it answers; a video missing from the response — deleted/private — is treated as indeterminate, not as "not scheduled"). Fallbacks: watch-page scrape (`isUpcoming` + `liveBroadcastDetails.startTimestamp`), then TranscriptAPI `/channel/latest`. Detected ones return `425` (`code: 'scheduled'`) so the reader shows a toast instead of sticky-locking.
 
 ## Members-only videos
 

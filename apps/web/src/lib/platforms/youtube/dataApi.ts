@@ -18,6 +18,7 @@
  *   - video snapshot: 3 units (videos 1 + members-only playlistItems 1
  *     + channels 1)
  *   - playlist fetch: 3 units (playlists 1 + playlistItems 1 + videos 1)
+ *   - scheduled-video check: 1 unit (videos 1)
  *
  * Members-only videos (verified empirically against channels with
  * members content): the `UU…` uploads playlist structurally excludes
@@ -142,6 +143,7 @@ interface VideosListResponse {
       thumbnails?: ThumbnailMap;
     };
     contentDetails?: { duration?: string };
+    liveStreamingDetails?: { scheduledStartTime?: string };
   }>;
 }
 
@@ -459,6 +461,47 @@ export async function fetchVideoViaDataApi(videoId: string): Promise<VideoSnapsh
       handle,
       logoUrl,
     },
+  };
+}
+
+/** Scheduled/upcoming state of a single video, for scheduledVideo.ts. */
+export interface DataApiScheduledStatus {
+  isUpcoming: boolean;
+  scheduledStartTime: Date | null;
+}
+
+/**
+ * Scheduled-premiere / upcoming-livestream check for a single video.
+ * `videos.list` exposes the same signals the watch-page scrape
+ * reconstructs from raw HTML — `liveBroadcastContent: 'upcoming'`
+ * (vs the scrape's `"isUpcoming":true`) and
+ * `liveStreamingDetails.scheduledStartTime` (vs
+ * `liveBroadcastDetails.startTimestamp`) — but structured. 1 unit.
+ *
+ * Returns null when the video is missing from the response: deleted
+ * and private videos are omitted by the API, and "not visible" must
+ * not be read as "not scheduled" — the caller falls through to the
+ * legacy strategies. Throws on request failure (quota, network).
+ */
+export async function fetchScheduledStatusViaDataApi(
+  videoId: string
+): Promise<DataApiScheduledStatus | null> {
+  console.info(`[youtube] Checking scheduled status via Data API: ${videoId}`);
+
+  const res = await dataApiFetch<VideosListResponse>('videos', {
+    part: 'snippet,liveStreamingDetails',
+    id: videoId,
+  });
+  const item = res.items?.[0];
+  if (item?.snippet == null) {
+    return null;
+  }
+  const isUpcoming = item.snippet.liveBroadcastContent === 'upcoming';
+  return {
+    isUpcoming,
+    scheduledStartTime: isUpcoming
+      ? parsePublishedAt(item.liveStreamingDetails?.scheduledStartTime)
+      : null,
   };
 }
 

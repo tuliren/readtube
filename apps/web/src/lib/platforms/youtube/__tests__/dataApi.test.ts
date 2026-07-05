@@ -3,6 +3,7 @@ import { MembersOnlyVideoError } from '@/lib/platforms/types';
 import {
   fetchChannelViaDataApi,
   fetchPlaylistViaDataApi,
+  fetchScheduledStatusViaDataApi,
   fetchVideoViaDataApi,
   isDataApiConfigured,
 } from '../dataApi';
@@ -499,5 +500,60 @@ describe('fetchPlaylistViaDataApi', () => {
     mockDataApi({ playlists: { items: [] } });
 
     await expect(fetchPlaylistViaDataApi(PLAYLIST_ID)).rejects.toThrow('returned no playlist');
+  });
+});
+
+describe('fetchScheduledStatusViaDataApi', () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    process.env = { ...originalEnv, YOUTUBE_API_KEY: 'yt-key' };
+    jest.spyOn(globalThis, 'fetch');
+    jest.spyOn(console, 'info').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+    jest.restoreAllMocks();
+  });
+
+  it('reports an upcoming premiere with its scheduled start time', async () => {
+    mockDataApi({
+      videos: {
+        items: [
+          {
+            id: VIDEO_ID,
+            snippet: { liveBroadcastContent: 'upcoming' },
+            liveStreamingDetails: { scheduledStartTime: '2026-08-01T15:00:00Z' },
+          },
+        ],
+      },
+    });
+
+    const status = await fetchScheduledStatusViaDataApi(VIDEO_ID);
+
+    expect(status).toEqual({
+      isUpcoming: true,
+      scheduledStartTime: new Date('2026-08-01T15:00:00Z'),
+    });
+  });
+
+  it.each([
+    ['a regular video', 'none'],
+    ['a currently-live stream', 'live'],
+  ])('reports %s as not upcoming', async (_label, liveBroadcastContent) => {
+    mockDataApi({
+      videos: { items: [{ id: VIDEO_ID, snippet: { liveBroadcastContent } }] },
+    });
+
+    const status = await fetchScheduledStatusViaDataApi(VIDEO_ID);
+
+    expect(status).toEqual({ isUpcoming: false, scheduledStartTime: null });
+  });
+
+  it('returns null when the video is missing from the response', async () => {
+    mockDataApi({ videos: { items: [] } });
+
+    await expect(fetchScheduledStatusViaDataApi(VIDEO_ID)).resolves.toBeNull();
   });
 });
