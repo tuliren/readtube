@@ -35,43 +35,14 @@ export type ContentPlatform = 'youtube' | 'bilibili';
 export type YouTubeFetchType = 'channel' | 'video' | 'playlist' | 'scheduled';
 export type YouTubeFetchSource = 'data_api' | 'rss' | 'scrape' | 'transcript_api';
 
-// Vercel populates this global with the per-request context (visitor
-// headers + `waitUntil`) during an HTTP request. `@vercel/analytics`'s
-// `track()` reads visitor headers from it — but it's absent in
-// Workflow/cron steps, and without any headers value `track()` throws
-// "No session context found". We mirror the library's own lookup so we
-// can tell whether to let it auto-read real headers (request scope) or
-// hand it an empty headers object (workflow/cron) to still send.
-const REQUEST_CONTEXT_SYMBOL = Symbol.for('@vercel/request-context');
-
-interface RequestContextStore {
-  get?: () => { headers?: unknown } | undefined;
-}
-
-function hasAmbientRequestHeaders(): boolean {
-  const store = (globalThis as Record<symbol, RequestContextStore | undefined>)[
-    REQUEST_CONTEXT_SYMBOL
-  ];
-  return store?.get?.()?.headers != null;
-}
-
 async function emit(name: string, properties: Record<string, string>): Promise<void> {
-  // Production + preview emit; local dev, the `scripts/` probes, and
-  // Jest have `VERCEL_ENV` unset (→ development) and stay silent. This
-  // is a system env var present on every Vercel runtime, the Workflow
-  // and cron ones included, so background emits aren't gated out.
   if (getVercelEnv(process.env.VERCEL_ENV) === VercelEnv.DEVELOPMENT) {
     return;
   }
   try {
-    // In a request, pass no options so `track()` auto-reads the real
-    // visitor headers from the ambient context (and flushes via
-    // `waitUntil`). In a Workflow/cron step there's no such context, so
-    // pass an empty headers object — enough to satisfy `track()`'s
-    // headers requirement so the event still sends (unattributed).
-    await track(name, properties, hasAmbientRequestHeaders() ? undefined : { headers: {} });
-  } catch {
-    // Best-effort — swallow everything.
+    await track(name, properties);
+  } catch (error) {
+    console.error(error);
   }
 }
 
