@@ -55,6 +55,7 @@ Per-app `README`s:
 - `INTEGRATION_DATABASE_URL` — only used by the integration test harness.
 - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `CLERK_WEBHOOK_SECRET` — Clerk auth.
 - `TRANSCRIPT_API_KEY`, `AI_GATEWAY_API_KEY`, `JUSTONEAPI_TOKEN` — transcript + AI providers.
+- `YOUTUBE_API_KEY` — YouTube Data API v3 key from our own GCP project. Optional; when set it is the primary source for YouTube channel/video metadata (scrape/RSS/TranscriptAPI remain as fallbacks).
 - `CRON_SECRET` — protects scheduled routes.
 
 Put local values in `.env.development.local` / `.env.*local` (Turbo watches these as global dependencies).
