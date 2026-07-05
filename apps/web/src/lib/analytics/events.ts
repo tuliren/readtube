@@ -20,6 +20,15 @@
  * to await for the event to actually leave. They stay silent in the
  * development environment (`VERCEL_ENV` unset or `development`), so
  * local dev, the `scripts/` probes, and Jest emit nothing.
+ *
+ * Workflow/cron caveat (verified on a preview deploy): `track()` reads
+ * the visitor headers from Vercel's ambient per-request context, which
+ * is present in route handlers but NOT in Workflow/cron steps
+ * (add-channel, refresh-channels, summary/article generation). Without
+ * a headers value it throws "No session context found" and the event
+ * never sends — which is why `youtube_fetch` (type=channel) and
+ * `content_generated` (summary/article) were missing. So we pass an
+ * empty headers object when there's no ambient context.
  */
 import { VideoPlatformType } from '@readtube/database';
 import { track } from '@vercel/analytics/server';
@@ -35,12 +44,35 @@ export type ContentPlatform = 'youtube' | 'bilibili';
 export type YouTubeFetchType = 'channel' | 'video' | 'playlist' | 'scheduled';
 export type YouTubeFetchSource = 'data_api' | 'rss' | 'scrape' | 'transcript_api';
 
+// Vercel populates this global with the per-request context (visitor
+// headers + `waitUntil`) during an HTTP request. `track()` reads the
+// headers from it; it's absent in Workflow/cron steps, so we mirror the
+// library's own lookup to decide whether to let `track()` auto-read the
+// real headers (request scope) or hand it an empty object (workflow).
+const REQUEST_CONTEXT_SYMBOL = Symbol.for('@vercel/request-context');
+
+interface RequestContextStore {
+  get?: () => { headers?: unknown } | undefined;
+}
+
+function hasAmbientRequestHeaders(): boolean {
+  const store = (globalThis as Record<symbol, RequestContextStore | undefined>)[
+    REQUEST_CONTEXT_SYMBOL
+  ];
+  return store?.get?.()?.headers != null;
+}
+
 async function emit(name: string, properties: Record<string, string>): Promise<void> {
   if (getVercelEnv(process.env.VERCEL_ENV) === VercelEnv.DEVELOPMENT) {
     return;
   }
   try {
-    await track(name, properties);
+    // Request scope: pass nothing so `track()` auto-reads the real
+    // visitor headers (and flushes via `waitUntil`). Workflow/cron: no
+    // ambient context, so pass an empty headers object — enough to get
+    // past `track()`'s session requirement so the event still sends
+    // (unattributed but counted).
+    await track(name, properties, hasAmbientRequestHeaders() ? undefined : { headers: {} });
   } catch (error) {
     console.error(error);
   }
