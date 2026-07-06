@@ -80,6 +80,7 @@ export async function upsertChannelWithVideos(
         name: snapshot.name,
         ...(snapshot.logoUrl != null ? { logo_url: snapshot.logoUrl } : {}),
         ...(hasHandle && !conflictOnHandle ? { handle: snapshot.handle } : {}),
+        ...(snapshot.fetchedVia != null ? { fetched_via: snapshot.fetchedVia } : {}),
         checked_at: new Date(),
       },
     });
@@ -106,6 +107,7 @@ export async function upsertChannelWithVideos(
       name: snapshot.name,
       rss_url: platform.buildRssUrl(sourceId),
       logo_url: snapshot.logoUrl,
+      fetched_via: snapshot.fetchedVia ?? null,
       checked_at: new Date(),
       ...(hasHandle && !handleAlreadyUsed ? { handle: snapshot.handle } : {}),
     },

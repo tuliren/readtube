@@ -141,6 +141,12 @@ model Channel {
   // success (audit trail) and on failure (used by the next caller to
   // detect a stale REFRESHING marker via getRun(workflow_id).status).
   workflow_id String?
+  // Which fetch approach produced the most recent snapshot for this
+  // channel: data_api | rss | scrape | transcript_api (YouTube). Null
+  // for single-path platforms (Bilibili) and rows predating this
+  // column. Telemetry only — lets us see how often the scrape / RSS /
+  // TranscriptAPI fallbacks fire behind the Data API.
+  fetched_via String?
 
   videos        Video[]
   subscriptions UserSubscription[]
@@ -212,6 +218,12 @@ model Video {
   // API on every reader open is wasteful for the user and the provider.
   // Reset by hand if a captionless video later gains captions.
   transcript_unavailable Boolean                  @default(false)
+  // Which fetch approach produced this video's metadata when it was
+  // individually added (add-video): data_api | scrape | transcript_api
+  // (YouTube). Null for videos created in bulk from a channel/playlist
+  // fetch (their source lives on the Channel/Playlist row) and for
+  // pre-existing rows. Telemetry only.
+  fetched_via            String?
   // Full-text search vector over title + description. Backed by a STORED
   // GENERATED column — the migration SQL creates it with to_tsvector +
   // setweight. Prisma sees it as Unsupported, which is fine for writes
@@ -469,6 +481,10 @@ model Playlist {
   read_at     DateTime?
   created_at  DateTime          @default(now())
   updated_at  DateTime          @updatedAt
+  // Which fetch approach produced this playlist: data_api | rss |
+  // scrape (YouTube). Null for rows predating this column. Telemetry
+  // only.
+  fetched_via String?
 
   user  User            @relation(fields: [user_id], references: [source_id], onDelete: Cascade)
   items PlaylistVideo[]
@@ -587,7 +603,7 @@ model UserRequest {
   // permanent transcript UNAVAILABLE outcome.
   error_message String?
 
-  created_at DateTime @default(now())
+  created_at   DateTime  @default(now())
   // NULL while an async workflow is in flight — set at insert time
   // only for SUMMARY/ARTICLE rows with outcome=GENERATED, then
   // backfilled to now() by the workflow's persist/revert step. Every

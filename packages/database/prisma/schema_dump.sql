@@ -1,3 +1,6 @@
+-- CreateSchema
+CREATE SCHEMA IF NOT EXISTS "public";
+
 -- CreateExtension
 CREATE EXTENSION IF NOT EXISTS "vector";
 
@@ -53,6 +56,7 @@ CREATE TABLE "Channel" (
     "checked_at" TIMESTAMP(3),
     "status" "ChannelStatus" NOT NULL DEFAULT 'READY',
     "workflow_id" TEXT,
+    "fetched_via" TEXT,
 
     CONSTRAINT "Channel_pkey" PRIMARY KEY ("id")
 );
@@ -85,6 +89,7 @@ CREATE TABLE "Video" (
     "transcript_unavailable" BOOLEAN NOT NULL DEFAULT false,
     "thumbnail_url" TEXT,
     "source_type" "VideoPlatformType" NOT NULL DEFAULT 'YOUTUBE',
+    "fetched_via" TEXT,
 
     CONSTRAINT "Video_pkey" PRIMARY KEY ("id")
 );
@@ -210,6 +215,7 @@ CREATE TABLE "Playlist" (
     "updated_at" TIMESTAMP(3) NOT NULL,
     "read_at" TIMESTAMP(3),
     "custom_name" TEXT,
+    "fetched_via" TEXT,
 
     CONSTRAINT "Playlist_pkey" PRIMARY KEY ("id")
 );

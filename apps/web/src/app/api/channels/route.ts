@@ -207,7 +207,7 @@ async function finishSubscribe(userId: string, channelId: string) {
   // Single choke point for both the fast and slow subscribe paths; the
   // route rejects duplicate subscriptions with 409 before reaching
   // here, so this counts genuinely-new channel adds.
-  void trackContentAdded('channel', platformLabel(channelRow.source_type));
+  await trackContentAdded('channel', platformLabel(channelRow.source_type));
 
   return NextResponse.json(
     {

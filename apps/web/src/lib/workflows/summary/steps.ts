@@ -1,10 +1,4 @@
-import {
-  GenerationStatus,
-  Prisma,
-  UserRequestOutcome,
-  UserRequestType,
-  prisma,
-} from '@readtube/database';
+import { GenerationStatus, Prisma, UserRequestOutcome, prisma } from '@readtube/database';
 import { Output, streamText } from 'ai';
 import { FatalError, getWorkflowMetadata, getWritable } from 'workflow';
 import { z } from 'zod';
@@ -354,7 +348,6 @@ export async function persistSummaryStep(
   if (input.userRequestId != null) {
     try {
       await completeUserRequest(prisma, input.userRequestId, {
-        type: UserRequestType.SUMMARY,
         outcome: UserRequestOutcome.GENERATED,
         usage,
         summaryId,
@@ -387,7 +380,6 @@ export async function revertSummaryRowStep(
   if (input.userRequestId != null) {
     try {
       await completeUserRequest(prisma, input.userRequestId, {
-        type: UserRequestType.SUMMARY,
         outcome: UserRequestOutcome.FAILED,
         errorMessage: errorMessage ?? 'Summary workflow failed.',
       });
