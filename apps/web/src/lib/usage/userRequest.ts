@@ -70,10 +70,6 @@ interface RecordArticleParams extends BaseRequestParams {
 }
 
 interface CompleteParams {
-  // The generation type this request completed — SUMMARY or ARTICLE.
-  // Carried so the terminal analytics event can be labelled without a
-  // re-read (the row's `type` isn't otherwise in scope here).
-  type: UserRequestType;
   outcome: UserRequestOutcome;
   // For Summary/Article generated runs, the persist step passes the
   // final `result.usage` JSON. Untyped because the AI SDK shape varies
@@ -105,17 +101,14 @@ const GENERATION_OUTCOME_LABEL: Record<UserRequestOutcome, GenerationOutcome> = 
 };
 
 /**
- * Fire the `content_generated` analytics event for a terminal outcome.
- * Emitted from every place that writes a *terminal* outcome so each
- * generation is counted exactly once:
- *   - transcript rows are always terminal;
- *   - summary/article FAILED/UNAVAILABLE rows written pre-flight are
- *     terminal, while the in-flight GENERATED insert is not (it's
- *     completed later via `completeUserRequest`).
+ * Fire the `content_generated` analytics event for a *terminal*
+ * outcome: transcript rows (always terminal) and the pre-flight
+ * summary/article FAILED/UNAVAILABLE rows. All of these are written in
+ * request scope, so the event reaches Vercel analytics.
  *
- * Awaited by callers (the emitter never throws): the summary/article
- * completions run in Workflow steps with no `waitUntil`, so the event
- * only sends if we wait for it.
+ * Summary/article *starts* are emitted separately as `started` (see
+ * `recordSummaryRequest`) — their real terminal outcome only lands in
+ * a Workflow step, which has no request context and so can't emit.
  */
 function emitGenerationEvent(type: UserRequestType, outcome: UserRequestOutcome): Promise<void> {
   return trackContentGenerated(GENERATION_TYPE_LABEL[type], GENERATION_OUTCOME_LABEL[outcome]);
@@ -169,9 +162,13 @@ export async function recordSummaryRequest(
     },
     select: { id: true },
   });
-  // Only pre-flight terminal rows (e.g. transcript-unavailable FAILED)
-  // count here; the in-flight GENERATED insert is completed later.
-  if (!isAsyncStart) {
+  // The in-flight GENERATED insert marks a generation kicking off; its
+  // terminal outcome only lands in a Workflow step (which can't emit),
+  // so count it here in request scope as `started`. Pre-flight terminal
+  // rows (e.g. transcript-unavailable FAILED) carry their real outcome.
+  if (isAsyncStart) {
+    await trackContentGenerated('summary', 'started');
+  } else {
     await emitGenerationEvent(UserRequestType.SUMMARY, params.outcome);
   }
   return row;
@@ -199,7 +196,9 @@ export async function recordArticleRequest(
     },
     select: { id: true },
   });
-  if (!isAsyncStart) {
+  if (isAsyncStart) {
+    await trackContentGenerated('article', 'started');
+  } else {
     await emitGenerationEvent(UserRequestType.ARTICLE, params.outcome);
   }
   return row;
@@ -217,11 +216,10 @@ export async function completeUserRequest(
   requestId: string | null | undefined,
   params: CompleteParams
 ): Promise<void> {
-  // Counts the same generations the audit log does: callers skip this
-  // function for force/per-field regens (they pass no request id), so
-  // those opt out of both the audit row and the analytics event —
-  // consistent with how quota is metered off `UserRequest`.
-  await emitGenerationEvent(params.type, params.outcome);
+  // No analytics here: this runs in a Workflow step with no request
+  // context, so `track()` can't send. Summary/article are counted at
+  // request time via the `started` event in `recordSummaryRequest` /
+  // `recordArticleRequest`; this function only backfills the audit row.
   if (requestId == null || requestId === '') {
     return;
   }

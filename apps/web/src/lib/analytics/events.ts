@@ -5,9 +5,12 @@
  * here carries at most two, and we split concerns across three event
  * names rather than one fat event:
  *
- *   - `content_generated` {type, outcome} — a transcript fetch, summary,
- *     or article generation reached a terminal outcome. Lets us chart
- *     how much derived content users generate.
+ *   - `content_generated` {type, outcome} — content generation activity.
+ *     Transcript carries its terminal outcome (generated/unavailable).
+ *     Summary/article carry `started` instead: their real terminal
+ *     outcome is only known inside a Workflow step, which can't emit
+ *     (no request context — see below), so we count them at request
+ *     time when generation kicks off.
  *   - `content_added` {type, platform} — a user added a video, playlist,
  *     or channel to their library.
  *   - `youtube_fetch` {type, source} — YouTube metadata was fetched and
@@ -36,7 +39,12 @@ import { track } from '@vercel/analytics/server';
 import { VercelEnv, getVercelEnv } from '@/lib/vercelEnv';
 
 export type ContentGenerationType = 'transcript' | 'summary' | 'article';
-export type GenerationOutcome = 'generated' | 'unavailable' | 'failed';
+/**
+ * `started` is request-time only (summary/article, whose terminal
+ * outcome lands in an un-emittable Workflow step); the others are
+ * terminal outcomes carried by transcript and the pre-flight failures.
+ */
+export type GenerationOutcome = 'generated' | 'unavailable' | 'failed' | 'started';
 
 export type ContentAddType = 'video' | 'playlist' | 'channel';
 export type ContentPlatform = 'youtube' | 'bilibili';
