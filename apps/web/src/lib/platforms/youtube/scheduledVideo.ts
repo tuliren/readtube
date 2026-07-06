@@ -25,20 +25,9 @@
  *     the same reason). Routed through different infrastructure than
  *     a Vercel-IP watch-page hit.
  */
-import { type YouTubeFetchSource, trackYouTubeFetch } from '@/lib/analytics/events';
 import { isEmptyString } from '@/lib/string';
 
 import { fetchScheduledStatusViaDataApi, isDataApiConfigured } from './dataApi';
-
-/** Map the internal ScheduledStatus source to the analytics label. */
-const SCHEDULED_SOURCE_LABEL: Record<
-  Exclude<ScheduledStatus['source'], 'none'>,
-  YouTubeFetchSource
-> = {
-  dataApi: 'data_api',
-  scrape: 'scrape',
-  transcriptApi: 'transcript_api',
-};
 
 const YT_USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
@@ -212,18 +201,6 @@ async function detectViaTranscriptApi(
  * only the Data API and scrape paths run.
  */
 export async function detectScheduledVideo(
-  videoId: string,
-  options: { channelSourceId?: string | null } = {}
-): Promise<ScheduledStatus> {
-  const status = await resolveScheduledStatus(videoId, options);
-  // `none` means no source answered — nothing was actually fetched.
-  if (status.source !== 'none') {
-    await trackYouTubeFetch('scheduled', SCHEDULED_SOURCE_LABEL[status.source]);
-  }
-  return status;
-}
-
-async function resolveScheduledStatus(
   videoId: string,
   options: { channelSourceId?: string | null } = {}
 ): Promise<ScheduledStatus> {

@@ -1,4 +1,12 @@
 /**
+ * Which fetch approach produced a snapshot. Persisted to the
+ * `fetched_via` column so we can measure how often the scrape / RSS /
+ * TranscriptAPI fallbacks fire behind the YouTube Data API. Only
+ * meaningful for multi-path platforms (YouTube); undefined otherwise.
+ */
+export type FetchSource = 'data_api' | 'rss' | 'scrape' | 'transcript_api';
+
+/**
  * Neutral snapshot shape shared across video platforms. Persisted by
  * the add-video workflow regardless of which platform produced it.
  * Keep in sync with `VideoSnapshot` as originally defined in
@@ -23,6 +31,8 @@ export interface VideoSnapshot {
     handle: string | null;
     logoUrl: string | null;
   };
+  /** Which tier served this fetch. Undefined for single-path platforms. */
+  fetchedVia?: FetchSource;
 }
 
 /**
@@ -67,6 +77,8 @@ export interface ChannelSnapshot {
   logoUrl: string | null;
   /** Shorts (YouTube) are filtered out. Ordered newest-first. */
   videos: SnapshotVideo[];
+  /** Which tier served this fetch. Undefined for single-path platforms. */
+  fetchedVia?: FetchSource;
 }
 
 /**

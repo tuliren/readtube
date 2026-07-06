@@ -3,7 +3,7 @@ import { VideoPlatformType } from '@readtube/database';
 // no-op `track`; spy on it to assert whether the emitter forwards.
 import { track } from '@vercel/analytics/server';
 
-import { platformLabel, trackYouTubeFetch } from '../events';
+import { platformLabel, trackContentAdded } from '../events';
 
 jest.mock('@vercel/analytics/server', () => ({ track: jest.fn(() => Promise.resolve()) }));
 
@@ -30,15 +30,9 @@ describe('event emission gating', () => {
   it.each([['production'], ['preview']])('emits on Vercel %s', async (vercelEnv) => {
     process.env = { ...originalEnv, VERCEL_ENV: vercelEnv };
 
-    await trackYouTubeFetch('channel', 'data_api');
+    await trackContentAdded('channel', 'youtube');
 
-    // No ambient request context in tests, so a fallback headers object
-    // is passed to satisfy `track()`'s session requirement.
-    expect(track).toHaveBeenCalledWith(
-      'youtube_fetch',
-      { type: 'channel', source: 'data_api' },
-      { headers: {} }
-    );
+    expect(track).toHaveBeenCalledWith('content_added', { type: 'channel', platform: 'youtube' });
   });
 
   it.each([
@@ -51,7 +45,7 @@ describe('event emission gating', () => {
       process.env.VERCEL_ENV = vercelEnv;
     }
 
-    await trackYouTubeFetch('channel', 'rss');
+    await trackContentAdded('channel', 'youtube');
 
     expect(track).not.toHaveBeenCalled();
   });
@@ -60,6 +54,6 @@ describe('event emission gating', () => {
     process.env = { ...originalEnv, VERCEL_ENV: 'production' };
     (track as jest.Mock).mockRejectedValueOnce(new Error('collector down'));
 
-    await expect(trackYouTubeFetch('video', 'scrape')).resolves.toBeUndefined();
+    await expect(trackContentAdded('video', 'youtube')).resolves.toBeUndefined();
   });
 });

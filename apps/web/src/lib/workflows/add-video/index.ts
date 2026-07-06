@@ -162,6 +162,7 @@ export async function addVideoForUser(args: {
       published_at: snapshot.publishedAt,
       thumbnail_url: snapshot.thumbnailUrl,
       duration_seconds: snapshot.durationSeconds,
+      fetched_via: snapshot.fetchedVia ?? null,
     },
     update: {
       channel_id: channel.id,
@@ -173,6 +174,7 @@ export async function addVideoForUser(args: {
       ...(snapshot.publishedAt != null ? { published_at: snapshot.publishedAt } : {}),
       thumbnail_url: snapshot.thumbnailUrl,
       ...(snapshot.durationSeconds != null ? { duration_seconds: snapshot.durationSeconds } : {}),
+      ...(snapshot.fetchedVia != null ? { fetched_via: snapshot.fetchedVia } : {}),
     },
     select: { id: true },
   });

@@ -4,7 +4,6 @@
  * fetchers are module-mocked; the pure merge logic is covered in
  * channelSnapshot.test.ts.
  */
-import { trackYouTubeFetch } from '@/lib/analytics/events';
 import type { ChannelSnapshot } from '@/lib/platforms/types';
 import { fetchRssFeed } from '@/lib/platforms/youtube/channelRss';
 import { scrapeChannel } from '@/lib/platforms/youtube/channelScrape';
@@ -12,9 +11,6 @@ import { fetchChannelSnapshot } from '@/lib/platforms/youtube/channelSnapshot';
 import { fetchChannelViaDataApi, isDataApiConfigured } from '@/lib/platforms/youtube/dataApi';
 import { fetchChannelLatest } from '@/lib/platforms/youtube/transcriptApi';
 
-jest.mock('@/lib/analytics/events', () => ({
-  trackYouTubeFetch: jest.fn(),
-}));
 jest.mock('@/lib/platforms/youtube/dataApi', () => ({
   isDataApiConfigured: jest.fn(),
   fetchChannelViaDataApi: jest.fn(),
@@ -175,23 +171,29 @@ describe('fetchChannelSnapshot orchestration', () => {
     expect(scrapeChannel).toHaveBeenCalled();
   });
 
-  describe('youtube_fetch analytics source', () => {
+  describe('fetched_via source tagging', () => {
     it('tags the Data API tier as data_api', async () => {
       (isDataApiConfigured as jest.Mock).mockReturnValue(true);
       (fetchChannelViaDataApi as jest.Mock).mockResolvedValue(dataApiSnapshot());
 
-      await fetchChannelSnapshot({ channelPageUrl: CHANNEL_PAGE_URL, rssUrl: RSS_URL });
+      const snapshot = await fetchChannelSnapshot({
+        channelPageUrl: CHANNEL_PAGE_URL,
+        rssUrl: RSS_URL,
+      });
 
-      expect(trackYouTubeFetch).toHaveBeenCalledWith('channel', 'data_api');
+      expect(snapshot.fetchedVia).toBe('data_api');
     });
 
     it('tags the RSS tier as rss', async () => {
       (isDataApiConfigured as jest.Mock).mockReturnValue(false);
       mockScrapeAndRssSuccess();
 
-      await fetchChannelSnapshot({ channelPageUrl: CHANNEL_PAGE_URL, rssUrl: RSS_URL });
+      const snapshot = await fetchChannelSnapshot({
+        channelPageUrl: CHANNEL_PAGE_URL,
+        rssUrl: RSS_URL,
+      });
 
-      expect(trackYouTubeFetch).toHaveBeenCalledWith('channel', 'rss');
+      expect(snapshot.fetchedVia).toBe('rss');
     });
 
     it('tags the TranscriptAPI fallback as transcript_api when RSS fails', async () => {
@@ -226,7 +228,7 @@ describe('fetchChannelSnapshot orchestration', () => {
       });
 
       expect(snapshot.videos.map((v) => v.videoId)).toEqual(['tapivideo01']);
-      expect(trackYouTubeFetch).toHaveBeenCalledWith('channel', 'transcript_api');
+      expect(snapshot.fetchedVia).toBe('transcript_api');
     });
 
     it('tags the scrape-only fallback as scrape', async () => {
@@ -251,9 +253,12 @@ describe('fetchChannelSnapshot orchestration', () => {
       (fetchRssFeed as jest.Mock).mockRejectedValue(new Error('RSS 404'));
       (fetchChannelLatest as jest.Mock).mockRejectedValue(new Error('TApi down'));
 
-      await fetchChannelSnapshot({ channelPageUrl: CHANNEL_PAGE_URL, rssUrl: RSS_URL });
+      const snapshot = await fetchChannelSnapshot({
+        channelPageUrl: CHANNEL_PAGE_URL,
+        rssUrl: RSS_URL,
+      });
 
-      expect(trackYouTubeFetch).toHaveBeenCalledWith('channel', 'scrape');
+      expect(snapshot.fetchedVia).toBe('scrape');
     });
   });
 });

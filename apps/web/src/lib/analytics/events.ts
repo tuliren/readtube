@@ -13,25 +13,18 @@
  *     time when generation kicks off.
  *   - `content_added` {type, platform} — a user added a video, playlist,
  *     or channel to their library.
- *   - `youtube_fetch` {type, source} — YouTube metadata was fetched and
- *     which tier served it (Data API vs the scrape / RSS / TranscriptAPI
- *     fallbacks). This is how we watch how often the fallbacks fire.
  *
- * Emitters never throw (analytics must not break a request or a
- * workflow step) but they ARE awaited by callers: outside an HTTP
- * request there's no `waitUntil` to flush the send, so the caller has
- * to await for the event to actually leave. They stay silent in the
- * development environment (`VERCEL_ENV` unset or `development`), so
- * local dev, the `scripts/` probes, and Jest emit nothing.
+ * Every emit happens in a route handler (request scope), so `track()`
+ * auto-reads the visitor headers from Vercel's ambient per-request
+ * context. Fetch-source telemetry runs in Workflow/cron steps that have
+ * no such context (so `track()` can't send there) — it's recorded on
+ * the `fetched_via` DB column instead; see `FetchSource` in
+ * `platforms/types.ts`.
  *
- * Workflow/cron caveat (verified on a preview deploy): `track()` reads
- * the visitor headers from Vercel's ambient per-request context, which
- * is present in route handlers but NOT in Workflow/cron steps
- * (add-channel, refresh-channels, summary/article generation). Without
- * a headers value it throws "No session context found" and the event
- * never sends — which is why `youtube_fetch` (type=channel) and
- * `content_generated` (summary/article) were missing. So we pass an
- * empty headers object when there's no ambient context.
+ * Emitters never throw (analytics must not break a request) but they
+ * ARE awaited by callers. They stay silent in the development
+ * environment (`VERCEL_ENV` unset or `development`), so local dev, the
+ * `scripts/` probes, and Jest emit nothing.
  */
 import { VideoPlatformType } from '@readtube/database';
 import { track } from '@vercel/analytics/server';
@@ -49,38 +42,12 @@ export type GenerationOutcome = 'generated' | 'unavailable' | 'failed' | 'starte
 export type ContentAddType = 'video' | 'playlist' | 'channel';
 export type ContentPlatform = 'youtube' | 'bilibili';
 
-export type YouTubeFetchType = 'channel' | 'video' | 'playlist' | 'scheduled';
-export type YouTubeFetchSource = 'data_api' | 'rss' | 'scrape' | 'transcript_api';
-
-// Vercel populates this global with the per-request context (visitor
-// headers + `waitUntil`) during an HTTP request. `track()` reads the
-// headers from it; it's absent in Workflow/cron steps, so we mirror the
-// library's own lookup to decide whether to let `track()` auto-read the
-// real headers (request scope) or hand it an empty object (workflow).
-const REQUEST_CONTEXT_SYMBOL = Symbol.for('@vercel/request-context');
-
-interface RequestContextStore {
-  get?: () => { headers?: unknown } | undefined;
-}
-
-function hasAmbientRequestHeaders(): boolean {
-  const store = (globalThis as Record<symbol, RequestContextStore | undefined>)[
-    REQUEST_CONTEXT_SYMBOL
-  ];
-  return store?.get?.()?.headers != null;
-}
-
 async function emit(name: string, properties: Record<string, string>): Promise<void> {
   if (getVercelEnv(process.env.VERCEL_ENV) === VercelEnv.DEVELOPMENT) {
     return;
   }
   try {
-    // Request scope: pass nothing so `track()` auto-reads the real
-    // visitor headers (and flushes via `waitUntil`). Workflow/cron: no
-    // ambient context, so pass an empty headers object — enough to get
-    // past `track()`'s session requirement so the event still sends
-    // (unattributed but counted).
-    await track(name, properties, hasAmbientRequestHeaders() ? undefined : { headers: {} });
+    await track(name, properties);
   } catch (error) {
     console.error(error);
   }
@@ -106,16 +73,4 @@ export function platformLabel(type: VideoPlatformType): ContentPlatform {
 /** A user added a video / playlist / channel to their library. */
 export function trackContentAdded(type: ContentAddType, platform: ContentPlatform): Promise<void> {
   return emit('content_added', { type, platform });
-}
-
-/**
- * YouTube metadata was fetched, tagged with which tier served it so we
- * can see how often the scrape / RSS / TranscriptAPI fallbacks fire
- * behind the Data API.
- */
-export function trackYouTubeFetch(
-  type: YouTubeFetchType,
-  source: YouTubeFetchSource
-): Promise<void> {
-  return emit('youtube_fetch', { type, source });
 }

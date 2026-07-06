@@ -1,6 +1,7 @@
 import { VideoPlatformType, prisma } from '@readtube/database';
 
-import { trackContentAdded, trackYouTubeFetch } from '@/lib/analytics/events';
+import { trackContentAdded } from '@/lib/analytics/events';
+import type { FetchSource } from '@/lib/platforms/types';
 import type { RssChannel } from '@/lib/platforms/youtube/channelRss';
 import { fetchRssFeed, isYouTubeShort } from '@/lib/platforms/youtube/channelRss';
 import { UNKNOWN_CHANNEL_NAME } from '@/lib/platforms/youtube/constants';
@@ -46,6 +47,8 @@ interface PlaylistFeed {
   channelName: string;
   name: string;
   videos: PlaylistVideo[];
+  /** Which tier served this fetch — persisted to Playlist.fetched_via. */
+  fetchedVia: FetchSource;
 }
 
 /**
@@ -69,12 +72,12 @@ export async function fetchPlaylistData(playlistId: string): Promise<PlaylistFee
     try {
       const playlist = await fetchPlaylistViaDataApi(playlistId);
       if (playlist.videos.length > 0) {
-        await trackYouTubeFetch('playlist', 'data_api');
         return {
           channelId: playlist.channelId,
           channelName: playlist.channelName,
           name: playlist.title,
           videos: playlist.videos,
+          fetchedVia: 'data_api',
         };
       }
       console.warn('[add-playlist] Data API returned zero videos — trying RSS/scrape');
@@ -86,7 +89,6 @@ export async function fetchPlaylistData(playlistId: string): Promise<PlaylistFee
   // Attempt 1: RSS feed
   try {
     const rss: RssChannel = await fetchRssFeed(buildPlaylistRssUrl(playlistId));
-    await trackYouTubeFetch('playlist', 'rss');
     return {
       channelId: rss.channelId,
       // For playlist RSS feeds the feed-level <title> is the playlist
@@ -105,6 +107,7 @@ export async function fetchPlaylistData(playlistId: string): Promise<PlaylistFee
           channelId: v.channelId,
           channelName: v.channelName,
         })),
+      fetchedVia: 'rss',
     };
   } catch {
     // RSS failed (likely 404) — fall through to scrape.
@@ -112,7 +115,6 @@ export async function fetchPlaylistData(playlistId: string): Promise<PlaylistFee
 
   // Attempt 2: page scrape
   const scraped = await scrapePlaylist(playlistId);
-  await trackYouTubeFetch('playlist', 'scrape');
   return {
     channelId: scraped.channelId,
     channelName: scraped.channelName,
@@ -127,6 +129,7 @@ export async function fetchPlaylistData(playlistId: string): Promise<PlaylistFee
       channelId: v.channelId,
       channelName: v.channelName,
     })),
+    fetchedVia: 'scrape',
   };
 }
 
@@ -196,6 +199,7 @@ export async function addPlaylistForUser(args: {
       source_id: ytPlaylistId,
       name,
       sort_order: nextOrder,
+      fetched_via: feed.fetchedVia,
     },
     select: { id: true },
   });
