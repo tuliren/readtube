@@ -4,8 +4,10 @@ import { clsx } from 'clsx';
 import 'katex/dist/katex.min.css';
 import { type Metadata } from 'next';
 import { Inter, Lexend } from 'next/font/google';
-import { ReactNode } from 'react';
+import { ReactNode, Suspense } from 'react';
 
+import { AttributionTracker } from '@/components/analytics/AttributionTracker';
+import { UtmParamTracker } from '@/components/analytics/UtmParamTracker';
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
 import { DESCRIPTION, FULL_WEBSITE_URL, MAIN_COLOR, TITLE } from '@/constants';
 import '@/styles/globals.css';
@@ -109,6 +111,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               },
             }}
           >
+            {/* Suspense because UtmParamTracker reads useSearchParams, which
+                would otherwise force the whole route into client rendering. */}
+            <Suspense fallback={null}>
+              <UtmParamTracker />
+            </Suspense>
+            <AttributionTracker />
             {children}
           </ClerkProvider>
         </ThemeProvider>
