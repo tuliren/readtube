@@ -41,6 +41,23 @@ CREATE TABLE "User" (
 );
 
 -- CreateTable
+CREATE TABLE "SignupAttribution" (
+    "id" TEXT NOT NULL,
+    "user_id" TEXT NOT NULL,
+    "utm_source" TEXT,
+    "utm_medium" TEXT,
+    "utm_campaign" TEXT,
+    "utm_term" TEXT,
+    "utm_content" TEXT,
+    "referrer" TEXT,
+    "landing_page" TEXT,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "SignupAttribution_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "Channel" (
     "id" TEXT NOT NULL,
     "source_type" "VideoPlatformType" NOT NULL DEFAULT 'YOUTUBE',
@@ -286,6 +303,12 @@ CREATE UNIQUE INDEX "User_source_id_key" ON "User"("source_id");
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "SignupAttribution_user_id_key" ON "SignupAttribution"("user_id");
+
+-- CreateIndex
+CREATE INDEX "signup_attribution_index_on_utm_source" ON "SignupAttribution"("utm_source");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "Channel_source_type_source_id_key" ON "Channel"("source_type", "source_id");
 
 -- CreateIndex
@@ -383,6 +406,9 @@ CREATE INDEX "user_request_index_on_user_type_created" ON "UserRequest"("user_id
 
 -- CreateIndex
 CREATE INDEX "user_request_index_on_video" ON "UserRequest"("video_id");
+
+-- AddForeignKey
+ALTER TABLE "SignupAttribution" ADD CONSTRAINT "SignupAttribution_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "User"("source_id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "UserSubscription" ADD CONSTRAINT "UserSubscription_channel_id_fkey" FOREIGN KEY ("channel_id") REFERENCES "Channel"("id") ON DELETE CASCADE ON UPDATE CASCADE;
