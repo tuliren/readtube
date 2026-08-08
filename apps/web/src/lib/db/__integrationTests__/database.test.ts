@@ -69,4 +69,69 @@ describe('Database Integration Tests', () => {
       })
     ).rejects.toThrow();
   });
+
+  describe('SignupAttribution', () => {
+    const userData = {
+      source_id: 'user_attribution',
+      email: 'attribution@example.com',
+      name: 'Attribution User',
+    };
+
+    beforeEach(async () => {
+      await global.testPrisma.user.create({ data: userData });
+    });
+
+    it('creates and retrieves an attribution row for a user', async () => {
+      await global.testPrisma.signupAttribution.create({
+        data: {
+          user_id: userData.source_id,
+          utm_source: 'producthunt',
+          referrer: 'https://www.producthunt.com/products/readtube',
+          landing_page: '/',
+        },
+      });
+
+      const retrieved = await global.testPrisma.signupAttribution.findUnique({
+        where: { user_id: userData.source_id },
+      });
+
+      expect(retrieved?.utm_source).toBe('producthunt');
+      expect(retrieved?.referrer).toBe('https://www.producthunt.com/products/readtube');
+      expect(retrieved?.landing_page).toBe('/');
+      expect(retrieved?.utm_medium).toBeNull();
+    });
+
+    it('enforces one attribution row per user', async () => {
+      await global.testPrisma.signupAttribution.create({
+        data: { user_id: userData.source_id, utm_source: 'first' },
+      });
+
+      await expect(
+        global.testPrisma.signupAttribution.create({
+          data: { user_id: userData.source_id, utm_source: 'second' },
+        })
+      ).rejects.toThrow();
+    });
+
+    it('rejects an attribution row without a matching user', async () => {
+      await expect(
+        global.testPrisma.signupAttribution.create({
+          data: { user_id: 'user_missing', utm_source: 'x' },
+        })
+      ).rejects.toThrow();
+    });
+
+    it('cascades deletion when the user is deleted', async () => {
+      await global.testPrisma.signupAttribution.create({
+        data: { user_id: userData.source_id, landing_page: '/' },
+      });
+
+      await global.testPrisma.user.delete({ where: { source_id: userData.source_id } });
+
+      const retrieved = await global.testPrisma.signupAttribution.findUnique({
+        where: { user_id: userData.source_id },
+      });
+      expect(retrieved).toBeNull();
+    });
+  });
 });
