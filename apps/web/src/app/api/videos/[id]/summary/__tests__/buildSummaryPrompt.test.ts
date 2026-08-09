@@ -1,7 +1,5 @@
 import { buildSummaryPrompt } from '@/app/api/videos/[id]/summary/buildPrompt';
-
-type SummaryField = 'headline' | 'short' | 'full';
-const SUMMARY_FIELDS: readonly SummaryField[] = ['headline', 'short', 'full'] as const;
+import { SUMMARY_FIELDS, type SummaryField } from '@/lib/workflows/summary/promptSections';
 
 const TITLE = 'How transformers work';
 const CHANNEL = 'AI Explained';
@@ -50,8 +48,14 @@ describe('buildSummaryPrompt', () => {
     }
   });
 
+  it('places the full section before the short section', () => {
+    const prompt = buildSummaryPrompt([...SUMMARY_FIELDS], null, 'en', TITLE, CHANNEL, TRANSCRIPT);
+    expect(prompt.indexOf('FULL SUMMARY')).toBeGreaterThan(-1);
+    expect(prompt.indexOf('FULL SUMMARY')).toBeLessThan(prompt.indexOf('SHORT SUMMARY'));
+  });
+
   it('only includes the short-vs-full distinction when both are requested', () => {
-    const distinctionMarker = 'NOT a truncation';
+    const distinctionMarker = 'distill the SHORT summary';
 
     const both = buildSummaryPrompt(['short', 'full'], null, 'en', TITLE, CHANNEL, TRANSCRIPT);
     expect(both).toContain(distinctionMarker);
@@ -61,6 +65,51 @@ describe('buildSummaryPrompt', () => {
 
     const fullOnly = buildSummaryPrompt(['full'], null, 'en', TITLE, CHANNEL, TRANSCRIPT);
     expect(fullOnly).not.toContain(distinctionMarker);
+  });
+
+  it.each<{
+    name: string;
+    fields: SummaryField[];
+    existing: { short?: string; full?: string };
+    present: string[];
+    absent: string[];
+  }>([
+    {
+      name: 'full-only regen sees the existing short',
+      fields: ['full'],
+      existing: { short: 'existing-short-abc' },
+      present: ['existing-short-abc', 'substantially longer'],
+      absent: [],
+    },
+    {
+      name: 'short-only regen sees the existing full',
+      fields: ['short'],
+      existing: { full: 'existing-full-def' },
+      present: ['existing-full-def', 'Distill the SHORT SUMMARY'],
+      absent: [],
+    },
+    {
+      name: 'both-field generation ignores existing content',
+      fields: ['short', 'full'],
+      existing: { short: 'existing-short-abc', full: 'existing-full-def' },
+      present: [],
+      absent: ['existing-short-abc', 'existing-full-def'],
+    },
+    {
+      name: 'full-only regen without a stored short adds no context',
+      fields: ['full'],
+      existing: {},
+      present: [],
+      absent: ['existing SHORT SUMMARY'],
+    },
+  ])('$name', ({ fields, existing, present, absent }) => {
+    const prompt = buildSummaryPrompt(fields, null, 'en', TITLE, CHANNEL, TRANSCRIPT, existing);
+    for (const marker of present) {
+      expect(prompt).toContain(marker);
+    }
+    for (const marker of absent) {
+      expect(prompt).not.toContain(marker);
+    }
   });
 
   it('embeds the language rule, video title and channel name', () => {

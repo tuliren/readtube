@@ -1,25 +1,44 @@
 import { buildLanguageRule } from '@/lib/language/prompt';
-import { type SummaryField } from '@/lib/workflows/summary/steps';
+import {
+  SECTION_BODIES,
+  SHORT_FULL_DISTINCTION,
+  type SummaryField,
+} from '@/lib/workflows/summary/promptSections';
 
-const SECTION_BODIES: Record<SummaryField, string> = {
-  headline: `HEADLINE — a very short newspaper-style title.
-- Title style, not a sentence.
-- Under 10 words. Shorter is better.
-- Plain text only — no markdown, no surrounding quotes, no "Title:" prefix.`,
-  short: `SHORT SUMMARY — a tight 2-3 sentence digest.
-- First sentence: the essential point.
-- 1-2 more sentences: the most important supporting context.
-- Plain prose. No headings, no lists, no preamble.`,
-  full: `FULL SUMMARY — a compact but richer overview, meaningfully longer than the short summary.
-- Focus on main arguments and conclusions; cut examples, tangents, and non-essential details.
-- Favor density over completeness — a reader should get the gist in under a minute.
-- Pick the format that fits the content:
-  - 2-3 short paragraphs of prose when the video is one continuous argument.
-  - A Markdown bullet list ("- ") when the video naturally breaks into discrete items (steps, tips, comparisons, list-of-N).
-  - A mix when an introductory point is followed by enumerated takeaways.
-- Bullets are terse one-liners, single-level only.
-- Never use headings (no #, ##, etc.). Do not bold or italicize.`,
-};
+/**
+ * Already-stored summary fields that are NOT part of this generation.
+ * Used by per-field regeneration: the FULL SUMMARY rules calibrate
+ * length against the short summary, so a full-only regen must see the
+ * existing short — without it the model has no anchor and collapses
+ * to digest length. Symmetrically, a short-only regen distills from
+ * the existing full.
+ */
+export interface ExistingSummaryFields {
+  short?: string;
+  full?: string;
+}
+
+function buildExistingContext(
+  fields: readonly SummaryField[],
+  existing: ExistingSummaryFields | undefined
+): string {
+  if (existing == null) {
+    return '';
+  }
+  if (fields.includes('full') && !fields.includes('short') && existing.short != null) {
+    return `\nFor calibration, here is the existing SHORT SUMMARY (not part of this generation):
+${existing.short}
+
+The FULL SUMMARY must be substantially longer and more detailed than this — present each key point with the material the video attaches to it, not just the core point.\n`;
+  }
+  if (fields.includes('short') && !fields.includes('full') && existing.full != null) {
+    return `\nFor reference, here is the existing FULL SUMMARY (not part of this generation):
+${existing.full}
+
+Distill the SHORT SUMMARY from it, consistent with the transcript.\n`;
+  }
+  return '';
+}
 
 export function buildSummaryPrompt(
   fields: readonly SummaryField[],
@@ -27,13 +46,13 @@ export function buildSummaryPrompt(
   sourceLanguage: string | null,
   title: string,
   channelName: string,
-  transcript: string
+  transcript: string,
+  existing?: ExistingSummaryFields
 ): string {
   const sections = fields.map((field) => SECTION_BODIES[field]);
   const distinction =
-    fields.includes('short') && fields.includes('full')
-      ? `\nThe short and full summaries serve different purposes — the short is a 2-3 sentence digest, the full is a denser, structured overview that is meaningfully longer and richer. The full summary is NOT a truncation of the short; write each independently against its own rules.\n`
-      : '';
+    fields.includes('short') && fields.includes('full') ? `\n${SHORT_FULL_DISTINCTION}\n` : '';
+  const existingContext = buildExistingContext(fields, existing);
   const intro =
     fields.length === 1
       ? 'Produce one summary of this video as a JSON object that matches the schema. Follow the rules below exactly.'
@@ -44,7 +63,7 @@ export function buildSummaryPrompt(
 ${intro}
 
 ${sections.join('\n\n')}
-${distinction}
+${distinction}${existingContext}
 For any field that has a hasLatex flag, set it to true only if that field's content contains an actual LaTeX math formula wrapped in $...$ or $$...$$ (e.g. $E = mc^2$). Dollar amounts like "$5 million" are not math.
 
 Video title: ${title}

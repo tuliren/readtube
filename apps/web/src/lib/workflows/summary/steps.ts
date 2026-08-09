@@ -9,11 +9,17 @@ import { CURRENT_FRONTMATTER_VERSION, serializeMarkdownDocument } from '@/lib/ma
 import { completeUserRequest } from '@/lib/usage/userRequest';
 import { emitTerminalEvent } from '@/lib/workflows/emitTerminalEvent';
 import { revertSummaryRow } from '@/lib/workflows/runRegistry';
+import {
+  SECTION_BODIES,
+  SHORT_FULL_DISTINCTION,
+  SUMMARY_FIELDS,
+  type SummaryField,
+} from '@/lib/workflows/summary/promptSections';
 
-export const SUMMARY_PROMPT_VERSION = 'v9';
+export { SUMMARY_FIELDS, type SummaryField };
 
-export type SummaryField = 'headline' | 'short' | 'full';
-export const SUMMARY_FIELDS: readonly SummaryField[] = ['headline', 'short', 'full'] as const;
+export const SUMMARY_PROMPT_VERSION = 'v10';
+
 export const FIELDS_WITH_FRONTMATTER: ReadonlySet<SummaryField> = new Set<SummaryField>([
   'short',
   'full',
@@ -22,27 +28,37 @@ export const FIELDS_WITH_FRONTMATTER: ReadonlySet<SummaryField> = new Set<Summar
 const HAS_LATEX_DESCRIPTION =
   'True if this field\'s content contains at least one LaTeX math formula wrapped in single or double dollar signs (e.g. $E = mc^2$ or $$\\int_0^1 x\\,dx$$). False otherwise. Dollar amounts like "$5 million" are not math and must not set this flag to true.';
 
-const HEADLINE_DESCRIPTION =
-  'Newspaper-style title under 10 words. Plain text only — no markdown, no surrounding quotes, no "Title:" prefix.';
-const SHORT_CONTENT_DESCRIPTION =
-  '2-3 sentence summary in plain prose. First sentence is the essential point; the rest is the most important supporting context. No headings, no lists, no preamble. Do not include any YAML frontmatter.';
-const FULL_CONTENT_DESCRIPTION =
-  'Compact full summary — denser and longer than the short summary. Cover main arguments and conclusions in 2-3 short paragraphs, a Markdown bullet list using "- " (single-level only, terse one-liners), or a mix. Never use headings (#, ##, …) and do not bold or italicize. The full summary is NOT a truncation of the short — write it independently. Do not include any YAML frontmatter.';
+// Field descriptions reuse the prompt section bodies verbatim (single
+// source of truth in promptSections.ts), plus schema-only rules.
+const NO_FRONTMATTER_RULE = 'Do not include any YAML frontmatter.';
+const HEADLINE_DESCRIPTION = SECTION_BODIES.headline;
+const SHORT_CONTENT_DESCRIPTION = `${SECTION_BODIES.short}\n${NO_FRONTMATTER_RULE}`;
+const FULL_CONTENT_DESCRIPTION = `${SECTION_BODIES.full}\n${NO_FRONTMATTER_RULE}`;
 
 function buildSummarySchema(fields: readonly SummaryField[]) {
   const shape: Record<string, z.ZodTypeAny> = {};
   if (fields.includes('headline')) {
     shape.headline = z.string().describe(HEADLINE_DESCRIPTION);
   }
-  if (fields.includes('short')) {
-    shape.short = z.object({
-      content: z.string().describe(SHORT_CONTENT_DESCRIPTION),
+  // `full` before `short` on purpose: the model generates fields in
+  // schema property order, and writing the full summary first (then
+  // distilling the short from it) keeps the full from anchoring on a
+  // just-written digest. See SUMMARY_FIELDS in promptSections.ts.
+  if (fields.includes('full')) {
+    // The write-full-first / distill-short note only makes sense when
+    // both fields are generated in this call; a standalone full regen
+    // has no short field to distill into.
+    const fullDescription = fields.includes('short')
+      ? `${SECTION_BODIES.full}\n${SHORT_FULL_DISTINCTION}\n${NO_FRONTMATTER_RULE}`
+      : FULL_CONTENT_DESCRIPTION;
+    shape.full = z.object({
+      content: z.string().describe(fullDescription),
       hasLatex: z.boolean().describe(HAS_LATEX_DESCRIPTION),
     });
   }
-  if (fields.includes('full')) {
-    shape.full = z.object({
-      content: z.string().describe(FULL_CONTENT_DESCRIPTION),
+  if (fields.includes('short')) {
+    shape.short = z.object({
+      content: z.string().describe(SHORT_CONTENT_DESCRIPTION),
       hasLatex: z.boolean().describe(HAS_LATEX_DESCRIPTION),
     });
   }
