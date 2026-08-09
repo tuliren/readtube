@@ -1,8 +1,15 @@
 'use client';
 
-import { ChevronDown, HelpCircle, Languages } from 'lucide-react';
+import { HelpCircle, Languages } from 'lucide-react';
 import Link from 'next/link';
 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { TARGET_LANGUAGES } from '@/lib/language/names';
 
@@ -22,41 +29,35 @@ const ORIGINAL_VALUE = '__original__';
  * summary/article language. "Original" maps to language=null in the
  * URL (handled by parseLanguageQuery on the server).
  *
- * The native `<select>` is given `appearance-none` so we can render a
- * Languages icon on the left and a custom chevron on the right with
- * symmetric vertical padding. The native chevron renders unevenly
- * (more space on top than bottom in most browsers) so we draw our own.
+ * Built on the shared Radix Select (`@/components/ui/select`) so the
+ * option list is a themed popover instead of the browser-native menu.
  */
 export default function LanguagePicker({ value, onChange, disabled = false }: Props) {
   return (
     <div className="inline-flex items-center gap-1.5">
-      <div className="relative inline-flex items-center">
-        <Languages
-          aria-hidden="true"
-          className="pointer-events-none absolute left-2 h-3.5 w-3.5 text-muted-foreground"
-        />
-        <select
+      <Select
+        disabled={disabled}
+        value={value ?? ORIGINAL_VALUE}
+        onValueChange={(next) => onChange(next === ORIGINAL_VALUE ? null : next)}
+      >
+        <SelectTrigger
           aria-label="Language"
-          disabled={disabled}
-          value={value ?? ORIGINAL_VALUE}
-          onChange={(e) => {
-            const next = e.target.value;
-            onChange(next === ORIGINAL_VALUE ? null : next);
-          }}
-          className="appearance-none rounded-md border border-border bg-background py-1.5 pr-7 pl-7 text-xs leading-none text-foreground hover:border-ring focus:border-ring focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+          className="h-auto w-auto gap-1.5 bg-background px-2 py-1.5 text-xs shadow-none"
         >
-          <option value={ORIGINAL_VALUE}>Original</option>
+          <Languages aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent align="end">
+          <SelectItem className="text-xs" value={ORIGINAL_VALUE}>
+            Original
+          </SelectItem>
           {TARGET_LANGUAGES.map((lang) => (
-            <option key={lang.code} value={lang.code}>
+            <SelectItem key={lang.code} className="text-xs" value={lang.code}>
               {lang.nativeName}
-            </option>
+            </SelectItem>
           ))}
-        </select>
-        <ChevronDown
-          aria-hidden="true"
-          className="pointer-events-none absolute right-2 h-3.5 w-3.5 text-muted-foreground"
-        />
-      </div>
+        </SelectContent>
+      </Select>
       <TooltipProvider delayDuration={200}>
         <Tooltip>
           <TooltipTrigger asChild>

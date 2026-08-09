@@ -28,8 +28,8 @@ describe('TARGET_LANGUAGES', () => {
 describe('findTargetLanguage', () => {
   it.each([
     { code: 'en', expectedName: 'English' },
-    { code: 'zh-Hans', expectedName: 'Chinese (Simplified)' },
-    { code: 'zh-Hant', expectedName: 'Chinese (Traditional)' },
+    { code: 'zh-Hans', expectedName: 'Simplified Chinese' },
+    { code: 'zh-Hant', expectedName: 'Traditional Chinese' },
     { code: 'ja', expectedName: 'Japanese' },
   ])('returns the entry for $code', ({ code, expectedName }) => {
     expect(findTargetLanguage(code)?.englishName).toBe(expectedName);
@@ -47,8 +47,8 @@ describe('findTargetLanguage', () => {
 
 describe('languageNameForPrompt', () => {
   it('returns the English name for known target codes', () => {
-    expect(languageNameForPrompt('zh-Hans')).toBe('Chinese (Simplified)');
-    expect(languageNameForPrompt('zh-Hant')).toBe('Chinese (Traditional)');
+    expect(languageNameForPrompt('zh-Hans')).toBe('Simplified Chinese');
+    expect(languageNameForPrompt('zh-Hant')).toBe('Traditional Chinese');
     expect(languageNameForPrompt('en')).toBe('English');
   });
 

@@ -18,8 +18,11 @@ export const TARGET_LANGUAGES: readonly TargetLanguage[] = [
   // zh-CN / zh-SG also resolve to Simplified, zh-TW / zh-HK / zh-MO to
   // Traditional — see normalizeLanguageTag for the region → script
   // collapse used during cache matching.
-  { code: 'zh-Hans', englishName: 'Chinese (Simplified)', nativeName: '简体中文' },
-  { code: 'zh-Hant', englishName: 'Chinese (Traditional)', nativeName: '繁體中文' },
+  // "Simplified Chinese" (not "Chinese (Simplified)") — englishName is
+  // interpolated into picker labels as "nativeName (englishName)", and
+  // parenthesized forms would nest: "简体中文 (Chinese (Simplified))".
+  { code: 'zh-Hans', englishName: 'Simplified Chinese', nativeName: '简体中文' },
+  { code: 'zh-Hant', englishName: 'Traditional Chinese', nativeName: '繁體中文' },
   { code: 'ja', englishName: 'Japanese', nativeName: '日本語' },
   { code: 'ko', englishName: 'Korean', nativeName: '한국어' },
   { code: 'es', englishName: 'Spanish', nativeName: 'Español' },
