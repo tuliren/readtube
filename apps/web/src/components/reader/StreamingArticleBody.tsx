@@ -1,12 +1,8 @@
 'use client';
 
 import ReactMarkdown from 'react-markdown';
-import rehypeExternalLinks from 'rehype-external-links';
-import rehypeKatex from 'rehype-katex';
-import remarkGfm from 'remark-gfm';
-import remarkMath from 'remark-math';
-import type { PluggableList } from 'unified';
 
+import { buildMarkdownPlugins } from './articleMarkdownPlugins';
 import type { SectionState } from './articleStreamHandler';
 
 interface Props {
@@ -20,10 +16,6 @@ interface Props {
 // rendering are visually identical — only the body composition differs.
 const BASE_CLASS =
   'prose prose-gray dark:prose-invert max-w-none font-sans text-[17px] leading-[1.8]';
-const EXTERNAL_LINKS_PLUGIN: PluggableList[number] = [
-  rehypeExternalLinks,
-  { target: '_blank', rel: ['noopener', 'noreferrer'] },
-];
 
 // Note: we deliberately do NOT inject `headingDomId`-style anchor ids
 // here. Each section is its own ReactMarkdown render, so the line
@@ -52,16 +44,6 @@ function SkeletonParagraph() {
 function buildSectionMarkdown(sec: SectionState, heading: string | null): string {
   const headingPart = heading != null && heading.trim().length > 0 ? `## ${heading}\n\n` : '';
   return headingPart + sec.body.trim();
-}
-
-function makePlugins(hasLatex: boolean): { remark: PluggableList; rehype: PluggableList } {
-  const mathPlugin: PluggableList[number] = hasLatex
-    ? remarkMath
-    : [remarkMath, { singleDollarTextMath: false }];
-  return {
-    remark: [remarkGfm, mathPlugin],
-    rehype: [rehypeKatex, EXTERNAL_LINKS_PLUGIN],
-  };
 }
 
 /**
@@ -99,9 +81,9 @@ export default function StreamingArticleBody({
         ? consolidatedHeadings[i]
         : sec.topic;
     const markdown = buildSectionMarkdown(sec, heading);
-    const plugins = makePlugins(sec.hasLatex);
+    const { remarkPlugins, rehypePlugins } = buildMarkdownPlugins(sec.hasLatex);
     items.push(
-      <ReactMarkdown key={`sec-${i}`} remarkPlugins={plugins.remark} rehypePlugins={plugins.rehype}>
+      <ReactMarkdown key={`sec-${i}`} remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins}>
         {markdown}
       </ReactMarkdown>
     );

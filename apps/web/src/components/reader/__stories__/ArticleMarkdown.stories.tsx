@@ -90,6 +90,28 @@ export const DisplayMathEvenWithoutFlag: Story = {
   },
 };
 
+export const ChineseEmphasis: Story = {
+  args: {
+    hasLatex: false,
+    // Real-world Chinese summary text: `**` markers wedged between an
+    // ideograph and full-width punctuation (`了**"…"**。`, `是**神经酰胺**，`).
+    // CommonMark's flanking rules fail here and render the markers
+    // literally while emphasizing the wrong span — remark-cjk-friendly
+    // fixes it. See articleMarkdownPlugins.
+    children:
+      '在病因上，他区分了**“快性胰岛素抵抗”和“慢性胰岛素抵抗”**。' +
+      '他强调关键不是甘油三酯，而是某些脂质，尤其是**神经酰胺**，会阻断胰岛素信号。',
+  },
+  play: async ({ canvasElement }) => {
+    const strongs = canvasElement.querySelectorAll('strong');
+    await expect(strongs.length).toBe(2);
+    await expect(strongs[0]?.textContent).toBe('“快性胰岛素抵抗”和“慢性胰岛素抵抗”');
+    await expect(strongs[1]?.textContent).toBe('神经酰胺');
+    // No stray literal markers survived.
+    await expect(canvasElement.textContent).not.toContain('**');
+  },
+};
+
 export const ScriptInjectionStripped: Story = {
   args: {
     hasLatex: true,

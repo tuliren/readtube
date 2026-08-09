@@ -1,13 +1,10 @@
 'use client';
 
 import ReactMarkdown, { type Components } from 'react-markdown';
-import rehypeExternalLinks from 'rehype-external-links';
-import rehypeKatex from 'rehype-katex';
-import remarkGfm from 'remark-gfm';
-import remarkMath from 'remark-math';
-import type { PluggableList } from 'unified';
 
 import { headingDomId } from '@/lib/reader/extractArticleHeadings';
+
+import { buildMarkdownPlugins } from './articleMarkdownPlugins';
 
 interface Props {
   children: string;
@@ -31,10 +28,6 @@ interface Props {
 
 const BASE_CLASS =
   'prose prose-gray dark:prose-invert max-w-none font-sans text-[17px] leading-[1.8]';
-const EXTERNAL_LINKS_PLUGIN: PluggableList[number] = [
-  rehypeExternalLinks,
-  { target: '_blank', rel: ['noopener', 'noreferrer'] },
-];
 
 // Heading components tag each `##` / `###` with a stable DOM id derived
 // from its source line number. `FloatingToc` scrolls to these ids when
@@ -62,17 +55,10 @@ const HEADING_COMPONENTS: Components = {
 
 /**
  * Shared Markdown renderer for AI-generated reader content (summaries,
- * articles). Single source of truth for the remark/rehype plugin set.
- *
- * LaTeX delimiter behaviour is gated by the `hasLatex` prop:
- *   - `hasLatex: true`  — both `$…$` and `$$…$$` render as math.
- *   - `hasLatex: false` or undefined — only `$$…$$` renders; single-`$`
- *     is disabled via `singleDollarTextMath: false` so prose dollar
- *     sign pairs (`$5 for $10`, `**$2.2M** and **$1.5B**`) stay
- *     literal. Display math still works because `$$…$$` is
- *     unambiguous.
- * The flag originates from the LLM-declared frontmatter — see
- * `lib/markdownFrontmatter.ts`.
+ * articles). The remark/rehype plugin set lives in
+ * `articleMarkdownPlugins` so this and the streaming renderer stay in
+ * lockstep; see that module for the LaTeX-gating and CJK-emphasis
+ * rationale.
  *
  * Safety: react-markdown does not parse raw HTML by default, so
  * `<script>alert(1)</script>` in the source becomes a text node,
@@ -84,11 +70,7 @@ export default function ArticleMarkdown({
   hasLatex,
   enableHeadingIds,
 }: Props) {
-  const mathPlugin: PluggableList[number] = hasLatex
-    ? remarkMath
-    : [remarkMath, { singleDollarTextMath: false }];
-  const remarkPlugins: PluggableList = [remarkGfm, mathPlugin];
-  const rehypePlugins: PluggableList = [rehypeKatex, EXTERNAL_LINKS_PLUGIN];
+  const { remarkPlugins, rehypePlugins } = buildMarkdownPlugins(hasLatex === true);
   return (
     <article className={className != null ? `${BASE_CLASS} ${className}` : BASE_CLASS}>
       <ReactMarkdown
