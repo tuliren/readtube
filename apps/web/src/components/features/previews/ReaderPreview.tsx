@@ -1,7 +1,15 @@
 'use client';
 
-import { ChevronDown, Languages, NotebookPen } from 'lucide-react';
+import { Languages, NotebookPen } from 'lucide-react';
 import { useState } from 'react';
+
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 import PreviewFrame from './PreviewFrame';
 import {
@@ -67,22 +75,22 @@ function TabStrip({
         })}
       </div>
       {showLanguagePicker && (
-        <div className="relative inline-flex items-center">
-          <Languages className="pointer-events-none absolute left-1.5 h-3 w-3 text-slate-400 dark:text-slate-500" />
-          <select
+        <Select value={language} onValueChange={(next) => onLanguageChange(next as LanguageCode)}>
+          <SelectTrigger
             aria-label="Language"
-            value={language}
-            onChange={(e) => onLanguageChange(e.target.value as LanguageCode)}
-            className="appearance-none rounded-md border border-slate-200 bg-white py-0.5 pr-5 pl-5 text-[10px] leading-none text-slate-700 hover:border-slate-300 focus:border-indigo-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-slate-600"
+            className="h-auto w-auto gap-1 border-slate-200 bg-white px-1.5 py-0.5 text-[10px] leading-none text-slate-700 shadow-none hover:border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-slate-600 [&_svg]:h-3 [&_svg]:w-3"
           >
+            <Languages aria-hidden="true" className="shrink-0 text-slate-400 dark:text-slate-500" />
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent align="end">
             {DEMO_LANGUAGES.map((l) => (
-              <option key={l.code} value={l.code}>
+              <SelectItem key={l.code} className="text-[10px]" value={l.code}>
                 {l.nativeName}
-              </option>
+              </SelectItem>
             ))}
-          </select>
-          <ChevronDown className="pointer-events-none absolute right-1 h-3 w-3 text-slate-400 dark:text-slate-500" />
-        </div>
+          </SelectContent>
+        </Select>
       )}
     </div>
   );

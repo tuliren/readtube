@@ -3,6 +3,13 @@
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { TARGET_LANGUAGES } from '@/lib/language/names';
 
 interface Props {
@@ -58,22 +65,23 @@ export default function PreferredLanguageForm({ initialValue }: Props) {
         Pre-selects the language picker on every video reader. Pick &ldquo;Original&rdquo; to always
         see the source-language version of summaries and articles.
       </p>
-      <select
+      <Select
         disabled={saving}
         value={value ?? ORIGINAL_VALUE}
-        onChange={(e) => {
-          const next = e.target.value;
-          handleChange(next === ORIGINAL_VALUE ? null : next);
-        }}
-        className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground hover:border-ring focus:border-ring focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+        onValueChange={(next) => handleChange(next === ORIGINAL_VALUE ? null : next)}
       >
-        <option value={ORIGINAL_VALUE}>Original (source language)</option>
-        {TARGET_LANGUAGES.map((lang) => (
-          <option key={lang.code} value={lang.code}>
-            {lang.nativeName} ({lang.englishName})
-          </option>
-        ))}
-      </select>
+        <SelectTrigger aria-label="Default reader language" className="w-72">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={ORIGINAL_VALUE}>Original (source language)</SelectItem>
+          {TARGET_LANGUAGES.map((lang) => (
+            <SelectItem key={lang.code} value={lang.code}>
+              {lang.nativeName} ({lang.englishName})
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }
