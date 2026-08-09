@@ -40,15 +40,19 @@ function buildSummarySchema(fields: readonly SummaryField[]) {
   if (fields.includes('headline')) {
     shape.headline = z.string().describe(HEADLINE_DESCRIPTION);
   }
-  if (fields.includes('short')) {
-    shape.short = z.object({
-      content: z.string().describe(SHORT_CONTENT_DESCRIPTION),
-      hasLatex: z.boolean().describe(HAS_LATEX_DESCRIPTION),
-    });
-  }
+  // `full` before `short` on purpose: the model generates fields in
+  // schema property order, and writing the full summary first (then
+  // distilling the short from it) keeps the full from anchoring on a
+  // just-written digest. See SUMMARY_FIELDS in promptSections.ts.
   if (fields.includes('full')) {
     shape.full = z.object({
       content: z.string().describe(FULL_CONTENT_DESCRIPTION),
+      hasLatex: z.boolean().describe(HAS_LATEX_DESCRIPTION),
+    });
+  }
+  if (fields.includes('short')) {
+    shape.short = z.object({
+      content: z.string().describe(SHORT_CONTENT_DESCRIPTION),
       hasLatex: z.boolean().describe(HAS_LATEX_DESCRIPTION),
     });
   }

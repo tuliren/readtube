@@ -48,8 +48,14 @@ describe('buildSummaryPrompt', () => {
     }
   });
 
+  it('places the full section before the short section', () => {
+    const prompt = buildSummaryPrompt([...SUMMARY_FIELDS], null, 'en', TITLE, CHANNEL, TRANSCRIPT);
+    expect(prompt.indexOf('FULL SUMMARY')).toBeGreaterThan(-1);
+    expect(prompt.indexOf('FULL SUMMARY')).toBeLessThan(prompt.indexOf('SHORT SUMMARY'));
+  });
+
   it('only includes the short-vs-full distinction when both are requested', () => {
-    const distinctionMarker = 'NOT a truncation';
+    const distinctionMarker = 'distill the SHORT summary';
 
     const both = buildSummaryPrompt(['short', 'full'], null, 'en', TITLE, CHANNEL, TRANSCRIPT);
     expect(both).toContain(distinctionMarker);
