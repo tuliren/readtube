@@ -47,9 +47,9 @@
     "katex": "^0.16.46",
     "lucide-react": "^1.14.0",
     "minimatch": "^10.2.5",
-    "next": "^16.2.6",
+    "next": "^16.2.11",
     "next-themes": "^0.4.6",
-    "postcss": "^8.5.14",
+    "postcss": "^8.5.23",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-hotkeys-hook": "^5.3.2",
@@ -70,7 +70,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@babel/core": "^7.29.7",
+    "@babel/core": "^8.0.0",
     "@chromatic-com/storybook": "^5.1.2",
     "@next/eslint-plugin-next": "^16.2.6",
     "@readtube/database": "*",
