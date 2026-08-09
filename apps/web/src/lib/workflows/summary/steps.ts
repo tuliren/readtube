@@ -10,7 +10,7 @@ import { completeUserRequest } from '@/lib/usage/userRequest';
 import { emitTerminalEvent } from '@/lib/workflows/emitTerminalEvent';
 import { revertSummaryRow } from '@/lib/workflows/runRegistry';
 
-export const SUMMARY_PROMPT_VERSION = 'v9';
+export const SUMMARY_PROMPT_VERSION = 'v10';
 
 export type SummaryField = 'headline' | 'short' | 'full';
 export const SUMMARY_FIELDS: readonly SummaryField[] = ['headline', 'short', 'full'] as const;
@@ -27,7 +27,7 @@ const HEADLINE_DESCRIPTION =
 const SHORT_CONTENT_DESCRIPTION =
   '2-3 sentence summary in plain prose. First sentence is the essential point; the rest is the most important supporting context. No headings, no lists, no preamble. Do not include any YAML frontmatter.';
 const FULL_CONTENT_DESCRIPTION =
-  'Compact full summary — denser and longer than the short summary. Cover main arguments and conclusions in 2-3 short paragraphs, a Markdown bullet list using "- " (single-level only, terse one-liners), or a mix. Never use headings (#, ##, …) and do not bold or italicize. The full summary is NOT a truncation of the short — write it independently. Do not include any YAML frontmatter.';
+  'Full summary — substantially richer and longer than the short summary whenever the content supports it. Cover every distinct argument, conclusion, and key supporting point in 3-4 short paragraphs, a Markdown bullet list using "- " (single-level only, terse one-liners), or a mix. Never use headings (#, ##, …); occasional bold or italics for emphasis are fine. The full summary is NOT a truncation of the short — write it independently. Do not include any YAML frontmatter.';
 
 function buildSummarySchema(fields: readonly SummaryField[]) {
   const shape: Record<string, z.ZodTypeAny> = {};

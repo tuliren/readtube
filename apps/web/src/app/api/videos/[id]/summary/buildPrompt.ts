@@ -10,15 +10,15 @@ const SECTION_BODIES: Record<SummaryField, string> = {
 - First sentence: the essential point.
 - 1-2 more sentences: the most important supporting context.
 - Plain prose. No headings, no lists, no preamble.`,
-  full: `FULL SUMMARY — a compact but richer overview, meaningfully longer than the short summary.
-- Focus on main arguments and conclusions; cut examples, tangents, and non-essential details.
-- Favor density over completeness — a reader should get the gist in under a minute.
+  full: `FULL SUMMARY — a substantially richer overview: cover every distinct argument, conclusion, and key supporting point.
+- Aim for several times the length of the short summary when the content supports it; if the video is genuinely thin, a shorter full summary is fine — never pad.
+- Cut only repetition, filler, and off-topic tangents.
 - Pick the format that fits the content:
-  - 2-3 short paragraphs of prose when the video is one continuous argument.
+  - 3-4 short paragraphs of prose when the video is one continuous argument.
   - A Markdown bullet list ("- ") when the video naturally breaks into discrete items (steps, tips, comparisons, list-of-N).
   - A mix when an introductory point is followed by enumerated takeaways.
 - Bullets are terse one-liners, single-level only.
-- Never use headings (no #, ##, etc.). Do not bold or italicize.`,
+- Never use headings (no #, ##, etc.). Occasional bold or italics for emphasis are fine.`,
 };
 
 export function buildSummaryPrompt(
@@ -32,7 +32,7 @@ export function buildSummaryPrompt(
   const sections = fields.map((field) => SECTION_BODIES[field]);
   const distinction =
     fields.includes('short') && fields.includes('full')
-      ? `\nThe short and full summaries serve different purposes — the short is a 2-3 sentence digest, the full is a denser, structured overview that is meaningfully longer and richer. The full summary is NOT a truncation of the short; write each independently against its own rules.\n`
+      ? `\nThe short and full summaries serve different purposes — the short is a 2-3 sentence digest; the full is a structured overview that covers all key arguments and should be substantially longer whenever the content supports it. The full summary is NOT a truncation of the short; write each independently against its own rules.\n`
       : '';
   const intro =
     fields.length === 1
