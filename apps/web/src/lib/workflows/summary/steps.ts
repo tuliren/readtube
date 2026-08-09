@@ -33,7 +33,7 @@ const HAS_LATEX_DESCRIPTION =
 const NO_FRONTMATTER_RULE = 'Do not include any YAML frontmatter.';
 const HEADLINE_DESCRIPTION = SECTION_BODIES.headline;
 const SHORT_CONTENT_DESCRIPTION = `${SECTION_BODIES.short}\n${NO_FRONTMATTER_RULE}`;
-const FULL_CONTENT_DESCRIPTION = `${SECTION_BODIES.full}\n${SHORT_FULL_DISTINCTION}\n${NO_FRONTMATTER_RULE}`;
+const FULL_CONTENT_DESCRIPTION = `${SECTION_BODIES.full}\n${NO_FRONTMATTER_RULE}`;
 
 function buildSummarySchema(fields: readonly SummaryField[]) {
   const shape: Record<string, z.ZodTypeAny> = {};
@@ -45,8 +45,14 @@ function buildSummarySchema(fields: readonly SummaryField[]) {
   // distilling the short from it) keeps the full from anchoring on a
   // just-written digest. See SUMMARY_FIELDS in promptSections.ts.
   if (fields.includes('full')) {
+    // The write-full-first / distill-short note only makes sense when
+    // both fields are generated in this call; a standalone full regen
+    // has no short field to distill into.
+    const fullDescription = fields.includes('short')
+      ? `${SECTION_BODIES.full}\n${SHORT_FULL_DISTINCTION}\n${NO_FRONTMATTER_RULE}`
+      : FULL_CONTENT_DESCRIPTION;
     shape.full = z.object({
-      content: z.string().describe(FULL_CONTENT_DESCRIPTION),
+      content: z.string().describe(fullDescription),
       hasLatex: z.boolean().describe(HAS_LATEX_DESCRIPTION),
     });
   }

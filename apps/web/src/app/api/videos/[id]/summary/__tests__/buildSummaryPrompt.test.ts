@@ -67,6 +67,51 @@ describe('buildSummaryPrompt', () => {
     expect(fullOnly).not.toContain(distinctionMarker);
   });
 
+  it.each<{
+    name: string;
+    fields: SummaryField[];
+    existing: { short?: string; full?: string };
+    present: string[];
+    absent: string[];
+  }>([
+    {
+      name: 'full-only regen sees the existing short',
+      fields: ['full'],
+      existing: { short: 'existing-short-abc' },
+      present: ['existing-short-abc', 'substantially longer'],
+      absent: [],
+    },
+    {
+      name: 'short-only regen sees the existing full',
+      fields: ['short'],
+      existing: { full: 'existing-full-def' },
+      present: ['existing-full-def', 'Distill the SHORT SUMMARY'],
+      absent: [],
+    },
+    {
+      name: 'both-field generation ignores existing content',
+      fields: ['short', 'full'],
+      existing: { short: 'existing-short-abc', full: 'existing-full-def' },
+      present: [],
+      absent: ['existing-short-abc', 'existing-full-def'],
+    },
+    {
+      name: 'full-only regen without a stored short adds no context',
+      fields: ['full'],
+      existing: {},
+      present: [],
+      absent: ['existing SHORT SUMMARY'],
+    },
+  ])('$name', ({ fields, existing, present, absent }) => {
+    const prompt = buildSummaryPrompt(fields, null, 'en', TITLE, CHANNEL, TRANSCRIPT, existing);
+    for (const marker of present) {
+      expect(prompt).toContain(marker);
+    }
+    for (const marker of absent) {
+      expect(prompt).not.toContain(marker);
+    }
+  });
+
   it('embeds the language rule, video title and channel name', () => {
     const prompt = buildSummaryPrompt([...SUMMARY_FIELDS], 'fr', null, TITLE, CHANNEL, TRANSCRIPT);
     expect(prompt).toContain('CRITICAL LANGUAGE REQUIREMENT');

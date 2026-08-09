@@ -25,10 +25,10 @@ export const SECTION_BODIES: Record<SummaryField, string> = {
 - Plain prose. No headings, no lists, no preamble.`,
   full: `FULL SUMMARY — a condensed article covering everything that matters in the video.
 - Write it directly from the transcript — never as an expansion of the short summary.
-- Cover every distinct argument and conclusion, and for each one keep the speaker's key reasoning and the most illustrative specifics: examples, numbers, names, steps.
+- Cover every distinct argument and conclusion, and for each one keep the speaker's key reasoning and the one or two most illustrative specifics: examples, numbers, names, steps.
 - Cut only repetition, filler, and off-topic tangents.
-- A typical video yields 3-4x the length of the short summary; if the video is genuinely thin, shorter is fine — never pad.
-- Default to prose: 3-5 short paragraphs.
+- A typical video yields 2-3x the length of the short summary; if the video is genuinely thin, shorter is fine — never pad.
+- Default to prose: 3-4 short paragraphs.
 - Use a Markdown bullet list ("- ") only when the video itself is a list of discrete items (steps, tips, rankings, list-of-N) — and even then, open with at least one sentence of prose before the list. Never write the entire summary as bullets.
 - Bullets are terse one-liners, single-level only.
 - Never use headings (no #, ##, etc.). Occasional bold or italics for emphasis are fine.`,

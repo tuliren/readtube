@@ -18,7 +18,7 @@ import {
   type SummaryField,
 } from '@/lib/workflows/summary/steps';
 
-import { buildSummaryPrompt } from './buildPrompt';
+import { type ExistingSummaryFields, buildSummaryPrompt } from './buildPrompt';
 
 // Must be a literal — Next.js's route-segment-config analyzer can't
 // follow imports. See `GENERATION_MAX_DURATION_SECONDS` in
@@ -334,6 +334,27 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // usage; mixing them across regen runs would clobber prior data).
   const userRequest = isFullGenerate ? await recordSafe(UserRequestOutcome.GENERATED) : null;
 
+  // Per-field regenerate: feed the stored fields that are NOT being
+  // regenerated into the prompt as context. The FULL SUMMARY rules
+  // calibrate length against the short summary, so a full-only regen
+  // must see the existing short — without it the model has no anchor
+  // and collapses to digest length.
+  let existingFields: ExistingSummaryFields | undefined;
+  if (!isFullGenerate) {
+    const existingRow = await prisma.summary.findFirst({
+      where: { transcript_id: transcript.id, language: target },
+      select: { short: true, full: true },
+    });
+    if (existingRow != null) {
+      existingFields = {
+        short:
+          existingRow.short != null ? parseMarkdownDocument(existingRow.short).content : undefined,
+        full:
+          existingRow.full != null ? parseMarkdownDocument(existingRow.full).content : undefined,
+      };
+    }
+  }
+
   // Run generation as a Vercel Workflow so it survives the request
   // lifecycle — see the article route for the full rationale.
   const run = await start(summaryWorkflow, [
@@ -345,7 +366,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         sourceLanguage,
         video.title,
         video.channel.name,
-        transcriptText
+        transcriptText,
+        existingFields
       ),
       transcriptId: transcript.id,
       language: target,
