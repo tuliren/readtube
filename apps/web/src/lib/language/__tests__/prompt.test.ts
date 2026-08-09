@@ -40,8 +40,8 @@ describe('buildLanguageRule', () => {
 
   it.each([
     { target: 'en', expectedName: 'English' },
-    { target: 'zh-Hans', expectedName: 'Chinese (Simplified)' },
-    { target: 'zh-Hant', expectedName: 'Chinese (Traditional)' },
+    { target: 'zh-Hans', expectedName: 'Simplified Chinese' },
+    { target: 'zh-Hant', expectedName: 'Traditional Chinese' },
     { target: 'ja', expectedName: 'Japanese' },
   ])('writes "$expectedName" when target is $target', ({ target, expectedName }) => {
     const rule = buildLanguageRule(target);
