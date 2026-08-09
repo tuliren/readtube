@@ -1,7 +1,5 @@
 import { buildSummaryPrompt } from '@/app/api/videos/[id]/summary/buildPrompt';
-
-type SummaryField = 'headline' | 'short' | 'full';
-const SUMMARY_FIELDS: readonly SummaryField[] = ['headline', 'short', 'full'] as const;
+import { SUMMARY_FIELDS, type SummaryField } from '@/lib/workflows/summary/promptSections';
 
 const TITLE = 'How transformers work';
 const CHANNEL = 'AI Explained';
