@@ -37,16 +37,17 @@ function extractPrimaryEmail(user: UserJSON): string | null {
  */
 async function saveUser({ sourceId, name, email, image }: UserAttributes): Promise<void> {
   if (getVercelEnv(process.env.VERCEL_ENV) !== VercelEnv.PRODUCTION) {
-    const existing = await prisma.user.findUnique({
-      where: { email },
-      select: { source_id: true },
+    // updateMany rather than update: it accepts the non-unique NOT
+    // condition (so the mismatch check and the write are one atomic
+    // statement) and matches zero rows instead of throwing when there
+    // is nothing to adopt. The unique email constraint guarantees at
+    // most one row can match.
+    const reassigned = await prisma.user.updateMany({
+      where: { email, NOT: { source_id: sourceId } },
+      data: { source_id: sourceId, name, image },
     });
-    if (existing != null && existing.source_id !== sourceId) {
-      await prisma.user.update({
-        where: { email },
-        data: { source_id: sourceId, name, image },
-      });
-      console.info(`Reassigned User ${email} from source_id ${existing.source_id} to ${sourceId}`);
+    if (reassigned.count > 0) {
+      console.info(`Reassigned User ${email} to source_id ${sourceId}`);
       return;
     }
   }
