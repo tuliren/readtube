@@ -3,6 +3,7 @@
 import ReactMarkdown, { type Components } from 'react-markdown';
 
 import { headingDomId } from '@/lib/reader/extractArticleHeadings';
+import remarkBulletsToParagraphs from '@/lib/reader/remarkBulletsToParagraphs';
 
 import { buildMarkdownPlugins } from './articleMarkdownPlugins';
 
@@ -16,6 +17,14 @@ interface Props {
    *  entirely — every dollar sign stays literal, which is the correct
    *  behaviour for plain prose containing money amounts etc. */
   hasLatex?: boolean;
+  /** When true, a document that consists entirely of unordered lists
+   *  is rendered as plain paragraphs — one per bullet — instead of a
+   *  bulleted list. Fallback for summaries where the model ignores the
+   *  "never write the entire summary as bullets" prompt rule. Mixed
+   *  documents (prose + list) are left untouched, so legitimate lists
+   *  keep their bullets. Off by default; only summaries opt in — the
+   *  Article tab renders lists as authored. */
+  bulletsToParagraphs?: boolean;
   /** When true, tag `##` / `###` headings with line-based DOM ids so
    *  `FloatingToc` can jump to them. Off by default: the Summary and
    *  Article tabs share this renderer but sit in the DOM at the same
@@ -68,13 +77,18 @@ export default function ArticleMarkdown({
   children,
   className,
   hasLatex,
+  bulletsToParagraphs,
   enableHeadingIds,
 }: Props) {
   const { remarkPlugins, rehypePlugins } = buildMarkdownPlugins(hasLatex === true);
   return (
     <article className={className != null ? `${BASE_CLASS} ${className}` : BASE_CLASS}>
       <ReactMarkdown
-        remarkPlugins={remarkPlugins}
+        remarkPlugins={
+          bulletsToParagraphs === true
+            ? [...remarkPlugins, remarkBulletsToParagraphs]
+            : remarkPlugins
+        }
         rehypePlugins={rehypePlugins}
         components={enableHeadingIds === true ? HEADING_COMPONENTS : undefined}
       >

@@ -688,7 +688,9 @@ export default function SummaryReader({
             )}
           </div>
           {shortContent.length > 0 ? (
-            <ArticleMarkdown hasLatex={shortHasLatex}>{shortContent}</ArticleMarkdown>
+            <ArticleMarkdown hasLatex={shortHasLatex} bulletsToParagraphs>
+              {shortContent}
+            </ArticleMarkdown>
           ) : isRegenerating('short') ? (
             <div className="space-y-2">
               <div className="h-4 w-full animate-pulse rounded bg-muted" />
@@ -711,7 +713,9 @@ export default function SummaryReader({
             )}
           </div>
           {fullContent.length > 0 ? (
-            <ArticleMarkdown hasLatex={fullHasLatex}>{fullContent}</ArticleMarkdown>
+            <ArticleMarkdown hasLatex={fullHasLatex} bulletsToParagraphs>
+              {fullContent}
+            </ArticleMarkdown>
           ) : isRegenerating('full') ? (
             <div className="space-y-2">
               {[100, 95, 90, 85, 75].map((w, i) => (

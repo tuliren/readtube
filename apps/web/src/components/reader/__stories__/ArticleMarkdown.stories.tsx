@@ -11,6 +11,7 @@ const meta = {
     children: { control: 'text' },
     className: { control: 'text' },
     hasLatex: { control: 'boolean' },
+    bulletsToParagraphs: { control: 'boolean' },
   },
 } satisfies Meta<typeof ArticleMarkdown>;
 
@@ -120,6 +121,54 @@ export const ScriptInjectionStripped: Story = {
   play: async ({ canvasElement }) => {
     await expect(canvasElement.querySelector('.katex')).not.toBeNull();
     await expect(canvasElement.querySelector('script')).toBeNull();
+  },
+};
+
+export const AllBulletSummaryAsParagraphs: Story = {
+  args: {
+    hasLatex: false,
+    bulletsToParagraphs: true,
+    // Real failure mode from the full-summary prompt: the model wraps
+    // every paragraph in a bullet despite the "never write the entire
+    // summary as bullets" rule. With bulletsToParagraphs the markers
+    // are dropped and each bullet renders as its own paragraph.
+    children: [
+      '- 这次访谈的核心，是诺兰解释《奥德赛》如何在极端条件下把"看起来不可能"的镜头拍出来：空中镜头依靠IMAX直升机云台。',
+      '- 水下镜头则使用巨大的钢制防水壳，出水时沉重、入水后因浮力反而好操作，配合防水监视器完成取景。',
+      '- 他还强调实拍优先于特效，**沉浸感**来自真实的物理环境。',
+    ].join('\n'),
+  },
+  play: async ({ canvasElement }) => {
+    await expect(canvasElement.querySelector('ul')).toBeNull();
+    await expect(canvasElement.querySelector('li')).toBeNull();
+    const paragraphs = canvasElement.querySelectorAll('p');
+    await expect(paragraphs.length).toBe(3);
+    await expect(paragraphs[0]?.textContent).toContain('这次访谈的核心');
+    await expect(paragraphs[1]?.textContent).toContain('水下镜头');
+    // Inline markdown inside the bullets still renders.
+    await expect(canvasElement.querySelector('strong')?.textContent).toBe('沉浸感');
+    // No stray bullet markers survive as text.
+    await expect(canvasElement.textContent).not.toContain('- ');
+  },
+};
+
+export const IntentionalListKeepsBullets: Story = {
+  args: {
+    hasLatex: false,
+    bulletsToParagraphs: true,
+    // A list preceded by prose is intentional (the prompt allows it
+    // for list-of-N videos) — the flag must leave it untouched.
+    children: [
+      'The video ranks three camera rigs:',
+      '',
+      '- IMAX helicopter mount',
+      '- Steel underwater housing',
+      '- Handheld stabilizer',
+    ].join('\n'),
+  },
+  play: async ({ canvasElement }) => {
+    await expect(canvasElement.querySelector('ul')).not.toBeNull();
+    await expect(canvasElement.querySelectorAll('li').length).toBe(3);
   },
 };
 
