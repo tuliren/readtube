@@ -25,7 +25,7 @@ export const SECTION_BODIES: Record<SummaryField, string> = {
 - Plain prose. No headings, no lists, no preamble.`,
   full: `FULL SUMMARY — a key-point summary: identify the 3-5 key points the video makes, then present each one with its support.
 - Organize by key point, NOT by the video's chronology — never walk through the transcript section by section.
-- Each key point gets one short paragraph: state the point in a sentence, then keep the speaker's justification and the one or two most illustrative specifics (examples, numbers, names, steps).
+- Each key point gets one short paragraph: state the point in a sentence, then keep the most valuable material the video attaches to that point, whatever form it takes — reasoning, examples, data, stories, demonstrations, caveats, consequences, advice. Pick the strongest one or two pieces per point; do not list everything.
 - Fold minor points into the key point they support; drop repetition, filler, and off-topic tangents entirely.
 - Write it directly from the transcript — never as an expansion of the short summary. A typical video yields 2-3x the length of the short summary; if the video is genuinely thin, shorter is fine — never pad.
 - Use a Markdown bullet list ("- ") only when the video itself is a list of discrete items (steps, tips, rankings, list-of-N) — and even then, open with at least one sentence of prose before the list. Never write the entire summary as bullets.
@@ -34,4 +34,4 @@ export const SECTION_BODIES: Record<SummaryField, string> = {
 };
 
 export const SHORT_FULL_DISTINCTION =
-  'The field order is deliberate: write the FULL summary first, directly from the transcript, then distill the SHORT summary from the full. The two differ in altitude, not just length — the full presents each key point with its justification and examples; the short keeps only the core point and the most important context.';
+  'The field order is deliberate: write the FULL summary first, directly from the transcript, then distill the SHORT summary from the full. The two differ in altitude, not just length — the full presents each key point with the most valuable material the video attaches to it; the short keeps only the core point and the most important context.';

@@ -29,7 +29,7 @@ function buildExistingContext(
     return `\nFor calibration, here is the existing SHORT SUMMARY (not part of this generation):
 ${existing.short}
 
-The FULL SUMMARY must be substantially longer and more detailed than this — present each key point with its justification and examples, not just the core point.\n`;
+The FULL SUMMARY must be substantially longer and more detailed than this — present each key point with the material the video attaches to it, not just the core point.\n`;
   }
   if (fields.includes('short') && !fields.includes('full') && existing.full != null) {
     return `\nFor reference, here is the existing FULL SUMMARY (not part of this generation):
