@@ -22,6 +22,7 @@ import { buildChannelLink, buildWatchLink } from '@/lib/urls/watchUrl';
 import ArticleReader from './ArticleReader';
 import FollowChannelDialogButton from './FollowChannelDialogButton';
 import NotesPanel from './NotesPanel';
+import PublicSignupCta from './PublicSignupCta';
 import ReadingTimeBadge from './ReadingTimeBadge';
 import SummaryReader from './SummaryReader';
 import TranscriptReader from './TranscriptReader';
@@ -857,6 +858,12 @@ export default function VideoReader({
                   </div>
                 )}
               </div>
+
+              {/* Signup nudge for public viewers — placed after the
+                  content they just finished reading and before the AI
+                  disclaimer so it reads as the natural "what next"
+                  beat of the page. */}
+              {publicMode && <PublicSignupCta />}
 
               {/* AI disclaimer — only meaningful for AI-generated tabs
                   (Summary, Article). Hidden on the Transcript tab,
