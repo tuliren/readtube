@@ -21,6 +21,11 @@ const isPublicRoute = createRouteMatcher([
   '/api(.*)',
   '/opengraph-image',
   '/producthunt(.*)',
+  // Crawler endpoints. The matcher's static-extension exclusion list
+  // doesn't cover .xml/.txt, so without these entries crawlers get a
+  // sign-in redirect instead of the sitemap.
+  '/sitemap.xml',
+  '/robots.txt',
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
