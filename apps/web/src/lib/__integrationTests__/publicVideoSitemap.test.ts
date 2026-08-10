@@ -8,6 +8,11 @@ import { buildVideoSitemapEntries, querySitemapVideos } from '@/lib/sitemap/publ
  * candidate filter + ordering against a real Postgres, then
  * buildVideoSitemapEntries' latest-transcript re-check that mirrors
  * the public page's 404 rule.
+ *
+ * Videos get explicit ids throughout: the query orders by `id DESC`
+ * (cuid ids are timestamp-prefixed, so in production that means
+ * newest-added-first), and hand-picked ids make that ordering
+ * assertable without relying on cuid generation internals.
  */
 
 async function reset() {
@@ -21,14 +26,14 @@ async function reset() {
 beforeEach(reset);
 
 async function createVideo(
+  id: string,
   sourceId: string,
   channelId: string,
-  publishedAt: Date | null,
-  id?: string
+  publishedAt: Date | null
 ) {
   return global.testPrisma.video.create({
     data: {
-      ...(id != null ? { id } : {}),
+      id,
       channel_id: channelId,
       source_id: sourceId,
       title: `Video ${sourceId}`,
@@ -49,13 +54,14 @@ async function createTranscript(videoId: string, createdAt: Date) {
 }
 
 describe('sitemap video entries', () => {
-  it('includes only videos whose latest transcript has READY content, newest first', async () => {
+  it('includes only videos whose latest transcript has READY content, id-descending', async () => {
     const channel = await global.testPrisma.channel.create({
       data: { source_id: 'UC_sitemap', name: 'Sitemap Chan', rss_url: 'https://x/sitemap.xml' },
     });
 
     // Included: READY summary on the (only) transcript.
     const summarized = await createVideo(
+      'vid_4',
       'summarized',
       channel.id,
       new Date('2026-01-03T00:00:00Z')
@@ -75,7 +81,12 @@ describe('sitemap video entries', () => {
     });
 
     // Included: READY article only (no summary).
-    const articled = await createVideo('articled', channel.id, new Date('2026-01-02T00:00:00Z'));
+    const articled = await createVideo(
+      'vid_3',
+      'articled',
+      channel.id,
+      new Date('2026-01-02T00:00:00Z')
+    );
     const articledTranscript = await createTranscript(
       articled.id,
       new Date('2026-01-02T01:00:00Z')
@@ -92,9 +103,8 @@ describe('sitemap video entries', () => {
       },
     });
 
-    // Included, sorted last despite being the newest row: null
-    // published_at sorts after every dated video.
-    const undated = await createVideo('undated', channel.id, null);
+    // Included: a null published_at is irrelevant to the id ordering.
+    const undated = await createVideo('vid_2', 'undated', channel.id, null);
     const undatedTranscript = await createTranscript(undated.id, new Date('2026-01-07T00:00:00Z'));
     await global.testPrisma.summary.create({
       data: {
@@ -110,7 +120,12 @@ describe('sitemap video entries', () => {
     // the public page only reads the latest transcript, which has
     // nothing. The candidate query still returns it (`some` matches
     // the older transcript); the build step must drop it.
-    const refetched = await createVideo('refetched', channel.id, new Date('2026-01-04T00:00:00Z'));
+    const refetched = await createVideo(
+      'vid_5',
+      'refetched',
+      channel.id,
+      new Date('2026-01-04T00:00:00Z')
+    );
     const refetchedOld = await createTranscript(refetched.id, new Date('2026-01-04T01:00:00Z'));
     await global.testPrisma.summary.create({
       data: {
@@ -124,6 +139,7 @@ describe('sitemap video entries', () => {
 
     // Excluded: only a GENERATING (in-flight) summary.
     const generating = await createVideo(
+      'vid_1',
       'generating',
       channel.id,
       new Date('2026-01-01T00:00:00Z')
@@ -142,11 +158,12 @@ describe('sitemap video entries', () => {
     });
 
     // Excluded: no transcript at all.
-    await createVideo('bare', channel.id, new Date('2026-01-01T00:00:00Z'));
+    await createVideo('vid_0', 'bare', channel.id, new Date('2026-01-01T00:00:00Z'));
 
     const rows = await querySitemapVideos(global.testPrisma);
-    // The candidate query keeps `refetched` (an older transcript
-    // matches) but drops `generating` and `bare` outright.
+    // id DESC across the candidates; the query keeps `refetched` (an
+    // older transcript matches) but drops `generating` and `bare`
+    // outright.
     expect(rows.map((r) => r.source_id)).toEqual([
       'refetched',
       'summarized',
@@ -171,19 +188,18 @@ describe('sitemap video entries', () => {
     ]);
   });
 
-  it('breaks published_at ties by id for a deterministic order', async () => {
+  it('orders by id descending regardless of insertion or publish order', async () => {
     const channel = await global.testPrisma.channel.create({
-      data: { source_id: 'UC_ties', name: 'Ties Chan', rss_url: 'https://x/ties.xml' },
+      data: { source_id: 'UC_order', name: 'Order Chan', rss_url: 'https://x/order.xml' },
     });
-    const publishedAt = new Date('2026-01-01T00:00:00Z');
-    // Created out of id order on purpose — the query must sort by id,
-    // not by insertion order.
-    for (const [id, sourceId] of [
-      ['tie_id_2', 'tie_b'],
-      ['tie_id_1', 'tie_a'],
-      ['tie_id_3', 'tie_c'],
-    ]) {
-      const video = await createVideo(sourceId, channel.id, publishedAt, id);
+    // Created out of id order, with publish dates that contradict the
+    // id order — the query must sort by id alone.
+    for (const [id, sourceId, publishedAt] of [
+      ['order_id_2', 'order_b', new Date('2026-03-01T00:00:00Z')],
+      ['order_id_1', 'order_a', new Date('2026-01-01T00:00:00Z')],
+      ['order_id_3', 'order_c', new Date('2026-02-01T00:00:00Z')],
+    ] as const) {
+      const video = await createVideo(id, sourceId, channel.id, publishedAt);
       const transcript = await createTranscript(video.id, publishedAt);
       await global.testPrisma.summary.create({
         data: {
@@ -198,6 +214,6 @@ describe('sitemap video entries', () => {
     const first = await querySitemapVideos(global.testPrisma);
     const second = await querySitemapVideos(global.testPrisma);
     expect(second).toEqual(first);
-    expect(first.map((r) => r.source_id)).toEqual(['tie_a', 'tie_b', 'tie_c']);
+    expect(first.map((r) => r.source_id)).toEqual(['order_c', 'order_b', 'order_a']);
   });
 });

@@ -39,9 +39,14 @@ export interface SitemapVideoRow {
  * transcript lost its content to a refetch) is rare and a slightly
  * under-filled sitemap is harmless.
  *
- * Ordering is fully specified (effectively unique key `id` as the
- * tiebreak, nulls last) so the sitemap is deterministic for a given
- * database state.
+ * Ordered by `id DESC`: cuid ids are timestamp-prefixed, so this is
+ * newest-added-first — the right eviction policy for the cap (a
+ * backfilled old video still counts as fresh content on our side).
+ * It's also a total order on the primary key, which keeps the sitemap
+ * deterministic with no tie-break column, and unlike `published_at`
+ * (which has no standalone index) it lets Postgres serve the
+ * ORDER BY + LIMIT from the PK index with early termination if the
+ * cap ever binds on a much larger table.
  */
 export async function querySitemapVideos(prisma: PrismaClient): Promise<SitemapVideoRow[]> {
   return prisma.video.findMany({
@@ -55,7 +60,7 @@ export async function querySitemapVideos(prisma: PrismaClient): Promise<SitemapV
         },
       },
     },
-    orderBy: [{ published_at: { sort: 'desc', nulls: 'last' } }, { id: 'asc' }],
+    orderBy: { id: 'desc' },
     take: PUBLIC_VIDEO_SITEMAP_CAP,
     select: {
       source_id: true,
