@@ -22,11 +22,22 @@ export const dynamic = 'force-static';
  * which would churn the sitemap on every deploy.
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const start = performance.now();
   const videos = await querySitemapVideos(prisma);
+  const videoEntries = buildVideoSitemapEntries(videos);
+  // This route renders during `next build`, so this line lands in the
+  // Vercel build log — the only per-route timing visibility the build
+  // offers. Watch it to catch the sitemap becoming a build bottleneck
+  // as the library grows.
+  console.log(
+    `[sitemap] ${videoEntries.length} video entries (${videos.length} candidates) in ${Math.round(
+      performance.now() - start
+    )}ms`
+  );
   return [
     { url: FULL_WEBSITE_URL },
     { url: `${FULL_WEBSITE_URL}/terms` },
     { url: `${FULL_WEBSITE_URL}/privacy` },
-    ...buildVideoSitemapEntries(videos),
+    ...videoEntries,
   ];
 }

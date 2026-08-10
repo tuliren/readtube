@@ -4,13 +4,15 @@ import type { MetadataRoute } from 'next';
 import { FULL_WEBSITE_URL } from '@/constants';
 
 /**
- * Cap on public video entries in the sitemap. The sitemap protocol
- * allows 50,000 URLs per file, so this is nowhere near a hard limit —
- * the cap exists to keep the file lean and focused on recent content
- * (entries are newest-first, so the cap drops the oldest videos) and
- * to bound the build-time query as the library grows.
+ * Cap on public video entries in the sitemap, applied both as the
+ * candidate query's `take` (bounds the build-time fetch; ~0.3s per
+ * thousand rows measured warm against Neon) and as a truncation in
+ * {@link buildVideoSitemapEntries}. The sitemap protocol allows
+ * 50,000 URLs per file, so this is nowhere near a hard limit — the
+ * cap keeps the file lean and focused on recent content (entries are
+ * newest-first, so the cap drops the oldest videos).
  */
-export const PUBLIC_VIDEO_SITEMAP_CAP = 5000;
+export const PUBLIC_VIDEO_SITEMAP_CAP = 10_000;
 
 /** Row shape produced by {@link querySitemapVideos}. */
 export interface SitemapVideoRow {
@@ -23,14 +25,19 @@ export interface SitemapVideoRow {
 
 /**
  * Fetch candidate videos for the sitemap: any video with a READY
- * summary or article on some transcript, newest-first. The public page
- * (/p/videos/[videoId]) 404s unless the *latest* transcript has READY
- * content, and that per-video "latest" check isn't expressible in a
- * single Prisma filter — so this query over-selects slightly and
- * {@link buildVideoSitemapEntries} re-checks the latest transcript
- * (which is also why the cap is applied there instead of as a DB-level
- * `take`). Runs once per build, so the unbounded candidate fetch is
- * acceptable.
+ * summary or article on some transcript, newest-first, at most
+ * {@link PUBLIC_VIDEO_SITEMAP_CAP} rows so the build-time fetch stays
+ * bounded no matter how large the library grows.
+ *
+ * The public page (/p/videos/[videoId]) 404s unless the *latest*
+ * transcript has READY content, and that per-video "latest" check
+ * isn't expressible in a single Prisma filter — so this query
+ * over-selects slightly and {@link buildVideoSitemapEntries} re-checks
+ * the latest transcript. A dropped candidate therefore leaves the
+ * sitemap marginally under the cap even when more qualifying videos
+ * exist past the `take` window; that case (a video whose newest
+ * transcript lost its content to a refetch) is rare and a slightly
+ * under-filled sitemap is harmless.
  *
  * Ordering is fully specified (effectively unique key `id` as the
  * tiebreak, nulls last) so the sitemap is deterministic for a given
@@ -49,6 +56,7 @@ export async function querySitemapVideos(prisma: PrismaClient): Promise<SitemapV
       },
     },
     orderBy: [{ published_at: { sort: 'desc', nulls: 'last' } }, { id: 'asc' }],
+    take: PUBLIC_VIDEO_SITEMAP_CAP,
     select: {
       source_id: true,
       transcripts: {
