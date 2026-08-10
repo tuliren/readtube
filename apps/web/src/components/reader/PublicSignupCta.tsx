@@ -17,7 +17,7 @@ export default function PublicSignupCta() {
     >
       <h2 className="text-lg font-semibold text-foreground">Read videos like this one, anytime</h2>
       <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
-        ReadTube turns your YouTube subscriptions into a personal newsletter — summaries and
+        ReadTube turns your YouTube subscriptions into a personal newsletter of summaries and
         articles you can read, search, and annotate instead of watching.
       </p>
       <Button asChild className="mt-5">
