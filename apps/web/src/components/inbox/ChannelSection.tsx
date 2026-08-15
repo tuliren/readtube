@@ -34,7 +34,7 @@ interface Props {
  *      Archived). Inbox is the default view and shows the
  *      aggregate unread badge, so the separate "All unread" entry that
  *      used to live at the top is gone.
- *   2. Videos — a single clickable entry opening the standalone
+ *   2. Standalone videos — a single clickable entry opening the standalone
  *      video library (no sub-items).
  *   3. Playlists — one row per user playlist, "+" dropdown to add one.
  *   4. Channels — folder-aware list of subscribed channels. The

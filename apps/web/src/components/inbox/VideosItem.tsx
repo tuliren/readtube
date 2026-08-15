@@ -16,12 +16,14 @@ interface Props {
 }
 
 /**
- * Sidebar "Videos" entry — a single clickable row (no sub-items)
- * between Views and Playlists that opens the user's standalone video
- * library. The label carries the same section-title typography as the
- * Playlists/Channels headers, and the always-visible "+" opens the
- * AddVideoModal directly; adding a video to a specific playlist lives
- * in the Playlists section's per-row dropdown.
+ * Sidebar "Standalone videos" entry — a single clickable row (no
+ * sub-items) between Views and Playlists that opens the user's
+ * standalone video library. Named explicitly ("Videos" alone reads as
+ * if it included playlist and channel videos too). The label carries
+ * the same section-title typography as the Playlists/Channels
+ * headers, and the always-visible "+" opens the AddVideoModal
+ * directly; adding a video to a specific playlist lives in the
+ * Playlists section's per-row dropdown.
  */
 export default function VideosItem({ onAddVideo }: Props) {
   const pathname = usePathname();
@@ -47,7 +49,7 @@ export default function VideosItem({ onAddVideo }: Props) {
             </Link>
           </TooltipTrigger>
           <TooltipContent side="right">
-            Videos
+            Standalone videos
             {unread > 0 ? ` (${unread})` : ''}
           </TooltipContent>
         </Tooltip>
@@ -69,11 +71,11 @@ export default function VideosItem({ onAddVideo }: Props) {
             though a single entry has nothing to collapse. */}
         <span aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
         <span
-          className={`text-base font-semibold ${
+          className={`truncate text-base font-semibold ${
             active ? 'text-blue-700 dark:text-blue-300' : 'text-foreground'
           }`}
         >
-          Videos
+          Standalone videos
         </span>
         <SidebarBadge count={unread} />
       </Link>

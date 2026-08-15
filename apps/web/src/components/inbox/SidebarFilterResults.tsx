@@ -56,7 +56,7 @@ export default function SidebarFilterResults({ query, channels, selectedChannelI
     () => [
       {
         key: 'videos',
-        label: 'Videos',
+        label: 'Standalone videos',
         href: '/videos/standalone',
         icon: Video,
         unreadCount: libraryCounts?.standaloneUnread ?? 0,
