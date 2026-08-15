@@ -46,7 +46,7 @@ export default async function VideosStandalonePage({ searchParams }: Props) {
       selectedVideoId={null}
       library={{
         scope: { library: 'standalone' },
-        title: 'Standalone',
+        title: 'Standalone videos',
         emptyMessage: 'No standalone videos on this page.',
         markAllReadBody: { standaloneOnly: true },
       }}

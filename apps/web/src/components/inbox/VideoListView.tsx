@@ -157,7 +157,7 @@ export default function VideoListView({
   // Library unread counts. Fetched from the same endpoints the sidebar
   // uses, so SWR's cache usually serves them instantly. The standalone
   // total comes from /api/videos/library-counts; per-playlist counts
-  // are attached to each /api/playlists row (same shape VideosSection
+  // are attached to each /api/playlists row (same shape PlaylistsSection
   // consumes). Both endpoints are invalidated by useTriage, so the
   // mark-all-read button appears and disappears in sync with the row
   // states.

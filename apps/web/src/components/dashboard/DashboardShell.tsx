@@ -590,28 +590,25 @@ function useAutoUncollapse(channels: ChannelData[], selectedChannelId: string | 
     return folders.some((f) => f.id === channel.folderId) ? channel.folderId : null;
   }, [selectedChannelId, channels, folders]);
 
-  // Match only the library sub-routes — not the reader at
-  // /videos/[videoId], which is reachable from the inbox for
-  // non-library videos and shouldn't auto-expand the Videos section.
-  const videosSelected =
-    pathname != null &&
-    (pathname === '/videos' ||
-      pathname === '/videos/standalone' ||
-      pathname.startsWith('/videos/playlists/'));
+  // The Videos entry is a top-level row (nothing to expand); only an
+  // active playlist needs its section uncollapsed. The reader at
+  // /videos/[videoId] doesn't match — it's reachable from the inbox
+  // for non-library videos and shouldn't auto-expand anything.
+  const playlistSelected = pathname != null && pathname.startsWith('/videos/playlists/');
 
   useEffect(() => {
     ensureExpandedFor({
       channelSelected: selectedChannelId != null,
       nonDefaultView,
       folderId: folderIdForSelection,
-      videosSelected,
+      playlistSelected,
     });
   }, [
     ensureExpandedFor,
     selectedChannelId,
     nonDefaultView,
     folderIdForSelection,
-    videosSelected,
+    playlistSelected,
     pathname,
   ]);
 }
@@ -627,7 +624,7 @@ interface PlaylistSummary {
  * channel/inbox title logic stays untouched.
  *
  * - /videos                         → "All videos"
- * - /videos/standalone              → "Standalone"
+ * - /videos/standalone              → "Standalone videos"
  * - /videos/playlists/[id]          → playlist name (from SWR cache)
  * - /videos/[sourceId] (the reader) → video title (via /api/videos/meta)
  */
@@ -672,7 +669,7 @@ function useLibraryTitle(): string | null {
       return 'All videos';
     }
     if (pathname === '/videos/standalone') {
-      return 'Standalone';
+      return 'Standalone videos';
     }
     if (pathname.startsWith('/videos/playlists/')) {
       const id = pathname.slice('/videos/playlists/'.length).split('/')[0];

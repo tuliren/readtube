@@ -1,6 +1,6 @@
 'use client';
 
-import { List, ListMusic } from 'lucide-react';
+import { ListMusic, Video } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useMemo } from 'react';
@@ -33,8 +33,8 @@ interface FixedEntry {
 
 /**
  * Flat list of navbar items matching the sidebar filter text, replacing
- * the regular Views/Videos/Channels sections while the filter is
- * active. Rows keep the section grouping and the shared sidebar row
+ * the regular Views/Videos/Playlists/Channels sections while the
+ * filter is active. Rows keep the section grouping and the shared sidebar row
  * styling so a filtered row looks exactly like its unfiltered
  * counterpart — same label, badge, and destination.
  */
@@ -52,13 +52,13 @@ export default function SidebarFilterResults({ query, channels, selectedChannelI
       })),
     []
   );
-  const standaloneEntries = useMemo<FixedEntry[]>(
+  const videoEntries = useMemo<FixedEntry[]>(
     () => [
       {
-        key: 'standalone',
-        label: 'Standalone',
+        key: 'videos',
+        label: 'Standalone videos',
         href: '/videos/standalone',
-        icon: List,
+        icon: Video,
         unreadCount: libraryCounts?.standaloneUnread ?? 0,
       },
     ],
@@ -66,15 +66,12 @@ export default function SidebarFilterResults({ query, channels, selectedChannelI
   );
 
   const matchedViews = filterLabeled(viewEntries, query);
-  const matchedStandalone = filterLabeled(standaloneEntries, query);
+  const matchedVideos = filterLabeled(videoEntries, query);
   const matchedPlaylists = filterPlaylists(playlists, query);
   const matchedChannels = filterChannels(channels, query);
 
   const totalMatches =
-    matchedViews.length +
-    matchedStandalone.length +
-    matchedPlaylists.length +
-    matchedChannels.length;
+    matchedViews.length + matchedVideos.length + matchedPlaylists.length + matchedChannels.length;
   if (totalMatches === 0) {
     return <p className="px-6 py-4 text-xs text-muted-foreground">No matching sidebar items.</p>;
   }
@@ -88,11 +85,15 @@ export default function SidebarFilterResults({ query, channels, selectedChannelI
           ))}
         </FilterGroup>
       )}
-      {(matchedStandalone.length > 0 || matchedPlaylists.length > 0) && (
+      {matchedVideos.length > 0 && (
         <FilterGroup heading="Videos">
-          {matchedStandalone.map((entry) => (
+          {matchedVideos.map((entry) => (
             <FixedEntryRow key={entry.key} entry={entry} />
           ))}
+        </FilterGroup>
+      )}
+      {matchedPlaylists.length > 0 && (
+        <FilterGroup heading="Playlists">
           {matchedPlaylists.map((playlist) => (
             <li key={playlist.id}>
               <Link href={`/videos/playlists/${playlist.id}`} className={sidebarRowClass(false)}>
