@@ -113,14 +113,32 @@ describe('GET /api/search', () => {
     const body = await search('rust');
     expect(body.videos.map((v) => v.sourceId)).toEqual(['v1']);
     expect(body.videos[0].channelName).toBe('Subscribed Channel');
+    expect(body.videos[0].matchedBy).toBe('title');
+    expect(body.videos[0].descriptionSnippet).toBeNull();
   });
 
-  it('matches videos by description and applies English stemming', async () => {
+  it('matches videos by description with English stemming and returns a delimited snippet', async () => {
     const channel = await seedChannel('c1', 'Channel One');
     await seedVideo(channel.id, 'v1', 'Weekly recap', 'Deep dive into running marathons');
 
     const body = await search('run marathon');
     expect(body.videos.map((v) => v.sourceId)).toEqual(['v1']);
+    expect(body.videos[0].matchedBy).toBe('description');
+    expect(body.videos[0].descriptionSnippet).toContain('[[running]]');
+    expect(body.videos[0].descriptionSnippet).toContain('[[marathons]]');
+  });
+
+  it('classifies title and description matches into separate classes', async () => {
+    const channel = await seedChannel('c1', 'Channel One');
+    await seedVideo(channel.id, 'v-title', 'Docker networking deep dive');
+    await seedVideo(channel.id, 'v-desc', 'Weekly recap', 'This episode covers Docker news');
+
+    const body = await search('docker');
+    const byId = new Map(body.videos.map((v) => [v.sourceId, v.matchedBy]));
+    expect(byId.get('v-title')).toBe('title');
+    expect(byId.get('v-desc')).toBe('description');
+    // Title matches order before description matches.
+    expect(body.videos.map((v) => v.sourceId)).toEqual(['v-title', 'v-desc']);
   });
 
   it('includes standalone and playlist videos outside subscribed channels', async () => {
@@ -161,13 +179,17 @@ describe('GET /api/search', () => {
     ]);
   });
 
-  it('caps each section at its limit', async () => {
+  it('caps each match class at its limit independently', async () => {
     const channel = await seedChannel('c1', 'Channel One');
     for (let i = 0; i < 12; i++) {
-      await seedVideo(channel.id, `v${i}`, `TypeScript tip number ${i}`);
+      await seedVideo(channel.id, `vt${i}`, `TypeScript tip number ${i}`);
+    }
+    for (let i = 0; i < 12; i++) {
+      await seedVideo(channel.id, `vd${i}`, `Untitled episode ${i}`, `More TypeScript talk ${i}`);
     }
 
     const body = await search('typescript');
-    expect(body.videos).toHaveLength(8);
+    expect(body.videos.filter((v) => v.matchedBy === 'title')).toHaveLength(8);
+    expect(body.videos.filter((v) => v.matchedBy === 'description')).toHaveLength(8);
   });
 });

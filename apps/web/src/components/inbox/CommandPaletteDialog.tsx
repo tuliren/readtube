@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 
 import {
@@ -12,7 +12,7 @@ import {
   CommandList,
 } from '@/components/ui/command';
 import { bestMatchScore } from '@/lib/search/matchScore';
-import type { SearchResponse } from '@/lib/search/types';
+import type { SearchResponse, VideoSearchHit } from '@/lib/search/types';
 import { channelHref } from '@/lib/urls/channelHref';
 
 import ChannelAvatar from './ChannelAvatar';
@@ -127,6 +127,11 @@ export default function CommandPaletteDialog({ items, open, setOpen }: Props) {
   const searching = trimmed.length > 0;
   const channelHits = searching ? (data?.channels ?? []) : [];
   const videoHits = searching ? (data?.videos ?? []) : [];
+  // Separate sections per matched field so a hit whose visible title
+  // doesn't contain the query terms isn't mystifying. Title matches
+  // come first (the server orders them first too).
+  const titleHits = videoHits.filter((hit) => hit.matchedBy === 'title');
+  const descriptionHits = videoHits.filter((hit) => hit.matchedBy === 'description');
   const hasResults = channelHits.length > 0 || videoHits.length > 0 || matchingCommands.length > 0;
 
   // cmdk auto-selects the first item only when ITS filter runs; with
@@ -203,31 +208,33 @@ export default function CommandPaletteDialog({ items, open, setOpen }: Props) {
             ))}
           </CommandGroup>
         )}
-        {videoHits.length > 0 && (
-          <CommandGroup heading="Videos">
-            {videoHits.map((hit) => (
-              <CommandItem
+        {titleHits.length > 0 && (
+          <CommandGroup heading="Videos (by title)">
+            {titleHits.map((hit) => (
+              <VideoHitItem
                 key={hit.id}
-                value={`video-${hit.id}`}
+                hit={hit}
                 onSelect={() =>
                   navigate(
                     `/videos/${encodeURIComponent(hit.sourceId)}?returnTo=${encodeURIComponent(returnTo)}`
                   )
                 }
-              >
-                <div className="flex min-w-0 flex-col">
-                  <span className="truncate">{hit.title}</span>
-                  <span className="truncate text-xs text-muted-foreground">
-                    {hit.channelName}
-                    {hit.publishedAt != null &&
-                      ` · ${new Date(hit.publishedAt).toLocaleDateString(undefined, {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric',
-                      })}`}
-                  </span>
-                </div>
-              </CommandItem>
+              />
+            ))}
+          </CommandGroup>
+        )}
+        {descriptionHits.length > 0 && (
+          <CommandGroup heading="Videos (by description)">
+            {descriptionHits.map((hit) => (
+              <VideoHitItem
+                key={hit.id}
+                hit={hit}
+                onSelect={() =>
+                  navigate(
+                    `/videos/${encodeURIComponent(hit.sourceId)}?returnTo=${encodeURIComponent(returnTo)}`
+                  )
+                }
+              />
             ))}
           </CommandGroup>
         )}
@@ -252,5 +259,54 @@ export default function CommandPaletteDialog({ items, open, setOpen }: Props) {
         ))}
       </CommandList>
     </CommandDialog>
+  );
+}
+
+/**
+ * One video hit row: title, then channel and date, and for
+ * description matches a snippet of the matched description fragment
+ * so the user can see why a video whose title lacks the query terms
+ * is in the list.
+ */
+function VideoHitItem({ hit, onSelect }: { hit: VideoSearchHit; onSelect: () => void }) {
+  return (
+    <CommandItem value={`video-${hit.id}`} onSelect={onSelect}>
+      <div className="flex min-w-0 flex-col">
+        <span className="truncate">{hit.title}</span>
+        <span className="truncate text-xs text-muted-foreground">
+          {hit.channelName}
+          {hit.publishedAt != null &&
+            ` · ${new Date(hit.publishedAt).toLocaleDateString(undefined, {
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric',
+            })}`}
+        </span>
+        {hit.descriptionSnippet != null && (
+          <span className="truncate text-xs italic text-muted-foreground">
+            {renderSnippet(hit.descriptionSnippet)}
+          </span>
+        )}
+      </div>
+    </CommandItem>
+  );
+}
+
+/**
+ * Render a ts_headline snippet whose hit terms are wrapped in
+ * `[[` `]]` delimiters. Splitting on the delimiters and emitting
+ * <mark> elements keeps the description content as plain text —
+ * markup inside a video description can never reach the DOM as HTML.
+ */
+function renderSnippet(snippet: string): React.ReactNode {
+  const parts = snippet.split(/\[\[(.*?)\]\]/g);
+  return parts.map((part, index) =>
+    index % 2 === 1 ? (
+      <mark key={index} className="rounded-sm bg-transparent font-medium text-foreground">
+        {part}
+      </mark>
+    ) : (
+      <Fragment key={index}>{part}</Fragment>
+    )
   );
 }

@@ -24,12 +24,30 @@ export interface ChannelSearchHit {
   logoUrl: string | null;
 }
 
+/**
+ * Which field of the video the query actually matched. The palette
+ * groups hits by this ("Videos (by title)" vs "Videos (by
+ * description)") so a hit whose title doesn't contain the query terms
+ * isn't confusing. A video matching on both fields is classified as
+ * a title match.
+ */
+export type VideoMatchField = 'title' | 'description';
+
 export interface VideoSearchHit {
   id: string;
   sourceId: string;
   title: string;
   channelName: string;
   publishedAt: string | null;
+  matchedBy: VideoMatchField;
+  /**
+   * For description matches: the matched fragment of the description,
+   * with `[[` `]]` wrapping each hit term (ts_headline custom
+   * delimiters — rendered as <mark> by the client, never as raw HTML,
+   * so a description containing markup can't inject it). Null for
+   * title matches.
+   */
+  descriptionSnippet: string | null;
 }
 
 export interface SearchResponse {
