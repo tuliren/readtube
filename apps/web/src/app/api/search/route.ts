@@ -72,6 +72,7 @@ export async function GET(request: NextRequest) {
         id: string;
         source_id: string;
         title: string;
+        title_highlight: string;
         published_at: Date | null;
         channel_name: string;
         title_match: boolean;
@@ -82,6 +83,12 @@ export async function GET(request: NextRequest) {
         ranked.id,
         ranked.source_id,
         ranked.title,
+        ts_headline(
+          'english',
+          ranked.title,
+          plainto_tsquery('english', ${q}),
+          'StartSel=[[, StopSel=]], HighlightAll=TRUE'
+        ) AS title_highlight,
         ranked.published_at,
         ranked.channel_name,
         ranked.title_match,
@@ -154,6 +161,7 @@ export async function GET(request: NextRequest) {
     id: row.id,
     sourceId: row.source_id,
     title: row.title,
+    titleHighlight: row.title_highlight,
     channelName: row.channel_name,
     publishedAt: row.published_at?.toISOString() ?? null,
     matchedBy: row.title_match ? 'title' : 'description',

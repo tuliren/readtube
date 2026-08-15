@@ -272,7 +272,7 @@ function VideoHitItem({ hit, onSelect }: { hit: VideoSearchHit; onSelect: () => 
   return (
     <CommandItem value={`video-${hit.id}`} onSelect={onSelect}>
       <div className="flex min-w-0 flex-col">
-        <span className="truncate">{hit.title}</span>
+        <span className="truncate">{renderHighlighted(hit.titleHighlight)}</span>
         <span className="truncate text-xs text-muted-foreground">
           {hit.channelName}
           {hit.publishedAt != null &&
@@ -284,7 +284,7 @@ function VideoHitItem({ hit, onSelect }: { hit: VideoSearchHit; onSelect: () => 
         </span>
         {hit.descriptionSnippet != null && (
           <span className="truncate text-xs italic text-muted-foreground">
-            {renderSnippet(hit.descriptionSnippet)}
+            {renderHighlighted(hit.descriptionSnippet)}
           </span>
         )}
       </div>
@@ -293,16 +293,20 @@ function VideoHitItem({ hit, onSelect }: { hit: VideoSearchHit; onSelect: () => 
 }
 
 /**
- * Render a ts_headline snippet whose hit terms are wrapped in
- * `[[` `]]` delimiters. Splitting on the delimiters and emitting
- * <mark> elements keeps the description content as plain text —
- * markup inside a video description can never reach the DOM as HTML.
+ * Render text whose query-term hits are wrapped in `[[` `]]`
+ * delimiters (ts_headline output) as bold, highlighted <mark>
+ * elements. Splitting on the delimiters keeps the underlying content
+ * plain text — markup inside a video title or description can never
+ * reach the DOM as HTML.
  */
-function renderSnippet(snippet: string): React.ReactNode {
-  const parts = snippet.split(/\[\[(.*?)\]\]/g);
+function renderHighlighted(text: string): React.ReactNode {
+  const parts = text.split(/\[\[(.*?)\]\]/g);
   return parts.map((part, index) =>
     index % 2 === 1 ? (
-      <mark key={index} className="rounded-sm bg-transparent font-medium text-foreground">
+      <mark
+        key={index}
+        className="rounded-sm bg-yellow-100 px-0.5 font-semibold text-foreground dark:bg-yellow-500/25"
+      >
         {part}
       </mark>
     ) : (

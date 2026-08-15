@@ -114,6 +114,7 @@ describe('GET /api/search', () => {
     expect(body.videos.map((v) => v.sourceId)).toEqual(['v1']);
     expect(body.videos[0].channelName).toBe('Subscribed Channel');
     expect(body.videos[0].matchedBy).toBe('title');
+    expect(body.videos[0].titleHighlight).toBe('[[Rust]] ownership explained');
     expect(body.videos[0].descriptionSnippet).toBeNull();
   });
 

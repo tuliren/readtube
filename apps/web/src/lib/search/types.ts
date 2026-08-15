@@ -37,6 +37,13 @@ export interface VideoSearchHit {
   id: string;
   sourceId: string;
   title: string;
+  /**
+   * The full title with `[[` `]]` wrapping each query-term hit
+   * (ts_headline HighlightAll). Identical to `title` (no delimiters)
+   * when the match came from the description only. The client splits
+   * on the delimiters and renders <mark> elements — never raw HTML.
+   */
+  titleHighlight: string;
   channelName: string;
   publishedAt: string | null;
   matchedBy: VideoMatchField;
