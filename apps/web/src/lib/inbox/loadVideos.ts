@@ -1,5 +1,7 @@
+import { Prisma } from '@readtube/database';
 import type { PrismaClient } from '@readtube/database';
 
+import { containsCjk, likePattern, searchTerms } from '@/lib/search/cjk';
 import { effectivePublishDate } from '@/lib/subscriptions';
 import type { InboxQuery, VideoData } from '@/lib/types';
 
@@ -65,16 +67,28 @@ export async function loadInboxVideos(
     userSubs.map((s) => [s.channel_id, s.read_at])
   );
 
-  // Free-text q goes through Postgres `search_tsv @@ plainto_tsquery`.
+  // Free-text q goes through Postgres `search_tsv @@ plainto_tsquery`,
+  // or — when the query contains CJK, which the english tsvector
+  // config can't tokenize — ILIKE substring matching backed by the
+  // pg_trgm indexes (same rule as /api/search, see lib/search/cjk.ts).
   // Prisma can't express @@ via the generated client, so we resolve a
   // restricted id set via $queryRaw and AND it into the main findMany.
   // Mirrors what /api/videos does — kept here verbatim so SSR and API
   // can never diverge on search semantics.
   let restrictIds: string[] | null = null;
   if (query.q != null && query.q.length > 0) {
+    const matchCondition = containsCjk(query.q)
+      ? Prisma.join(
+          searchTerms(query.q).map(
+            (term) =>
+              Prisma.sql`("title" ILIKE ${likePattern(term)} OR "description" ILIKE ${likePattern(term)})`
+          ),
+          ' AND '
+        )
+      : Prisma.sql`"search_tsv" @@ plainto_tsquery('english', ${query.q})`;
     const rows = await prisma.$queryRaw<Array<{ id: string }>>`
       SELECT "id" FROM "Video"
-      WHERE "search_tsv" @@ plainto_tsquery('english', ${query.q})
+      WHERE (${matchCondition})
         AND "channel_id" IN (
           SELECT "channel_id" FROM "UserSubscription" WHERE "user_id" = ${userId}
         )
