@@ -4,7 +4,11 @@
 datasource db {
   provider   = "postgresql"
   url        = env("DATABASE_URL")
-  extensions = [vector]
+  // pg_trgm backs the trigram GIN indexes on Video.title/description
+  // (raw SQL in the add_pg_trgm migration) that make ILIKE substring
+  // search fast — the CJK-query path of /api/search and the inbox
+  // search, where the english-config tsvector can't tokenize.
+  extensions = [vector, pg_trgm]
 }
 
 generator client {

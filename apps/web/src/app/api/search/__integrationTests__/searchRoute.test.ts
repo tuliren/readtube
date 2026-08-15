@@ -180,6 +180,48 @@ describe('GET /api/search', () => {
     ]);
   });
 
+  it('matches CJK queries by substring, which the tsvector path cannot', async () => {
+    const channel = await seedChannel('c1', '影视飓风');
+    await seedVideo(channel.id, 'v-cjk-title', '对话诺兰！导演亲手翻开了《奥德赛》的另一面');
+    await seedVideo(channel.id, 'v-cjk-desc', '每周电影杂谈', '本期我们聊聊大导演诺兰的新片计划');
+    await seedVideo(channel.id, 'v-unrelated', '厨房里的科学');
+
+    const body = await search('诺兰');
+    const byId = new Map(body.videos.map((v) => [v.sourceId, v]));
+    expect(byId.size).toBe(2);
+    expect(byId.get('v-cjk-title')?.matchedBy).toBe('title');
+    expect(byId.get('v-cjk-title')?.titleHighlight).toContain('[[诺兰]]');
+    expect(byId.get('v-cjk-desc')?.matchedBy).toBe('description');
+    expect(byId.get('v-cjk-desc')?.descriptionSnippet).toContain('[[诺兰]]');
+    // Title matches order before description matches.
+    expect(body.videos.map((v) => v.sourceId)).toEqual(['v-cjk-title', 'v-cjk-desc']);
+  });
+
+  it('requires every term of a mixed CJK and Latin query to match', async () => {
+    const channel = await seedChannel('c1', '硅谷101');
+    await seedVideo(channel.id, 'v-both', '对话盛颖：xAI 的 Infra 浪漫');
+    await seedVideo(channel.id, 'v-one', '对话盛颖：开源与平权');
+
+    const body = await search('对话 infra');
+    expect(body.videos.map((v) => v.sourceId)).toEqual(['v-both']);
+  });
+
+  it('scopes CJK matches to the user library', async () => {
+    const outside = await seedChannel('c-out', '未订阅频道', { subscribed: false });
+    await seedVideo(outside.id, 'v-out', '诺兰访谈');
+
+    const body = await search('诺兰');
+    expect(body.videos).toEqual([]);
+  });
+
+  it('matches subscribed channels by CJK name substring', async () => {
+    await seedChannel('c-cjk', 'Mediastorm影视飓风');
+    await seedChannel('c-other', 'MKBHD');
+
+    const body = await search('影视');
+    expect(body.channels.map((c) => c.name)).toEqual(['Mediastorm影视飓风']);
+  });
+
   it('caps each match class at its limit independently', async () => {
     const channel = await seedChannel('c1', 'Channel One');
     for (let i = 0; i < 12; i++) {
