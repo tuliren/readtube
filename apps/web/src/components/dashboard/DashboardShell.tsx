@@ -617,7 +617,7 @@ interface PlaylistSummary {
  * channel/inbox title logic stays untouched.
  *
  * - /videos                         → "All videos"
- * - /videos/standalone              → "Standalone"
+ * - /videos/standalone              → "Standalone videos"
  * - /videos/playlists/[id]          → playlist name (from SWR cache)
  * - /videos/[sourceId] (the reader) → video title (via /api/videos/meta)
  */
@@ -662,7 +662,7 @@ function useLibraryTitle(): string | null {
       return 'All videos';
     }
     if (pathname === '/videos/standalone') {
-      return 'Standalone';
+      return 'Standalone videos';
     }
     if (pathname.startsWith('/videos/playlists/')) {
       const id = pathname.slice('/videos/playlists/'.length).split('/')[0];
