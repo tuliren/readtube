@@ -1,10 +1,15 @@
 'use client';
 
+import { useState } from 'react';
+
 import { TooltipProvider } from '@/components/ui/tooltip';
 import type { ChannelData } from '@/lib/types';
 
 import FolderSection from './FolderSection';
 import PlaylistsSection from './PlaylistsSection';
+import { useSidebar } from './SidebarContext';
+import SidebarFilterInput from './SidebarFilterInput';
+import SidebarFilterResults from './SidebarFilterResults';
 import VideosItem from './VideosItem';
 import ViewsSection from './ViewsSection';
 
@@ -22,20 +27,25 @@ interface Props {
 }
 
 /**
- * Left sidebar content below the app topbar:
+ * Left sidebar content below the app topbar. A filter input at the
+ * top, then:
  *
  *   1. Views — Inbox + the triage buckets (Starred / Read Later /
  *      Archived). Inbox is the default view and shows the
  *      aggregate unread badge, so the separate "All unread" entry that
  *      used to live at the top is gone.
  *   2. Videos — a single clickable entry opening the standalone
- *      video library (no sub-items), with an always-visible "+" for
- *      Add video.
+ *      video library (no sub-items).
  *   3. Playlists — one row per user playlist, "+" dropdown to add one.
  *   4. Channels — folder-aware list of subscribed channels. The
  *      "+ Add channel" entry lives at the top of this section
  *      (right under the Channels header) inside FolderSection so it
  *      sits next to the thing it adds to.
+ *
+ * While the filter input holds text, the sections are replaced by a
+ * flat list of matching navbar items (SidebarFilterResults). The
+ * collapsed 56px rail hides the input — there's no room for it, and
+ * ⌘K covers search there.
  */
 export default function ChannelSection({
   channels,
@@ -44,17 +54,33 @@ export default function ChannelSection({
   onAddChannel,
   onAddVideo,
 }: Props) {
+  const { collapsed } = useSidebar();
+  const [filter, setFilter] = useState('');
+  const trimmedFilter = filter.trim();
+  const filtering = !collapsed && trimmedFilter.length > 0;
+
   return (
     <TooltipProvider delayDuration={300}>
       <nav className="flex min-w-0 flex-col overflow-x-hidden overflow-y-auto">
-        <ViewsSection inboxUnread={totalUnread} />
-        <VideosItem onAddVideo={() => onAddVideo(null)} />
-        <PlaylistsSection onAddVideo={onAddVideo} />
-        <FolderSection
-          channels={channels}
-          selectedChannelId={selectedChannelId}
-          onAddChannel={onAddChannel}
-        />
+        {!collapsed && <SidebarFilterInput value={filter} onChange={setFilter} />}
+        {filtering ? (
+          <SidebarFilterResults
+            query={trimmedFilter}
+            channels={channels}
+            selectedChannelId={selectedChannelId}
+          />
+        ) : (
+          <>
+            <ViewsSection inboxUnread={totalUnread} />
+            <VideosItem onAddVideo={() => onAddVideo(null)} />
+            <PlaylistsSection onAddVideo={onAddVideo} />
+            <FolderSection
+              channels={channels}
+              selectedChannelId={selectedChannelId}
+              onAddChannel={onAddChannel}
+            />
+          </>
+        )}
       </nav>
     </TooltipProvider>
   );

@@ -2,6 +2,9 @@
 CREATE SCHEMA IF NOT EXISTS "public";
 
 -- CreateExtension
+CREATE EXTENSION IF NOT EXISTS "pg_trgm";
+
+-- CreateExtension
 CREATE EXTENSION IF NOT EXISTS "vector";
 
 -- CreateEnum
@@ -327,7 +330,13 @@ CREATE UNIQUE INDEX "UserSubscription_user_id_channel_id_key" ON "UserSubscripti
 CREATE INDEX "video_index_on_channel_published_at" ON "Video"("channel_id", "published_at");
 
 -- CreateIndex
+CREATE INDEX "video_description_trgm_idx" ON "Video" USING GIN ("description" gin_trgm_ops);
+
+-- CreateIndex
 CREATE INDEX "video_search_tsv_idx" ON "Video" USING GIN ("search_tsv");
+
+-- CreateIndex
+CREATE INDEX "video_title_trgm_idx" ON "Video" USING GIN ("title" gin_trgm_ops);
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Video_channel_id_source_id_key" ON "Video"("channel_id", "source_id");

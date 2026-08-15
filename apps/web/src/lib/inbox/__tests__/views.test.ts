@@ -1,6 +1,6 @@
 import type { InboxQuery } from '@/lib/types';
 
-import { INBOX_VIEWS, resolveInboxView } from '../views';
+import { INBOX_VIEWS, inboxViewHref, resolveInboxView } from '../views';
 
 describe('resolveInboxView', () => {
   it.each<{ query: InboxQuery; expectedKey: string | null; desc: string }>([
@@ -39,5 +39,21 @@ describe('resolveInboxView', () => {
       expect(view.emptyMessage.length).toBeGreaterThan(0);
       expect(view.icon).toBeDefined();
     }
+  });
+});
+
+describe('inboxViewHref', () => {
+  it.each([
+    ['inbox', '/inbox'],
+    ['unread', '/inbox?unread=1'],
+    ['starred', '/inbox?starred=1'],
+    ['saved', '/inbox?saved=1'],
+    ['archived', '/inbox?archived=1'],
+  ])('view %s links to %s', (key, expected) => {
+    const view = INBOX_VIEWS.find((v) => v.key === key);
+    if (view == null) {
+      throw new Error(`missing view ${key}`);
+    }
+    expect(inboxViewHref(view)).toBe(expected);
   });
 });

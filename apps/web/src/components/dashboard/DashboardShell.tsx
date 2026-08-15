@@ -13,6 +13,7 @@ import AddVideoModal from '@/components/inbox/AddVideoModal';
 import ChannelAvatar from '@/components/inbox/ChannelAvatar';
 import ChannelSection from '@/components/inbox/ChannelSection';
 import { CommandPaletteProvider } from '@/components/inbox/CommandPalette';
+import GlobalSearchButton from '@/components/inbox/GlobalSearchButton';
 import { KeyboardShortcutsProvider } from '@/components/inbox/KeyboardShortcutsProvider';
 import {
   SidebarExpandedOverride,
@@ -166,6 +167,9 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
                     underneath the X glyph. */}
                 <div className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-5">
                   <SheetTitle className="text-base font-bold text-foreground">ReadTube</SheetTitle>
+                  {/* No keyboard chip in the drawer — touch devices
+                      have no ⌘K, the button itself is the affordance. */}
+                  <GlobalSearchButton showShortcut={false} />
                   <UserButton>
                     <UserButton.MenuItems>
                       <UserButton.Link
@@ -207,15 +211,18 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
               ) : (
                 <div className="flex flex-1 items-center justify-between px-2">
                   <span className="text-base font-bold text-foreground">ReadTube</span>
-                  <button
-                    type="button"
-                    onClick={toggleCollapsed}
-                    className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-                    aria-label="Collapse sidebar"
-                    title="Collapse sidebar"
-                  >
-                    <PanelLeft className="h-4 w-4" />
-                  </button>
+                  <div className="flex items-center gap-0.5">
+                    <GlobalSearchButton />
+                    <button
+                      type="button"
+                      onClick={toggleCollapsed}
+                      className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                      aria-label="Collapse sidebar"
+                      title="Collapse sidebar"
+                    >
+                      <PanelLeft className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

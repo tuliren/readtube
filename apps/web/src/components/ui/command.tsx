@@ -23,7 +23,15 @@ const Command = React.forwardRef<
 ));
 Command.displayName = CommandPrimitive.displayName;
 
-const CommandDialog = ({ children, ...props }: DialogProps) => {
+interface CommandDialogProps extends DialogProps {
+  /** Extra props forwarded to the inner cmdk `Command` root — e.g.
+   *  `shouldFilter: false` plus controlled `value`/`onValueChange`
+   *  when an external source (a server search endpoint) already
+   *  filtered and ranked the items. */
+  commandProps?: React.ComponentPropsWithoutRef<typeof CommandPrimitive>;
+}
+
+const CommandDialog = ({ children, commandProps, ...props }: CommandDialogProps) => {
   return (
     <Dialog {...props}>
       <DialogContent className="overflow-hidden p-0">
@@ -35,7 +43,17 @@ const CommandDialog = ({ children, ...props }: DialogProps) => {
           to assistive tech but invisible on screen.
         */}
         <DialogTitle className="sr-only">Command palette</DialogTitle>
-        <Command className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5">
+        {/*
+          Group headings render as full-line section banners: bold
+          small caps on a light theme-accent band, so result types
+          like "Videos (by description)" read as unmissable sections
+          rather than blending into the muted metadata lines of the
+          rows.
+        */}
+        <Command
+          {...commandProps}
+          className="[&_[cmdk-group-heading]]:mb-1 [&_[cmdk-group-heading]]:rounded-md [&_[cmdk-group-heading]]:bg-blue-50 [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-bold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-blue-800 dark:[&_[cmdk-group-heading]]:bg-blue-500/10 dark:[&_[cmdk-group-heading]]:text-blue-300 [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:mt-1 [&_[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5"
+        >
           {children}
         </Command>
       </DialogContent>
@@ -96,7 +114,7 @@ const CommandGroup = React.forwardRef<
   <CommandPrimitive.Group
     ref={ref}
     className={cn(
-      'overflow-hidden p-1 text-foreground [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground',
+      'overflow-hidden p-1 text-foreground [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-sm [&_[cmdk-group-heading]]:font-bold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider',
       className
     )}
     {...props}

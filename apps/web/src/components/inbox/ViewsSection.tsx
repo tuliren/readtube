@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useCollapseState } from '@/components/dashboard/CollapseStateContext';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { isDefaultQuery } from '@/lib/inbox/filter';
-import { INBOX_VIEWS, type InboxViewDef } from '@/lib/inbox/views';
+import { INBOX_VIEWS, type InboxViewDef, inboxViewHref } from '@/lib/inbox/views';
 import type { InboxQuery } from '@/lib/types';
 
 import { useSidebar } from './SidebarContext';
@@ -74,16 +74,7 @@ export default function ViewsSection({ inboxUnread }: Props) {
         <ul className="space-y-0.5">
           {INBOX_VIEWS.map((view) => {
             const active = isActive(view);
-            const params = new URLSearchParams();
-            for (const [k, v] of Object.entries(view.query)) {
-              if (v === true) {
-                params.set(k, '1');
-              } else if (typeof v === 'string' && v.length > 0) {
-                params.set(k, v);
-              }
-            }
-            const qs = params.toString();
-            const href = qs.length > 0 ? `/inbox?${qs}` : '/inbox';
+            const href = inboxViewHref(view);
             // Inbox + Unread both reflect the user's pending-triage
             // queue, so both surface the aggregate unread count.
             const count = view.key === 'inbox' || view.key === 'unread' ? inboxUnread : 0;
