@@ -10,33 +10,21 @@ import {
   useState,
 } from 'react';
 
-import {
-  CommandDialog,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command';
+import CommandPaletteDialog, { type CommandItemInfo } from './CommandPaletteDialog';
+
+export type { CommandItemInfo };
 
 /**
- * ⌘K command palette. Each feature stream calls `useCommand(...)` in its
- * components to push items into the global registry; those items render
- * inside the palette grouped by category, with a run-handler fired on
- * selection.
+ * ⌘K command palette registry. The dialog itself (CommandPaletteDialog)
+ * searches the user's channels and videos through /api/search; this
+ * module owns the open state, the global ⌘K keybinding, and the
+ * registry that lets feature streams add extra commands via
+ * `useCommand(...)` — those render as their own groups below the
+ * search results.
  *
- * The palette itself is mounted once at the root of /inbox (in InboxShell)
- * and listens for ⌘K / ctrl+K globally.
+ * Mounted once at the dashboard root (DashboardShell) so the palette
+ * works on every authenticated page.
  */
-
-export interface CommandItemInfo {
-  id: string;
-  label: string;
-  group: string;
-  keywords?: string;
-  shortcut?: string;
-  run: () => void;
-}
 
 interface CommandContextValue {
   items: CommandItemInfo[];
@@ -87,52 +75,8 @@ export function CommandPaletteProvider({ children }: { children: React.ReactNode
   return (
     <CommandContext.Provider value={value}>
       {children}
-      <CommandPaletteDialog />
+      <CommandPaletteDialog items={items} open={open} setOpen={setOpen} />
     </CommandContext.Provider>
-  );
-}
-
-function CommandPaletteDialog() {
-  const context = useContext(CommandContext);
-  if (context == null) {
-    return null;
-  }
-  const { items, open, setOpen } = context;
-
-  // Group items by their `group` field for rendering.
-  const byGroup = new Map<string, CommandItemInfo[]>();
-  for (const item of items) {
-    const existing = byGroup.get(item.group) ?? [];
-    existing.push(item);
-    byGroup.set(item.group, existing);
-  }
-
-  return (
-    <CommandDialog open={open} onOpenChange={setOpen}>
-      <CommandInput placeholder="Type a command or search..." />
-      <CommandList>
-        <CommandEmpty>No results found.</CommandEmpty>
-        {Array.from(byGroup.entries()).map(([groupName, groupItems]) => (
-          <CommandGroup key={groupName} heading={groupName}>
-            {groupItems.map((item) => (
-              <CommandItem
-                key={item.id}
-                value={`${item.label} ${item.keywords ?? ''}`}
-                onSelect={() => {
-                  setOpen(false);
-                  item.run();
-                }}
-              >
-                <span>{item.label}</span>
-                {item.shortcut != null ? (
-                  <span className="ml-auto text-muted-foreground text-xs">{item.shortcut}</span>
-                ) : null}
-              </CommandItem>
-            ))}
-          </CommandGroup>
-        ))}
-      </CommandList>
-    </CommandDialog>
   );
 }
 
@@ -147,7 +91,7 @@ function CommandPaletteDialog() {
  * mount.
  *
  * We still only re-run the registration effect when the *display* fields
- * change (id, label, group, keywords, shortcut) so cmdk's fuzzy matcher
+ * change (id, label, group, keywords, shortcut) so the palette list
  * doesn't thrash on every parent re-render.
  */
 export function useCommand(info: CommandItemInfo): void {
