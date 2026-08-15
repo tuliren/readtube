@@ -24,24 +24,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { playlistDisplayName } from '@/lib/inbox/playlistName';
 
 import DeletePlaylistDialog from './DeletePlaylistDialog';
 import NewPlaylistDialog from './NewPlaylistDialog';
 import RenamePlaylistDialog from './RenamePlaylistDialog';
 import { useSidebar } from './SidebarContext';
 import { SidebarBadge, SidebarRowContent, sidebarRowClass } from './SidebarRow';
-
-/**
- * User-facing display label for a playlist. When the user has set a
- * custom name, show it as the primary label and append the original
- * in parentheses.
- */
-function playlistDisplayName(p: { name: string; customName: string | null }): string {
-  if (p.customName != null && p.customName.length > 0) {
-    return `${p.customName} (${p.name})`;
-  }
-  return p.name;
-}
 
 interface Props {
   /** Open the AddVideoModal. The optional playlistId pre-selects a

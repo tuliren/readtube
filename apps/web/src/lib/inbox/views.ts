@@ -71,6 +71,24 @@ export const INBOX_VIEWS: InboxViewDef[] = [
 ];
 
 /**
+ * Build the sidebar URL for a view: `/inbox?<flag>=1` for the named
+ * triage buckets, bare `/inbox` for the default view. Shared by
+ * ViewsSection and the sidebar filter so both produce identical links.
+ */
+export function inboxViewHref(view: InboxViewDef): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(view.query)) {
+    if (value === true) {
+      params.set(key, '1');
+    } else if (typeof value === 'string' && value.length > 0) {
+      params.set(key, value);
+    }
+  }
+  const qs = params.toString();
+  return qs.length > 0 ? `/inbox?${qs}` : '/inbox';
+}
+
+/**
  * Resolve the active view from an InboxQuery, in declaration order.
  *
  * The named filter buckets (Starred / Read Later /
