@@ -115,7 +115,12 @@ export default function AddVideoModal({ open, onOpenChange, targetPlaylistId = n
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Add video</DialogTitle>
+          {/* The same modal serves both the "Standalone videos" entry
+              (no playlist target) and a playlist row's "Add video"
+              item; the title names the destination accordingly. */}
+          <DialogTitle>
+            {targetPlaylistId == null ? 'Add standalone video' : 'Add video to playlist'}
+          </DialogTitle>
           <DialogDescription>
             Paste a YouTube video URL or id:{' '}
             <code className="rounded bg-muted px-1">youtube.com/watch?v=…</code>,{' '}
