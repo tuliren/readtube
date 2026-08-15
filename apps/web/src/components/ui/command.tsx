@@ -24,13 +24,14 @@ const Command = React.forwardRef<
 Command.displayName = CommandPrimitive.displayName;
 
 interface CommandDialogProps extends DialogProps {
-  /** Set false when an external source (e.g. a server search endpoint)
-   *  already filtered and ranked the items — cmdk would otherwise
-   *  re-filter them against the input text and drop valid results. */
-  shouldFilter?: boolean;
+  /** Extra props forwarded to the inner cmdk `Command` root — e.g.
+   *  `shouldFilter: false` plus controlled `value`/`onValueChange`
+   *  when an external source (a server search endpoint) already
+   *  filtered and ranked the items. */
+  commandProps?: React.ComponentPropsWithoutRef<typeof CommandPrimitive>;
 }
 
-const CommandDialog = ({ children, shouldFilter, ...props }: CommandDialogProps) => {
+const CommandDialog = ({ children, commandProps, ...props }: CommandDialogProps) => {
   return (
     <Dialog {...props}>
       <DialogContent className="overflow-hidden p-0">
@@ -43,7 +44,7 @@ const CommandDialog = ({ children, shouldFilter, ...props }: CommandDialogProps)
         */}
         <DialogTitle className="sr-only">Command palette</DialogTitle>
         <Command
-          shouldFilter={shouldFilter}
+          {...commandProps}
           className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5"
         >
           {children}

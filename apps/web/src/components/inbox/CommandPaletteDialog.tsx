@@ -129,13 +129,40 @@ export default function CommandPaletteDialog({ items, open, setOpen }: Props) {
   const videoHits = searching ? (data?.videos ?? []) : [];
   const hasResults = channelHits.length > 0 || videoHits.length > 0 || matchingCommands.length > 0;
 
+  // cmdk auto-selects the first item only when ITS filter runs; with
+  // shouldFilter=false and results arriving async, the selection stays
+  // empty and Enter does nothing. Control the selection ourselves:
+  // whenever the top hit changes, point the selection at it. Arrowing
+  // within an unchanged result set doesn't retrigger this (firstValue
+  // is stable), so manual navigation isn't fought.
+  const [selectedValue, setSelectedValue] = useState('');
+  const firstValue =
+    channelHits.length > 0
+      ? `channel-${channelHits[0].id}`
+      : videoHits.length > 0
+        ? `video-${videoHits[0].id}`
+        : matchingCommands.length > 0
+          ? `command-${matchingCommands[0].id}`
+          : '';
+  useEffect(() => {
+    setSelectedValue(firstValue);
+  }, [firstValue]);
+
   function navigate(href: string) {
     setOpen(false);
     router.push(href);
   }
 
   return (
-    <CommandDialog open={open} onOpenChange={setOpen} shouldFilter={false}>
+    <CommandDialog
+      open={open}
+      onOpenChange={setOpen}
+      commandProps={{
+        shouldFilter: false,
+        value: selectedValue,
+        onValueChange: setSelectedValue,
+      }}
+    >
       <CommandInput
         placeholder="Search videos and channels..."
         value={query}
