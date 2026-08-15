@@ -31,9 +31,6 @@ export const metadata: Metadata = {
     'deep work',
     'focus',
   ],
-  alternates: {
-    canonical: '/',
-  },
   openGraph: {
     type: 'website',
     siteName: TITLE,

@@ -30,7 +30,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     return {};
   }
   // Root layout's title template appends " | ReadTube" automatically.
-  return { title: capTitle(video.title) };
+  // The self-referencing canonical (no query string) is what lets
+  // Google index this page: it collapses the ?language= variants into
+  // one URL and must match the sitemap entry, which is built from
+  // source_id the same way.
+  return {
+    title: capTitle(video.title),
+    alternates: {
+      canonical: `/p/videos/${encodeURIComponent(stub.source_id)}`,
+    },
+  };
 }
 
 /**
