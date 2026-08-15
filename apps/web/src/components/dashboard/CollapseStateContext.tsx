@@ -21,7 +21,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 interface PersistedState {
   viewsCollapsed: boolean;
   channelsCollapsed: boolean;
-  videosCollapsed: boolean;
+  playlistsCollapsed: boolean;
   collapsedFolderIds: string[];
 }
 
@@ -29,7 +29,7 @@ const STORAGE_KEY = 'readtube.sidebar.collapse';
 const DEFAULT_STATE: PersistedState = {
   viewsCollapsed: false,
   channelsCollapsed: false,
-  videosCollapsed: false,
+  playlistsCollapsed: false,
   collapsedFolderIds: [],
 };
 
@@ -40,18 +40,18 @@ interface EnsureExpandedInput {
   channelSelected?: boolean;
   /** True when a non-default view (Starred / Read Later / Archived) is active. */
   nonDefaultView?: boolean;
-  /** True when the active page is under /videos (Standalone/playlist). */
-  videosSelected?: boolean;
+  /** True when the active page is a playlist under /videos/playlists. */
+  playlistSelected?: boolean;
 }
 
 interface CollapseState {
   viewsCollapsed: boolean;
   channelsCollapsed: boolean;
-  videosCollapsed: boolean;
+  playlistsCollapsed: boolean;
   isFolderCollapsed: (folderId: string) => boolean;
   toggleViews: () => void;
   toggleChannels: () => void;
-  toggleVideos: () => void;
+  togglePlaylists: () => void;
   toggleFolder: (folderId: string) => void;
   ensureExpandedFor: (input: EnsureExpandedInput) => void;
 }
@@ -63,11 +63,13 @@ function parseStored(raw: string | null): PersistedState {
     return DEFAULT_STATE;
   }
   try {
-    const parsed = JSON.parse(raw) as Partial<PersistedState>;
+    const parsed = JSON.parse(raw) as Partial<PersistedState> & { videosCollapsed?: boolean };
     return {
       viewsCollapsed: parsed.viewsCollapsed === true,
       channelsCollapsed: parsed.channelsCollapsed === true,
-      videosCollapsed: parsed.videosCollapsed === true,
+      // The Playlists section absorbed the old Videos section, so a
+      // stored pre-rename `videosCollapsed` flag carries over.
+      playlistsCollapsed: parsed.playlistsCollapsed === true || parsed.videosCollapsed === true,
       collapsedFolderIds: Array.isArray(parsed.collapsedFolderIds)
         ? parsed.collapsedFolderIds.filter((id): id is string => typeof id === 'string')
         : [],
@@ -107,8 +109,8 @@ export function CollapseStateProvider({ children }: { children: React.ReactNode 
     setState((prev) => ({ ...prev, channelsCollapsed: !prev.channelsCollapsed }));
   }, []);
 
-  const toggleVideos = useCallback(() => {
-    setState((prev) => ({ ...prev, videosCollapsed: !prev.videosCollapsed }));
+  const togglePlaylists = useCallback(() => {
+    setState((prev) => ({ ...prev, playlistsCollapsed: !prev.playlistsCollapsed }));
   }, []);
 
   const toggleFolder = useCallback((folderId: string) => {
@@ -132,8 +134,8 @@ export function CollapseStateProvider({ children }: { children: React.ReactNode 
       if (input.nonDefaultView === true && prev.viewsCollapsed) {
         next = { ...next, viewsCollapsed: false };
       }
-      if (input.videosSelected === true && prev.videosCollapsed) {
-        next = { ...next, videosCollapsed: false };
+      if (input.playlistSelected === true && prev.playlistsCollapsed) {
+        next = { ...next, playlistsCollapsed: false };
       }
       if (input.folderId != null && prev.collapsedFolderIds.includes(input.folderId)) {
         const folderId = input.folderId;
@@ -155,22 +157,22 @@ export function CollapseStateProvider({ children }: { children: React.ReactNode 
     () => ({
       viewsCollapsed: state.viewsCollapsed,
       channelsCollapsed: state.channelsCollapsed,
-      videosCollapsed: state.videosCollapsed,
+      playlistsCollapsed: state.playlistsCollapsed,
       isFolderCollapsed: (folderId: string) => collapsedFolderSet.has(folderId),
       toggleViews,
       toggleChannels,
-      toggleVideos,
+      togglePlaylists,
       toggleFolder,
       ensureExpandedFor,
     }),
     [
       state.viewsCollapsed,
       state.channelsCollapsed,
-      state.videosCollapsed,
+      state.playlistsCollapsed,
       collapsedFolderSet,
       toggleViews,
       toggleChannels,
-      toggleVideos,
+      togglePlaylists,
       toggleFolder,
       ensureExpandedFor,
     ]

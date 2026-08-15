@@ -4,7 +4,8 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import type { ChannelData } from '@/lib/types';
 
 import FolderSection from './FolderSection';
-import VideosSection from './VideosSection';
+import PlaylistsSection from './PlaylistsSection';
+import VideosItem from './VideosItem';
 import ViewsSection from './ViewsSection';
 
 interface Props {
@@ -21,14 +22,18 @@ interface Props {
 }
 
 /**
- * Left sidebar content below the app topbar. Two sections:
+ * Left sidebar content below the app topbar:
  *
  *   1. Views — Inbox + the triage buckets (Starred / Read Later /
  *      Archived). Inbox is the default view and shows the
  *      aggregate unread badge, so the separate "All unread" entry that
  *      used to live at the top is gone.
- *   2. Channels — folder-aware list of subscribed channels. The
- *      "+ Add channel" entry now lives at the top of this section
+ *   2. Videos — a single clickable entry opening the standalone
+ *      video library (no sub-items), with an always-visible "+" for
+ *      Add video.
+ *   3. Playlists — one row per user playlist, "+" dropdown to add one.
+ *   4. Channels — folder-aware list of subscribed channels. The
+ *      "+ Add channel" entry lives at the top of this section
  *      (right under the Channels header) inside FolderSection so it
  *      sits next to the thing it adds to.
  */
@@ -43,7 +48,8 @@ export default function ChannelSection({
     <TooltipProvider delayDuration={300}>
       <nav className="flex min-w-0 flex-col overflow-x-hidden overflow-y-auto">
         <ViewsSection inboxUnread={totalUnread} />
-        <VideosSection onAddVideo={onAddVideo} />
+        <VideosItem onAddVideo={() => onAddVideo(null)} />
+        <PlaylistsSection onAddVideo={onAddVideo} />
         <FolderSection
           channels={channels}
           selectedChannelId={selectedChannelId}
