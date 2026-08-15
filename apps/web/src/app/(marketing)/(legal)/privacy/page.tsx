@@ -6,6 +6,9 @@ import { getFileContent } from '@/lib/file';
 
 export const metadata: Metadata = {
   title: 'Privacy Policy',
+  alternates: {
+    canonical: '/privacy',
+  },
 };
 
 async function getPrivacyPolicyContent() {

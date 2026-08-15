@@ -1,9 +1,21 @@
+import type { Metadata } from 'next';
+
 import CallToAction from '@/components/CallToAction';
 import Faq from '@/components/Faq';
 import Features from '@/components/Features';
 import Hero from '@/components/Hero';
 import Pricing from '@/components/Pricing';
 import { DESCRIPTION, FULL_WEBSITE_URL, TITLE } from '@/constants';
+
+// Canonical must be set per page, never in a shared layout: layout
+// metadata is inherited by every child page that doesn't override it,
+// which would tell Google that all pages are duplicates of this one
+// and deindex them.
+export const metadata: Metadata = {
+  alternates: {
+    canonical: '/',
+  },
+};
 
 const structuredData = {
   '@context': 'https://schema.org',

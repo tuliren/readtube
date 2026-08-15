@@ -6,6 +6,9 @@ import { getFileContent } from '@/lib/file';
 
 export const metadata: Metadata = {
   title: 'Terms of Service',
+  alternates: {
+    canonical: '/terms',
+  },
 };
 
 async function getTermsOfServiceContent() {
