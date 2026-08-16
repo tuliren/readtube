@@ -1,9 +1,9 @@
 # 202608-google-exp1 — Google Search exact-match probe
 
-- **Status:** planned (campaign fully configured as a draft in Google Ads; blocked on owner identity check + publish, see log)
+- **Status:** published, **paused** (campaign id 24149259742) — awaiting owner launch approval
 - **Channel:** Google Ads / Search / cpc
-- **Budget:** $0 spent of $150 cap
-- **Dates:** not launched; campaign dates set to Sep 15 – Sep 30, 2026 (adjust at launch)
+- **Budget:** $0 spent of $150 cap (platform-enforced campaign total budget)
+- **Dates:** campaign dates Sep 15 – Sep 30, 2026 (adjust at launch)
 - **Hypothesis:** People searching for YouTube summarizer tools have exactly the problem ReadTube solves; the subscription-inbox angle ("your whole feed, readable" vs. one-off paste-a-URL summaries) differentiates enough to convert clicks into signups at ≤ $5 per signup.
 - **Decision rule (copied from MARKETING.md at planning time):** Kill if cost per signup > $5 after ~$50 of spend, or zero signups after $30. Iterate if ≤ $5/signup but near-zero activation. Scale (double budget) if ≤ $2.50/signup and ≥ 1/3 of paid signups activate.
 
@@ -49,6 +49,16 @@ Campaign built end-to-end in the Google Ads UI (Claude via browser) and saved as
 - Search campaigns now support a **campaign total budget** (requires start+end dates) — used it for a platform-enforced $150 cap instead of the manual review-touchpoint enforcement the plan assumed.
 - The new-campaign wizard allows only **one ad group**, so all 9 exact-match keywords live together; per-keyword performance still separates via the keywords report and `utm_term={keyword}`.
 - **Blocker:** at the budget/review step Google demanded a "Confirm it's you" re-authentication (skippable until Aug 28, 2026; the review error-check then hung with "Changes failed to save"). Publishing needs the owner: open Campaigns → the `202608-google-exp1` draft, complete the identity check, re-confirm budget ($150 total / Sep 15–30) and the $2 max-CPC limit, publish, and pause (or leave the future start date as the safety).
+
+### 2026-08-16 (later) — published
+
+Owner completed the identity check; Claude resumed in the same browser session and finished the build:
+
+- Post-mortem on the earlier "Changes failed to save": the identity gate had silently blocked *all* writes in the first session — the budget, keywords, and ad never persisted (only bidding + campaign settings + the $2 max-CPC limit survived). Re-entered the campaign-total budget ($150, Sep 15–30), all 9 exact-match keywords, and the full RSA; saves confirmed ("All changes saved").
+- **Published** → campaign id **24149259742** — then immediately **paused** (owner approval still required to start spend; the Sep 15 start date is the second safety).
+- Added campaign-level negative keywords post-publish: `free download`, `apk`, `mp3`, `mp4`, `downloader`.
+- Verified in live campaign settings: Search Network only, broad-match off, AU/CA/UK/US + English, start/end dates, campaign total $150, Maximize Clicks, final URL suffix `utm_term={keyword}`.
+- To launch: owner (or Claude with owner approval) flips the campaign from Paused to Enabled; ads then enter Google's ad review and serving starts no earlier than Sep 15. Pull the dates earlier at launch if desired.
 
 ## Findings
 

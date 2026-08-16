@@ -65,13 +65,13 @@ Each experiment gets: a hypothesis, a budget cap, a duration, and a **decision r
 
 ## Experiment queue
 
-### E1 — Google Search exact-match probe ($150 cap) — built, awaiting owner publish
+### E1 — Google Search exact-match probe ($150 cap) — published, paused
 
 Hypothesis: people searching for YouTube summarizer tools have exactly the problem ReadTube solves, and the subscription-inbox angle differentiates it enough to convert clicks into signups at ≤ $5.
 
-- Campaign `202608-google-exp1` is **fully configured as a draft** in Google Ads (Aug 16, 2026): Search-only (Display/Search-partners/AI Max all off), 9 exact-match high-intent keywords in one ad group, one RSA (`rsa-a`), Maximize Clicks with $2 max-CPC limit, **campaign total budget $150** with dates Sep 15–30, 2026.
-- Landing: homepage with full UTMs per the convention above (`utm_term={keyword}` via campaign final-URL suffix).
-- **Blocked on owner:** Google requires a "Confirm it's you" identity check before the draft can publish. Steps: open the draft in Campaigns, confirm identity, re-verify budget and bid limit, publish (future start date means no spend before Sep 15), and adjust dates when actually approving launch.
+- Campaign `202608-google-exp1` (id 24149259742) is **published and paused** (Aug 16, 2026): Search-only (Display/Search-partners/AI Max all off), 9 exact-match high-intent keywords in one ad group, one RSA (`rsa-a`), 5 negative keywords, Maximize Clicks with $2 max-CPC limit, **campaign total budget $150** with dates Sep 15–30, 2026.
+- Landing: homepage with full UTMs per the convention above (`utm_term={keyword}` via campaign final-URL suffix, verified live).
+- **To launch:** owner approves, then flip the campaign from Paused to Enabled (ad review runs first; serving starts no earlier than Sep 15 — pull the dates earlier at launch if desired).
 - Success: per the decision rules; compare keywords via `--group-by term` and the Google Ads keywords report.
 - Details, exact copy, and the build log: `marketing/diary/202608-google-exp1.md`.
 
@@ -96,7 +96,7 @@ One niche newsletter or small creator in the productivity / PKM / digital-minima
 
 | Date | Experiment | Spend | Signups | Activated | Decision |
 | --- | --- | --- | --- | --- | --- |
-| Aug 16, 2026 | E1 `202608-google-exp1` | $0.00 | — | — | built as draft; awaiting owner identity check + publish |
+| Aug 16, 2026 | E1 `202608-google-exp1` | $0.00 | — | — | published, **paused**; owner flips to Enabled to launch |
 
 Total spent: **$0.00**. Credit status: spend-$500-get-$500 offer on the shared ads account, deadline Oct 13, 2026 — $500 of combined spend needed for the payout.
 
