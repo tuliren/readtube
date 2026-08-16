@@ -24,3 +24,4 @@ Turn YouTube subscriptions into a personal substack. Consume videos efficiently 
 
 - [DEVELOPMENT.md](DEVELOPMENT.md): project setup and deployment
 - [DESIGN.md](DESIGN.md): design choices and feature implementation details
+- [MARKETING.md](MARKETING.md): marketing experiment plan, budget ledger, and UTM conventions — the source of truth for marketing work; per-experiment history in `marketing/diary/`

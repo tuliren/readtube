@@ -145,8 +145,9 @@ build
 # Storybook
 storybook-static
 
-# Claude
-.claude/
+# Claude (local state stays ignored; shared skills are tracked)
+.claude/*
+!.claude/skills/
 .gstack/
 .playwright-mcp/
 
