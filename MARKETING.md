@@ -65,14 +65,14 @@ Each experiment gets: a hypothesis, a budget cap, a duration, and a **decision r
 
 ## Experiment queue
 
-### E1 — Google Search exact-match probe ($150 cap) — published, paused
+### E1 — Google Search exact-match probe ($150 cap) — LIVE since Aug 16, 2026
 
 Hypothesis: people searching for YouTube summarizer tools have exactly the problem ReadTube solves, and the subscription-inbox angle differentiates it enough to convert clicks into signups at ≤ $5.
 
-- Campaign `202608-google-exp1` (id 24149259742) is **published and paused** (Aug 16, 2026): Search-only (Display/Search-partners/AI Max all off), 9 exact-match high-intent keywords in one ad group, one RSA (`rsa-a`), 5 negative keywords, Maximize Clicks with $2 max-CPC limit, **campaign total budget $150** with dates Sep 15–30, 2026.
+- Campaign `202608-google-exp1` (id 24149259742), **enabled Aug 16, 2026** with owner approval: Search-only (Display/Search-partners/AI Max all off), ad group `summarizer-intent` with 9 exact-match high-intent keywords, one RSA (`rsa-a`), 5 negative keywords, Maximize Clicks with $2 max-CPC limit, **campaign total budget $150**, dates **Aug 16–31, 2026** (~$9.4/day).
 - Landing: homepage with full UTMs per the convention above (`utm_term={keyword}` via campaign final-URL suffix, verified live).
-- **To launch:** owner approves, then flip the campaign from Paused to Enabled (ad review runs first; serving starts no earlier than Sep 15 — pull the dates earlier at launch if desired).
-- Success: per the decision rules; compare keywords via `--group-by term` and the Google Ads keywords report.
+- Ads/keywords entered Google's ad review at launch; serving begins on approval.
+- Success: per the decision rules; compare keywords via `--group-by term` and the Google Ads keywords report. Review cadence: every 3–4 days, first touchpoint ~Aug 19–20.
 - Details, exact copy, and the build log: `marketing/diary/202608-google-exp1.md`.
 
 ### E2 — Google competitor/alternative angle (~$100 cap) — after E1
@@ -96,9 +96,9 @@ One niche newsletter or small creator in the productivity / PKM / digital-minima
 
 | Date | Experiment | Spend | Signups | Activated | Decision |
 | --- | --- | --- | --- | --- | --- |
-| Aug 16, 2026 | E1 `202608-google-exp1` | $0.00 | — | — | published, **paused**; owner flips to Enabled to launch |
+| Aug 16, 2026 | E1 `202608-google-exp1` | $0.00 | — | — | **LIVE** (owner-approved); $150 cap, ends Aug 31; ads in review |
 
-Total spent: **$0.00**. Credit status: spend-$500-get-$500 offer on the shared ads account, deadline Oct 13, 2026 — $500 of combined spend needed for the payout.
+Total spent: **$0.00** (serving starts once ad review approves). Credit status: spend-$500-get-$500 offer on the shared ads account, deadline Oct 13, 2026 — $500 of combined spend needed for the payout.
 
 ## Experiment diary
 

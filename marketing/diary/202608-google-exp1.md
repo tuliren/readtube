@@ -1,9 +1,9 @@
 # 202608-google-exp1 — Google Search exact-match probe
 
-- **Status:** published, **paused** (campaign id 24149259742) — awaiting owner launch approval
+- **Status:** **live** (launched Aug 16, 2026; campaign id 24149259742; ads in Google review at launch)
 - **Channel:** Google Ads / Search / cpc
 - **Budget:** $0 spent of $150 cap (platform-enforced campaign total budget)
-- **Dates:** campaign dates Sep 15 – Sep 30, 2026 (adjust at launch)
+- **Dates:** Aug 16 – Aug 31, 2026 (~$9.4/day pacing)
 - **Hypothesis:** People searching for YouTube summarizer tools have exactly the problem ReadTube solves; the subscription-inbox angle ("your whole feed, readable" vs. one-off paste-a-URL summaries) differentiates enough to convert clicks into signups at ≤ $5 per signup.
 - **Decision rule (copied from MARKETING.md at planning time):** Kill if cost per signup > $5 after ~$50 of spend, or zero signups after $30. Iterate if ≤ $5/signup but near-zero activation. Scale (double budget) if ≤ $2.50/signup and ≥ 1/3 of paid signups activate.
 
@@ -59,6 +59,17 @@ Owner completed the identity check; Claude resumed in the same browser session a
 - Added campaign-level negative keywords post-publish: `free download`, `apk`, `mp3`, `mp4`, `downloader`.
 - Verified in live campaign settings: Search Network only, broad-match off, AU/CA/UK/US + English, start/end dates, campaign total $150, Maximize Clicks, final URL suffix `utm_term={keyword}`.
 - To launch: owner (or Claude with owner approval) flips the campaign from Paused to Enabled; ads then enter Google's ad review and serving starts no earlier than Sep 15. Pull the dates earlier at launch if desired.
+
+### 2026-08-16 (launch)
+
+Owner approved launch ("Please launch"). Launch sequence:
+
+- Pulled campaign dates to **Aug 16 – Aug 31, 2026** ($150 over 16 days ≈ $9.4/day, matching the planned pace) and enabled the campaign.
+- **Surprise:** the campaign showed "Campaign has no ad groups" — the wizard's publish had created only the campaign-level objects (budget, bidding, targeting, URL suffix); the ad-group-level entities (keywords + ad) were dropped, a further casualty of the draft wizard's identity-gate save corruption. The wizard's own review page had listed "Create an ad / Add keywords" as issues before the fix session, and the fix apparently only lived in the draft, not the published campaign.
+- Rebuilt directly on the **live** campaign via the standard ad-group editor (reliable, no draft state): ad group `summarizer-intent`, all 9 exact-match keywords, the `rsa-a` ad with UTM final URL, 8 headlines, 4 descriptions.
+- Verified live: ad group **Eligible**; ad and keywords **Pending / Under review** (normal pre-serving ad review); negative keywords already in place at campaign level.
+- Lesson for E2+: skip the new-campaign wizard's draft flow entirely — create the campaign shell, then build ad groups/keywords/ads through the post-publish editors, verifying each entity in the tables afterward.
+- Next review touchpoint: ~Aug 19–20 (check ad approval, impressions/clicks, and the attribution report).
 
 ## Findings
 
