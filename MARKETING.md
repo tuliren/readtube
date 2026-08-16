@@ -17,7 +17,7 @@ Goal: maximize **quality signups and activated users** through ads and marketing
   2. **Activation rate of paid signups** — an activated signup subscribed to ≥1 channel or added ≥1 video, and consumed something. A channel that delivers cheap signups who never activate is still a dead channel.
 - Guardrail while free: treat **$5/signup** as the ceiling and **$2.50/activated-signup-adjacent** as the "interesting" line. These are placeholders until we see real numbers; tighten them once paid tiers exist and real LTV is measurable.
 - **Ad policy: no known risk.** Unlike Marauder Bot (blocked by Google's "dishonest behavior" policy), ReadTube is a wholesome productivity/reading tool. Standard approvals expected. Keep ad copy claims mapped to real, shipped features anyway.
-- **Google Ads credit caveat:** Google's standard intro offer is *spend $500, get $500* — the credit usually pays out only after matching real spend within 60 days of redemption, and only spend *after* redemption counts. Before treating the $500 as free budget, verify in the account (Billing → Promotions) what the actual terms and expiry are, and plan spend pacing around the deadline.
+- **Google Ads credit (verified Aug 16, 2026):** the "$500 credit" is the *spend $500, get $500* intro offer on the **Marauder Bot** Google Ads account (888-925-2284) — "$500 away from $500 credit", deadline **Oct 13, 2026**. It is a match on real spend, not free budget, and there is no separate ReadTube ads account under this login (Google allows one intro credit per customer, and a fresh account would need its own billing setup). So ReadTube campaigns run as separate campaigns inside that account; combined Google spend across both products must hit $500 by Oct 13 for the $500 payout, which then funds scaling whatever won. If clean separation ever matters more than the credit, create a dedicated ReadTube ads account later.
 - Reddit ads: the existing Reddit Ads account belongs to Marauder Bot. Reddit's Business Manager does support multiple ad accounts per business, but creating additional ad accounts is limited to **managed** businesses (ones with a Reddit sales rep); self-serve advertisers effectively get one ad account per Reddit login. The workaround is a second Reddit user account on a different email (a Gmail `+` alias works) which can then be invited into the same Business Manager. Deprioritized: not needed for the current queue, and organic Reddit (Z track) comes first anyway.
 
 ## Assets
@@ -65,14 +65,15 @@ Each experiment gets: a hypothesis, a budget cap, a duration, and a **decision r
 
 ## Experiment queue
 
-### E1 — Google Search exact-match probe (~$150 cap) — planned
+### E1 — Google Search exact-match probe ($150 cap) — built, awaiting owner publish
 
 Hypothesis: people searching for YouTube summarizer tools have exactly the problem ReadTube solves, and the subscription-inbox angle differentiates it enough to convert clicks into signups at ≤ $5.
 
-- Campaign `202608-google-exp1`: Search-only (no Display/Search-partner expansion), exact-match high-intent keywords — `[youtube summarizer]`, `[youtube video summarizer]`, `[summarize youtube video]`, `[ai youtube summary]`, `[youtube video to text]`, `[youtube video to article]`, `[youtube transcript summary]`, `[read youtube videos]` — one RSA, ~$10/day, capped at $150 total, max CPC ~$2.
-- Landing: homepage with full UTMs per the convention above (`utm_term={keyword}` via final-URL suffix).
-- Success: per the decision rules; compare keywords via `--group-by term`.
-- Details and exact copy: `marketing/diary/202608-google-exp1.md`.
+- Campaign `202608-google-exp1` is **fully configured as a draft** in Google Ads (Aug 16, 2026): Search-only (Display/Search-partners/AI Max all off), 9 exact-match high-intent keywords in one ad group, one RSA (`rsa-a`), Maximize Clicks with $2 max-CPC limit, **campaign total budget $150** with dates Sep 15–30, 2026.
+- Landing: homepage with full UTMs per the convention above (`utm_term={keyword}` via campaign final-URL suffix).
+- **Blocked on owner:** Google requires a "Confirm it's you" identity check before the draft can publish. Steps: open the draft in Campaigns, confirm identity, re-verify budget and bid limit, publish (future start date means no spend before Sep 15), and adjust dates when actually approving launch.
+- Success: per the decision rules; compare keywords via `--group-by term` and the Google Ads keywords report.
+- Details, exact copy, and the build log: `marketing/diary/202608-google-exp1.md`.
 
 ### E2 — Google competitor/alternative angle (~$100 cap) — after E1
 
@@ -95,9 +96,9 @@ One niche newsletter or small creator in the productivity / PKM / digital-minima
 
 | Date | Experiment | Spend | Signups | Activated | Decision |
 | --- | --- | --- | --- | --- | --- |
-| — | — | $0.00 | — | — | nothing live yet |
+| Aug 16, 2026 | E1 `202608-google-exp1` | $0.00 | — | — | built as draft; awaiting owner identity check + publish |
 
-Total spent: **$0.00**. Credit status: $500 promotional credit on the Google Ads account — terms (spend-match requirement, expiry) to be verified in-account before E1 launches.
+Total spent: **$0.00**. Credit status: spend-$500-get-$500 offer on the shared ads account, deadline Oct 13, 2026 — $500 of combined spend needed for the payout.
 
 ## Experiment diary
 
