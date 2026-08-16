@@ -112,5 +112,5 @@ export function groupAttributionRows(
     group.generations += row.generations;
   }
 
-  return [...groups.values()].sort((a, b) => b.signups - a.signups);
+  return Array.from(groups.values()).sort((a, b) => b.signups - a.signups);
 }
