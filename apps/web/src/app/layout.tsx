@@ -7,6 +7,7 @@ import { Inter, Lexend } from 'next/font/google';
 import { ReactNode, Suspense } from 'react';
 
 import { AttributionTracker } from '@/components/analytics/AttributionTracker';
+import { GoogleAdsTag } from '@/components/analytics/GoogleAdsTag';
 import { UtmParamTracker } from '@/components/analytics/UtmParamTracker';
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
 import { DESCRIPTION, FULL_WEBSITE_URL, MAIN_COLOR, TITLE } from '@/constants';
@@ -118,6 +119,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           </ClerkProvider>
         </ThemeProvider>
         <Analytics />
+        <GoogleAdsTag />
       </body>
     </html>
   );

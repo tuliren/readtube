@@ -28,7 +28,7 @@ Goal: maximize **quality signups and activated users** through ads and marketing
 
 ## Tracking (already in place)
 
-First-touch attribution is captured automatically: `UtmParamTracker` stores UTM params / referrer / landing page in localStorage (earliest wins), and after sign-in `AttributionTracker` writes one `SignupAttribution` row per user (see DESIGN.md "Signup attribution"). A `signed_up` Vercel Analytics event fires alongside. Reporting:
+First-touch attribution is captured automatically: `UtmParamTracker` stores UTM params / referrer / landing page in localStorage (earliest wins), and after sign-in `AttributionTracker` writes one `SignupAttribution` row per user (see DESIGN.md "Signup attribution"). A `signed_up` Vercel Analytics event fires alongside, and a **Google Ads conversion** ("ReadTube sign-up", tag `AW-18390610665`) fires at the same moment via gtag.js — the tag loads site-wide in production only (`GoogleAdsTag` in the root layout), so Google's conversion counts should mirror `signed_up` 1:1 minus ad blockers. Reporting:
 
 ```bash
 cd apps/web
@@ -71,7 +71,7 @@ Hypothesis: people searching for YouTube summarizer tools have exactly the probl
 
 - Campaign `202608-google-exp1` (id 24149259742), **enabled Aug 16, 2026** with owner approval: Search-only (Display/Search-partners/AI Max all off), ad group `summarizer-intent` with 9 exact-match high-intent keywords, one RSA (`rsa-a`), 5 negative keywords, Maximize Clicks with $2 max-CPC limit, **campaign total budget $150**, dates **Aug 16–31, 2026** (~$9.4/day).
 - Landing: homepage with full UTMs per the convention above (`utm_term={keyword}` via campaign final-URL suffix, verified live).
-- Ads/keywords entered Google's ad review at launch; serving begins on approval.
+- Ads/keywords entered Google's ad review at launch; approved and serving as of Aug 17. Campaign-scoped assets added Aug 17 (4 sitelinks, 6 callouts, 1 structured snippet) plus the "ReadTube sign-up" conversion action; image assets are not available on this account (Google eligibility gate).
 - Success: per the decision rules; compare keywords via `--group-by term` and the Google Ads keywords report. Review cadence: every 3–4 days, first touchpoint ~Aug 19–20.
 - Details, exact copy, and the build log: `marketing/diary/202608-google-exp1.md`.
 
@@ -97,6 +97,7 @@ One niche newsletter or small creator in the productivity / PKM / digital-minima
 | Date | Experiment | Spend | Signups | Activated | Decision |
 | --- | --- | --- | --- | --- | --- |
 | Aug 16, 2026 | E1 `202608-google-exp1` | $0.00 | — | — | **LIVE** (owner-approved); $150 cap, ends Aug 31; ads in review |
+| Aug 17, 2026 | E1 `202608-google-exp1` | $4.84 to date | — | — | Serving (7.55% CTR, $1.21 avg CPC); added sitelinks/callouts/snippet + sign-up conversion tracking; first review ~Aug 19–20 |
 
 Total spent: **$0.00** (serving starts once ad review approves). Credit status: spend-$500-get-$500 offer on the shared ads account, deadline Oct 13, 2026 — $500 of combined spend needed for the payout.
 

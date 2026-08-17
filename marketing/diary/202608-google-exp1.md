@@ -71,6 +71,21 @@ Owner approved launch ("Please launch"). Launch sequence:
 - Lesson for E2+: skip the new-campaign wizard's draft flow entirely — create the campaign shell, then build ad groups/keywords/ads through the post-publish editors, verifying each entity in the tables afterward.
 - Next review touchpoint: ~Aug 19–20 (check ad approval, impressions/clicks, and the attribution report).
 
+### 2026-08-17 — conversion tracking + ad assets
+
+Owner asked about richer ad formats and Google's conversion-tracking nag; approved doing both. Not a scheduled review touchpoint, but early numbers were visible in passing: **ad approved and serving** — 53 impressions, 4 clicks, $4.84 spent, 7.55% CTR, $1.21 avg CPC (campaign-to-date, Aug 16–17). No attribution-report pull; first real read stays at the Aug 19–20 touchpoint.
+
+- **Conversion action created** (Goals → Conversions wizard): category Sign-up, name **"ReadTube sign-up"**, manual event via code, primary, one-per-click, same-value $1, data-driven attribution, data source www.read.tube. The Google tag for the account is `AW-18390610665`; the event snippet `send_to` is `AW-18390610665/4gm1CLemouMcEOnlqcFE`. The goal shows **"Misconfigured"** until the tag ships and the first conversion arrives — expected, not an error.
+  - **Declined enhanced conversions** (the wizard pre-checks it): it is an account-wide data-processing agreement (hashed user emails to Google) on an account shared with the other product — owner's call, and not needed for signup counting. Unchecking it turned "Agree and finish" into plain "Finish".
+  - Wired in the same session via PR: gtag.js loads site-wide in production (`GoogleAdsTag` in the root layout, gated on `VERCEL_ENV === 'production'`), and `AttributionTracker` fires the conversion exactly when a `SignupAttribution` row is recorded — so Google's conversion count should track the `signed_up` event 1:1 (minus ad blockers). No consent banner exists; UK/EEA visitors are tracked without consent mode, a known gap if targeting ever leans on the UK.
+- **Ad assets added** (all campaign-scoped to `202608-google-exp1`, none account-level — the account is shared):
+  - 4 sitelinks: Sign Up Free → /sign-up · How It Works → /#features · Pricing → /#pricing · FAQ → /#faq, each with two description lines.
+  - 6 callouts: Follows Subscriptions · Free During Beta · AI Summaries & Articles · Search Your Videos · Notes & Highlights · Multi-Language Articles.
+  - 1 structured snippet: Service catalog — Video Summaries, Full Articles, Subscription Inbox, Search & Notes, Multi-Language.
+  - Sitelinks and callouts went **Eligible within minutes**; the structured snippet was still Pending at session end. The campaign-level final-URL suffix (`utm_term={keyword}`) applies to sitelink clicks, so attribution holds.
+- **Image assets: not available on this account.** No "Image" type exists in the asset menus, and the RSA editor's "More asset types" (8 total) has no Images either — Google gates image assets on account eligibility and simply hides the option. Prepared 1200×628 and 1200×1200 crops from the `/producthunt` gallery anyway (hero card + clean inbox-UI square); revisit if the option appears. Business name/logo (replacing the generic globe icon in ads) needs account-level advertiser verification — owner's call, low priority for a $150 probe.
+- Housekeeping: the Google Ads account under this login is named "Marauder Bot" (the other product); the ReadTube campaign lives inside it as planned. The ads account is reachable via the owner's liren@starfish.sh Google session, not tuliren@gmail.com.
+
 ## Findings
 
 ## Outcome
