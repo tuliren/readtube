@@ -4,6 +4,7 @@ import { useUser } from '@clerk/nextjs';
 import { track } from '@vercel/analytics';
 import { useEffect, useRef } from 'react';
 
+import { trackGoogleAdsSignupConversion } from '@/lib/analytics/googleAds';
 import {
   SignupAttributionResponse,
   deriveAttributionSource,
@@ -40,6 +41,7 @@ async function submitAttribution(utmParams: UtmParams, userId: string): Promise<
       source: deriveAttributionSource(utmParams),
       landing_page: utmParams.landing_page ?? 'unknown',
     });
+    trackGoogleAdsSignupConversion();
   }
 
   // Every response status means the attribution was handled (recorded,
