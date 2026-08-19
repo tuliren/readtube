@@ -33,6 +33,47 @@ export const DEFAULT_AI_MODEL = 'openai/gpt-5.4-mini';
 export const DEFAULT_EMBEDDING_MODEL = 'openai/text-embedding-3-small';
 
 /**
+ * Model for AI transcript generation of caption-less YouTube videos.
+ * The Vercel AI Gateway forwards a YouTube watch URL sent as a file
+ * part straight to Gemini, which ingests the video server-side — no
+ * audio download involved (spike-verified against a 54-min video).
+ * Gateway pricing: $0.75/M input, $3.75/M output ≈ $0.30 per video
+ * hour with MEDIA_RESOLUTION_LOW. Future cost levers, both unverified
+ * through the gateway today: the flex service tier (half price, no
+ * knob in @ai-sdk/gateway provider options yet) and dropping
+ * video-frame tokens via the Google provider's per-file videoMetadata
+ * fps option (frames are ~72% of input tokens and useless for
+ * transcription).
+ */
+export const TRANSCRIPT_GENERATION_MODEL = 'google/gemini-3.7-flash';
+
+/**
+ * Output budget for a transcript generation. The model's ceiling is
+ * 65,536; a dense 54-min video measured ~21.6k output tokens, so 60k
+ * comfortably covers the 2-hour duration cap below while leaving the
+ * parser's truncation salvage as a backstop rather than the norm.
+ */
+export const TRANSCRIPT_GENERATION_MAX_OUTPUT_TOKENS = 60_000;
+
+/**
+ * Refuse to generate transcripts for videos longer than this.
+ * Transcript output scales with speech (~24k tokens/hour measured on
+ * dense Chinese speech), so ~2.5-3h would overrun the 65,536
+ * output-token ceiling; 2 h keeps a dense video comfortably under it.
+ * Longer videos need chunked generation (videoMetadata start/end
+ * offsets) — a follow-up if demand appears.
+ */
+export const TRANSCRIPT_GENERATION_MAX_VIDEO_SECONDS = 2 * 60 * 60;
+
+/**
+ * Abort a transcript generation that has produced no response for
+ * this long. Measured latency for a 54-min video ranged 4–9 minutes,
+ * so 700 s gives headroom for long videos while staying under the
+ * workflow step's 800 s budget.
+ */
+export const TRANSCRIPT_GENERATION_TIMEOUT_MS = 700_000;
+
+/**
  * Maximum attempts (initial + retries) for `streamText` calls in
  * generation steps when nothing has been streamed to the client yet.
  * Once any delta has been emitted, retrying would re-stream content
