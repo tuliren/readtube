@@ -46,6 +46,15 @@ interface RecordTranscriptParams extends BaseRequestParams {
   outcome: UserRequestOutcome;
   transcriptId?: string | null;
   errorMessage?: string | null;
+  // AI-generation fields. The captions path leaves them unset: it has
+  // no model, and it completes synchronously. The generation route
+  // sets `pending: true` (async start — `completed_at` stays null
+  // until the workflow's terminal step backfills it) plus the model /
+  // prompt / workflow attribution.
+  model?: string | null;
+  promptVersion?: string | null;
+  workflowId?: string | null;
+  pending?: boolean;
 }
 
 interface RecordSummaryParams extends BaseRequestParams {
@@ -78,6 +87,7 @@ interface CompleteParams {
   usage?: unknown;
   summaryId?: string | null;
   articleId?: string | null;
+  transcriptId?: string | null;
   errorMessage?: string | null;
 }
 
@@ -118,6 +128,7 @@ export async function recordTranscriptRequest(
   prisma: PrismaClient,
   params: RecordTranscriptParams
 ): Promise<{ id: string }> {
+  const isAsyncStart = params.pending === true;
   const row = await prisma.userRequest.create({
     data: {
       user_id: params.userId,
@@ -125,16 +136,25 @@ export async function recordTranscriptRequest(
       outcome: params.outcome,
       video_id: params.videoId,
       transcript_id: params.transcriptId ?? null,
+      model: params.model ?? null,
+      prompt_version: params.promptVersion ?? null,
+      workflow_id: params.workflowId ?? null,
       error_message: params.errorMessage ?? null,
-      // Transcript flow is fully synchronous from the route's view:
+      // The captions flow is fully synchronous from the route's view:
       // stamp completed_at at insert time so analytics queries that
-      // join on `completed_at IS NOT NULL` see these rows.
-      completed_at: new Date(),
+      // join on `completed_at IS NOT NULL` see these rows. The AI
+      // generation flow is async — the workflow's terminal step
+      // backfills completed_at via `completeUserRequest`.
+      completed_at: isAsyncStart ? null : new Date(),
     },
     select: { id: true },
   });
-  // Transcript rows are always terminal (GENERATED or UNAVAILABLE).
-  await emitGenerationEvent(UserRequestType.TRANSCRIPT, params.outcome);
+  if (isAsyncStart) {
+    await trackContentGenerated('transcript', 'started');
+  } else {
+    // Captions rows are always terminal (GENERATED or UNAVAILABLE).
+    await emitGenerationEvent(UserRequestType.TRANSCRIPT, params.outcome);
+  }
   return row;
 }
 
@@ -230,6 +250,7 @@ export async function completeUserRequest(
       usage: 'usage' in params ? jsonOrNull(params.usage) : undefined,
       summary_id: params.summaryId ?? undefined,
       article_id: params.articleId ?? undefined,
+      transcript_id: params.transcriptId ?? undefined,
       error_message: params.errorMessage ?? undefined,
       completed_at: new Date(),
     },

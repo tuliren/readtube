@@ -441,3 +441,116 @@ export async function releaseChannelRefresh(
     data: { status: ChannelStatus.READY },
   });
 }
+
+/**
+ * Detects an in-flight AI transcript generation on a Video row.
+ * Mirrors {@link findActiveChannelRefresh}: the marker lives on the
+ * Video row (`transcript_generation_status = GENERATING`), a stale
+ * marker (workflow no longer active) is opportunistically reverted to
+ * READY with a user-facing timeout message, and the revert is guarded
+ * on `workflow_id` so a concurrent fresh claim isn't clobbered.
+ */
+export async function findActiveTranscriptGeneration(
+  prisma: PrismaClient,
+  videoId: string
+): Promise<{ runId: string } | null> {
+  const row = await prisma.video.findUnique({
+    where: { id: videoId },
+    select: { transcript_generation_status: true, transcript_generation_workflow_id: true },
+  });
+  if (
+    row == null ||
+    row.transcript_generation_status !== GenerationStatus.GENERATING ||
+    row.transcript_generation_workflow_id == null
+  ) {
+    return null;
+  }
+  if (await isWorkflowActive(row.transcript_generation_workflow_id)) {
+    return { runId: row.transcript_generation_workflow_id };
+  }
+  // Stale GENERATING marker — the workflow died without reverting.
+  // Unlike Article/Summary there is no placeholder row to delete;
+  // flip the status back and leave a failure message so the reader's
+  // generation panel explains what happened instead of showing a
+  // spinner forever.
+  await prisma.video.updateMany({
+    where: {
+      id: videoId,
+      transcript_generation_status: GenerationStatus.GENERATING,
+      transcript_generation_workflow_id: row.transcript_generation_workflow_id,
+    },
+    data: {
+      transcript_generation_status: GenerationStatus.READY,
+      transcript_generation_error: 'Transcript generation timed out. Please try again.',
+    },
+  });
+  return null;
+}
+
+/**
+ * Atomic claim helper for transcript-generation workflows. Flips the
+ * Video row from `READY` to `GENERATING`, stamps `workflow_id`, and
+ * clears any prior failure message. Returns true if the claim won,
+ * false if another generation currently owns the row. Callers must
+ * run {@link findActiveTranscriptGeneration} first to recover stale
+ * markers — this only succeeds against a clean READY row.
+ */
+export async function claimTranscriptGeneration(
+  prisma: PrismaClient,
+  videoId: string,
+  runId: string
+): Promise<boolean> {
+  const result = await prisma.video.updateMany({
+    where: { id: videoId, transcript_generation_status: GenerationStatus.READY },
+    data: {
+      transcript_generation_status: GenerationStatus.GENERATING,
+      transcript_generation_workflow_id: runId,
+      transcript_generation_error: null,
+    },
+  });
+  return result.count === 1;
+}
+
+/**
+ * Release a Video row's generation marker back to `READY` after a
+ * successful run (or a caption-probe short-circuit). Guarded on
+ * `workflow_id = runId`; the id is left in place for audit.
+ */
+export async function releaseTranscriptGeneration(
+  prisma: PrismaClient,
+  videoId: string,
+  runId: string
+): Promise<void> {
+  await prisma.video.updateMany({
+    where: {
+      id: videoId,
+      transcript_generation_workflow_id: runId,
+      transcript_generation_status: GenerationStatus.GENERATING,
+    },
+    data: { transcript_generation_status: GenerationStatus.READY },
+  });
+}
+
+/**
+ * Failure counterpart of {@link releaseTranscriptGeneration}: revert
+ * to `READY` and store a human-readable failure message for the
+ * reader's generation panel. Guarded on `workflow_id = runId`.
+ */
+export async function revertTranscriptGeneration(
+  prisma: PrismaClient,
+  videoId: string,
+  runId: string,
+  errorMessage: string
+): Promise<void> {
+  await prisma.video.updateMany({
+    where: {
+      id: videoId,
+      transcript_generation_workflow_id: runId,
+      transcript_generation_status: GenerationStatus.GENERATING,
+    },
+    data: {
+      transcript_generation_status: GenerationStatus.READY,
+      transcript_generation_error: errorMessage,
+    },
+  });
+}
