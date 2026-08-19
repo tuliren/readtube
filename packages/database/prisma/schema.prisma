@@ -58,6 +58,19 @@ enum ChannelStatus {
   READY
 }
 
+// Provenance of a Transcript row's text.
+//
+//   CAPTIONS   fetched from the platform's existing caption track
+//              (native or platform auto-generated) via the upstream
+//              transcript vendor.
+//   GENERATED  transcribed by an AI model (see the transcript-generation
+//              workflow) because the platform had no caption track.
+//              The reader shows an "AI-generated" indicator for these.
+enum TranscriptSource {
+  CAPTIONS
+  GENERATED
+}
+
 // Discriminator for UserRequest.type — see UserRequest model below.
 enum UserRequestType {
   TRANSCRIPT
@@ -253,6 +266,22 @@ model Video {
   // API on every reader open is wasteful for the user and the provider.
   // Reset by hand if a captionless video later gains captions.
   transcript_unavailable Boolean                  @default(false)
+  // Dedup marker for the AI transcript-generation workflow, mirroring
+  // the Channel refresh pattern: GENERATING means a workflow is
+  // currently transcribing this video; READY means no workflow is
+  // touching it now. Two generations must not run concurrently against
+  // the same video. The sticky `transcript_unavailable` flag stays true
+  // after a successful generation — the generated Transcript row is
+  // preferred by every read path before the flag is consulted.
+  transcript_generation_status      GenerationStatus @default(READY)
+  // Vercel Workflow runId of the most recent generation workflow for
+  // this video. Populated by the claim helper when a workflow starts;
+  // intentionally kept after completion for tracing.
+  transcript_generation_workflow_id String?
+  // Human-readable failure message from the last generation attempt,
+  // shown by the reader's generation panel. Null while generating and
+  // after a success.
+  transcript_generation_error       String?
   // Which fetch approach produced this video's metadata when it was
   // individually added (add-video): data_api | scrape | transcript_api
   // (YouTube). Null for videos created in bulk from a channel/playlist
@@ -296,13 +325,16 @@ model UserVideoConsumption {
 }
 
 model Transcript {
-  id         String   @id @default(cuid())
+  id         String           @id @default(cuid())
   video_id   String
   language   String?
   text       String
+  // Where the text came from: platform captions (default) or AI
+  // transcription — see the TranscriptSource enum.
+  source     TranscriptSource @default(CAPTIONS)
   fetched_at DateTime
-  created_at DateTime @default(now())
-  video      Video    @relation(fields: [video_id], references: [id], onDelete: Cascade)
+  created_at DateTime         @default(now())
+  video      Video            @relation(fields: [video_id], references: [id], onDelete: Cascade)
 
   articles  Article[]
   summaries Summary[]
