@@ -25,6 +25,7 @@ import NotesPanel from './NotesPanel';
 import PublicSignupCta from './PublicSignupCta';
 import ReadingTimeBadge from './ReadingTimeBadge';
 import SummaryReader from './SummaryReader';
+import TranscriptGenerationPanel from './TranscriptGenerationPanel';
 import TranscriptReader from './TranscriptReader';
 import VideoReaderActions from './VideoReaderActions';
 
@@ -162,14 +163,18 @@ export default function VideoReader({
   const durationLabel = formatDurationSeconds(video.durationSeconds);
 
   // Shared transcript availability state across all three tabs.
-  // Seeded from the SSR-rendered VideoData: an already-flagged
-  // captionless video opens straight into the unavailable state, an
-  // already-cached transcript starts as 'present' (so its tab dot
-  // is blue from the first render), everything else is 'unknown'.
-  const initialTranscriptStatus: TranscriptStatus = video.transcriptUnavailable
-    ? 'unavailable'
-    : video.hasTranscript
-      ? 'present'
+  // Seeded from the SSR-rendered VideoData: an already-cached
+  // transcript starts as 'present' (so its tab dot is blue from the
+  // first render), an already-flagged captionless video opens
+  // straight into the unavailable state, everything else is
+  // 'unknown'. hasTranscript is checked BEFORE the sticky flag: after
+  // a successful AI generation the flag stays true (it means "no
+  // native captions") while a Transcript row exists — the row must
+  // win or a reload would dead-end a video that has a transcript.
+  const initialTranscriptStatus: TranscriptStatus = video.hasTranscript
+    ? 'present'
+    : video.transcriptUnavailable
+      ? 'unavailable'
       : 'unknown';
   const [transcriptStatus, setTranscriptStatus] =
     useState<TranscriptStatus>(initialTranscriptStatus);
@@ -242,8 +247,11 @@ export default function VideoReader({
       return;
     }
     prevVideoIdRef.current = video.id;
+    // Same ordering rule as initialTranscriptStatus: an existing
+    // transcript row (possibly AI-generated) outranks the sticky
+    // no-captions flag.
     setTranscriptStatus(
-      video.transcriptUnavailable ? 'unavailable' : video.hasTranscript ? 'present' : 'unknown'
+      video.hasTranscript ? 'present' : video.transcriptUnavailable ? 'unavailable' : 'unknown'
     );
     setHasSummary(video.hasSummary);
     setHasArticle(video.hasArticle);
@@ -715,29 +723,35 @@ export default function VideoReader({
           )}
 
           {transcriptStatus === 'unavailable' ? (
-            // Transcript is sticky-unavailable for this video — there's
-            // nothing the AI tabs can produce. Skip the tab bar entirely
-            // and render a single "no transcript" notice with a YouTube
-            // link, so the user has one obvious next step instead of
-            // three tabs that all show the same message.
-            <div className="mt-8 rounded-md border border-amber-200 bg-amber-50 px-4 py-6 text-center dark:border-amber-500/30 dark:bg-amber-500/10">
-              <p className="text-base font-medium text-amber-800 dark:text-amber-200">
-                No transcript is available for this video
-              </p>
-              <p className="mt-2 text-sm text-amber-700 dark:text-amber-300">
-                For now, ReadTube can only generate a summary or article when {platformName}{' '}
-                provides a native transcript for the video. Support for videos without captions is
-                on the roadmap.
-              </p>
-              <a
-                href={watchUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:underline"
-              >
-                Watch on {platformName} ↗
-              </a>
-            </div>
+            // Transcript is sticky-unavailable for this video — the
+            // platform has no captions. Skip the tab bar entirely and,
+            // in authenticated mode, offer the AI generation fallback
+            // (TranscriptGenerationPanel drives the whole
+            // idle/generating/failed flow and flips the shared status
+            // to 'present' when a transcript lands). Public viewers
+            // can't trigger paid work, so they keep a static notice.
+            publicMode ? (
+              <div className="mt-8 rounded-md border border-amber-200 bg-amber-50 px-4 py-6 text-center dark:border-amber-500/30 dark:bg-amber-500/10">
+                <p className="text-base font-medium text-amber-800 dark:text-amber-200">
+                  No transcript is available for this video
+                </p>
+                <a
+                  href={watchUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:underline"
+                >
+                  Watch on {platformName} ↗
+                </a>
+              </div>
+            ) : (
+              <TranscriptGenerationPanel
+                videoDbId={video.id}
+                watchUrl={watchUrl}
+                platformName={platformName}
+                onTranscriptReady={() => setTranscriptStatus('present')}
+              />
+            )
           ) : (
             <>
               {/* Tabs — Summary first because it's the cheapest scannable

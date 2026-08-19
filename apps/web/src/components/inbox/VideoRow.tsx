@@ -72,9 +72,12 @@ function WithTooltip({
  * clicking them follows the same navigation as the row body.
  */
 function ArtifactBadges({ video }: { video: VideoData }) {
-  if (video.transcriptUnavailable) {
+  // The sticky flag alone no longer means a dead end: an AI-generated
+  // transcript can exist for a caption-less video, in which case the
+  // normal artifact dots apply.
+  if (video.transcriptUnavailable && !video.hasTranscript) {
     return (
-      <WithTooltip label="This video has no captions, so no transcript / summary / article can be produced.">
+      <WithTooltip label="This video has no captions. Open it to generate a transcript with AI.">
         <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0 text-[10px] font-medium text-amber-700">
           No transcript
         </span>
@@ -271,9 +274,10 @@ export default function VideoRow({
   }, [video.hasArticle]);
 
   // Generate buttons are only meaningful when a transcript can exist.
-  // Skip them for videos we've confirmed have no captions so the row
-  // doesn't grow buttons that would immediately 410.
-  const canGenerate = !video.transcriptUnavailable;
+  // Skip them for videos we've confirmed have no captions — unless an
+  // AI-generated transcript already exists, in which case summaries
+  // and articles can build on it like any other transcript.
+  const canGenerate = !video.transcriptUnavailable || video.hasTranscript;
   const showGenerateSummary = canGenerate && !video.hasSummary;
   const showGenerateArticle = canGenerate && !video.hasArticle;
 

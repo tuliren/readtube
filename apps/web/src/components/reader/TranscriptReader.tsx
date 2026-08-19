@@ -76,6 +76,10 @@ export default function TranscriptReader({
 }: Props) {
   const [segments, setSegments] = useState<TranscriptSegment[] | null>(null);
   const [localStatus, setLocalStatus] = useState<LocalStatus>('checking');
+  // Transcript provenance from the GET response. 'GENERATED' renders
+  // a small badge so readers know they're looking at AI transcription
+  // rather than the platform's caption track.
+  const [source, setSource] = useState<string | null>(null);
 
   // Stream the transcript word count up to VideoReader so the
   // Transcript tab header can render the reading-time badge.
@@ -160,8 +164,9 @@ export default function TranscriptReader({
           setLocalStatus('error');
           return;
         }
-        const data = (await res.json()) as { segments: TranscriptSegment[] };
+        const data = (await res.json()) as { segments: TranscriptSegment[]; source?: string };
         setSegments(data.segments);
+        setSource(data.source ?? null);
         setLocalStatus('loaded');
         // Set the ref BEFORE the broadcast so when the effect re-runs
         // (because transcriptStatus prop changes from unknown→present)
@@ -211,6 +216,8 @@ export default function TranscriptReader({
       }
       const data = (await res.json()) as { segments: TranscriptSegment[] };
       setSegments(data.segments);
+      // The POST path fetches platform captions, never AI generation.
+      setSource('CAPTIONS');
       setLocalStatus('loaded');
       // Set the ref BEFORE the broadcast so when the effect re-runs
       // (because transcriptStatus prop changes from unknown→present)
@@ -276,7 +283,16 @@ export default function TranscriptReader({
     );
   }
 
-  return <TranscriptContent segments={segments} platform={platform} sourceId={sourceId} />;
+  return (
+    <div>
+      {source === 'GENERATED' && (
+        <p className="mb-4 inline-flex items-center rounded-full border border-border bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+          AI-generated transcript
+        </p>
+      )}
+      <TranscriptContent segments={segments} platform={platform} sourceId={sourceId} />
+    </div>
+  );
 }
 
 function TranscriptContent({
