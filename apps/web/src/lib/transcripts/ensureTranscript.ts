@@ -1,4 +1,4 @@
-import { type PrismaClient, UserRequestOutcome } from '@readtube/database';
+import { type PrismaClient, TranscriptSource, UserRequestOutcome } from '@readtube/database';
 
 import { getPlatformByType } from '@/lib/platforms';
 import { SubtitleFetchError, type TranscriptSegment } from '@/lib/platforms/types';
@@ -208,6 +208,12 @@ export async function ensureTranscript(
  * when it bundles a transcript with the snapshot — fetching twice
  * for the same video would double-bill the user.
  *
+ * The transcript-generation workflow also reuses this with
+ * `source: GENERATED` (provenance) and `recordAudit: false` (its
+ * route already inserted a pending UserRequest row that the
+ * workflow's terminal step backfills — a second row here would
+ * double-count).
+ *
  * Returns the new `Transcript.id` so callers can hand it back to
  * the client.
  */
@@ -218,6 +224,8 @@ export async function persistTranscript(
     videoId: string;
     segments: TranscriptSegment[];
     language: string;
+    source?: TranscriptSource;
+    recordAudit?: boolean;
   }
 ): Promise<{ id: string }> {
   const created = await prisma.transcript.create({
@@ -225,16 +233,19 @@ export async function persistTranscript(
       video_id: params.videoId,
       text: JSON.stringify(params.segments),
       language: params.language,
+      source: params.source ?? TranscriptSource.CAPTIONS,
       fetched_at: new Date(),
     },
     select: { id: true },
   });
-  await safeRecord(prisma, {
-    userId: params.userId,
-    videoId: params.videoId,
-    outcome: UserRequestOutcome.GENERATED,
-    transcriptId: created.id,
-  });
+  if (params.recordAudit ?? true) {
+    await safeRecord(prisma, {
+      userId: params.userId,
+      videoId: params.videoId,
+      outcome: UserRequestOutcome.GENERATED,
+      transcriptId: created.id,
+    });
+  }
   return created;
 }
 

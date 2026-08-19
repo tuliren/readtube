@@ -1,4 +1,4 @@
-import { buildSummaryPrompt } from '@/app/api/videos/[id]/summary/buildPrompt';
+import { buildSummaryPrompt } from '@/lib/workflows/summary/buildPrompt';
 import { SUMMARY_FIELDS, type SummaryField } from '@/lib/workflows/summary/promptSections';
 
 const TITLE = 'How transformers work';

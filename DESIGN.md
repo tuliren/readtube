@@ -56,6 +56,33 @@ Ingesting a members-only video is always a mistake: the watch page is paywalled,
 
 **Scrape/RSS fallback path.** `channelScrape.ts` drops members-only uploads (badge `BADGE_MEMBERS_ONLY` / `BADGE_STYLE_TYPE_MEMBERS_ONLY`) into `memberOnlyVideoIds`, which `mergeSnapshot` uses to drop matching RSS entries too (the channel `/videos` tab, unlike the `UU…` playlist, does list members-only videos).
 
+## AI transcript generation (caption-less videos)
+
+When TranscriptAPI permanently 404s (video truly has no caption track), the sticky `transcript_unavailable` flag no longer dead-ends the reader: `TranscriptGenerationPanel` offers an explicit **Generate transcript** button (never automatic — each run costs real money). POST `/api/videos/[id]/transcript/generate` starts `transcriptGenerationWorkflow` (WDK, `maxDuration = 800`), which:
+
+1. **Re-probes TranscriptAPI first** — auto-captions lag upload by hours, and a probe is near-free vs. a paid generation. On a hit it persists the captions and clears the sticky flag.
+2. **Transcribes via Gemini** (`TRANSCRIPT_GENERATION_MODEL` in `constants.ts`) by passing the YouTube watch URL as a file part through the AI Gateway — Gemini ingests the video server-side; no audio download, no yt-dlp, no extra vendor key. Measured: ~$0.30 and 4–9 min for a ~1 h video with `MEDIA_RESOLUTION_LOW`. Cost levers not yet available through the gateway (flex tier, `videoMetadata.fps` to drop frame tokens) are documented next to the constant.
+3. **Parses defensively** (`parseGeneratedTranscript`: fences, trailing commas, token-ceiling truncation salvage, `H:MM:SS` timestamps, monotonicity + duration clamps) and persists with `Transcript.source = GENERATED`, which renders an "AI-generated transcript" badge in the reader.
+
+After a transcript lands (either path), a final step auto-starts a **full summary generation** via `startAutoSummary` (`lib/workflows/summary/autoStart.ts`) — a trimmed mirror of the summary POST's full-generate path (same registry claim, pending `UserRequest`, user-default target language), launched with `start()` from a step per WDK's background child-workflow pattern. The reader's Summary tab taps into it through the normal `findActiveSummaryRun` flow. Auto-summary failures are swallowed: the transcript is already persisted, and the user still has the manual Generate button.
+
+In-flight dedup mirrors the Channel-refresh registry: `Video.transcript_generation_status/workflow_id/error` with claim/release/revert helpers in `runRegistry.ts`; the transcript GET's 410 body carries a `generation` object (eligible / state / error) that doubles as the panel's polling endpoint, and its stale-marker check recovers rows whose workflow died. Guards: YouTube only (Gemini can't ingest Bilibili), duration known and ≤ `TRANSCRIPT_GENERATION_MAX_VIDEO_SECONDS` (2 h — the 65k output-token ceiling binds around 2.5–3 h of dense speech; longer videos would need chunked generation via `videoMetadata` offsets). The sticky flag stays true after a successful generation — it means "no native captions", and every read path prefers an existing Transcript row over the flag. Cost attribution: the route inserts a pending `UserRequest` (`model`, `prompt_version`, `workflow_id`); the workflow's terminal step backfills `usage`/`transcript_id` or flips it to FAILED.
+
+### Cost (measured Aug 2026 — inputs for pricing / quota design)
+
+Measured end-to-end on a 54-minute Chinese video with no caption track, via the AI Gateway (`google/gemini-3.7-flash` at $0.75/M input, $3.75/M output tokens):
+
+| Component | Cost | Notes |
+| --- | --- | --- |
+| Captions re-probe | 1 TranscriptAPI credit | existing plan; free relative to generation |
+| Gemini transcription | **$0.30** ($0.22 in + $0.08 out) | 297k input tokens (215k video-frame + 82k audio at `MEDIA_RESOLUTION_LOW`), 21.6k output; 4–9 min latency |
+| Auto-summary | ~$0.03 | `DEFAULT_AI_MODEL` (gpt-5.4-mini, $0.74/$4.5 per M) over the ~25k-token transcript |
+| **Total** | **~$0.35 per video hour** | ~$0.12 for a typical 20-min video; compute negligible (step idles awaiting the API under Fluid) |
+
+Rule of thumb for budgeting: **generation cost ≈ clicks × ~$0.10–0.35** depending on video length; token counts per run are persisted in `UserRequest.usage` for exact accounting. Cost levers if volume grows (both blocked on gateway support today, documented next to `TRANSCRIPT_GENERATION_MODEL`): the flex service tier halves the rate, and dropping video-frame tokens via `videoMetadata.fps` removes ~72% of input tokens — together ≈ $0.08–0.15 per video hour.
+
+**Quota planning note:** generated-transcript content is ~50–100x more expensive per video than a captions fetch, so it likely needs its own quota separate from `MONTHLY_GENERATION_QUOTA`. The data model already supports this: these `UserRequest` rows are distinguishable by `model != null` (captions rows have no model) or by joining `Transcript.source = GENERATED`, and carry per-run token `usage` for cost-weighted metering. Caveat for whoever builds it: `countMonthlyTranscriptGenerations` currently counts every TRANSCRIPT row regardless of `outcome` — its "FAILED only ever attaches to summary/article rows" assumption predates this feature, so a generation quota should exclude FAILED and never-completed (pending, `completed_at IS NULL`) rows or users get charged quota for failed attempts.
+
 ## Generation usage & quota
 
 Metered off the `UserRequest` audit log (no counter table); `lib/usage/quota.ts` derives it. Only `TRANSCRIPT` requests count toward `MONTHLY_GENERATION_QUOTA` (`getGenerationUsage`, UTC calendar month); `getLifetimeUsage` groups all-time counts by type. Rows are only written when work actually happened, so every row counts regardless of `outcome`. Surfaced read-only on `/usage`; no enforcement yet.

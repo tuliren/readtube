@@ -1,8 +1,10 @@
 import { auth } from '@clerk/nextjs/server';
-import { prisma } from '@readtube/database';
+import { VideoPlatformType, prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 
+import { TRANSCRIPT_GENERATION_MAX_VIDEO_SECONDS } from '@/constants';
 import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
+import { findActiveTranscriptGeneration } from '@/lib/workflows/runRegistry';
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { userId } = await auth();
@@ -28,11 +30,14 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     },
     select: {
       id: true,
+      source_type: true,
+      duration_seconds: true,
       transcript_unavailable: true,
+      transcript_generation_error: true,
       transcripts: {
         orderBy: { created_at: 'desc' },
         take: 1,
-        select: { text: true, language: true },
+        select: { text: true, language: true, source: true },
       },
     },
   });
@@ -43,17 +48,50 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
   const cached = video.transcripts[0];
   if (cached != null) {
-    return NextResponse.json({ segments: JSON.parse(cached.text), language: cached.language });
+    return NextResponse.json({
+      segments: JSON.parse(cached.text),
+      language: cached.language,
+      source: cached.source,
+    });
   }
 
-  // 410 Gone signals "we already tried and there is nothing here" so
-  // the client can render a permanent unavailable state without
-  // offering a retry button. 404 stays reserved for "we haven't tried
-  // yet" — the client renders a Fetch button for that path.
+  // 410 Gone signals "the captions path already ran and there is
+  // nothing there" — but with AI generation available, it is no longer
+  // a dead end. The `generation` payload tells the client whether to
+  // offer the Generate button, show in-flight progress (this GET is
+  // also the polling endpoint), or surface the last failure. 404
+  // stays reserved for "we haven't tried yet" — the client renders a
+  // Fetch button for that path.
   if (video.transcript_unavailable) {
-    console.error(`[videos/transcript/GET] Transcript sticky-unavailable for video ${id}`);
+    console.info(`[videos/transcript/GET] Transcript sticky-unavailable for video ${id}`);
+    const eligible =
+      video.source_type === VideoPlatformType.YOUTUBE &&
+      video.duration_seconds != null &&
+      video.duration_seconds <= TRANSCRIPT_GENERATION_MAX_VIDEO_SECONDS;
+    const ineligibleReason = eligible
+      ? null
+      : video.source_type !== VideoPlatformType.YOUTUBE
+        ? 'platform'
+        : video.duration_seconds == null
+          ? 'duration-unknown'
+          : 'too-long';
+    // findActiveTranscriptGeneration doubles as stale-marker cleanup:
+    // a poll after the workflow dies flips the row back to READY with
+    // a timeout message, which the next poll reports as 'failed'.
+    const active = eligible ? await findActiveTranscriptGeneration(prisma, video.id) : null;
+    const state =
+      active != null ? 'generating' : video.transcript_generation_error != null ? 'failed' : 'idle';
     return NextResponse.json(
-      { error: 'Transcript unavailable', code: 'unavailable' },
+      {
+        error: 'Transcript unavailable',
+        code: 'unavailable',
+        generation: {
+          eligible,
+          ineligibleReason,
+          state,
+          errorMessage: state === 'failed' ? video.transcript_generation_error : null,
+        },
+      },
       { status: 410 }
     );
   }

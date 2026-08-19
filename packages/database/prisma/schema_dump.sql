@@ -23,6 +23,9 @@ CREATE TYPE "GenerationStatus" AS ENUM ('GENERATING', 'READY');
 CREATE TYPE "ChannelStatus" AS ENUM ('REFRESHING', 'READY');
 
 -- CreateEnum
+CREATE TYPE "TranscriptSource" AS ENUM ('CAPTIONS', 'GENERATED');
+
+-- CreateEnum
 CREATE TYPE "UserRequestType" AS ENUM ('TRANSCRIPT', 'SUMMARY', 'ARTICLE');
 
 -- CreateEnum
@@ -110,6 +113,9 @@ CREATE TABLE "Video" (
     "thumbnail_url" TEXT,
     "source_type" "VideoPlatformType" NOT NULL DEFAULT 'YOUTUBE',
     "fetched_via" TEXT,
+    "transcript_generation_error" TEXT,
+    "transcript_generation_status" "GenerationStatus" NOT NULL DEFAULT 'READY',
+    "transcript_generation_workflow_id" TEXT,
 
     CONSTRAINT "Video_pkey" PRIMARY KEY ("id")
 );
@@ -132,6 +138,7 @@ CREATE TABLE "Transcript" (
     "text" TEXT NOT NULL,
     "fetched_at" TIMESTAMP(3) NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "source" "TranscriptSource" NOT NULL DEFAULT 'CAPTIONS',
 
     CONSTRAINT "Transcript_pkey" PRIMARY KEY ("id")
 );
