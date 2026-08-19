@@ -10,6 +10,7 @@ export {
   ArticleStyle,
   ChannelStatus,
   GenerationStatus,
+  TranscriptSource,
   UserRequestOutcome,
   UserRequestType,
   UserSourceType,
