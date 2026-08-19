@@ -13,12 +13,14 @@ import { claimSummaryRun, findActiveSummaryRun } from '@/lib/workflows/runRegist
 import { NDJSON_HEADERS, ndjsonResponseFromRun } from '@/lib/workflows/streamResponse';
 import { type SummaryStreamEvent, summaryWorkflow } from '@/lib/workflows/summary';
 import {
+  type ExistingSummaryFields,
+  buildSummaryPrompt,
+} from '@/lib/workflows/summary/buildPrompt';
+import {
   SUMMARY_FIELDS,
   SUMMARY_PROMPT_VERSION,
   type SummaryField,
 } from '@/lib/workflows/summary/steps';
-
-import { type ExistingSummaryFields, buildSummaryPrompt } from './buildPrompt';
 
 // Must be a literal — Next.js's route-segment-config analyzer can't
 // follow imports. See `GENERATION_MAX_DURATION_SECONDS` in

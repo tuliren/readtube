@@ -4,6 +4,7 @@ import {
   generateTranscriptStep,
   persistGeneratedTranscriptStep,
   probeCaptionsStep,
+  startSummaryGenerationStep,
 } from './steps';
 
 export type { TranscriptGenerationInput } from './steps';
@@ -27,16 +28,25 @@ export async function transcriptGenerationWorkflow(
 ): Promise<void> {
   'use workflow';
 
+  let transcriptId: string;
   try {
     const probe = await probeCaptionsStep(input);
-    if (probe.found) {
-      return;
+    if (probe.found && probe.transcriptId != null) {
+      transcriptId = probe.transcriptId;
+    } else {
+      const generated = await generateTranscriptStep(input);
+      const persisted = await persistGeneratedTranscriptStep({ ...input, ...generated });
+      transcriptId = persisted.transcriptId;
     }
-    const generated = await generateTranscriptStep(input);
-    await persistGeneratedTranscriptStep({ ...input, ...generated });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to generate transcript.';
     await failTranscriptGenerationStep(input, message);
     throw err;
   }
+
+  // Outside the try: the transcript is persisted and the marker
+  // released, so a hiccup here must not flip the generation to FAILED.
+  // The step itself also swallows errors; this ordering is belt and
+  // braces.
+  await startSummaryGenerationStep(input, transcriptId);
 }

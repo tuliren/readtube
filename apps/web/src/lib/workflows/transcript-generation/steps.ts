@@ -24,6 +24,7 @@ import {
   releaseTranscriptGeneration,
   revertTranscriptGeneration,
 } from '@/lib/workflows/runRegistry';
+import { startAutoSummary } from '@/lib/workflows/summary/autoStart';
 import { buildTranscriptGenerationPrompt } from '@/lib/workflows/transcript-generation/prompt';
 
 export interface TranscriptGenerationInput {
@@ -65,7 +66,7 @@ export interface GeneratedTranscript {
  */
 export async function probeCaptionsStep(
   input: TranscriptGenerationInput
-): Promise<{ found: boolean }> {
+): Promise<{ found: boolean; transcriptId: string | null }> {
   'use step';
 
   let fetched;
@@ -77,7 +78,7 @@ export async function probeCaptionsStep(
       `[transcriptGeneration] captions probe missed for video ${input.videoDbId}:`,
       err instanceof Error ? err.message : err
     );
-    return { found: false };
+    return { found: false, transcriptId: null };
   }
 
   const { workflowRunId } = getWorkflowMetadata();
@@ -103,7 +104,7 @@ export async function probeCaptionsStep(
   console.info(
     `[transcriptGeneration] captions appeared for video ${input.videoDbId}; skipped AI generation`
   );
-  return { found: true };
+  return { found: true, transcriptId: created.id };
 }
 
 /**
@@ -165,7 +166,7 @@ export async function generateTranscriptStep(
  */
 export async function persistGeneratedTranscriptStep(
   input: TranscriptGenerationInput & GeneratedTranscript
-): Promise<void> {
+): Promise<{ transcriptId: string }> {
   'use step';
 
   if (input.finishReason === 'length') {
@@ -205,6 +206,36 @@ export async function persistGeneratedTranscriptStep(
     usage: input.usage,
     transcriptId: created.id,
   });
+  return { transcriptId: created.id };
+}
+
+/**
+ * Follow-up step: kick off a full summary generation for the fresh
+ * transcript so the user who asked for a transcript comes back to a
+ * summary. Runs as an independent child workflow via start() (the
+ * WDK-sanctioned background pattern) — the reader's summary tab taps
+ * into it through the normal findActiveSummaryRun registry. Failures
+ * are swallowed: the transcript is already persisted, and a missed
+ * auto-summary just leaves the user the regular Generate button.
+ */
+export async function startSummaryGenerationStep(
+  input: TranscriptGenerationInput,
+  transcriptId: string
+): Promise<void> {
+  'use step';
+
+  try {
+    await startAutoSummary(prisma, {
+      userId: input.userId,
+      videoDbId: input.videoDbId,
+      transcriptId,
+    });
+  } catch (err) {
+    console.error(
+      `[transcriptGeneration] auto-summary start failed for video ${input.videoDbId}:`,
+      err
+    );
+  }
 }
 
 /**
