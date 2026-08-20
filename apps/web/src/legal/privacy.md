@@ -18,7 +18,7 @@ For the purposes of this Privacy Policy:
 
 - **Account** means a unique account created for You to access our Service or parts of our Service.
 - **Affiliate** means an entity that controls, is controlled by or is under common control with a party, where "control" means ownership of 50% or more of the shares, equity interest or other securities entitled to vote for election of directors or other managing authority.
-- **Company** (referred to as either "the Company", "We", "Us" or "Our" in this Agreement) refers to Starfish Software LLC, 166 Geary St, STE 1500 #448, San Francisco, CA 94108.
+- **Company** (referred to as either "the Company", "We", "Us" or "Our" in this Agreement) refers to Starfish Software LLC.
 - **Cookies** are small files that are placed on Your computer, mobile device or any other device by a website, containing the details of Your browsing history on that website among its many uses.
 - **Country** refers to: California, United States
 - **Device** means any device that can access the Service such as a computer, a cellphone or a digital tablet.
