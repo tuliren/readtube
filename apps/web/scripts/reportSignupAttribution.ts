@@ -100,7 +100,7 @@ function parseArgs(argv: string[]): { days: number; groupBy: GroupBy } {
         WHERE outcome = 'GENERATED'
         GROUP BY user_id
       ) g ON g.user_id = sa.user_id
-      WHERE sa.created_at >= NOW() - make_interval(days => ${days});
+      WHERE sa.created_at >= NOW() - make_interval(days => ${days}::int);
     `;
 
     const inputs: AttributionFunnelInput[] = rows.map((r) => ({
