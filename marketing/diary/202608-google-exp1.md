@@ -101,6 +101,10 @@ First full data read (campaign lifetime Aug 16–20, Google Ads + attribution DB
 - **What Aug 23 decides:** with the vampire paused, do summarizer keywords get impressions/clicks at all? If they serve and convert, E1 finally tests its hypothesis. If spend flatlines at the $2 cap (and the bid raise isn't approved), exact-match summarizer volume is effectively unwinnable at probe CPCs → close E1 and move the remaining ~$114 toward E2's competitor-alternative angle.
 - **Z-track lead:** "youtube video to text" is a genuine demand pocket with dirt-cheap signups; the homepage just doesn't speak to it. A dedicated landing page routing that intent into add-video + AI transcripts (PR #145) could turn it into an activating funnel — candidate for a future cycle (zero-dollar, then possibly re-enable the keyword pointed at that page).
 
+### 2026-08-20 (later) — max-CPC raise approved and applied
+
+Owner approved the bid raise in-session. Set the Maximize Clicks max-CPC limit **$2.00 → $3.00** in campaign settings and verified it persisted: after a full page reload, the Bidding editor reads $3.00 from server state (the launch session's silent-save failure mode did not recur; no identity check appeared). Change history separately confirms the earlier keyword pause (`1 exact match keyword paused`, Aug 20 2:34 PM PT, campaign `202608-google-exp1` / ad group `summarizer-intent`). Campaign total budget unchanged at $150, dates unchanged (Aug 16–31). Nothing further pending owner approval for E1.
+
 ## Findings
 
 ## Outcome
