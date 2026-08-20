@@ -65,7 +65,7 @@ Each experiment gets: a hypothesis, a budget cap, a duration, and a **decision r
 
 ## Experiment queue
 
-### E1 — Google Search exact-match probe ($150 cap) — LIVE since Aug 16, 2026
+### E1 — Google Search exact-match probe ($150 cap) — ITERATING (live since Aug 16, 2026)
 
 Hypothesis: people searching for YouTube summarizer tools have exactly the problem ReadTube solves, and the subscription-inbox angle differentiates it enough to convert clicks into signups at ≤ $5.
 
@@ -73,6 +73,7 @@ Hypothesis: people searching for YouTube summarizer tools have exactly the probl
 - Landing: homepage with full UTMs per the convention above (`utm_term={keyword}` via campaign final-URL suffix, verified live).
 - Ads/keywords entered Google's ad review at launch; approved and serving as of Aug 17. Campaign-scoped assets added Aug 17 (4 sitelinks, 6 callouts, 1 structured snippet) plus the "ReadTube sign-up" conversion action; image assets are not available on this account (Google eligibility gate).
 - Success: per the decision rules; compare keywords via `--group-by term` and the Google Ads keywords report. Review cadence: every 3–4 days, first touchpoint ~Aug 19–20.
+- **Aug 20 review (iterate):** $35.90 spent — but 96% of it on `[youtube video to text]`, which delivered all 12 signups at $2.99 each with near-zero activation (2 activated, 0 consumed): transcription intent, not summarizer intent. Paused that keyword; the 8 summarizer keywords barely served at the $2 max-CPC cap (54 impressions combined), so the core hypothesis is still untested. Owner approved raising the cap to $3 (applied and verified same day). Next review ~Aug 23 decides whether summarizer terms can serve at all.
 - Details, exact copy, and the build log: `marketing/diary/202608-google-exp1.md`.
 
 ### E2 — Google competitor/alternative angle (~$100 cap) — after E1
@@ -98,8 +99,9 @@ One niche newsletter or small creator in the productivity / PKM / digital-minima
 | --- | --- | --- | --- | --- | --- |
 | Aug 16, 2026 | E1 `202608-google-exp1` | $0.00 | — | — | **LIVE** (owner-approved); $150 cap, ends Aug 31; ads in review |
 | Aug 17, 2026 | E1 `202608-google-exp1` | $4.84 to date | — | — | Serving (7.55% CTR, $1.21 avg CPC); added sitelinks/callouts/snippet + sign-up conversion tracking; first review ~Aug 19–20 |
+| Aug 20, 2026 | E1 `202608-google-exp1` | $35.90 to date | 12 | 2 | **Iterate**: `[youtube video to text]` ate 96% of spend, $2.99/signup but ~zero activation → paused it; summarizer keywords barely served ($2 cap losing auctions); $2→$3 max-CPC raise owner-approved and applied |
 
-Total spent: **$0.00** (serving starts once ad review approves). Credit status: spend-$500-get-$500 offer on the shared ads account, deadline Oct 13, 2026 — $500 of combined spend needed for the payout.
+Total spent: **$35.90** of the $150 E1 cap. Credit status: spend-$500-get-$500 offer on the shared ads account, deadline Oct 13, 2026 — $500 of combined spend needed for the payout.
 
 ## Experiment diary
 
