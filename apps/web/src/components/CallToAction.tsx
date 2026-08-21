@@ -2,6 +2,7 @@ import { clsx } from 'clsx';
 
 import { Button } from '@/components/Button';
 import { Container } from '@/components/Container';
+import { ctaHref } from '@/lib/analytics/ctaLinks';
 
 type Theme = 'light' | 'dark';
 
@@ -41,7 +42,11 @@ export default function CallToAction({ theme = 'dark' }: { theme?: Theme }) {
             The feed is engineered to hold your attention. ReadTube is built to return it.
           </p>
           <div className="mt-10 flex justify-center">
-            <Button href="/sign-up" variant="solid" color={styles.buttonColor}>
+            <Button
+              href={ctaHref('/sign-up', { source: 'landing_footer', content: 'build_library' })}
+              variant="solid"
+              color={styles.buttonColor}
+            >
               Build your library
             </Button>
           </div>
