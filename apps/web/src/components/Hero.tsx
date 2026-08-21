@@ -2,6 +2,7 @@ import { Button } from '@/components/Button';
 import PreviewDropdown, { type PreviewItem } from '@/components/PreviewDropdown';
 import RotatingWord from '@/components/RotatingWord';
 import { DESCRIPTION } from '@/constants';
+import { ctaHref } from '@/lib/analytics/ctaLinks';
 
 const PREVIEW_VIDEOS: readonly PreviewItem[] = [
   { title: 'Jensen Huang Interview with Lex Fridman', id: 'vif8NQcjVf0' },
@@ -35,7 +36,11 @@ export default function Hero() {
       </p>
 
       <div className="mt-14 flex flex-wrap items-center justify-center gap-x-4 gap-y-3">
-        <Button href="/sign-up" variant="solid" color="slate">
+        <Button
+          href={ctaHref('/sign-up', { source: 'landing_hero', content: 'get_started' })}
+          variant="solid"
+          color="slate"
+        >
           Get Started
         </Button>
         <PreviewDropdown items={PREVIEW_VIDEOS} />

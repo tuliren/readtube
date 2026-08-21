@@ -20,6 +20,16 @@ export interface UtmParams {
 const UTM_KEY = 'readtube_utm_params';
 const ATTRIBUTION_HANDLED_KEY = 'readtube_attribution_handled_user';
 
+/**
+ * `utm_medium` value carried by on-site call-to-action links (built via
+ * `ctaLinks.ts`). It marks a click as internal navigation: `extractUtmParams`
+ * drops the UTM params of any link tagged with it, so an on-site button never
+ * overwrites the external, first-touch signup attribution or the `signed_up`
+ * event. Vercel Web Analytics still records the full URL, so these clicks show
+ * up in its UTM breakdown regardless.
+ */
+export const INTERNAL_UTM_MEDIUM = 'internal';
+
 // Hostnames that only ever appear as OAuth redirect artifacts (the referrer a
 // browser reports after an IdP consent screen), never as genuine referral
 // sources. github.com is deliberately absent: it hosts real referral links
@@ -75,14 +85,26 @@ export function isExcludedReferrer(referrer: string, currentHostname?: string): 
 export function extractUtmParams(url: URL, documentReferrer?: string): UtmParams {
   const params: UtmParams = {};
 
+  const utmParams: Record<string, string> = {};
   for (const key of Array.from(url.searchParams.keys())) {
     const lowerKey = key.toLowerCase();
     if (lowerKey.startsWith('utm_')) {
       const value = url.searchParams.get(key);
       if (value != null && value.length > 0) {
-        params[lowerKey] = value;
+        utmParams[lowerKey] = value;
       }
     }
+  }
+
+  // On-site CTAs tag themselves with utm_medium=internal so their clicks
+  // surface in Vercel Web Analytics' UTM breakdown. They are funnel steps,
+  // not the external source a signup should be attributed to, so their UTM
+  // values are dropped here and never reach the first-touch attribution store
+  // or the `signed_up` event — keeping the paid-attribution report free of
+  // on-site labels like "public_video". The external referrer / landing page
+  // below are still captured (and first-touch merging keeps the original).
+  if (utmParams.utm_medium !== INTERNAL_UTM_MEDIUM) {
+    Object.assign(params, utmParams);
   }
 
   // Capture the referrer: an explicit query param wins over document.referrer.

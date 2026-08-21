@@ -96,6 +96,20 @@ describe('extractUtmParams', () => {
       'https://t.co/abc',
       { utm_source: 'x', referrer: 'https://t.co/abc', landing_page: '/' },
     ],
+    [
+      // On-site CTAs carry utm_medium=internal; their UTM values are dropped
+      // so an internal button click never becomes the attributed source.
+      'utm params dropped for internal-medium CTA links',
+      'https://www.read.tube/sign-up?utm_source=public_video&utm_medium=internal&utm_content=create_account',
+      undefined,
+      { landing_page: '/sign-up' },
+    ],
+    [
+      'internal-medium CTA still records an external referrer',
+      'https://www.read.tube/sign-up?utm_source=public_video&utm_medium=internal',
+      'https://news.ycombinator.com/item?id=1',
+      { referrer: 'https://news.ycombinator.com/item?id=1', landing_page: '/sign-up' },
+    ],
   ])('extracts %s', (_name, url, documentReferrer, expected) => {
     expect(extractUtmParams(new URL(url), documentReferrer)).toEqual(expected);
   });

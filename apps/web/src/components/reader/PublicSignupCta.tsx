@@ -1,6 +1,7 @@
 import Link from 'next/link';
 
 import { Button } from '@/components/ui/button';
+import { ctaHref } from '@/lib/analytics/ctaLinks';
 
 /**
  * Signup nudge at the end of public share pages, rendered between the
@@ -21,10 +22,15 @@ export default function PublicSignupCta() {
         articles you can read, search, and annotate instead of watching.
       </p>
       <Button asChild className="mt-5">
-        <Link href="/sign-up">Create a free account</Link>
+        <Link href={ctaHref('/sign-up', { source: 'public_video', content: 'create_account' })}>
+          Create a free account
+        </Link>
       </Button>
       <p className="mt-3 text-xs text-muted-foreground">
-        <Link href="/" className="underline hover:text-foreground">
+        <Link
+          href={ctaHref('/', { source: 'public_video', content: 'learn_more' })}
+          className="underline hover:text-foreground"
+        >
           Learn more about ReadTube
         </Link>
       </p>
