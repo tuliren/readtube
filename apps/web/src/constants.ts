@@ -49,21 +49,25 @@ export const TRANSCRIPT_GENERATION_MODEL = 'google/gemini-3.7-flash';
 
 /**
  * Output budget for a transcript generation. The model's ceiling is
- * 65,536; a dense 54-min video measured ~21.6k output tokens, so 60k
- * comfortably covers the 2-hour duration cap below while leaving the
- * parser's truncation salvage as a backstop rather than the norm.
+ * 65,536, and we request all of it: a dense 54-min video measured
+ * ~21.6k output tokens, so typical videos finish well under this even
+ * near the 3-hour duration cap below. Only the densest long videos
+ * reach the ceiling, where the parser's truncation salvage persists the
+ * completed prefix rather than failing outright.
  */
-export const TRANSCRIPT_GENERATION_MAX_OUTPUT_TOKENS = 60_000;
+export const TRANSCRIPT_GENERATION_MAX_OUTPUT_TOKENS = 65_536;
 
 /**
  * Refuse to generate transcripts for videos longer than this.
  * Transcript output scales with speech (~24k tokens/hour measured on
- * dense Chinese speech), so ~2.5-3h would overrun the 65,536
- * output-token ceiling; 2 h keeps a dense video comfortably under it.
- * Longer videos need chunked generation (videoMetadata start/end
+ * dense Chinese speech), so a dense 3 h video (~72k tokens) can overrun
+ * the 65,536 output-token ceiling; when it does, the parser's
+ * truncation salvage persists the completed prefix. Most videos are far
+ * less dense and finish comfortably under the ceiling. Fully covering
+ * dense long videos needs chunked generation (videoMetadata start/end
  * offsets) — a follow-up if demand appears.
  */
-export const TRANSCRIPT_GENERATION_MAX_VIDEO_SECONDS = 2 * 60 * 60;
+export const TRANSCRIPT_GENERATION_MAX_VIDEO_SECONDS = 3 * 60 * 60;
 
 /**
  * Abort a transcript generation that has produced no response for
