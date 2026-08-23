@@ -10,6 +10,7 @@ import {
   TRANSCRIPT_GENERATION_CHUNK_SECONDS,
   TRANSCRIPT_GENERATION_MAX_OUTPUT_TOKENS,
   TRANSCRIPT_GENERATION_MAX_PARALLEL_WINDOWS,
+  TRANSCRIPT_GENERATION_MAX_VIDEO_SECONDS,
   TRANSCRIPT_GENERATION_TIMEOUT_MS,
 } from '@/constants';
 import {
@@ -49,9 +50,10 @@ export interface TranscriptGenerationInput {
   /** Platform video id — YouTube-only today (the route guards this;
    *  Gemini can only ingest YouTube watch URLs). */
   videoSourceId: string;
-  /** Video.duration_seconds, used to clamp model timestamps. The
-   *  route rejects videos with unknown duration, so this is always
-   *  set for fresh runs; kept nullable for input-shape stability. */
+  /** Video.duration_seconds, used to plan windows and clamp model
+   *  timestamps. The route resolves an unknown duration (on-demand
+   *  fetch + backfill) before starting, so this is always set for
+   *  fresh runs; kept nullable for input-shape stability. */
   durationSeconds: number | null;
   /** Clerk user id of the requester, for the Transcript audit trail. */
   userId: string;
@@ -150,13 +152,29 @@ export async function generateTranscriptStep(
   'use step';
 
   if (input.durationSeconds == null) {
-    // The route requires a known duration; windows can't be planned
-    // without it, so a null here is a bug, not a retryable condition.
+    // The route resolves the duration before starting; windows can't
+    // be planned without it, so a null here is a bug, not a retryable
+    // condition.
     throw new FatalError('Video duration is required for AI transcript generation.');
   }
-  const durationSeconds = input.durationSeconds;
+  // Videos longer than the cap are transcribed only up to it: windows,
+  // stitching, and the coverage guard all use the capped length as the
+  // effective duration (validating against the full length would
+  // reject a correctly capped run as incomplete). The reader flags the
+  // untranscribed tail — the transcript GET computes gaps against the
+  // FULL video duration, so the tail surfaces as a trailing gap.
+  const transcribeSeconds = Math.min(
+    input.durationSeconds,
+    TRANSCRIPT_GENERATION_MAX_VIDEO_SECONDS
+  );
+  if (transcribeSeconds < input.durationSeconds) {
+    console.info(
+      `[transcriptGeneration] video ${input.videoDbId} runs ${input.durationSeconds}s; ` +
+        `transcribing only the first ${transcribeSeconds}s`
+    );
+  }
   const videoUrl = `https://www.youtube.com/watch?v=${input.videoSourceId}`;
-  const windows = planTranscriptWindows(durationSeconds, TRANSCRIPT_GENERATION_CHUNK_SECONDS);
+  const windows = planTranscriptWindows(transcribeSeconds, TRANSCRIPT_GENERATION_CHUNK_SECONDS);
 
   const results = await mapWithConcurrency(
     windows,
@@ -166,7 +184,7 @@ export async function generateTranscriptStep(
 
   const stitched = stitchWindowSegments(
     results.map((r) => r.segments),
-    durationSeconds
+    transcribeSeconds
   );
 
   const totalInputTokens = results.reduce((sum, r) => sum + (r.usage.inputTokens ?? 0), 0);
@@ -186,7 +204,7 @@ export async function generateTranscriptStep(
   try {
     assertUsableGeneration({
       segments: stitched,
-      durationSeconds,
+      durationSeconds: transcribeSeconds,
       finishReason,
       inputTokens: totalInputTokens > 0 ? totalInputTokens : null,
       blockedWindowCount,
@@ -196,7 +214,7 @@ export async function generateTranscriptStep(
     console.warn(
       `[transcriptGeneration] rejecting unusable output for video ${input.videoDbId}: ` +
         `windows=${windows.length}, blocked=${blockedWindowCount}, inputTokens=${totalInputTokens}, ` +
-        `segments=${stitched.length}, coveredMs=${coveredMs}, durationMs=${durationSeconds * 1000}, ` +
+        `segments=${stitched.length}, coveredMs=${coveredMs}, durationMs=${transcribeSeconds * 1000}, ` +
         `finishReason=${finishReason}`
     );
     // A block-caused shortfall re-blocks on retry — make it terminal so

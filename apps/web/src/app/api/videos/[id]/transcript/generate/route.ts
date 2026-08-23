@@ -3,7 +3,8 @@ import { UserRequestOutcome, VideoPlatformType, prisma } from '@readtube/databas
 import { NextRequest, NextResponse } from 'next/server';
 import { getRun, start } from 'workflow/api';
 
-import { TRANSCRIPT_GENERATION_MAX_VIDEO_SECONDS, TRANSCRIPT_GENERATION_MODEL } from '@/constants';
+import { TRANSCRIPT_GENERATION_MODEL } from '@/constants';
+import { fetchVideoDurationSeconds } from '@/lib/platforms/youtube/videoDuration';
 import { recordTranscriptRequest } from '@/lib/usage/userRequest';
 import { VercelEnv, getVercelEnv } from '@/lib/vercelEnv';
 import {
@@ -100,34 +101,47 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     );
   }
 
-  if (video.duration_seconds == null) {
-    return NextResponse.json(
-      {
-        error: 'The video duration is unknown, so generation cost cannot be bounded.',
-        code: 'duration-unknown',
-      },
-      { status: 422 }
-    );
-  }
-  if (video.duration_seconds > TRANSCRIPT_GENERATION_MAX_VIDEO_SECONDS) {
-    const maxHours = TRANSCRIPT_GENERATION_MAX_VIDEO_SECONDS / 3600;
-    return NextResponse.json(
-      {
-        error: `Videos longer than ${maxHours} hours are not supported yet.`,
-        code: 'too-long',
-      },
-      { status: 422 }
-    );
-  }
-
   // Idempotency: someone (possibly this same user in another tab) is
-  // already generating. Tap in by polling — no new audit row.
+  // already generating. Tap in by polling — no new audit row. Checked
+  // before the duration resolution below so tap-ins don't pay a
+  // redundant upstream lookup.
   const active = await findActiveTranscriptGeneration(prisma, video.id);
   if (active != null) {
     console.info(
       `[transcript/generate/POST] Generation already in flight for video ${id} (${active.runId})`
     );
     return NextResponse.json({ status: 'generating' }, { status: 202 });
+  }
+
+  // Generation windows can't be planned without a duration, but an
+  // unknown duration is a data gap, not a dead end: videos ingested
+  // through duration-less paths (playlist RSS, TranscriptAPI metadata)
+  // never get backfilled by the channel-refresh cron once they age out
+  // of the channel's recent feed. Fetch it on demand and persist the
+  // backfill so every other duration consumer benefits too. Videos
+  // longer than TRANSCRIPT_GENERATION_MAX_VIDEO_SECONDS are accepted —
+  // the workflow transcribes up to the cap and the reader flags the
+  // untranscribed tail.
+  let durationSeconds = video.duration_seconds;
+  if (durationSeconds == null) {
+    durationSeconds = await fetchVideoDurationSeconds(video.source_id);
+    if (durationSeconds == null) {
+      console.error(`[transcript/generate/POST] Could not resolve duration for video ${id}`);
+      return NextResponse.json(
+        {
+          error: 'Could not determine the video duration. Please try again.',
+          code: 'duration-unavailable',
+        },
+        { status: 503 }
+      );
+    }
+    await prisma.video.update({
+      where: { id: video.id },
+      data: { duration_seconds: durationSeconds },
+    });
+    console.info(
+      `[transcript/generate/POST] Backfilled duration ${durationSeconds}s for video ${id}`
+    );
   }
 
   // Insert the pending audit row before starting so the workflow can
@@ -151,7 +165,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     {
       videoDbId: video.id,
       videoSourceId: video.source_id,
-      durationSeconds: video.duration_seconds,
+      durationSeconds,
       userId,
       userRequestId: userRequest?.id ?? null,
     },
