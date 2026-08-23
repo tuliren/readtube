@@ -1,6 +1,5 @@
 'use client';
 
-import { Loader2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -14,6 +13,7 @@ import { buildWatchLink } from '@/lib/urls/watchUrl';
 import { isDevelopment } from '@/lib/vercelEnv';
 
 import FloatingToc from './FloatingToc';
+import RegenerateButton from './RegenerateButton';
 import type { TranscriptStatus } from './VideoReader';
 
 interface Props {
@@ -387,21 +387,11 @@ export default function TranscriptReader({
               the local dev server (the generate route re-checks the env),
               so it never ships to preview or production. */}
           {isDevelopment() && (
-            <button
+            <RegenerateButton
               onClick={handleRegenerate}
-              disabled={regenerating}
+              regenerating={regenerating}
               title="Dev only: re-run AI transcription"
-              className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground hover:bg-muted disabled:opacity-50"
-            >
-              {regenerating ? (
-                <>
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  Regenerating…
-                </>
-              ) : (
-                'Regenerate'
-              )}
-            </button>
+            />
           )}
         </div>
       )}

@@ -1,6 +1,5 @@
 'use client';
 
-import { ArrowPathIcon } from '@heroicons/react/24/outline';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -16,23 +15,10 @@ import ArticleMarkdown from './ArticleMarkdown';
 import ExportMarkdownButtons from './ExportMarkdownButtons';
 import FloatingToc from './FloatingToc';
 import LanguagePicker, { languageQueryFragment } from './LanguagePicker';
+import RegenerateButton from './RegenerateButton';
 import StreamingArticleBody from './StreamingArticleBody';
 import type { TranscriptStatus } from './VideoReader';
 import { type SectionState, createArticleStreamHandler } from './articleStreamHandler';
-
-function RegenerateButton({ onClick, disabled }: { onClick: () => void; disabled?: boolean }) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      title="Regenerate article"
-      className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50 disabled:hover:text-muted-foreground"
-    >
-      <ArrowPathIcon className="h-3.5 w-3.5" />
-      Regenerate
-    </button>
-  );
-}
 
 interface Props {
   videoDbId: string;
@@ -488,6 +474,7 @@ export default function ArticleReader({
           <RegenerateButton
             onClick={() => handleGenerate({ force: true })}
             disabled={isStreaming}
+            title="Regenerate article"
           />
         )}
         <ExportMarkdownButtons
