@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { findTargetLanguage } from '@/lib/language/names';
 import { parseLanguageQuery } from '@/lib/language/prompt';
+import { resolveDefaultShareRow } from '@/lib/language/publicShare';
 
 /**
  * Sharing-intent gate: the public video page only renders when a
@@ -12,8 +13,10 @@ import { parseLanguageQuery } from '@/lib/language/prompt';
  *
  * Honors `?language=<bcp47>`. When set and a matching translated
  * Summary row exists, return it; otherwise fall back to the Original
- * (`language IS NULL`) row. Missing / `original` / unknown codes go
- * straight to Original. We intentionally do NOT cross-check against
+ * (`language IS NULL`) row. Missing / `original` / unknown codes have
+ * no specific language, so they resolve via `resolveDefaultShareRow`
+ * (Original → English → earliest) — never empty when some version
+ * exists. We intentionally do NOT cross-check against
  * `User.preferred_language` here — public visitors have no signed-in
  * user, and the URL is the only authoritative selection.
  */
@@ -80,22 +83,34 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     select: { headline: true, short: true, full: true, language: true, generated_at: true },
   } as const;
 
-  // When a target is requested, look it up directly. Fall back to
-  // the Original on miss so a tampered or stale share URL renders
-  // the canonical version instead of 404'ing. Both lookups filter
-  // on `status = READY` so an in-flight row never surfaces.
+  const findByLanguage = (language: string | null) =>
+    prisma.summary.findFirst({
+      where: { transcript_id: transcript.id, language, status: 'READY' },
+      ...fields,
+    });
+
+  // When a specific target is requested, look it up directly and fall
+  // back to the Original on miss so a tampered or stale share URL
+  // renders the canonical version instead of 404'ing. With no specific
+  // language (bare share URL / `original` / unknown code), resolve the
+  // default: Original → English → earliest-generated, so the page never
+  // renders empty when the creator only generated translated rows.
+  // Every lookup filters on `status = READY` so an in-flight row never
+  // surfaces.
   let summary = null;
   if (targetLanguage != null) {
-    summary = await prisma.summary.findFirst({
-      where: { transcript_id: transcript.id, language: targetLanguage, status: 'READY' },
-      ...fields,
-    });
-  }
-  if (summary == null) {
-    summary = await prisma.summary.findFirst({
-      where: { transcript_id: transcript.id, language: null, status: 'READY' },
-      ...fields,
-    });
+    summary = await findByLanguage(targetLanguage);
+    if (summary == null) {
+      summary = await findByLanguage(null);
+    }
+  } else {
+    summary = await resolveDefaultShareRow(findByLanguage, () =>
+      prisma.summary.findFirst({
+        where: { transcript_id: transcript.id, status: 'READY' },
+        orderBy: { generated_at: 'asc' },
+        ...fields,
+      })
+    );
   }
   if (!summary) {
     console.info(`[public/summary/GET] No cached summary for video ${id}`);

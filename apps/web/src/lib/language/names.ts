@@ -11,8 +11,15 @@ export interface TargetLanguage {
   nativeName: string;
 }
 
+/**
+ * BCP-47 code for English. Stored on translated rows whose target is
+ * English (the picker's first entry) and used as the fallback language
+ * on the public share page when no Original row exists.
+ */
+export const ENGLISH_LANGUAGE_CODE = 'en';
+
 export const TARGET_LANGUAGES: readonly TargetLanguage[] = [
-  { code: 'en', englishName: 'English', nativeName: 'English' },
+  { code: ENGLISH_LANGUAGE_CODE, englishName: 'English', nativeName: 'English' },
   // Chinese is split by script subtag (BCP-47 standard: Hans / Hant)
   // because the model writes meaningfully different output for each.
   // zh-CN / zh-SG also resolve to Simplified, zh-TW / zh-HK / zh-MO to

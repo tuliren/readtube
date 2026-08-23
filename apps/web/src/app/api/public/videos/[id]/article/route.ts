@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { findTargetLanguage } from '@/lib/language/names';
 import { parseLanguageQuery } from '@/lib/language/prompt';
+import { resolveDefaultShareRow } from '@/lib/language/publicShare';
 
 const DEFAULT_STYLE: ArticleStyle = ArticleStyle.NARRATIVE;
 
@@ -82,33 +83,49 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: 'Not public' }, { status: 404 });
   }
 
-  // When a target is requested, look it up directly. Fall back to
-  // the Original on miss so a tampered or stale share URL renders
-  // the canonical version instead of 404'ing.
   const fields = {
     select: { content: true, style: true, language: true, generated_at: true },
   } as const;
 
-  let article = null;
-  if (targetLanguage != null) {
-    article = await prisma.article.findFirst({
+  // Require `content != null` on every lookup: a READY-with-null-content
+  // row isn't servable (see the private article GET for how those can
+  // arise), so it must not shadow a sibling row that does have content
+  // during the default-language fallback below.
+  const findByLanguage = (language: string | null) =>
+    prisma.article.findFirst({
       where: {
         transcript_id: transcript.id,
         style,
-        language: targetLanguage,
+        language,
         status: 'READY',
+        content: { not: null },
       },
       ...fields,
     });
+
+  // When a specific target is requested, look it up directly and fall
+  // back to the Original on miss so a tampered or stale share URL
+  // renders the canonical version instead of 404'ing. With no specific
+  // language (bare share URL / `original` / unknown code), resolve the
+  // default: Original → English → earliest-generated, so the page never
+  // renders empty when the creator only generated translated rows.
+  let article = null;
+  if (targetLanguage != null) {
+    article = await findByLanguage(targetLanguage);
+    if (article == null) {
+      article = await findByLanguage(null);
+    }
+  } else {
+    article = await resolveDefaultShareRow(findByLanguage, () =>
+      prisma.article.findFirst({
+        where: { transcript_id: transcript.id, style, status: 'READY', content: { not: null } },
+        orderBy: { generated_at: 'asc' },
+        ...fields,
+      })
+    );
   }
-  if (article == null) {
-    article = await prisma.article.findFirst({
-      where: { transcript_id: transcript.id, style, language: null, status: 'READY' },
-      ...fields,
-    });
-  }
-  // Guard against READY-with-null-content rows the same way the
-  // private article GET does — see that route for the rationale.
+  // Belt-and-suspenders: the queries above already exclude null content,
+  // but keep the guard so `article.content` type-narrows before use.
   if (article == null || article.content == null) {
     console.info(`[public/article/GET] No cached article for video ${id} (style=${style})`);
     return NextResponse.json({ error: 'Not cached' }, { status: 404 });
