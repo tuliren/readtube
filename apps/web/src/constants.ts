@@ -78,6 +78,33 @@ export const TRANSCRIPT_GENERATION_MAX_VIDEO_SECONDS = 3 * 60 * 60;
 export const TRANSCRIPT_GENERATION_TIMEOUT_MS = 700_000;
 
 /**
+ * Reject a generation whose prompt carried fewer input tokens than
+ * this — the tell that Gemini never ingested the video and answered
+ * from the text prompt alone, inventing a plausible but unrelated
+ * transcript. The prompt text is ~150 tokens; a genuinely ingested
+ * video adds ~5.5k input tokens per minute at MEDIA_RESOLUTION_LOW
+ * (measured: 297k for a 54-min video, all VIDEO modality), so any real
+ * ingestion clears this floor by a wide margin while the text-only
+ * failure mode (~146 tokens) sits far below it. Rejection is retryable:
+ * the miss is an intermittent server-side video-fetch failure, so a
+ * fresh model call usually succeeds.
+ */
+export const TRANSCRIPT_GENERATION_MIN_INPUT_TOKENS = 1000;
+
+/**
+ * Reject a non-truncated generation that covers less than this fraction
+ * of a video whose duration we know. A run that stops far short of the
+ * end — the hallucinated 36-second "transcript" of a 2-hour video is
+ * the pathological case — is treated as incomplete rather than
+ * persisting a sliver. Skipped when the output hit the token ceiling
+ * (finishReason 'length'), where a short prefix is expected and already
+ * salvaged, and when duration is unknown. 0.5 is deliberately lenient:
+ * it flags gross shortfalls while tolerating videos that legitimately
+ * trail off into music or silence. Retryable, same as the token floor.
+ */
+export const TRANSCRIPT_GENERATION_MIN_COVERAGE_RATIO = 0.5;
+
+/**
  * Maximum attempts (initial + retries) for `streamText` calls in
  * generation steps when nothing has been streamed to the client yet.
  * Once any delta has been emitted, retrying would re-stream content

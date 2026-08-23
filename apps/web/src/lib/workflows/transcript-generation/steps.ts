@@ -14,11 +14,13 @@ import {
 } from '@/constants';
 import { detectLanguage } from '@/lib/language/detect';
 import { getPlatformByType } from '@/lib/platforms';
+import type { TranscriptSegment } from '@/lib/platforms/types';
 import { persistTranscript } from '@/lib/transcripts/ensureTranscript';
 import {
   TranscriptParseError,
   parseGeneratedTranscript,
 } from '@/lib/transcripts/parseGeneratedTranscript';
+import { assertUsableGeneration } from '@/lib/transcripts/validateGeneratedTranscript';
 import { completeUserRequest } from '@/lib/usage/userRequest';
 import {
   releaseTranscriptGeneration,
@@ -45,7 +47,7 @@ export interface TranscriptGenerationInput {
 }
 
 export interface GeneratedTranscript {
-  rawText: string;
+  segments: TranscriptSegment[];
   usage: unknown;
   finishReason: string;
 }
@@ -109,10 +111,21 @@ export async function probeCaptionsStep(
 
 /**
  * The paid step: hand Gemini the YouTube watch URL as a file part
- * (the AI Gateway forwards it; Gemini ingests the video server-side)
- * and collect the raw segment JSON. Errors that retrying cannot fix —
- * the model can't access the video at all — are classified as
- * FatalError so the workflow runtime doesn't re-bill a doomed call.
+ * (the AI Gateway forwards it; Gemini ingests the video server-side),
+ * parse the segment JSON, and validate that the model actually
+ * transcribed the video before returning.
+ *
+ * Parsing and quality validation live here, not in the persist step, on
+ * purpose: when the model returns a hallucinated or partial transcript
+ * (Gemini intermittently fails to fetch the video and answers from the
+ * prompt text alone), {@link assertUsableGeneration} throws a retryable
+ * error and the workflow runtime re-runs THIS step — a fresh model
+ * call, the only way to recover. Validating in persist would retry the
+ * same cached text forever and never re-ingest the video.
+ *
+ * Errors that retrying cannot fix — the model can't access the video at
+ * all, or the response can't be parsed into any segments — are
+ * classified as FatalError so the runtime doesn't re-bill a doomed call.
  */
 export async function generateTranscriptStep(
   input: TranscriptGenerationInput
@@ -152,17 +165,49 @@ export async function generateTranscriptStep(
     throw classifyGenerationError(err);
   }
 
+  const durationMs = input.durationSeconds == null ? null : input.durationSeconds * 1000;
+  let segments;
+  try {
+    segments = parseGeneratedTranscript(result.text, { durationMs });
+  } catch (err) {
+    if (err instanceof TranscriptParseError) {
+      throw new FatalError(`The model returned an unusable transcript: ${err.message}`);
+    }
+    throw err;
+  }
+
+  // Retryable: an intermittent ingestion miss produces a hallucinated
+  // or partial transcript that a fresh call usually fixes.
+  const inputTokens = extractInputTokens(result.usage);
+  try {
+    assertUsableGeneration({
+      segments,
+      durationSeconds: input.durationSeconds,
+      finishReason: result.finishReason,
+      inputTokens,
+    });
+  } catch (err) {
+    const coveredMs = segments.reduce((max, segment) => Math.max(max, segment.endMs), 0);
+    console.warn(
+      `[transcriptGeneration] rejecting unusable output for video ${input.videoDbId}: ` +
+        `inputTokens=${inputTokens ?? 'unknown'}, segments=${segments.length}, ` +
+        `coveredMs=${coveredMs}, durationMs=${durationMs ?? 'unknown'}, ` +
+        `finishReason=${result.finishReason}`
+    );
+    throw err;
+  }
+
   return {
-    rawText: result.text,
+    segments,
     usage: serializableUsage(result.usage),
     finishReason: result.finishReason,
   };
 }
 
 /**
- * Parse, persist, release the claim, and backfill the audit row.
- * Parse failures are FatalError — the raw text is deterministic, so a
- * retry would spend nothing but also fix nothing.
+ * Persist the validated segments, release the claim, and backfill the
+ * audit row. Parsing and quality validation already ran in the generate
+ * step (see {@link generateTranscriptStep}), so this step is pure I/O.
  */
 export async function persistGeneratedTranscriptStep(
   input: TranscriptGenerationInput & GeneratedTranscript
@@ -176,18 +221,7 @@ export async function persistGeneratedTranscriptStep(
     );
   }
 
-  let segments;
-  try {
-    segments = parseGeneratedTranscript(input.rawText, {
-      durationMs: input.durationSeconds == null ? null : input.durationSeconds * 1000,
-    });
-  } catch (err) {
-    if (err instanceof TranscriptParseError) {
-      throw new FatalError(`The model returned an unusable transcript: ${err.message}`);
-    }
-    throw err;
-  }
-
+  const { segments } = input;
   const joined = segments.map((segment) => segment.text).join(' ');
   const language = detectLanguage(joined) ?? 'unknown';
 
@@ -295,6 +329,19 @@ function classifyGenerationError(err: unknown): Error {
     return err;
   }
   return new Error('Transcript generation failed.');
+}
+
+/** Pull the normalized prompt-input token count off the AI SDK usage
+ *  object. Returns null when absent so the ingestion guard fails open
+ *  (a missing count must not reject an otherwise-valid transcript). */
+function extractInputTokens(usage: unknown): number | null {
+  if (usage != null && typeof usage === 'object' && 'inputTokens' in usage) {
+    const value = (usage as { inputTokens?: unknown }).inputTokens;
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+  }
+  return null;
 }
 
 /** Workflow step results must be serializable; usage objects from the
