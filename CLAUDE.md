@@ -14,6 +14,7 @@ Turn YouTube subscriptions into a personal substack. Consume videos efficiently 
 - In unit tests, use `it.each` to group similar test cases together. Do not use "should" in test descriptions.
 - When introducing a database schema change, follow the workflow in `packages/database/README.md`. The short version: edit `packages/database/prisma/schema.prisma`, run `yarn db:create-migration` (which creates both an up and a down migration via the custom `bin/create-migration.sh` wrapper), inspect the generated SQL — Prisma's diff doesn't fully understand the `Unsupported("tsvector")` generated column or the raw-SQL ANN/GIN indexes, so you may need to delete spurious DROP/RECREATE INDEX statements by hand — and then apply with `yarn db:deploy`.
 - Never modify any existing migration files.
+- Never put a specific video ID, URL, title, or any of its content into committed code, comments, tests, or PR/commit descriptions. Debug with such values only in throwaway scratch files or CLI args; use neutral placeholders in anything committed.
 - When writing Prisma `upsert` statement, always ensure the unique fields have the same values in the `where` and `create` options. This enables Prisma to use native Postgres `upsert` statement.
 - When a React component file is long, separate subcomponents into their own component files.
 - After making a change, thinking about updating these docs, if applicable:

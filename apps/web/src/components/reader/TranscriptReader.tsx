@@ -8,6 +8,7 @@ import type { TranscriptSegment } from '@/lib/platforms/types';
 import { formatTimestamp, groupTranscriptSegments } from '@/lib/platforms/youtube/transcript';
 import { buildTranscriptToc, transcriptParagraphId } from '@/lib/reader/buildTranscriptToc';
 import { buildScheduledMessage, parseScheduledResponse } from '@/lib/reader/scheduledVideoToast';
+import type { TranscriptGap } from '@/lib/transcripts/transcriptGaps';
 import type { VideoPlatform } from '@/lib/types';
 import { buildWatchLink } from '@/lib/urls/watchUrl';
 import { isDevelopment } from '@/lib/vercelEnv';
@@ -34,6 +35,11 @@ interface Props {
    *  Transcript tab header can render the reading time badge. Fires
    *  whenever the segment list changes (initial load, fetch, etc.). */
   onTranscriptWordsChange: (words: number) => void;
+  /** Reports the stretches an AI transcript leaves uncovered up to
+   *  VideoReader, which renders one shared "incomplete transcript"
+   *  notice under every tab (the summary and article share the gap).
+   *  Empty for complete transcripts and platform captions. */
+  onTranscriptGapsChange: (gaps: TranscriptGap[]) => void;
 }
 
 type LocalStatus = 'checking' | 'notCached' | 'fetching' | 'loaded' | 'error';
@@ -78,8 +84,13 @@ export default function TranscriptReader({
   transcriptStatus,
   onTranscriptStatusChange,
   onTranscriptWordsChange,
+  onTranscriptGapsChange,
 }: Props) {
   const [segments, setSegments] = useState<TranscriptSegment[] | null>(null);
+  // Uncovered stretches from the GET response (GENERATED transcripts
+  // only). Reported up to VideoReader so the shared notice renders
+  // under every tab.
+  const [missingRanges, setMissingRanges] = useState<TranscriptGap[]>([]);
   const [localStatus, setLocalStatus] = useState<LocalStatus>('checking');
   // Transcript provenance from the GET response. 'GENERATED' renders
   // a small badge so readers know they're looking at AI transcription
@@ -103,6 +114,12 @@ export default function TranscriptReader({
     onTranscriptWordsChange(countWords(segments.map((s) => s.text).join(' ')));
   }, [segments, onTranscriptWordsChange]);
 
+  // Stream the transcript's uncovered stretches up to VideoReader so it
+  // can render the shared incomplete-transcript notice.
+  useEffect(() => {
+    onTranscriptGapsChange(missingRanges);
+  }, [missingRanges, onTranscriptGapsChange]);
+
   // Track which videoDbId we already have segments for. The effect
   // depends on transcriptStatus so an external flip from the Summary
   // or Article tab (e.g., they ran ensureTranscript on the user's
@@ -124,6 +141,7 @@ export default function TranscriptReader({
     if (transcriptStatus === 'unavailable') {
       setLocalStatus('notCached');
       setSegments(null);
+      setMissingRanges([]);
       loadedForVideoDbIdRef.current = null;
       return;
     }
@@ -141,6 +159,7 @@ export default function TranscriptReader({
     let cancelled = false;
     setLocalStatus('checking');
     setSegments(null);
+    setMissingRanges([]);
 
     fetch(`/api/videos/${videoDbId}/transcript`)
       .then(async (res) => {
@@ -180,10 +199,12 @@ export default function TranscriptReader({
           id?: string;
           segments: TranscriptSegment[];
           source?: string;
+          missingRanges?: TranscriptGap[];
         };
         setSegments(data.segments);
         setSource(data.source ?? null);
         setTranscriptId(data.id ?? null);
+        setMissingRanges(data.missingRanges ?? []);
         setLocalStatus('loaded');
         // Set the ref BEFORE the broadcast so when the effect re-runs
         // (because transcriptStatus prop changes from unknown→present)
@@ -224,12 +245,14 @@ export default function TranscriptReader({
             id?: string;
             segments: TranscriptSegment[];
             source?: string;
+            missingRanges?: TranscriptGap[];
             generation?: { state: string; errorMessage: string | null };
           };
           if (data.id != null && data.id !== regenBaselineIdRef.current) {
             setSegments(data.segments);
             setSource(data.source ?? null);
             setTranscriptId(data.id);
+            setMissingRanges(data.missingRanges ?? []);
             setRegenerating(false);
             toast.success('Transcript regenerated.');
             return;
@@ -311,6 +334,9 @@ export default function TranscriptReader({
       setSegments(data.segments);
       // The POST path fetches platform captions, never AI generation.
       setSource('CAPTIONS');
+      // Captions don't carry a gap notice (music/silence omissions are
+      // expected, not a generation failure).
+      setMissingRanges([]);
       setLocalStatus('loaded');
       // Set the ref BEFORE the broadcast so when the effect re-runs
       // (because transcriptStatus prop changes from unknown→present)

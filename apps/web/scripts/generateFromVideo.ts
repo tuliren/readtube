@@ -84,6 +84,14 @@ async function transcribeVideo(
         maxOutputTokens: TRANSCRIPT_GENERATION_MAX_OUTPUT_TOKENS,
         signal: AbortSignal.timeout(TRANSCRIPT_GENERATION_TIMEOUT_MS),
       });
+      // Mirror the production step: a content-policy block yields an empty
+      // response with a blockReason, so skip the window and keep the rest.
+      if (result.blockReason != null) {
+        console.log(
+          `  window ${window.startSec}-${window.endSec}s: BLOCKED (${result.blockReason}), skipping`
+        );
+        return [] as TranscriptSegment[];
+      }
       const segments = normalizeWindowTimestamps(
         parseGeneratedTranscript(result.text, { durationMs: null }),
         window

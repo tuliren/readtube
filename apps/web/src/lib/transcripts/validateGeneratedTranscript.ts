@@ -24,6 +24,21 @@ export class TranscriptGenerationQualityError extends Error {
   }
 }
 
+/**
+ * Thrown when Gemini's content-policy filter blocked so many windows
+ * that too little of the video remains to persist. Unlike
+ * {@link TranscriptGenerationQualityError}, this shortfall is
+ * DETERMINISTIC — a block re-blocks on retry — so the caller maps it to
+ * a FatalError rather than letting the runtime re-bill a doomed rerun.
+ */
+export class TranscriptGenerationBlockedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'TranscriptGenerationBlockedError';
+    Object.setPrototypeOf(this, TranscriptGenerationBlockedError.prototype);
+  }
+}
+
 export interface GenerationQualityInput {
   /** Parsed segments, already clamped to the video duration. */
   segments: TranscriptSegment[];
@@ -33,6 +48,11 @@ export interface GenerationQualityInput {
   finishReason: string;
   /** Prompt input tokens from usage; null skips the ingestion check. */
   inputTokens: number | null;
+  /** How many windows Gemini refused on content-policy grounds. When a
+   *  coverage shortfall coincides with a block, the gap is deterministic,
+   *  so it is reported via the fatal {@link TranscriptGenerationBlockedError}
+   *  instead of the retryable quality error. Defaults to 0. */
+  blockedWindowCount?: number;
 }
 
 /**
@@ -58,10 +78,20 @@ export function assertUsableGeneration(input: GenerationQualityInput): void {
   // of the end. If the transcript ends well before a video whose
   // duration we know — and was not cut off by the output-token ceiling
   // (finishReason 'length', already salvaged) — treat it as incomplete.
+  // A shortfall from content-policy blocks (blockedWindowCount > 0) is
+  // deterministic, so it is fatal; any other shortfall is an intermittent
+  // miss worth a retry. Coverage at or above the ratio passes even when
+  // some windows were blocked — the surviving windows are persisted as a
+  // partial transcript with a gap where the block was.
   if (input.durationSeconds != null && input.finishReason !== 'length') {
     const coveredMs = input.segments.reduce((max, segment) => Math.max(max, segment.endMs), 0);
     const durationMs = input.durationSeconds * 1000;
     if (coveredMs < durationMs * TRANSCRIPT_GENERATION_MIN_COVERAGE_RATIO) {
+      if ((input.blockedWindowCount ?? 0) > 0) {
+        throw new TranscriptGenerationBlockedError(
+          'The model was blocked by content policy on too much of this video to produce a usable transcript.'
+        );
+      }
       throw new TranscriptGenerationQualityError(
         'The generated transcript covered only part of the video. Please try again.'
       );

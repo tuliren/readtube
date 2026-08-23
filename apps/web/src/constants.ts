@@ -72,21 +72,31 @@ export const TRANSCRIPT_GENERATION_MEDIA_RESOLUTION = 'MEDIA_RESOLUTION_LOW';
  * back with zero video tokens). Longer videos are split into windows of
  * this size, each requested with a `video_metadata` start/end offset,
  * then stitched — the model returns absolute (original-video) timestamps
- * per window, so no offset math is needed. 45 min stays comfortably
- * under the observed cap while keeping the window count (and per-window
- * output-token pressure) low. Tunable.
+ * per window, so no offset math is needed.
+ *
+ * Beyond the ingestion cap, the window size bounds the collateral damage
+ * from Gemini's content-policy filter: `PROHIBITED_CONTENT` blocks are
+ * evaluated per request over the whole window, and a block drops that
+ * window from the stitched transcript (see the generate step). The block
+ * is content-localized (measured: a 45-min window blocked while its first
+ * 15 min transcribed cleanly), so a smaller window confines the gap to
+ * the offending stretch instead of losing 45 min. 20 min keeps the gap
+ * small while staying far under the ingestion cap; total video tokens
+ * ingested is independent of window size, so this does not raise cost.
+ * Tunable.
  */
-export const TRANSCRIPT_GENERATION_CHUNK_SECONDS = 45 * 60;
+export const TRANSCRIPT_GENERATION_CHUNK_SECONDS = 20 * 60;
 
 /**
  * Max windows generated concurrently within the generate step. Sized so
  * every window of a max-length video ({@link TRANSCRIPT_GENERATION_MAX_VIDEO_SECONDS})
- * runs in a single batch (⌈3 h / 45 min⌉ = 4), keeping wall-clock to
- * roughly one window and under the workflow's 800 s step budget. Raising
- * it risks tripping Gemini's per-minute token quota (each window ingests
- * a full 45 min of video at once).
+ * runs in a single batch (⌈3 h / 20 min⌉ = 9), keeping wall-clock to
+ * roughly one window and under the workflow's 800 s step budget. Total
+ * simultaneous ingestion is unchanged from the previous 45-min/4-window
+ * sizing (9 × 20 min ≈ 4 × 45 min of video in flight), so Gemini's
+ * per-minute token quota sees the same pressure.
  */
-export const TRANSCRIPT_GENERATION_MAX_PARALLEL_WINDOWS = 4;
+export const TRANSCRIPT_GENERATION_MAX_PARALLEL_WINDOWS = 9;
 
 /**
  * Output budget for a transcript generation. The model's ceiling is
@@ -144,6 +154,16 @@ export const TRANSCRIPT_GENERATION_MIN_INPUT_TOKENS = 1000;
  * trail off into music or silence. Retryable, same as the token floor.
  */
 export const TRANSCRIPT_GENERATION_MIN_COVERAGE_RATIO = 0.5;
+
+/**
+ * Minimum length of an uncovered stretch (seconds) before the reader
+ * flags it as a gap in an AI-generated transcript. A content-policy
+ * block skips a whole {@link TRANSCRIPT_GENERATION_CHUNK_SECONDS} window
+ * and an output-token truncation drops the tail, both far longer than
+ * this; the floor keeps natural pauses and short non-speech stretches
+ * from reading as missing content. Tunable.
+ */
+export const TRANSCRIPT_GAP_NOTICE_MIN_SECONDS = 120;
 
 /**
  * Maximum attempts (initial + retries) for `streamText` calls in
