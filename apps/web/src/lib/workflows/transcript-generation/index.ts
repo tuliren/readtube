@@ -1,3 +1,5 @@
+import { extractErrorMessage } from '@/lib/workflows/errorMessage';
+
 import type { TranscriptGenerationInput } from './steps';
 import {
   failTranscriptGenerationStep,
@@ -18,10 +20,15 @@ export const maxDuration = 800;
  * AI transcript generation for a caption-less video. Kicked off
  * explicitly by POST /api/videos/[id]/transcript/generate after the
  * route claims the Video row's generation marker (GENERATING +
- * workflow_id). Success paths release the marker; the catch path
- * reverts it with a user-facing message and flips the audit row to
- * FAILED. There is no client stream — the reader polls the transcript
- * GET route and picks up the persisted row when it appears.
+ * workflow_id). The marker is held through the summary handoff:
+ * success paths persist the transcript but leave the marker
+ * GENERATING, and startSummaryGenerationStep releases it after the
+ * auto-summary run is registered — so the reader's polling panel can
+ * hold its spinner until the summary tab has something to tap into.
+ * The catch path reverts the marker with a user-facing message and
+ * flips the audit row to FAILED. There is no client stream — the
+ * reader polls the transcript GET route and picks up the persisted
+ * row when it appears.
  */
 export async function transcriptGenerationWorkflow(
   input: TranscriptGenerationInput
@@ -39,14 +46,19 @@ export async function transcriptGenerationWorkflow(
       transcriptId = persisted.transcriptId;
     }
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to generate transcript.';
-    await failTranscriptGenerationStep(input, message);
+    await failTranscriptGenerationStep(
+      input,
+      extractErrorMessage(err, 'Failed to generate transcript.')
+    );
     throw err;
   }
 
-  // Outside the try: the transcript is persisted and the marker
-  // released, so a hiccup here must not flip the generation to FAILED.
-  // The step itself also swallows errors; this ordering is belt and
-  // braces.
+  // Outside the try: the transcript is persisted, so a hiccup here
+  // must not flip the generation to FAILED. The step swallows summary
+  // errors and then releases the generation marker; if the release
+  // itself dies the stale-marker cleanup in
+  // findActiveTranscriptGeneration recovers the row, and the reader
+  // still sees the transcript (the GET checks the row before the
+  // marker).
   await startSummaryGenerationStep(input, transcriptId);
 }

@@ -59,44 +59,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   const cached = video.transcripts[0];
   if (cached != null) {
-    // In poll mode, report whether a (re)generation is still in flight
-    // so the client can distinguish "new transcript landed" (id changed)
-    // from "the run reverted" (state failed). findActiveTranscriptGeneration
-    // also cleans up stale GENERATING markers, so a dead run surfaces as
-    // 'failed' rather than polling forever.
-    let generation:
-      | { state: 'idle' | 'generating' | 'failed'; errorMessage: string | null }
-      | undefined;
-    if (withGeneration) {
-      const active = await findActiveTranscriptGeneration(prisma, video.id);
-      const state =
-        active != null
-          ? 'generating'
-          : video.transcript_generation_error != null
-            ? 'failed'
-            : 'idle';
-      generation = {
-        state,
-        errorMessage: state === 'failed' ? video.transcript_generation_error : null,
-      };
-    }
-    const segments = JSON.parse(cached.text) as TranscriptSegment[];
-    // Surface the stretches AI generation left uncovered (content-policy
-    // blocks, output truncation) so the reader can flag them. Only for
-    // GENERATED transcripts — platform captions legitimately omit music
-    // and silence, which would read as false gaps.
-    const missingRanges =
-      cached.source === TranscriptSource.GENERATED
-        ? computeTranscriptGaps(segments, video.duration_seconds, TRANSCRIPT_GAP_NOTICE_MIN_SECONDS)
-        : [];
-    return NextResponse.json({
-      id: cached.id,
-      segments,
-      language: cached.language,
-      source: cached.source,
-      missingRanges,
-      ...(generation != null ? { generation } : {}),
-    });
+    return cachedTranscriptResponse(video, cached, withGeneration);
   }
 
   // 410 Gone signals "the captions path already ran and there is
@@ -119,6 +82,22 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     // a poll after the workflow dies flips the row back to READY with
     // a timeout message, which the next poll reports as 'failed'.
     const active = eligible ? await findActiveTranscriptGeneration(prisma, video.id) : null;
+    if (eligible && active == null) {
+      // Race guard: a generation can persist its transcript and
+      // release its marker between the transcript read above and the
+      // marker read here, which would make this request report a bogus
+      // "nothing here, not generating" — the polling panel would flip
+      // back to the Generate button and stop polling. Re-check for a
+      // just-landed row before answering.
+      const landed = await prisma.transcript.findFirst({
+        where: { video_id: video.id },
+        orderBy: { created_at: 'desc' },
+        select: { id: true, text: true, language: true, source: true },
+      });
+      if (landed != null) {
+        return cachedTranscriptResponse(video, landed, withGeneration);
+      }
+    }
     const state =
       active != null ? 'generating' : video.transcript_generation_error != null ? 'failed' : 'idle';
     return NextResponse.json(
@@ -144,6 +123,56 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   console.info(`[videos/transcript/GET] Transcript not cached for video ${id}`);
   return NextResponse.json({ error: 'Not cached' }, { status: 404 });
+}
+
+/**
+ * The 200 payload for a cached transcript. In poll mode
+ * (`withGeneration`) it also reports whether a generation workflow is
+ * still in flight — after the transcript row lands, the workflow keeps
+ * its GENERATING marker until the auto-summary handoff completes, and
+ * the reader's panel holds its spinner until this reports a
+ * non-generating state. findActiveTranscriptGeneration also cleans up
+ * stale GENERATING markers, so a dead run surfaces as 'failed' rather
+ * than polling forever.
+ */
+async function cachedTranscriptResponse(
+  video: {
+    id: string;
+    duration_seconds: number | null;
+    transcript_generation_error: string | null;
+  },
+  cached: { id: string; text: string; language: string | null; source: TranscriptSource },
+  withGeneration: boolean
+): Promise<NextResponse> {
+  let generation:
+    | { state: 'idle' | 'generating' | 'failed'; errorMessage: string | null }
+    | undefined;
+  if (withGeneration) {
+    const active = await findActiveTranscriptGeneration(prisma, video.id);
+    const state =
+      active != null ? 'generating' : video.transcript_generation_error != null ? 'failed' : 'idle';
+    generation = {
+      state,
+      errorMessage: state === 'failed' ? video.transcript_generation_error : null,
+    };
+  }
+  const segments = JSON.parse(cached.text) as TranscriptSegment[];
+  // Surface the stretches AI generation left uncovered (content-policy
+  // blocks, output truncation) so the reader can flag them. Only for
+  // GENERATED transcripts — platform captions legitimately omit music
+  // and silence, which would read as false gaps.
+  const missingRanges =
+    cached.source === TranscriptSource.GENERATED
+      ? computeTranscriptGaps(segments, video.duration_seconds, TRANSCRIPT_GAP_NOTICE_MIN_SECONDS)
+      : [];
+  return NextResponse.json({
+    id: cached.id,
+    segments,
+    language: cached.language,
+    source: cached.source,
+    missingRanges,
+    ...(generation != null ? { generation } : {}),
+  });
 }
 
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {

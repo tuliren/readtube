@@ -99,7 +99,6 @@ export async function probeCaptionsStep(
     return { found: false, transcriptId: null };
   }
 
-  const { workflowRunId } = getWorkflowMetadata();
   const created = await persistTranscript(prisma, {
     userId: input.userId,
     videoId: input.videoDbId,
@@ -114,7 +113,10 @@ export async function probeCaptionsStep(
     where: { id: input.videoDbId },
     data: { transcript_unavailable: false },
   });
-  await releaseTranscriptGeneration(prisma, input.videoDbId, workflowRunId);
+  // Deliberately NOT releasing the generation marker here — that
+  // happens in startSummaryGenerationStep, after the auto-summary is
+  // kicked off, so the reader's polling panel never observes a
+  // released marker before the summary run is registered.
   await safeCompleteUserRequest(input.userRequestId, {
     outcome: UserRequestOutcome.GENERATED,
     transcriptId: created.id,
@@ -262,6 +264,12 @@ async function transcribeWindow(
       signal: AbortSignal.timeout(TRANSCRIPT_GENERATION_TIMEOUT_MS),
     });
   } catch (err) {
+    // The raw upstream error goes to the logs; classifyGenerationError
+    // maps it to copy the reader panel can show if retries run out.
+    console.warn(
+      `[transcriptGeneration] ${formatWindow(window)} window failed for video ${input.videoDbId}:`,
+      err
+    );
     throw classifyGenerationError(err);
   }
 
@@ -360,7 +368,6 @@ export async function persistGeneratedTranscriptStep(
   const joined = segments.map((segment) => segment.text).join(' ');
   const language = detectLanguage(joined) ?? 'unknown';
 
-  const { workflowRunId } = getWorkflowMetadata();
   const created = await persistTranscript(prisma, {
     userId: input.userId,
     videoId: input.videoDbId,
@@ -369,7 +376,9 @@ export async function persistGeneratedTranscriptStep(
     source: TranscriptSource.GENERATED,
     recordAudit: false,
   });
-  await releaseTranscriptGeneration(prisma, input.videoDbId, workflowRunId);
+  // The generation marker stays GENERATING here on purpose; see
+  // startSummaryGenerationStep, which releases it after the
+  // auto-summary handoff.
   await safeCompleteUserRequest(input.userRequestId, {
     outcome: UserRequestOutcome.GENERATED,
     usage: input.usage,
@@ -386,6 +395,13 @@ export async function persistGeneratedTranscriptStep(
  * into it through the normal findActiveSummaryRun registry. Failures
  * are swallowed: the transcript is already persisted, and a missed
  * auto-summary just leaves the user the regular Generate button.
+ *
+ * This step also RELEASES the generation marker — the persist steps
+ * deliberately leave it GENERATING so the reader's polling panel keeps
+ * its spinner through the summary handoff. The panel only flips to the
+ * tabbed reader once the marker is released, and by then the summary
+ * run is registered, so SummaryReader mounts straight into the
+ * tap-in stream instead of a stale "no summary yet" state.
  */
 export async function startSummaryGenerationStep(
   input: TranscriptGenerationInput,
@@ -405,6 +421,8 @@ export async function startSummaryGenerationStep(
       err
     );
   }
+  const { workflowRunId } = getWorkflowMetadata();
+  await releaseTranscriptGeneration(prisma, input.videoDbId, workflowRunId);
 }
 
 /**
@@ -447,7 +465,18 @@ function classifyGenerationError(err: unknown): Error {
   }
   if (err instanceof GeminiVideoError) {
     if (err.retryable) {
-      return err;
+      // Replace the raw API payload with copy fit for the reader
+      // panel: after the step's retries are exhausted, this message is
+      // what the failure state shows. Still a plain Error so the
+      // workflow runtime retries the step.
+      if (err.status === 429) {
+        return new Error(
+          'The AI transcription service is rate-limited right now. Please try again in a few minutes.'
+        );
+      }
+      return new Error(
+        'The AI transcription service is temporarily unavailable. Please try again.'
+      );
     }
     const inaccessible =
       /not found|not accessible|not available|private|age.restricted|unsupported|cannot process|invalid.argument|failed.precondition|permission/i.test(

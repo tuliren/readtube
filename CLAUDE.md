@@ -17,6 +17,7 @@ Turn YouTube subscriptions into a personal substack. Consume videos efficiently 
 - Never put a specific video ID, URL, title, or any of its content into committed code, comments, tests, or PR/commit descriptions. Debug with such values only in throwaway scratch files or CLI args; use neutral placeholders in anything committed.
 - When writing Prisma `upsert` statement, always ensure the unique fields have the same values in the `where` and `create` options. This enables Prisma to use native Postgres `upsert` statement.
 - When a React component file is long, separate subcomponents into their own component files.
+- When pushing new commits to a branch with an open PR, re-evaluate the PR title and description against the full change set and update them (`gh pr edit`) if they no longer cover it.
 - After making a change, thinking about updating these docs, if applicable:
   - `CLAUDE.md` (this file)
   - `README.md` for different modules

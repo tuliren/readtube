@@ -1,3 +1,5 @@
+import { extractErrorMessage } from '@/lib/workflows/errorMessage';
+
 import type { GeneratedSummary, SummaryWorkflowInput } from './steps';
 import {
   emitTerminalEventStep,
@@ -15,7 +17,7 @@ export async function summaryWorkflow(input: SummaryWorkflowInput): Promise<void
   try {
     generated = await generateSummaryStep(input);
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to generate summary.';
+    const message = extractErrorMessage(err, 'Failed to generate summary.');
     // Revert the row we claimed at start time before the terminal
     // error event closes the stream. Without this, a fresh-claim
     // failure leaves a phantom GENERATING row that the next read
@@ -30,7 +32,7 @@ export async function summaryWorkflow(input: SummaryWorkflowInput): Promise<void
   try {
     await persistSummaryStep({ ...input, ...generated });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to save summary.';
+    const message = extractErrorMessage(err, 'Failed to save summary.');
     await revertSummaryRowStep(input, message);
     await emitTerminalEventStep({ error: message });
     throw err;

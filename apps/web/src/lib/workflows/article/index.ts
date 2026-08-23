@@ -1,3 +1,5 @@
+import { extractErrorMessage } from '@/lib/workflows/errorMessage';
+
 import type { ArticleWorkflowInput, GeneratedArticle } from './steps';
 import {
   emitTerminalEventStep,
@@ -15,7 +17,7 @@ export async function articleWorkflow(input: ArticleWorkflowInput): Promise<void
   try {
     generated = await generateArticleStep(input);
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to generate article.';
+    const message = extractErrorMessage(err, 'Failed to generate article.');
     // Revert the row we claimed at start time before the terminal
     // error closes the stream. Fresh claims get DELETEd so the slot
     // is clean; regen claims revert to READY (old content stays).
@@ -29,7 +31,7 @@ export async function articleWorkflow(input: ArticleWorkflowInput): Promise<void
   try {
     await persistArticleStep({ ...input, ...generated });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to save article.';
+    const message = extractErrorMessage(err, 'Failed to save article.');
     await revertArticleRowStep(input, message);
     await emitTerminalEventStep({ error: message });
     throw err;
