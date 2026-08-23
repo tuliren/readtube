@@ -99,7 +99,6 @@ export async function probeCaptionsStep(
     return { found: false, transcriptId: null };
   }
 
-  const { workflowRunId } = getWorkflowMetadata();
   const created = await persistTranscript(prisma, {
     userId: input.userId,
     videoId: input.videoDbId,
@@ -114,7 +113,10 @@ export async function probeCaptionsStep(
     where: { id: input.videoDbId },
     data: { transcript_unavailable: false },
   });
-  await releaseTranscriptGeneration(prisma, input.videoDbId, workflowRunId);
+  // Deliberately NOT releasing the generation marker here — that
+  // happens in startSummaryGenerationStep, after the auto-summary is
+  // kicked off, so the reader's polling panel never observes a
+  // released marker before the summary run is registered.
   await safeCompleteUserRequest(input.userRequestId, {
     outcome: UserRequestOutcome.GENERATED,
     transcriptId: created.id,
@@ -360,7 +362,6 @@ export async function persistGeneratedTranscriptStep(
   const joined = segments.map((segment) => segment.text).join(' ');
   const language = detectLanguage(joined) ?? 'unknown';
 
-  const { workflowRunId } = getWorkflowMetadata();
   const created = await persistTranscript(prisma, {
     userId: input.userId,
     videoId: input.videoDbId,
@@ -369,7 +370,9 @@ export async function persistGeneratedTranscriptStep(
     source: TranscriptSource.GENERATED,
     recordAudit: false,
   });
-  await releaseTranscriptGeneration(prisma, input.videoDbId, workflowRunId);
+  // The generation marker stays GENERATING here on purpose; see
+  // startSummaryGenerationStep, which releases it after the
+  // auto-summary handoff.
   await safeCompleteUserRequest(input.userRequestId, {
     outcome: UserRequestOutcome.GENERATED,
     usage: input.usage,
@@ -386,6 +389,13 @@ export async function persistGeneratedTranscriptStep(
  * into it through the normal findActiveSummaryRun registry. Failures
  * are swallowed: the transcript is already persisted, and a missed
  * auto-summary just leaves the user the regular Generate button.
+ *
+ * This step also RELEASES the generation marker — the persist steps
+ * deliberately leave it GENERATING so the reader's polling panel keeps
+ * its spinner through the summary handoff. The panel only flips to the
+ * tabbed reader once the marker is released, and by then the summary
+ * run is registered, so SummaryReader mounts straight into the
+ * tap-in stream instead of a stale "no summary yet" state.
  */
 export async function startSummaryGenerationStep(
   input: TranscriptGenerationInput,
@@ -405,6 +415,8 @@ export async function startSummaryGenerationStep(
       err
     );
   }
+  const { workflowRunId } = getWorkflowMetadata();
+  await releaseTranscriptGeneration(prisma, input.videoDbId, workflowRunId);
 }
 
 /**

@@ -36,6 +36,16 @@ const POLL_INTERVAL_MS = 10_000;
 const MAX_HOURS = TRANSCRIPT_GENERATION_MAX_VIDEO_SECONDS / 3600;
 
 /**
+ * While the panel believes a generation is in flight, tolerate this
+ * many consecutive polls that claim "nothing here, not generating"
+ * (or fail outright) before giving up and showing the button again.
+ * A mid-run 'idle' is almost always a read-interleaving artifact or a
+ * transient server error, and flipping on it would also stop the
+ * polling loop, stranding a stale panel over a finished transcript.
+ */
+const MAX_UNEXPLAINED_POLLS = 3;
+
+/**
  * Replaces the old dead-end "no transcript" notice for caption-less
  * videos. Offers an explicit, user-triggered AI generation (never
  * automatic — each run has real model cost), shows in-flight progress
@@ -57,9 +67,30 @@ export default function TranscriptGenerationPanel({
   // every parent render).
   const onReadyRef = useRef(onTranscriptReady);
   onReadyRef.current = onTranscriptReady;
+  // Mirror of `status` for applyGetResponse, which is deliberately
+  // dependency-free (it seeds both the mount fetch and the polling
+  // interval) but needs to know whether a generation is in flight to
+  // apply the unexplained-poll tolerance below.
+  const statusRef = useRef<PanelStatus>(status);
+  statusRef.current = status;
+  const unexplainedPollsRef = useRef(0);
 
   const applyGetResponse = useCallback(async (res: Response): Promise<void> => {
     if (res.ok) {
+      // Poll mode: a 200 can arrive while the workflow is still
+      // finishing — the transcript row is persisted but the marker is
+      // held until the auto-summary handoff. Keep the spinner until
+      // the marker is released, so when the tabbed reader takes over
+      // the summary tab has a run to tap into instead of a stale
+      // "no summary" state.
+      const body = (await res.json().catch(() => null)) as {
+        generation?: { state?: string };
+      } | null;
+      unexplainedPollsRef.current = 0;
+      if (body?.generation?.state === 'generating') {
+        setStatus({ kind: 'generating' });
+        return;
+      }
       onReadyRef.current();
       return;
     }
@@ -81,31 +112,59 @@ export default function TranscriptGenerationPanel({
         return;
       }
       if (generation.state === 'generating') {
+        unexplainedPollsRef.current = 0;
         setStatus({ kind: 'generating' });
         return;
       }
       if (generation.state === 'failed') {
+        unexplainedPollsRef.current = 0;
         setStatus({
           kind: 'failed',
           message: generation.errorMessage ?? 'Transcript generation failed.',
         });
         return;
       }
+      // State 'idle' while we believe a run is in flight is a race
+      // artifact (see the server's re-check) or a run that vanished
+      // without a marker. Keep the spinner for a few polls — flipping
+      // to 'idle' would also stop the polling loop.
+      if (
+        statusRef.current.kind === 'generating' &&
+        unexplainedPollsRef.current < MAX_UNEXPLAINED_POLLS
+      ) {
+        unexplainedPollsRef.current += 1;
+        return;
+      }
+      unexplainedPollsRef.current = 0;
       setStatus({ kind: 'idle', exceedsLengthCap: generation.exceedsLengthCap === true });
       return;
     }
     // 404 (not tried) or transient errors: the parent only renders
     // this panel when the sticky flag is known, so just offer the
-    // button; the POST guards catch anything odd.
+    // button; the POST guards catch anything odd. Mid-generation,
+    // apply the same tolerance as the 'idle' case so a server blip
+    // doesn't strand a stale panel over a finishing run.
+    if (
+      statusRef.current.kind === 'generating' &&
+      unexplainedPollsRef.current < MAX_UNEXPLAINED_POLLS
+    ) {
+      unexplainedPollsRef.current += 1;
+      return;
+    }
+    unexplainedPollsRef.current = 0;
     setStatus({ kind: 'idle' });
   }, []);
 
   // Seed the panel from the server on mount / video change. A page
   // refresh mid-generation lands directly in the 'generating' state.
+  // `poll=1` asks for generation state alongside a cached transcript,
+  // so a refresh during the summary handoff keeps the spinner instead
+  // of flashing an intermediate state.
   useEffect(() => {
     let cancelled = false;
+    unexplainedPollsRef.current = 0;
     setStatus({ kind: 'checking' });
-    fetch(`/api/videos/${videoDbId}/transcript`)
+    fetch(`/api/videos/${videoDbId}/transcript?poll=1`)
       .then((res) => {
         if (!cancelled) {
           return applyGetResponse(res);
@@ -122,14 +181,16 @@ export default function TranscriptGenerationPanel({
   }, [videoDbId, applyGetResponse]);
 
   // Poll while generating. The GET route doubles as progress endpoint:
-  // 200 means the transcript row landed; a 410 whose generation.state
-  // is 'failed' means the workflow reverted with an error.
+  // a 200 whose generation.state is no longer 'generating' means the
+  // transcript landed AND the auto-summary handoff finished; a 410
+  // whose generation.state is 'failed' means the workflow reverted
+  // with an error.
   useEffect(() => {
     if (status.kind !== 'generating') {
       return;
     }
     const interval = setInterval(() => {
-      fetch(`/api/videos/${videoDbId}/transcript`)
+      fetch(`/api/videos/${videoDbId}/transcript?poll=1`)
         .then((res) => applyGetResponse(res))
         .catch(() => {
           // Transient poll failure — keep polling.
@@ -154,6 +215,7 @@ export default function TranscriptGenerationPanel({
           onReadyRef.current();
           return;
         }
+        unexplainedPollsRef.current = 0;
         setStatus({ kind: 'generating' });
         return;
       }
