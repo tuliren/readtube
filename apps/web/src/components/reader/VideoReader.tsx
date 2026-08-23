@@ -895,6 +895,7 @@ export default function VideoReader({
                 gaps={transcriptGaps}
                 platform={video.platform}
                 sourceId={video.sourceId}
+                durationSeconds={video.durationSeconds}
               />
 
               {/* Signup nudge for public viewers — placed after the
