@@ -156,6 +156,16 @@ export const TRANSCRIPT_GENERATION_MIN_INPUT_TOKENS = 1000;
 export const TRANSCRIPT_GENERATION_MIN_COVERAGE_RATIO = 0.5;
 
 /**
+ * Minimum length of an uncovered stretch (seconds) before the reader
+ * flags it as a gap in an AI-generated transcript. A content-policy
+ * block skips a whole {@link TRANSCRIPT_GENERATION_CHUNK_SECONDS} window
+ * and an output-token truncation drops the tail, both far longer than
+ * this; the floor keeps natural pauses and short non-speech stretches
+ * from reading as missing content. Tunable.
+ */
+export const TRANSCRIPT_GAP_NOTICE_MIN_SECONDS = 120;
+
+/**
  * Maximum attempts (initial + retries) for `streamText` calls in
  * generation steps when nothing has been streamed to the client yet.
  * Once any delta has been emitted, retrying would re-stream content

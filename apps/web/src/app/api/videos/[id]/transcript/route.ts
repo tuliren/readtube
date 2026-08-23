@@ -1,9 +1,14 @@
 import { auth } from '@clerk/nextjs/server';
-import { VideoPlatformType, prisma } from '@readtube/database';
+import { TranscriptSource, VideoPlatformType, prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 
-import { TRANSCRIPT_GENERATION_MAX_VIDEO_SECONDS } from '@/constants';
+import {
+  TRANSCRIPT_GAP_NOTICE_MIN_SECONDS,
+  TRANSCRIPT_GENERATION_MAX_VIDEO_SECONDS,
+} from '@/constants';
+import type { TranscriptSegment } from '@/lib/platforms/types';
 import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
+import { computeTranscriptGaps } from '@/lib/transcripts/transcriptGaps';
 import { findActiveTranscriptGeneration } from '@/lib/workflows/runRegistry';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -75,11 +80,21 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         errorMessage: state === 'failed' ? video.transcript_generation_error : null,
       };
     }
+    const segments = JSON.parse(cached.text) as TranscriptSegment[];
+    // Surface the stretches AI generation left uncovered (content-policy
+    // blocks, output truncation) so the reader can flag them. Only for
+    // GENERATED transcripts — platform captions legitimately omit music
+    // and silence, which would read as false gaps.
+    const missingRanges =
+      cached.source === TranscriptSource.GENERATED
+        ? computeTranscriptGaps(segments, video.duration_seconds, TRANSCRIPT_GAP_NOTICE_MIN_SECONDS)
+        : [];
     return NextResponse.json({
       id: cached.id,
-      segments: JSON.parse(cached.text),
+      segments,
       language: cached.language,
       source: cached.source,
+      missingRanges,
       ...(generation != null ? { generation } : {}),
     });
   }

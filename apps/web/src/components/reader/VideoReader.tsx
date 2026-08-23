@@ -14,6 +14,7 @@ import ThemeSelector from '@/components/settings/ThemeSelector';
 import { Button } from '@/components/ui/button';
 import { formatDurationSeconds } from '@/lib/format/duration';
 import { findTargetLanguage } from '@/lib/language/names';
+import type { TranscriptGap } from '@/lib/transcripts/transcriptGaps';
 import type { VideoData } from '@/lib/types';
 import { channelHref } from '@/lib/urls/channelHref';
 import { videoHref } from '@/lib/urls/videoHref';
@@ -21,6 +22,7 @@ import { buildChannelLink, buildWatchLink } from '@/lib/urls/watchUrl';
 
 import ArticleReader from './ArticleReader';
 import FollowChannelDialogButton from './FollowChannelDialogButton';
+import IncompleteTranscriptNotice from './IncompleteTranscriptNotice';
 import NotesPanel from './NotesPanel';
 import PublicSignupCta from './PublicSignupCta';
 import ReadingTimeBadge from './ReadingTimeBadge';
@@ -218,6 +220,12 @@ export default function VideoReader({
   const [articleWords, setArticleWords] = useState(0);
   const [transcriptWords, setTranscriptWords] = useState(0);
 
+  // Stretches the AI transcript left uncovered (content-policy blocks,
+  // output truncation), reported up by TranscriptReader. Drives one
+  // shared incomplete-transcript notice under all three tabs, since the
+  // summary and article are generated from the same gapped transcript.
+  const [transcriptGaps, setTranscriptGaps] = useState<TranscriptGap[]>([]);
+
   // Per-tab "generation in progress" flag. While true the tab header
   // hides the reading-time badge (which would tick up dishonestly as
   // partial deltas land) and shows a small spinner instead. Mirrors
@@ -264,6 +272,7 @@ export default function VideoReader({
     setSummaryWords(0);
     setArticleWords(0);
     setTranscriptWords(0);
+    setTranscriptGaps([]);
     setSummaryGenerating(false);
     setArticleGenerating(false);
     // Re-pick the default tab for the new video. A stale activeTab
@@ -404,6 +413,10 @@ export default function VideoReader({
   const handleSummaryWordsChange = useCallback((words: number) => setSummaryWords(words), []);
   const handleArticleWordsChange = useCallback((words: number) => setArticleWords(words), []);
   const handleTranscriptWordsChange = useCallback((words: number) => setTranscriptWords(words), []);
+  const handleTranscriptGapsChange = useCallback(
+    (gaps: TranscriptGap[]) => setTranscriptGaps(gaps),
+    []
+  );
   const handleSummaryGeneratingChange = useCallback(
     (generating: boolean) => setSummaryGenerating(generating),
     []
@@ -868,10 +881,21 @@ export default function VideoReader({
                       transcriptStatus={transcriptStatus}
                       onTranscriptStatusChange={setTranscriptStatus}
                       onTranscriptWordsChange={handleTranscriptWordsChange}
+                      onTranscriptGapsChange={handleTranscriptGapsChange}
                     />
                   </div>
                 )}
               </div>
+
+              {/* One shared "incomplete transcript" notice under all
+                  three tabs: the summary and article are generated from
+                  the same gapped transcript, so the omission applies to
+                  every tab, not just the raw transcript. */}
+              <IncompleteTranscriptNotice
+                gaps={transcriptGaps}
+                platform={video.platform}
+                sourceId={video.sourceId}
+              />
 
               {/* Signup nudge for public viewers — placed after the
                   content they just finished reading and before the AI
