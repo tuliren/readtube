@@ -49,8 +49,9 @@ export default function IncompleteTranscriptNotice({
       </p>
       <p className="mt-1 text-amber-800/90 dark:text-amber-200/90">
         AI transcription could not cover {gaps.length === 1 ? 'one part' : 'some parts'} of this
-        video, so the transcript, summary, and article all skip {gaps.length === 1 ? 'it' : 'them'}.
-        Watch the original for what is missing:
+        video, usually because a section triggered the model&apos;s content policy or the output was
+        cut short. The transcript, summary, and article all skip{' '}
+        {gaps.length === 1 ? 'that part' : 'those parts'}. Watch the original for what is missing:
       </p>
       <ul className="mt-2 space-y-1">
         {gaps.map((gap) => {

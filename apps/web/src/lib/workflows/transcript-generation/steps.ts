@@ -264,6 +264,12 @@ async function transcribeWindow(
       signal: AbortSignal.timeout(TRANSCRIPT_GENERATION_TIMEOUT_MS),
     });
   } catch (err) {
+    // The raw upstream error goes to the logs; classifyGenerationError
+    // maps it to copy the reader panel can show if retries run out.
+    console.warn(
+      `[transcriptGeneration] ${formatWindow(window)} window failed for video ${input.videoDbId}:`,
+      err
+    );
     throw classifyGenerationError(err);
   }
 
@@ -459,7 +465,18 @@ function classifyGenerationError(err: unknown): Error {
   }
   if (err instanceof GeminiVideoError) {
     if (err.retryable) {
-      return err;
+      // Replace the raw API payload with copy fit for the reader
+      // panel: after the step's retries are exhausted, this message is
+      // what the failure state shows. Still a plain Error so the
+      // workflow runtime retries the step.
+      if (err.status === 429) {
+        return new Error(
+          'The AI transcription service is rate-limited right now. Please try again in a few minutes.'
+        );
+      }
+      return new Error(
+        'The AI transcription service is temporarily unavailable. Please try again.'
+      );
     }
     const inaccessible =
       /not found|not accessible|not available|private|age.restricted|unsupported|cannot process|invalid.argument|failed.precondition|permission/i.test(

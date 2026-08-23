@@ -1,3 +1,5 @@
+import { extractErrorMessage } from '@/lib/workflows/errorMessage';
+
 import type { TranscriptGenerationInput } from './steps';
 import {
   failTranscriptGenerationStep,
@@ -44,8 +46,10 @@ export async function transcriptGenerationWorkflow(
       transcriptId = persisted.transcriptId;
     }
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to generate transcript.';
-    await failTranscriptGenerationStep(input, message);
+    await failTranscriptGenerationStep(
+      input,
+      extractErrorMessage(err, 'Failed to generate transcript.')
+    );
     throw err;
   }
 
