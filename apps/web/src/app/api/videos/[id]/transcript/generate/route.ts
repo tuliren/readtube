@@ -5,6 +5,7 @@ import { getRun, start } from 'workflow/api';
 
 import { TRANSCRIPT_GENERATION_MAX_VIDEO_SECONDS, TRANSCRIPT_GENERATION_MODEL } from '@/constants';
 import { recordTranscriptRequest } from '@/lib/usage/userRequest';
+import { VercelEnv, getVercelEnv } from '@/lib/vercelEnv';
 import {
   claimTranscriptGeneration,
   findActiveTranscriptGeneration,
@@ -20,7 +21,7 @@ import { TRANSCRIPT_GENERATION_PROMPT_VERSION } from '@/lib/workflows/transcript
  * endpoint only accepts videos where the captions path has already
  * been tried and permanently failed (`transcript_unavailable`).
  */
-export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { userId } = await auth();
   if (userId == null) {
     console.error('[transcript/generate/POST] Unauthorized');
@@ -28,6 +29,17 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
   }
 
   const { id } = await params;
+
+  // Dev-only regeneration. In production a generated transcript is
+  // final (each run costs real money and there is no per-user cap yet),
+  // so this override is gated to the local dev server: it lets us
+  // re-run generation over an existing transcript to test the pipeline.
+  // The client sends `?force=1` from the dev-only Regenerate button; the
+  // env gate here is the authority so a crafted request can't regenerate
+  // in a deployed environment.
+  const forceRegenerate =
+    getVercelEnv(process.env.VERCEL_ENV) === VercelEnv.DEVELOPMENT &&
+    request.nextUrl.searchParams.get('force') === '1';
 
   const video = await prisma.video.findFirst({
     where: {
@@ -57,8 +69,11 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
   }
 
   // A transcript already exists — nothing to generate. The client
-  // refetches the GET route and renders it.
-  if (video.transcripts[0] != null) {
+  // refetches the GET route and renders it. Skipped under a dev-only
+  // force-regenerate, which deliberately re-runs generation over the
+  // existing transcript (the workflow writes a new row that supersedes
+  // it, since reads take the most recent transcript).
+  if (video.transcripts[0] != null && !forceRegenerate) {
     return NextResponse.json({ status: 'ready' });
   }
 

@@ -6,7 +6,7 @@ import { TRANSCRIPT_GENERATION_MAX_VIDEO_SECONDS } from '@/constants';
 import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
 import { findActiveTranscriptGeneration } from '@/lib/workflows/runRegistry';
 
-export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { userId } = await auth();
   if (userId == null) {
     console.error('[videos/transcript/GET] Unauthorized');
@@ -14,6 +14,12 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   }
 
   const { id } = await params;
+
+  // `?poll=1` asks for live generation state alongside an existing
+  // transcript — used by the dev Regenerate flow to tell when a fresh
+  // run has landed (new transcript id) or failed. Off the hot path:
+  // normal reads skip the extra getRun probe.
+  const withGeneration = request.nextUrl.searchParams.get('poll') === '1';
 
   console.info(`[videos/transcript/GET] Fetching transcript for video ${id}, user ${userId}`);
 
@@ -37,7 +43,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       transcripts: {
         orderBy: { created_at: 'desc' },
         take: 1,
-        select: { text: true, language: true, source: true },
+        select: { id: true, text: true, language: true, source: true },
       },
     },
   });
@@ -48,10 +54,33 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
   const cached = video.transcripts[0];
   if (cached != null) {
+    // In poll mode, report whether a (re)generation is still in flight
+    // so the client can distinguish "new transcript landed" (id changed)
+    // from "the run reverted" (state failed). findActiveTranscriptGeneration
+    // also cleans up stale GENERATING markers, so a dead run surfaces as
+    // 'failed' rather than polling forever.
+    let generation:
+      | { state: 'idle' | 'generating' | 'failed'; errorMessage: string | null }
+      | undefined;
+    if (withGeneration) {
+      const active = await findActiveTranscriptGeneration(prisma, video.id);
+      const state =
+        active != null
+          ? 'generating'
+          : video.transcript_generation_error != null
+            ? 'failed'
+            : 'idle';
+      generation = {
+        state,
+        errorMessage: state === 'failed' ? video.transcript_generation_error : null,
+      };
+    }
     return NextResponse.json({
+      id: cached.id,
       segments: JSON.parse(cached.text),
       language: cached.language,
       source: cached.source,
+      ...(generation != null ? { generation } : {}),
     });
   }
 
