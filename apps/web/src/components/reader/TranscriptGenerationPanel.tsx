@@ -185,19 +185,35 @@ export default function TranscriptGenerationPanel({
   // transcript landed AND the auto-summary handoff finished; a 410
   // whose generation.state is 'failed' means the workflow reverted
   // with an error.
+  //
+  // Browsers throttle interval timers in background tabs (Chrome: to
+  // ~once a minute, more aggressively after prolonged inactivity), so
+  // a user who switches away during generation can come back to a
+  // spinner whose decisive poll hasn't fired yet. The visibilitychange
+  // listener fires a poll the moment the tab is foregrounded again, so
+  // the panel flips immediately instead of waiting out the throttled
+  // interval.
   useEffect(() => {
     if (status.kind !== 'generating') {
       return;
     }
-    const interval = setInterval(() => {
+    const poll = () => {
       fetch(`/api/videos/${videoDbId}/transcript?poll=1`)
         .then((res) => applyGetResponse(res))
         .catch(() => {
           // Transient poll failure — keep polling.
         });
-    }, POLL_INTERVAL_MS);
+    };
+    const interval = setInterval(poll, POLL_INTERVAL_MS);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        poll();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
     return () => {
       clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
     };
   }, [status.kind, videoDbId, applyGetResponse]);
 
