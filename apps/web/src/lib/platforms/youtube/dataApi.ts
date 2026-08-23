@@ -464,6 +464,24 @@ export async function fetchVideoViaDataApi(videoId: string): Promise<VideoSnapsh
   };
 }
 
+/**
+ * Duration-only lookup: one videos.list call for `contentDetails`
+ * (1 unit) — far cheaper than the full video snapshot (3 units with
+ * the members-only and channel-enrichment calls). Returns null when
+ * the video is invisible to the API (private / deleted) or carries no
+ * parseable duration, so the caller can fall back to the watch-page
+ * scrape. Throws on request failure (quota, network).
+ */
+export async function fetchVideoDurationViaDataApi(videoId: string): Promise<number | null> {
+  console.info(`[youtube] Fetching video duration via Data API: ${videoId}`);
+
+  const res = await dataApiFetch<VideosListResponse>('videos', {
+    part: 'contentDetails',
+    id: videoId,
+  });
+  return parseIsoDurationSeconds(res.items?.[0]?.contentDetails?.duration);
+}
+
 /** Scheduled/upcoming state of a single video, for scheduledVideo.ts. */
 export interface DataApiScheduledStatus {
   isUpcoming: boolean;

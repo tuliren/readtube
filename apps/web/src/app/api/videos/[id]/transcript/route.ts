@@ -108,17 +108,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   // Fetch button for that path.
   if (video.transcript_unavailable) {
     console.info(`[videos/transcript/GET] Transcript sticky-unavailable for video ${id}`);
-    const eligible =
-      video.source_type === VideoPlatformType.YOUTUBE &&
-      video.duration_seconds != null &&
-      video.duration_seconds <= TRANSCRIPT_GENERATION_MAX_VIDEO_SECONDS;
-    const ineligibleReason = eligible
-      ? null
-      : video.source_type !== VideoPlatformType.YOUTUBE
-        ? 'platform'
-        : video.duration_seconds == null
-          ? 'duration-unknown'
-          : 'too-long';
+    // Platform is the only hard gate: Gemini can only ingest YouTube
+    // watch URLs. An unknown duration is resolved on demand by the
+    // generate route, and an over-cap duration is transcribed up to
+    // TRANSCRIPT_GENERATION_MAX_VIDEO_SECONDS — neither blocks the
+    // Generate button anymore.
+    const eligible = video.source_type === VideoPlatformType.YOUTUBE;
+    const ineligibleReason = eligible ? null : 'platform';
     // findActiveTranscriptGeneration doubles as stale-marker cleanup:
     // a poll after the workflow dies flips the row back to READY with
     // a timeout message, which the next poll reports as 'failed'.
@@ -134,6 +130,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           ineligibleReason,
           state,
           errorMessage: state === 'failed' ? video.transcript_generation_error : null,
+          // Heads-up for the idle panel: a known over-cap duration
+          // means generation will stop at the cap and leave the tail
+          // untranscribed.
+          exceedsLengthCap:
+            video.duration_seconds != null &&
+            video.duration_seconds > TRANSCRIPT_GENERATION_MAX_VIDEO_SECONDS,
         },
       },
       { status: 410 }

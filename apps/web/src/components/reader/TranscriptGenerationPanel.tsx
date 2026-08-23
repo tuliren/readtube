@@ -7,9 +7,12 @@ import { TRANSCRIPT_GENERATION_MAX_VIDEO_SECONDS } from '@/constants';
 
 interface GenerationInfo {
   eligible: boolean;
-  ineligibleReason: 'platform' | 'too-long' | 'duration-unknown' | null;
+  ineligibleReason: 'platform' | null;
   state: 'idle' | 'generating' | 'failed';
   errorMessage: string | null;
+  /** True when the video is longer than the AI transcription cap, so
+   *  only the first MAX_HOURS hours would be transcribed. */
+  exceedsLengthCap?: boolean;
 }
 
 interface Props {
@@ -24,23 +27,13 @@ interface Props {
 
 type PanelStatus =
   | { kind: 'checking' }
-  | { kind: 'idle' }
+  | { kind: 'idle'; exceedsLengthCap?: boolean }
   | { kind: 'generating' }
   | { kind: 'failed'; message: string }
   | { kind: 'ineligible'; message: string };
 
 const POLL_INTERVAL_MS = 10_000;
 const MAX_HOURS = TRANSCRIPT_GENERATION_MAX_VIDEO_SECONDS / 3600;
-
-function ineligibleMessage(reason: GenerationInfo['ineligibleReason']): string {
-  if (reason === 'platform') {
-    return 'AI transcription is only supported for YouTube videos.';
-  }
-  if (reason === 'too-long') {
-    return `AI transcription currently supports videos up to ${MAX_HOURS} hours.`;
-  }
-  return 'AI transcription is not available for this video because its duration is unknown.';
-}
 
 /**
  * Replaces the old dead-end "no transcript" notice for caption-less
@@ -81,7 +74,10 @@ export default function TranscriptGenerationPanel({
         return;
       }
       if (!generation.eligible) {
-        setStatus({ kind: 'ineligible', message: ineligibleMessage(generation.ineligibleReason) });
+        setStatus({
+          kind: 'ineligible',
+          message: 'AI transcription is only supported for YouTube videos.',
+        });
         return;
       }
       if (generation.state === 'generating') {
@@ -95,7 +91,7 @@ export default function TranscriptGenerationPanel({
         });
         return;
       }
-      setStatus({ kind: 'idle' });
+      setStatus({ kind: 'idle', exceedsLengthCap: generation.exceedsLengthCap === true });
       return;
     }
     // 404 (not tried) or transient errors: the parent only renders
@@ -231,10 +227,18 @@ export default function TranscriptGenerationPanel({
       {status.kind === 'failed' ? (
         <p className="mt-2 text-sm text-red-700 dark:text-red-300">{status.message}</p>
       ) : (
-        <p className="mt-2 text-sm text-amber-700 dark:text-amber-300">
-          ReadTube can transcribe it with AI instead. Generation runs in the background and can take
-          several minutes for long videos.
-        </p>
+        <>
+          <p className="mt-2 text-sm text-amber-700 dark:text-amber-300">
+            ReadTube can transcribe it with AI instead. Generation runs in the background and can
+            take several minutes for long videos.
+          </p>
+          {status.exceedsLengthCap === true && (
+            <p className="mt-2 text-sm text-amber-700 dark:text-amber-300">
+              This video is longer than {MAX_HOURS} hours, so only the first {MAX_HOURS} hours will
+              be transcribed.
+            </p>
+          )}
+        </>
       )}
       <div className="mt-4">
         <button

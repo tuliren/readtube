@@ -109,14 +109,19 @@ export const TRANSCRIPT_GENERATION_MAX_PARALLEL_WINDOWS = 9;
 export const TRANSCRIPT_GENERATION_MAX_OUTPUT_TOKENS = 65_536;
 
 /**
- * Refuse to generate transcripts for videos longer than this.
- * Transcript output scales with speech (~24k tokens/hour measured on
- * dense Chinese speech), so a dense 3 h video (~72k tokens) can overrun
- * the 65,536 output-token ceiling; when it does, the parser's
- * truncation salvage persists the completed prefix. Most videos are far
- * less dense and finish comfortably under the ceiling. Fully covering
- * dense long videos needs chunked generation (videoMetadata start/end
- * offsets) — a follow-up if demand appears.
+ * Transcribe at most this much of a video. Longer videos are NOT
+ * rejected — generation windows are planned only up to this cap, the
+ * tail is left untranscribed, and the reader flags it as a trailing
+ * gap (plus a length-cap note) via the transcript GET's gap
+ * computation. The cap bounds per-run model cost and keeps the window
+ * count within one parallel batch
+ * ({@link TRANSCRIPT_GENERATION_MAX_PARALLEL_WINDOWS}). It also tracks
+ * the output-token budget: transcript output scales with speech (~24k
+ * tokens/hour measured on dense Chinese speech), so a dense 3 h of
+ * content (~72k tokens) can overrun the 65,536 output-token ceiling;
+ * when it does, the parser's truncation salvage persists the completed
+ * prefix. Most videos are far less dense and finish comfortably under
+ * the ceiling.
  */
 export const TRANSCRIPT_GENERATION_MAX_VIDEO_SECONDS = 3 * 60 * 60;
 
