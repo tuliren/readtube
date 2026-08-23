@@ -4,21 +4,34 @@ import {
   VideoPlatformType,
   prisma,
 } from '@readtube/database';
-import { APICallError, generateText } from 'ai';
 import { FatalError, getWorkflowMetadata } from 'workflow';
 
 import {
+  TRANSCRIPT_GENERATION_CHUNK_SECONDS,
   TRANSCRIPT_GENERATION_MAX_OUTPUT_TOKENS,
-  TRANSCRIPT_GENERATION_MODEL,
+  TRANSCRIPT_GENERATION_MAX_PARALLEL_WINDOWS,
   TRANSCRIPT_GENERATION_TIMEOUT_MS,
 } from '@/constants';
+import {
+  GeminiVideoError,
+  type VideoWindowUsage,
+  generateFromVideoWindow,
+} from '@/lib/ai/geminiVideo';
 import { detectLanguage } from '@/lib/language/detect';
 import { getPlatformByType } from '@/lib/platforms';
+import type { TranscriptSegment } from '@/lib/platforms/types';
 import { persistTranscript } from '@/lib/transcripts/ensureTranscript';
 import {
   TranscriptParseError,
   parseGeneratedTranscript,
 } from '@/lib/transcripts/parseGeneratedTranscript';
+import {
+  type TranscriptWindow,
+  normalizeWindowTimestamps,
+  planTranscriptWindows,
+  stitchWindowSegments,
+} from '@/lib/transcripts/transcriptWindows';
+import { assertUsableGeneration } from '@/lib/transcripts/validateGeneratedTranscript';
 import { completeUserRequest } from '@/lib/usage/userRequest';
 import {
   releaseTranscriptGeneration,
@@ -45,7 +58,7 @@ export interface TranscriptGenerationInput {
 }
 
 export interface GeneratedTranscript {
-  rawText: string;
+  segments: TranscriptSegment[];
   usage: unknown;
   finishReason: string;
 }
@@ -108,61 +121,173 @@ export async function probeCaptionsStep(
 }
 
 /**
- * The paid step: hand Gemini the YouTube watch URL as a file part
- * (the AI Gateway forwards it; Gemini ingests the video server-side)
- * and collect the raw segment JSON. Errors that retrying cannot fix —
- * the model can't access the video at all — are classified as
- * FatalError so the workflow runtime doesn't re-bill a doomed call.
+ * The paid step: transcribe the video via the native Gemini API,
+ * chunked so long videos actually ingest.
+ *
+ * Gemini caps YouTube-URL ingestion at ~1 h per request — a longer
+ * video comes back with zero video tokens and the model hallucinates
+ * from the title (see `TRANSCRIPT_GENERATION_MODEL` in constants). So we
+ * split the video into {@link TRANSCRIPT_GENERATION_CHUNK_SECONDS}
+ * windows, transcribe each with a `video_metadata` offset (windows use
+ * absolute timestamps, so stitching is a plain concatenation), then
+ * validate the stitched result.
+ *
+ * Parsing + validation live here, not in persist, on purpose: a
+ * hallucinated/partial window throws a retryable error and the runtime
+ * re-runs THIS step (fresh model calls) — the only way to recover.
+ * Validating in persist would retry the same cached text forever.
+ *
+ * Errors retrying cannot fix — the video is inaccessible, or a window's
+ * response can't be parsed — are FatalError so the runtime doesn't
+ * re-bill a doomed call.
  */
 export async function generateTranscriptStep(
   input: TranscriptGenerationInput
 ): Promise<GeneratedTranscript> {
   'use step';
 
+  if (input.durationSeconds == null) {
+    // The route requires a known duration; windows can't be planned
+    // without it, so a null here is a bug, not a retryable condition.
+    throw new FatalError('Video duration is required for AI transcript generation.');
+  }
+  const durationSeconds = input.durationSeconds;
+  const videoUrl = `https://www.youtube.com/watch?v=${input.videoSourceId}`;
+  const windows = planTranscriptWindows(durationSeconds, TRANSCRIPT_GENERATION_CHUNK_SECONDS);
+
+  const results = await mapWithConcurrency(
+    windows,
+    TRANSCRIPT_GENERATION_MAX_PARALLEL_WINDOWS,
+    (window) => transcribeWindow(input, videoUrl, window)
+  );
+
+  const stitched = stitchWindowSegments(
+    results.map((r) => r.segments),
+    durationSeconds
+  );
+
+  const totalInputTokens = results.reduce((sum, r) => sum + (r.usage.inputTokens ?? 0), 0);
+  // If any window hit the output-token ceiling its coverage is partial;
+  // flag it so the coverage guard salvages rather than rejects.
+  const finishReason = results.some((r) => r.finishReason === 'length') ? 'length' : 'stop';
+
+  try {
+    assertUsableGeneration({
+      segments: stitched,
+      durationSeconds,
+      finishReason,
+      inputTokens: totalInputTokens > 0 ? totalInputTokens : null,
+    });
+  } catch (err) {
+    const coveredMs = stitched.reduce((max, segment) => Math.max(max, segment.endMs), 0);
+    console.warn(
+      `[transcriptGeneration] rejecting unusable output for video ${input.videoDbId}: ` +
+        `windows=${windows.length}, inputTokens=${totalInputTokens}, segments=${stitched.length}, ` +
+        `coveredMs=${coveredMs}, durationMs=${durationSeconds * 1000}, finishReason=${finishReason}`
+    );
+    throw err;
+  }
+
+  return {
+    segments: stitched,
+    usage: aggregateWindowUsage(results),
+    finishReason,
+  };
+}
+
+interface WindowResult {
+  segments: TranscriptSegment[];
+  usage: VideoWindowUsage;
+  finishReason: string;
+}
+
+/** Transcribe one window: native call, ingestion guard, parse, and
+ *  normalize timestamps to absolute time. */
+async function transcribeWindow(
+  input: TranscriptGenerationInput,
+  videoUrl: string,
+  window: TranscriptWindow
+): Promise<WindowResult> {
   let result;
   try {
-    result = await generateText({
-      model: TRANSCRIPT_GENERATION_MODEL,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: buildTranscriptGenerationPrompt() },
-            {
-              type: 'file',
-              data: new URL(`https://www.youtube.com/watch?v=${input.videoSourceId}`),
-              mediaType: 'video/mp4',
-            },
-          ],
-        },
-      ],
-      providerOptions: {
-        // Transcription only needs the audio track, but there is no
-        // gateway knob to drop video frames yet — low resolution at
-        // least minimizes the per-frame token cost.
-        google: { mediaResolution: 'MEDIA_RESOLUTION_LOW' },
-      },
+    result = await generateFromVideoWindow({
+      prompt: buildTranscriptGenerationPrompt(),
+      videoUrl,
+      startOffsetSec: window.startSec,
+      endOffsetSec: window.endSec,
       maxOutputTokens: TRANSCRIPT_GENERATION_MAX_OUTPUT_TOKENS,
-      // generateText has no incremental output to watchdog (unlike the
-      // summary/article streams), so a total-duration abort is the
-      // stall guard. Sized to stay under the workflow step budget.
-      abortSignal: AbortSignal.timeout(TRANSCRIPT_GENERATION_TIMEOUT_MS),
+      // Total-duration abort is the stall guard; sized to stay under the
+      // workflow step budget even with windows running in parallel.
+      signal: AbortSignal.timeout(TRANSCRIPT_GENERATION_TIMEOUT_MS),
     });
   } catch (err) {
     throw classifyGenerationError(err);
   }
 
+  // Ingestion guard: zero VIDEO tokens means Gemini didn't watch this
+  // window (length cap or fetch miss) and is hallucinating. Retryable —
+  // a fresh call usually ingests.
+  if (result.usage.videoTokens != null && result.usage.videoTokens <= 0) {
+    throw new Error(
+      `The model did not read the ${formatWindow(window)} segment of the video. Please try again.`
+    );
+  }
+
+  let segments;
+  try {
+    // No duration clamp here — normalizeWindowTimestamps inspects the
+    // raw offsets first, then stitchWindowSegments clamps to the video.
+    segments = parseGeneratedTranscript(result.text, { durationMs: null });
+  } catch (err) {
+    if (err instanceof TranscriptParseError) {
+      throw new FatalError(`The model returned an unusable transcript: ${err.message}`);
+    }
+    throw err;
+  }
+
   return {
-    rawText: result.text,
-    usage: serializableUsage(result.usage),
+    segments: normalizeWindowTimestamps(segments, window),
+    usage: result.usage,
     finishReason: result.finishReason,
   };
 }
 
+/** Run `fn` over `items` in ordered batches of at most `limit`,
+ *  preserving input order and rejecting on the first error. */
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  for (let i = 0; i < items.length; i += limit) {
+    const batch = items.slice(i, i + limit);
+    const settled = await Promise.all(batch.map((item) => fn(item)));
+    for (let j = 0; j < settled.length; j++) {
+      results[i + j] = settled[j];
+    }
+  }
+  return results;
+}
+
+function aggregateWindowUsage(results: WindowResult[]): unknown {
+  const totals = { inputTokens: 0, outputTokens: 0, videoTokens: 0, windows: results.length };
+  for (const r of results) {
+    totals.inputTokens += r.usage.inputTokens ?? 0;
+    totals.outputTokens += r.usage.outputTokens ?? 0;
+    totals.videoTokens += r.usage.videoTokens ?? 0;
+  }
+  return totals;
+}
+
+function formatWindow(window: TranscriptWindow): string {
+  return `${Math.floor(window.startSec / 60)}–${Math.ceil(window.endSec / 60)} min`;
+}
+
 /**
- * Parse, persist, release the claim, and backfill the audit row.
- * Parse failures are FatalError — the raw text is deterministic, so a
- * retry would spend nothing but also fix nothing.
+ * Persist the validated segments, release the claim, and backfill the
+ * audit row. Parsing and quality validation already ran in the generate
+ * step (see {@link generateTranscriptStep}), so this step is pure I/O.
  */
 export async function persistGeneratedTranscriptStep(
   input: TranscriptGenerationInput & GeneratedTranscript
@@ -176,18 +301,7 @@ export async function persistGeneratedTranscriptStep(
     );
   }
 
-  let segments;
-  try {
-    segments = parseGeneratedTranscript(input.rawText, {
-      durationMs: input.durationSeconds == null ? null : input.durationSeconds * 1000,
-    });
-  } catch (err) {
-    if (err instanceof TranscriptParseError) {
-      throw new FatalError(`The model returned an unusable transcript: ${err.message}`);
-    }
-    throw err;
-  }
-
+  const { segments } = input;
   const joined = segments.map((segment) => segment.text).join(' ');
   const language = detectLanguage(joined) ?? 'unknown';
 
@@ -266,49 +380,35 @@ export async function failTranscriptGenerationStep(
 /**
  * Decide whether a model-call failure is worth retrying. Access
  * problems (private / removed / unsupported video) and other
- * non-retryable API rejections come back as 4xx responses — retrying
- * re-bills a doomed call, so map them to FatalError with a friendly
- * message. Timeouts and network/5xx/429 blips stay plain Errors so
- * the workflow runtime's step retry gets another shot.
+ * non-retryable rejections come back as {@link GeminiVideoError} with
+ * `retryable=false` — retrying re-bills a doomed call, so map them to
+ * FatalError with a friendly message. Timeouts and network/5xx/429
+ * blips stay plain Errors so the workflow runtime's step retry gets
+ * another shot.
  */
 function classifyGenerationError(err: unknown): Error {
   if (err instanceof Error && err.name === 'TimeoutError') {
     return new Error('Transcript generation timed out. Please try again.');
   }
-  if (APICallError.isInstance(err)) {
-    const retryable = err.isRetryable || err.statusCode == null || err.statusCode >= 500;
-    if (!retryable) {
-      const detail = `${err.message} ${String(err.responseBody ?? '')}`;
-      const inaccessible =
-        /not found|not accessible|not available|private|age.restricted|unsupported|cannot process|invalid.argument|failed.precondition/i.test(
-          detail
-        );
-      if (inaccessible) {
-        return new FatalError(
-          'The model could not access this video. It may be private, age-restricted, or removed.'
-        );
-      }
-      return new FatalError(truncateForDisplay(`Transcript generation failed: ${err.message}`));
+  if (err instanceof GeminiVideoError) {
+    if (err.retryable) {
+      return err;
     }
+    const inaccessible =
+      /not found|not accessible|not available|private|age.restricted|unsupported|cannot process|invalid.argument|failed.precondition|permission/i.test(
+        err.message
+      );
+    if (inaccessible) {
+      return new FatalError(
+        'The model could not access this video. It may be private, age-restricted, or removed.'
+      );
+    }
+    return new FatalError(truncateForDisplay(`Transcript generation failed: ${err.message}`));
   }
   if (err instanceof Error) {
     return err;
   }
   return new Error('Transcript generation failed.');
-}
-
-/** Workflow step results must be serializable; usage objects from the
- *  AI SDK are plain data but may carry undefined fields — round-trip
- *  through JSON to normalize. */
-function serializableUsage(usage: unknown): unknown {
-  if (usage == null) {
-    return null;
-  }
-  try {
-    return JSON.parse(JSON.stringify(usage)) as unknown;
-  } catch {
-    return null;
-  }
 }
 
 /** Keep stored/displayed failure messages bounded — raw gateway

@@ -15,7 +15,7 @@ export const CONTACT_EMAIL = `contact@${DOMAIN}`;
 // openai/gpt-5.4-mini: $0.74 / $4.5
 // openai/gpt-5.4: $2.5 / $15 - too expensive
 // anthropic/claude-haiku-4.5: $1 / $5 - slow
-export const DEFAULT_AI_MODEL = 'openai/gpt-5.4-mini';
+export const DEFAULT_AI_MODEL = 'openai/gpt-5.6-luna';
 
 /**
  * Model for semantic embeddings. 1536 native dims matches the pgvector
@@ -34,18 +34,59 @@ export const DEFAULT_EMBEDDING_MODEL = 'openai/text-embedding-3-small';
 
 /**
  * Model for AI transcript generation of caption-less YouTube videos.
- * The Vercel AI Gateway forwards a YouTube watch URL sent as a file
- * part straight to Gemini, which ingests the video server-side — no
- * audio download involved (spike-verified against a 54-min video).
- * Gateway pricing: $0.75/M input, $3.75/M output ≈ $0.30 per video
- * hour with MEDIA_RESOLUTION_LOW. Future cost levers, both unverified
- * through the gateway today: the flex service tier (half price, no
- * knob in @ai-sdk/gateway provider options yet) and dropping
- * video-frame tokens via the Google provider's per-file videoMetadata
- * fps option (frames are ~72% of input tokens and useless for
- * transcription).
+ * This is the NATIVE Gemini model id (no `google/` gateway prefix): the
+ * transcript workflow calls the Google Generative Language API directly
+ * (see `lib/ai/geminiVideo.ts`), NOT the Vercel AI Gateway.
+ *
+ * Why bypass the gateway: Gemini ingests a YouTube watch URL server-side
+ * as a `fileData` part, but there is a hard length cap on URL ingestion
+ * (~1 h) — longer videos silently come back with ZERO video tokens and
+ * the model hallucinates from the title. The only fix is to clip the
+ * video into windows via the per-part `video_metadata` start/end offset,
+ * and the gateway does NOT forward that field (verified: a clipped
+ * request through the gateway ingested 0 video tokens, while the same
+ * clip through the native API ingested normally). Summaries/articles
+ * still use the gateway (`DEFAULT_AI_MODEL`) over the transcript text.
+ *
+ * Pricing ≈ $0.75/M input, $3.75/M output ≈ $0.30 per video hour at
+ * MEDIA_RESOLUTION_LOW. Requires `GEMINI_API_KEY`.
  */
-export const TRANSCRIPT_GENERATION_MODEL = 'google/gemini-3.7-flash';
+export const TRANSCRIPT_GENERATION_MODEL = 'gemini-3.7-flash';
+
+/** Base URL for the native Google Generative Language REST API. */
+export const TRANSCRIPT_GENERATION_NATIVE_ENDPOINT =
+  'https://generativelanguage.googleapis.com/v1beta';
+
+/**
+ * Media resolution for video ingestion. LOW minimizes per-frame token
+ * cost (frames are ~72% of input tokens and useless for transcription)
+ * and, critically, stretches how much video fits under the ingestion
+ * cap. Measured ingestion rate at LOW: ~5,460 video tokens per minute.
+ */
+export const TRANSCRIPT_GENERATION_MEDIA_RESOLUTION = 'MEDIA_RESOLUTION_LOW';
+
+/**
+ * Window size (seconds) for chunked video ingestion. Gemini's YouTube
+ * URL ingestion caps out around ~1 h of video per request even at low
+ * resolution (measured: a 54-min video ingests, a 2 h11 m video comes
+ * back with zero video tokens). Longer videos are split into windows of
+ * this size, each requested with a `video_metadata` start/end offset,
+ * then stitched — the model returns absolute (original-video) timestamps
+ * per window, so no offset math is needed. 45 min stays comfortably
+ * under the observed cap while keeping the window count (and per-window
+ * output-token pressure) low. Tunable.
+ */
+export const TRANSCRIPT_GENERATION_CHUNK_SECONDS = 45 * 60;
+
+/**
+ * Max windows generated concurrently within the generate step. Sized so
+ * every window of a max-length video ({@link TRANSCRIPT_GENERATION_MAX_VIDEO_SECONDS})
+ * runs in a single batch (⌈3 h / 45 min⌉ = 4), keeping wall-clock to
+ * roughly one window and under the workflow's 800 s step budget. Raising
+ * it risks tripping Gemini's per-minute token quota (each window ingests
+ * a full 45 min of video at once).
+ */
+export const TRANSCRIPT_GENERATION_MAX_PARALLEL_WINDOWS = 4;
 
 /**
  * Output budget for a transcript generation. The model's ceiling is
@@ -76,6 +117,33 @@ export const TRANSCRIPT_GENERATION_MAX_VIDEO_SECONDS = 3 * 60 * 60;
  * workflow step's 800 s budget.
  */
 export const TRANSCRIPT_GENERATION_TIMEOUT_MS = 700_000;
+
+/**
+ * Reject a generation whose prompt carried fewer input tokens than
+ * this — the tell that Gemini never ingested the video and answered
+ * from the text prompt alone, inventing a plausible but unrelated
+ * transcript. The prompt text is ~150 tokens; a genuinely ingested
+ * video adds ~5.5k input tokens per minute at MEDIA_RESOLUTION_LOW
+ * (measured: 297k for a 54-min video, all VIDEO modality), so any real
+ * ingestion clears this floor by a wide margin while the text-only
+ * failure mode (~146 tokens) sits far below it. Rejection is retryable:
+ * the miss is an intermittent server-side video-fetch failure, so a
+ * fresh model call usually succeeds.
+ */
+export const TRANSCRIPT_GENERATION_MIN_INPUT_TOKENS = 1000;
+
+/**
+ * Reject a non-truncated generation that covers less than this fraction
+ * of a video whose duration we know. A run that stops far short of the
+ * end — the hallucinated 36-second "transcript" of a 2-hour video is
+ * the pathological case — is treated as incomplete rather than
+ * persisting a sliver. Skipped when the output hit the token ceiling
+ * (finishReason 'length'), where a short prefix is expected and already
+ * salvaged, and when duration is unknown. 0.5 is deliberately lenient:
+ * it flags gross shortfalls while tolerating videos that legitimately
+ * trail off into music or silence. Retryable, same as the token floor.
+ */
+export const TRANSCRIPT_GENERATION_MIN_COVERAGE_RATIO = 0.5;
 
 /**
  * Maximum attempts (initial + retries) for `streamText` calls in

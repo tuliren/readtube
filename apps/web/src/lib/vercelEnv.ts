@@ -32,3 +32,14 @@ export function getVercelEnv(envVar: string | undefined): VercelEnv {
 export function isProduction(): boolean {
   return getVercelEnv(process.env.NEXT_PUBLIC_VERCEL_ENV) === VercelEnv.PRODUCTION;
 }
+
+/**
+ * Client-side "are we on a local dev server" gate. Reads
+ * `NEXT_PUBLIC_VERCEL_ENV`, which Vercel sets to `preview`/`production`
+ * on deployments and leaves unset locally (defaulting to DEVELOPMENT).
+ * Used to expose dev-only affordances (e.g. the transcript Regenerate
+ * button) that must never ship to preview or production.
+ */
+export function isDevelopment(): boolean {
+  return getVercelEnv(process.env.NEXT_PUBLIC_VERCEL_ENV) === VercelEnv.DEVELOPMENT;
+}

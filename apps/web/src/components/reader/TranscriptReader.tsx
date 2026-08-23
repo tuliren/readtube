@@ -10,8 +10,10 @@ import { buildTranscriptToc, transcriptParagraphId } from '@/lib/reader/buildTra
 import { buildScheduledMessage, parseScheduledResponse } from '@/lib/reader/scheduledVideoToast';
 import type { VideoPlatform } from '@/lib/types';
 import { buildWatchLink } from '@/lib/urls/watchUrl';
+import { isDevelopment } from '@/lib/vercelEnv';
 
 import FloatingToc from './FloatingToc';
+import RegenerateButton from './RegenerateButton';
 import type { TranscriptStatus } from './VideoReader';
 
 interface Props {
@@ -35,6 +37,9 @@ interface Props {
 }
 
 type LocalStatus = 'checking' | 'notCached' | 'fetching' | 'loaded' | 'error';
+
+// How often the dev Regenerate flow polls for the fresh transcript.
+const REGEN_POLL_INTERVAL_MS = 10_000;
 
 function TranscriptSkeleton() {
   return (
@@ -80,6 +85,13 @@ export default function TranscriptReader({
   // a small badge so readers know they're looking at AI transcription
   // rather than the platform's caption track.
   const [source, setSource] = useState<string | null>(null);
+  // Current transcript row id — lets the dev Regenerate flow detect
+  // when a fresh run has superseded it (reads take the newest row).
+  const [transcriptId, setTranscriptId] = useState<string | null>(null);
+  const [regenerating, setRegenerating] = useState(false);
+  // The transcript id at the moment regeneration started; polling waits
+  // for a different id to appear before swapping in the new segments.
+  const regenBaselineIdRef = useRef<string | null>(null);
 
   // Stream the transcript word count up to VideoReader so the
   // Transcript tab header can render the reading-time badge.
@@ -164,9 +176,14 @@ export default function TranscriptReader({
           setLocalStatus('error');
           return;
         }
-        const data = (await res.json()) as { segments: TranscriptSegment[]; source?: string };
+        const data = (await res.json()) as {
+          id?: string;
+          segments: TranscriptSegment[];
+          source?: string;
+        };
         setSegments(data.segments);
         setSource(data.source ?? null);
+        setTranscriptId(data.id ?? null);
         setLocalStatus('loaded');
         // Set the ref BEFORE the broadcast so when the effect re-runs
         // (because transcriptStatus prop changes from unknown→present)
@@ -188,6 +205,82 @@ export default function TranscriptReader({
       cancelled = true;
     };
   }, [videoDbId, transcriptStatus, onTranscriptStatusChange]);
+
+  // Dev-only: poll while a forced regeneration is in flight. A new
+  // transcript id means the fresh run landed (swap it in); a 'failed'
+  // generation state means the run reverted (toast and stop). Transient
+  // poll errors are ignored so a blip doesn't abort the wait.
+  useEffect(() => {
+    if (!regenerating) {
+      return;
+    }
+    const interval = setInterval(() => {
+      fetch(`/api/videos/${videoDbId}/transcript?poll=1`)
+        .then(async (res) => {
+          if (!res.ok) {
+            return;
+          }
+          const data = (await res.json()) as {
+            id?: string;
+            segments: TranscriptSegment[];
+            source?: string;
+            generation?: { state: string; errorMessage: string | null };
+          };
+          if (data.id != null && data.id !== regenBaselineIdRef.current) {
+            setSegments(data.segments);
+            setSource(data.source ?? null);
+            setTranscriptId(data.id);
+            setRegenerating(false);
+            toast.success('Transcript regenerated.');
+            return;
+          }
+          if (data.generation?.state === 'failed') {
+            setRegenerating(false);
+            toast.error(data.generation.errorMessage ?? 'Regeneration failed.');
+          }
+        })
+        .catch(() => {
+          // Transient poll failure — keep polling.
+        });
+    }, REGEN_POLL_INTERVAL_MS);
+    return () => {
+      clearInterval(interval);
+    };
+  }, [regenerating, videoDbId]);
+
+  async function handleRegenerate() {
+    if (regenerating || transcriptId == null) {
+      return;
+    }
+    regenBaselineIdRef.current = transcriptId;
+    setRegenerating(true);
+    try {
+      const res = await fetch(`/api/videos/${videoDbId}/transcript/generate?force=1`, {
+        method: 'POST',
+      });
+      const body = (await res.json().catch(() => null)) as {
+        status?: string;
+        error?: string;
+      } | null;
+      if (!res.ok && res.status !== 202) {
+        toast.error(body?.error ?? 'Could not start regeneration.');
+        setRegenerating(false);
+        return;
+      }
+      // 'ready' means the server declined to regenerate (e.g. the env
+      // gate wasn't honored) — nothing to poll for, so stop.
+      if (body?.status === 'ready') {
+        toast.info('Nothing to regenerate.');
+        setRegenerating(false);
+        return;
+      }
+      // Otherwise a run started — the poll effect above takes over and
+      // swaps in the new transcript when it lands.
+    } catch {
+      toast.error('Could not start regeneration.');
+      setRegenerating(false);
+    }
+  }
 
   async function handleFetch() {
     setLocalStatus('fetching');
@@ -286,9 +379,21 @@ export default function TranscriptReader({
   return (
     <div>
       {source === 'GENERATED' && (
-        <p className="mb-4 inline-flex items-center rounded-full border border-border bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-          AI-generated transcript
-        </p>
+        <div className="mb-4 flex items-center gap-2">
+          <span className="inline-flex items-center rounded-full border border-border bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+            AI-generated transcript
+          </span>
+          {/* Dev-only: re-run AI transcription over this video. Gated to
+              the local dev server (the generate route re-checks the env),
+              so it never ships to preview or production. */}
+          {isDevelopment() && (
+            <RegenerateButton
+              onClick={handleRegenerate}
+              regenerating={regenerating}
+              title="Dev only: re-run AI transcription"
+            />
+          )}
+        </div>
       )}
       <TranscriptContent segments={segments} platform={platform} sourceId={sourceId} />
     </div>

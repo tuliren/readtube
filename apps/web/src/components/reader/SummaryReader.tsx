@@ -1,6 +1,5 @@
 'use client';
 
-import { ArrowPathIcon } from '@heroicons/react/24/outline';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -14,6 +13,7 @@ import { isProduction } from '@/lib/vercelEnv';
 import ArticleMarkdown from './ArticleMarkdown';
 import ExportMarkdownButtons from './ExportMarkdownButtons';
 import LanguagePicker, { languageQueryFragment } from './LanguagePicker';
+import RegenerateButton from './RegenerateButton';
 import type { TranscriptStatus } from './VideoReader';
 
 type HasLatexByField = Partial<Record<'short' | 'full', boolean>>;
@@ -89,20 +89,6 @@ function WordCountLabel({ count }: { count: number }) {
     <span className="text-xs font-normal text-muted-foreground">
       ({count} {count === 1 ? 'word' : 'words'})
     </span>
-  );
-}
-
-function RegenerateButton({ onClick, disabled }: { onClick: () => void; disabled?: boolean }) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      title="Regenerate"
-      className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50 disabled:hover:text-muted-foreground"
-    >
-      <ArrowPathIcon className="h-3.5 w-3.5" />
-      Regenerate
-    </button>
   );
 }
 
