@@ -1,5 +1,6 @@
 import type { TranscriptSegment } from '@/lib/platforms/types';
 import {
+  TranscriptGenerationBlockedError,
   TranscriptGenerationQualityError,
   assertUsableGeneration,
 } from '@/lib/transcripts/validateGeneratedTranscript';
@@ -102,6 +103,53 @@ describe('assertUsableGeneration', () => {
       },
     ])('$desc', ({ input }) => {
       expect(() => assertUsableGeneration(input)).toThrow(TranscriptGenerationQualityError);
+    });
+  });
+
+  describe('content-policy blocks', () => {
+    it('accepts a partial transcript when a blocked window still leaves enough coverage', () => {
+      // 100s video, one window blocked, but the survivors cover 60s (> the
+      // 50% ratio) — persist the partial rather than fail.
+      expect(() =>
+        assertUsableGeneration({
+          segments: coverageTo(60_000),
+          durationSeconds: 100,
+          finishReason: 'stop',
+          inputTokens: 200_000,
+          blockedWindowCount: 1,
+        })
+      ).not.toThrow();
+    });
+
+    it('reports a block-caused shortfall as the fatal blocked error', () => {
+      let caught: unknown;
+      try {
+        assertUsableGeneration({
+          segments: coverageTo(40_000),
+          durationSeconds: 100,
+          finishReason: 'stop',
+          inputTokens: 200_000,
+          blockedWindowCount: 2,
+        });
+      } catch (err) {
+        caught = err;
+      }
+      // Blocks re-block on retry, so this must be the deterministic error
+      // the step maps to FatalError — not the retryable quality error.
+      expect(caught).toBeInstanceOf(TranscriptGenerationBlockedError);
+      expect(caught).not.toBeInstanceOf(TranscriptGenerationQualityError);
+    });
+
+    it('reports a shortfall with no blocks as the retryable quality error', () => {
+      expect(() =>
+        assertUsableGeneration({
+          segments: coverageTo(40_000),
+          durationSeconds: 100,
+          finishReason: 'stop',
+          inputTokens: 200_000,
+          blockedWindowCount: 0,
+        })
+      ).toThrow(TranscriptGenerationQualityError);
     });
   });
 

@@ -31,7 +31,10 @@ import {
   planTranscriptWindows,
   stitchWindowSegments,
 } from '@/lib/transcripts/transcriptWindows';
-import { assertUsableGeneration } from '@/lib/transcripts/validateGeneratedTranscript';
+import {
+  TranscriptGenerationBlockedError,
+  assertUsableGeneration,
+} from '@/lib/transcripts/validateGeneratedTranscript';
 import { completeUserRequest } from '@/lib/usage/userRequest';
 import {
   releaseTranscriptGeneration,
@@ -170,6 +173,15 @@ export async function generateTranscriptStep(
   // If any window hit the output-token ceiling its coverage is partial;
   // flag it so the coverage guard salvages rather than rejects.
   const finishReason = results.some((r) => r.finishReason === 'length') ? 'length' : 'stop';
+  const blockedWindowCount = results.filter((r) => r.blocked).length;
+  if (blockedWindowCount > 0) {
+    // Content-policy blocks are deterministic and non-configurable, so we
+    // keep the windows that came through rather than fail the whole run.
+    console.warn(
+      `[transcriptGeneration] ${blockedWindowCount}/${windows.length} window(s) blocked by ` +
+        `content policy for video ${input.videoDbId}; stitching the surviving windows`
+    );
+  }
 
   try {
     assertUsableGeneration({
@@ -177,14 +189,21 @@ export async function generateTranscriptStep(
       durationSeconds,
       finishReason,
       inputTokens: totalInputTokens > 0 ? totalInputTokens : null,
+      blockedWindowCount,
     });
   } catch (err) {
     const coveredMs = stitched.reduce((max, segment) => Math.max(max, segment.endMs), 0);
     console.warn(
       `[transcriptGeneration] rejecting unusable output for video ${input.videoDbId}: ` +
-        `windows=${windows.length}, inputTokens=${totalInputTokens}, segments=${stitched.length}, ` +
-        `coveredMs=${coveredMs}, durationMs=${durationSeconds * 1000}, finishReason=${finishReason}`
+        `windows=${windows.length}, blocked=${blockedWindowCount}, inputTokens=${totalInputTokens}, ` +
+        `segments=${stitched.length}, coveredMs=${coveredMs}, durationMs=${durationSeconds * 1000}, ` +
+        `finishReason=${finishReason}`
     );
+    // A block-caused shortfall re-blocks on retry — make it terminal so
+    // the runtime does not re-bill a doomed rerun.
+    if (err instanceof TranscriptGenerationBlockedError) {
+      throw new FatalError(err.message);
+    }
     throw err;
   }
 
@@ -199,10 +218,14 @@ interface WindowResult {
   segments: TranscriptSegment[];
   usage: VideoWindowUsage;
   finishReason: string;
+  /** True when Gemini refused this window on content-policy grounds. Its
+   *  segments are empty; the caller stitches the surviving windows and
+   *  fails only if too little of the video remains. */
+  blocked: boolean;
 }
 
-/** Transcribe one window: native call, ingestion guard, parse, and
- *  normalize timestamps to absolute time. */
+/** Transcribe one window: native call, content-block skip, ingestion
+ *  guard, parse, and normalize timestamps to absolute time. */
 async function transcribeWindow(
   input: TranscriptGenerationInput,
   videoUrl: string,
@@ -222,6 +245,19 @@ async function transcribeWindow(
     });
   } catch (err) {
     throw classifyGenerationError(err);
+  }
+
+  // Content-policy block: Gemini returns an empty response with a
+  // blockReason (e.g. PROHIBITED_CONTENT on politically sensitive
+  // videos). This is deterministic and non-configurable — retrying and
+  // safetySettings do not help — so drop this window and let the caller
+  // stitch the rest rather than fail the whole video.
+  if (result.blockReason != null) {
+    console.warn(
+      `[transcriptGeneration] Gemini blocked the ${formatWindow(window)} segment ` +
+        `(${result.blockReason}) for video ${input.videoDbId}; skipping it`
+    );
+    return { segments: [], usage: result.usage, finishReason: 'blocked', blocked: true };
   }
 
   // Ingestion guard: zero VIDEO tokens means Gemini didn't watch this
@@ -249,6 +285,7 @@ async function transcribeWindow(
     segments: normalizeWindowTimestamps(segments, window),
     usage: result.usage,
     finishReason: result.finishReason,
+    blocked: false,
   };
 }
 

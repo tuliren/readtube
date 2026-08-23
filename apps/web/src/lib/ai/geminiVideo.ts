@@ -38,6 +38,11 @@ export interface VideoWindowResult {
   /** Normalized to the AI SDK convention: 'length' when the output hit
    *  the token ceiling (native 'MAX_TOKENS'), otherwise 'stop'. */
   finishReason: string;
+  /** Gemini's reason for refusing to answer this window on content-policy
+   *  grounds (e.g. 'PROHIBITED_CONTENT'), or null when it answered. A
+   *  block yields an empty {@link text}, so callers must check this first
+   *  rather than treat the empty response as an unparseable transcript. */
+  blockReason: string | null;
   usage: VideoWindowUsage;
 }
 
@@ -45,6 +50,45 @@ interface UsageMetadata {
   promptTokenCount?: number;
   candidatesTokenCount?: number;
   promptTokensDetails?: Array<{ modality?: string; tokenCount?: number }>;
+}
+
+/**
+ * Candidate `finishReason` values that mean Gemini stopped for a
+ * content-policy reason rather than finishing normally. `PROHIBITED_CONTENT`
+ * (the core, non-configurable filter that `safetySettings` cannot relax)
+ * is the one seen on politically sensitive videos; the rest are covered
+ * for completeness.
+ */
+const BLOCKING_FINISH_REASONS = new Set([
+  'SAFETY',
+  'RECITATION',
+  'PROHIBITED_CONTENT',
+  'BLOCKLIST',
+  'SPII',
+  'IMAGE_SAFETY',
+]);
+
+/**
+ * Extract the content-policy block reason from a `generateContent`
+ * response, or null when the model answered normally. Gemini signals a
+ * block two ways: a prompt-level `promptFeedback.blockReason` (no
+ * candidate is returned at all) or a candidate whose `finishReason` is
+ * one of {@link BLOCKING_FINISH_REASONS}. Both surface here as a bare
+ * string so the caller can log it and skip the window.
+ */
+export function extractBlockReason(data: {
+  candidates?: Array<{ finishReason?: string }>;
+  promptFeedback?: { blockReason?: string };
+}): string | null {
+  const promptBlock = data.promptFeedback?.blockReason;
+  if (typeof promptBlock === 'string' && promptBlock.length > 0) {
+    return promptBlock;
+  }
+  const finishReason = data.candidates?.[0]?.finishReason;
+  if (typeof finishReason === 'string' && BLOCKING_FINISH_REASONS.has(finishReason)) {
+    return finishReason;
+  }
+  return null;
 }
 
 function extractUsage(usageMetadata: UsageMetadata | undefined): VideoWindowUsage {
@@ -145,6 +189,7 @@ export async function generateFromVideoWindow(params: {
       content?: { parts?: Array<{ text?: string }> };
       finishReason?: string;
     }>;
+    promptFeedback?: { blockReason?: string };
     usageMetadata?: UsageMetadata;
   };
 
@@ -155,5 +200,10 @@ export async function generateFromVideoWindow(params: {
     .join('');
   const finishReason = candidate?.finishReason === 'MAX_TOKENS' ? 'length' : 'stop';
 
-  return { text, finishReason, usage: extractUsage(data.usageMetadata) };
+  return {
+    text,
+    finishReason,
+    blockReason: extractBlockReason(data),
+    usage: extractUsage(data.usageMetadata),
+  };
 }
