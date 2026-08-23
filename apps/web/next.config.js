@@ -48,6 +48,23 @@ module.exports = withWorkflow({
         },
       ],
     },
+    // API responses must never be served from the browser's HTTP
+    // cache. Without an explicit Cache-Control, 410/404 responses are
+    // heuristically cacheable (RFC 9110), and Chrome was observed
+    // re-serving a cached 410 from the transcript GET for every
+    // subsequent poll of the same URL — the reader then showed "no
+    // transcript" forever after a generation completed, because the
+    // server never saw the polls. Handlers can still override this
+    // per-route if a cacheable API response is ever wanted.
+    {
+      source: '/api/:path*',
+      headers: [
+        {
+          key: 'Cache-Control',
+          value: 'no-store',
+        },
+      ],
+    },
   ],
   images: {
     remotePatterns: [

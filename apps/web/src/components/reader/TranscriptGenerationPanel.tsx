@@ -98,9 +98,18 @@ export default function TranscriptGenerationPanel({
       const body = (await res.json().catch(() => null)) as { generation?: GenerationInfo } | null;
       const generation = body?.generation;
       if (generation == null) {
-        // Older response shape (or public route) — no generation
-        // metadata to act on; offer the button and let POST guards
-        // decide.
+        // Missing generation metadata: an interrupted body read, or an
+        // older response shape. Mid-generation this is a transient to
+        // ride out, not a verdict — flipping to idle on one bad read
+        // froze a stale panel over a finishing run.
+        if (
+          statusRef.current.kind === 'generating' &&
+          unexplainedPollsRef.current < MAX_UNEXPLAINED_POLLS
+        ) {
+          unexplainedPollsRef.current += 1;
+          return;
+        }
+        unexplainedPollsRef.current = 0;
         setStatus({ kind: 'idle' });
         return;
       }
@@ -164,7 +173,11 @@ export default function TranscriptGenerationPanel({
     let cancelled = false;
     unexplainedPollsRef.current = 0;
     setStatus({ kind: 'checking' });
-    fetch(`/api/videos/${videoDbId}/transcript?poll=1`)
+    // no-store: browsers heuristically cache 410s (no Cache-Control),
+    // and a cached "no transcript" here froze the panel over a
+    // finished generation. Bypass the HTTP cache entirely so stale
+    // entries from before the server-side no-store header also die.
+    fetch(`/api/videos/${videoDbId}/transcript?poll=1`, { cache: 'no-store' })
       .then((res) => {
         if (!cancelled) {
           return applyGetResponse(res);
@@ -180,11 +193,20 @@ export default function TranscriptGenerationPanel({
     };
   }, [videoDbId, applyGetResponse]);
 
-  // Poll while generating. The GET route doubles as progress endpoint:
-  // a 200 whose generation.state is no longer 'generating' means the
-  // transcript landed AND the auto-summary handoff finished; a 410
-  // whose generation.state is 'failed' means the workflow reverted
-  // with an error.
+  // Poll for the panel's whole lifetime, not just while 'generating'.
+  // The panel only mounts while the shared transcript status is
+  // 'unavailable', so a poll is always meaningful — and an interval
+  // gated on the status made 'idle' a terminal state: any transient
+  // that knocked the panel out of 'generating' (an aborted response
+  // read, a remount racing a fetch) silently stopped all polling, and
+  // the panel then sat on a stale no-transcript notice over a finished
+  // generation until a manual refresh (observed live). Lifetime
+  // polling makes every state self-healing and also picks up
+  // generations started from another tab. The GET doubles as progress
+  // endpoint: a 200 whose generation.state is no longer 'generating'
+  // means the transcript landed AND the auto-summary handoff finished;
+  // a 410 whose generation.state is 'failed' means the workflow
+  // reverted with an error.
   //
   // Browsers throttle interval timers in background tabs (Chrome: to
   // ~once a minute, more aggressively after prolonged inactivity), so
@@ -194,11 +216,12 @@ export default function TranscriptGenerationPanel({
   // the panel flips immediately instead of waiting out the throttled
   // interval.
   useEffect(() => {
-    if (status.kind !== 'generating') {
-      return;
-    }
     const poll = () => {
-      fetch(`/api/videos/${videoDbId}/transcript?poll=1`)
+      // Platform ineligibility is permanent — polling can't change it.
+      if (statusRef.current.kind === 'ineligible') {
+        return;
+      }
+      fetch(`/api/videos/${videoDbId}/transcript?poll=1`, { cache: 'no-store' })
         .then((res) => applyGetResponse(res))
         .catch(() => {
           // Transient poll failure — keep polling.
@@ -215,7 +238,7 @@ export default function TranscriptGenerationPanel({
       clearInterval(interval);
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, [status.kind, videoDbId, applyGetResponse]);
+  }, [videoDbId, applyGetResponse]);
 
   async function handleGenerate() {
     setStarting(true);

@@ -161,7 +161,10 @@ export default function TranscriptReader({
     setSegments(null);
     setMissingRanges([]);
 
-    fetch(`/api/videos/${videoDbId}/transcript`)
+    // no-store: a heuristically cached 410 here would flip the shared
+    // transcript status back to 'unavailable' over a transcript that
+    // actually exists (browsers may cache 410s without Cache-Control).
+    fetch(`/api/videos/${videoDbId}/transcript`, { cache: 'no-store' })
       .then(async (res) => {
         if (cancelled) {
           return;
@@ -236,7 +239,7 @@ export default function TranscriptReader({
       return;
     }
     const interval = setInterval(() => {
-      fetch(`/api/videos/${videoDbId}/transcript?poll=1`)
+      fetch(`/api/videos/${videoDbId}/transcript?poll=1`, { cache: 'no-store' })
         .then(async (res) => {
           if (!res.ok) {
             return;
