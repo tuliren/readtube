@@ -65,7 +65,12 @@ async function seedVideoWithTranscript(): Promise<SeedResult> {
   return { videoId: video.id, transcriptId: transcript.id };
 }
 
-async function seedSummary(transcriptId: string, language: string | null, headline: string) {
+async function seedSummary(
+  transcriptId: string,
+  language: string | null,
+  headline: string,
+  generatedAt?: Date
+) {
   return global.testPrisma.summary.create({
     data: {
       transcript_id: transcriptId,
@@ -75,6 +80,7 @@ async function seedSummary(transcriptId: string, language: string | null, headli
       full: `Full ${headline}`,
       prompt_version: 'v1',
       model: 'test-model',
+      ...(generatedAt != null ? { generated_at: generatedAt } : {}),
     },
   });
 }
@@ -83,7 +89,8 @@ async function seedArticle(
   transcriptId: string,
   style: ArticleStyle,
   language: string | null,
-  content: string
+  content: string,
+  generatedAt?: Date
 ) {
   return global.testPrisma.article.create({
     data: {
@@ -93,6 +100,7 @@ async function seedArticle(
       content,
       prompt_version: 'v1',
       model: 'test-model',
+      ...(generatedAt != null ? { generated_at: generatedAt } : {}),
     },
   });
 }
@@ -177,6 +185,63 @@ describe('GET /api/public/videos/[id]/summary', () => {
     // No `ja` row, no Original to fall back to.
     expect(res.status).toBe(404);
   });
+
+  describe('default language (no param) fallback', () => {
+    it('returns the Original when present, even alongside translations', async () => {
+      const { videoId, transcriptId } = await seedVideoWithTranscript();
+      await seedSummary(transcriptId, null, 'Original headline');
+      await seedSummary(transcriptId, 'zh-Hans', 'zh headline');
+
+      const res = await summaryGet(buildRequest(), { params: Promise.resolve({ id: videoId }) });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.headline).toBe('Original headline');
+      expect(body.language).toBeNull();
+    });
+
+    it('prefers English over other translations when no Original exists', async () => {
+      const { videoId, transcriptId } = await seedVideoWithTranscript();
+      // zh was generated first, en second — English must still win over
+      // the earlier-created translation.
+      await seedSummary(transcriptId, 'zh-Hans', 'zh headline', new Date('2026-01-01T00:00:00Z'));
+      await seedSummary(transcriptId, 'en', 'en headline', new Date('2026-02-01T00:00:00Z'));
+
+      const res = await summaryGet(buildRequest(), { params: Promise.resolve({ id: videoId }) });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.headline).toBe('en headline');
+      expect(body.language).toBe('en');
+    });
+
+    it('falls back to the earliest translation when neither Original nor English exists', async () => {
+      const { videoId, transcriptId } = await seedVideoWithTranscript();
+      await seedSummary(transcriptId, 'ja', 'ja headline', new Date('2026-02-01T00:00:00Z'));
+      await seedSummary(transcriptId, 'zh-Hans', 'zh headline', new Date('2026-01-01T00:00:00Z'));
+
+      const res = await summaryGet(buildRequest(), { params: Promise.resolve({ id: videoId }) });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.headline).toBe('zh headline');
+      expect(body.language).toBe('zh-Hans');
+    });
+
+    it('applies the same fallback for an explicit language=original with no Original row', async () => {
+      const { videoId, transcriptId } = await seedVideoWithTranscript();
+      await seedSummary(transcriptId, 'en', 'en headline');
+
+      const res = await summaryGet(buildRequest('original'), {
+        params: Promise.resolve({ id: videoId }),
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.headline).toBe('en headline');
+      expect(body.language).toBe('en');
+    });
+  });
 });
 
 describe('GET /api/public/videos/[id]/article', () => {
@@ -219,5 +284,76 @@ describe('GET /api/public/videos/[id]/article', () => {
     });
 
     expect(res.status).toBe(404);
+  });
+
+  describe('default language (no param) fallback', () => {
+    it('returns the Original when present, even alongside translations', async () => {
+      const { videoId, transcriptId } = await seedVideoWithTranscript();
+      await seedArticle(transcriptId, ArticleStyle.NARRATIVE, null, 'Original content');
+      await seedArticle(transcriptId, ArticleStyle.NARRATIVE, 'zh-Hans', 'zh content');
+
+      const res = await articleGet(buildRequest(undefined, ArticleStyle.NARRATIVE), {
+        params: Promise.resolve({ id: videoId }),
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.content).toBe('Original content');
+      expect(body.language).toBeNull();
+    });
+
+    it('prefers English over other translations when no Original exists', async () => {
+      const { videoId, transcriptId } = await seedVideoWithTranscript();
+      await seedArticle(
+        transcriptId,
+        ArticleStyle.NARRATIVE,
+        'zh-Hans',
+        'zh content',
+        new Date('2026-01-01T00:00:00Z')
+      );
+      await seedArticle(
+        transcriptId,
+        ArticleStyle.NARRATIVE,
+        'en',
+        'en content',
+        new Date('2026-02-01T00:00:00Z')
+      );
+
+      const res = await articleGet(buildRequest(undefined, ArticleStyle.NARRATIVE), {
+        params: Promise.resolve({ id: videoId }),
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.content).toBe('en content');
+      expect(body.language).toBe('en');
+    });
+
+    it('falls back to the earliest translation when neither Original nor English exists', async () => {
+      const { videoId, transcriptId } = await seedVideoWithTranscript();
+      await seedArticle(
+        transcriptId,
+        ArticleStyle.NARRATIVE,
+        'ja',
+        'ja content',
+        new Date('2026-02-01T00:00:00Z')
+      );
+      await seedArticle(
+        transcriptId,
+        ArticleStyle.NARRATIVE,
+        'zh-Hans',
+        'zh content',
+        new Date('2026-01-01T00:00:00Z')
+      );
+
+      const res = await articleGet(buildRequest(undefined, ArticleStyle.NARRATIVE), {
+        params: Promise.resolve({ id: videoId }),
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.content).toBe('zh content');
+      expect(body.language).toBe('zh-Hans');
+    });
   });
 });
