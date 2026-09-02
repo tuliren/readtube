@@ -77,14 +77,33 @@ describe('buildVideoWhere — date window', () => {
 });
 
 describe('buildVideoWhere — archive mode', () => {
-  it('excludes archived videos by default', () => {
-    const where = buildVideoWhere({}, USER_ID, CHANNEL_IDS);
+  it.each<{ name: string; query: InboxQuery }>([
+    { name: 'the default view', query: {} },
+    { name: 'the unread view', query: { unread: true } },
+  ])('excludes archived videos from $name', ({ query }) => {
+    const where = buildVideoWhere(query, USER_ID, CHANNEL_IDS);
     expect(where.archives).toEqual({ none: { user_id: USER_ID } });
   });
 
   it('shows only archived when archived=true', () => {
     const where = buildVideoWhere({ archived: true }, USER_ID, CHANNEL_IDS);
     expect(where.archives).toEqual({ some: { user_id: USER_ID } });
+  });
+
+  it.each<{ name: string; query: InboxQuery }>([
+    { name: 'Starred', query: { starred: true } },
+    { name: 'Read Later', query: { saved: true } },
+  ])('emits no archive filter for the $name view', ({ query }) => {
+    // Archiving clears a video from the inbox; it must not also empty
+    // the bucket the user deliberately put it in.
+    const where = buildVideoWhere(query, USER_ID, CHANNEL_IDS);
+    expect(where.archives).toBeUndefined();
+  });
+
+  it('intersects when archived is combined with a bucket', () => {
+    const where = buildVideoWhere({ starred: true, archived: true }, USER_ID, CHANNEL_IDS);
+    expect(where.archives).toEqual({ some: { user_id: USER_ID } });
+    expect(where.stars).toEqual({ some: { user_id: USER_ID } });
   });
 });
 
@@ -229,7 +248,8 @@ describe('buildVideoWhere — compositional sanity', () => {
 
     expect(where.channel_id).toBe('chan_a');
     expect(where.stars).toEqual({ some: { user_id: USER_ID } });
-    expect(where.archives).toEqual({ none: { user_id: USER_ID } });
+    // Starred exempts the view from the default archive exclusion.
+    expect(where.archives).toBeUndefined();
     expect(where.published_at).toEqual({ gte: new Date('2026-01-01') });
   });
 });

@@ -25,5 +25,5 @@ Turn YouTube subscriptions into a personal substack. Consume videos efficiently 
 ## References
 
 - [DEVELOPMENT.md](DEVELOPMENT.md): project setup and deployment
-- [DESIGN.md](DESIGN.md): design choices and feature implementation details
+- [DESIGN.md](DESIGN.md): design choices and feature implementation details. Before changing any triage behavior, read "Special marks & what survives an unsubscribe" there — it defines what a special mark is (star / Read Later save / note, not archive or read state), what an unsubscribe keeps, and how archive interacts with the Starred and Read Later buckets. Those rules are load-bearing across `lib/videos/marks.ts`, `lib/subscriptions.ts`, and `lib/inbox/buildWhere.ts`, and each one is easy to break with a one-line edit.
 - [MARKETING.md](MARKETING.md): marketing experiment plan, budget ledger, and UTM conventions — the source of truth for marketing work; per-experiment history in `marketing/diary/`

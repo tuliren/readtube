@@ -14,7 +14,8 @@ import type { InboxQuery } from '@/lib/types';
  *
  * Triage rules:
  * - `archived` defaults to excluding archived videos; set archived=true to
- *   show only archived.
+ *   show only archived. The Starred and Read Later views are exempt from
+ *   that default exclusion — see below.
  * - `starred` / `saved` = true restricts to videos with a row in the matching
  *   table for this user.
  * - `unread` filtering needs the per-channel read-at watermark map and so
@@ -61,9 +62,17 @@ export function buildVideoWhere(
 
   // Triage: archived is a hard exclude by default; set archived=true to flip
   // into the archived view.
+  //
+  // Starred and Read Later are exempt from the default exclusion.
+  // Archiving means "get this out of my inbox", so it belongs to the
+  // feed views — it shouldn't quietly empty a bucket the user put the
+  // video into by hand. Archiving a starred video is a normal way to
+  // clear it from the inbox while keeping the star, and the Starred
+  // view has to keep showing it. `archived=true` still wins when both
+  // are set, giving the archived ∩ starred intersection.
   if (query.archived === true) {
     where.archives = { some: { user_id: userId } };
-  } else {
+  } else if (query.starred !== true && query.saved !== true) {
     where.archives = { none: { user_id: userId } };
   }
 

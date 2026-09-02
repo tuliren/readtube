@@ -132,9 +132,9 @@ describe('views after unsubscribing a channel', () => {
     await unsubscribeChannelForUser(global.testPrisma, USER_ID, seeded.channelId);
 
     expect(await loadIds({ archived: true })).toEqual([seeded.starred]);
-    // Archived videos are excluded from the Starred view, same as
-    // they always were while the channel was subscribed.
-    expect(await loadIds({ starred: true })).toEqual([]);
+    // Archiving clears a video from the inbox; it doesn't take the
+    // video out of the bucket the user put it in.
+    expect(await loadIds({ starred: true })).toEqual([seeded.starred]);
   });
 
   it.each<{ name: string; query: InboxQuery }>([
