@@ -25,19 +25,13 @@ import { Prisma } from '@readtube/database';
  * rows we kept would be invisible and un-actionable.
  */
 
-/**
- * Prisma `Video.where` fragment matching videos this user has marked.
- * Emits an `OR`, so spread it into a where clause that doesn't already
- * use one (or nest it under `AND`).
- */
-export function videoMarkedByUser(userId: string): Prisma.VideoWhereInput {
-  return {
-    OR: [
-      { stars: { some: { user_id: userId } } },
-      { saves: { some: { user_id: userId } } },
-      { notes: { some: { user_id: userId } } },
-    ],
-  };
+/** One `Video.where` arm per mark table. */
+function markArms(userId: string): Prisma.VideoWhereInput[] {
+  return [
+    { stars: { some: { user_id: userId } } },
+    { saves: { some: { user_id: userId } } },
+    { notes: { some: { user_id: userId } } },
+  ];
 }
 
 /**
@@ -54,13 +48,13 @@ export function videoReachableByUser(userId: string): Prisma.VideoWhereInput {
       { channel: { subscriptions: { some: { user_id: userId } } } },
       { standalone: { some: { user_id: userId } } },
       { playlist_items: { some: { playlist: { user_id: userId } } } },
-      ...(videoMarkedByUser(userId).OR as Prisma.VideoWhereInput[]),
+      ...markArms(userId),
     ],
   };
 }
 
 /**
- * Raw-SQL counterpart of `videoMarkedByUser`, for the `$queryRaw`
+ * Raw-SQL counterpart of the mark arms above, for the `$queryRaw`
  * search paths that can't go through the generated client.
  * `videoIdColumn` is the qualified id column of the `Video` row being
  * tested, e.g. ``Prisma.sql`v."id"` ``.

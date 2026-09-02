@@ -252,9 +252,9 @@ export async function markAllReadForUser(
 }
 
 /**
- * Unsubscribe a user from a channel and clean up the user-scoped triage
- * state (consumption, stars, saves, archives, notes) for the channel's
- * videos.
+ * Unsubscribe a user from a channel and clean up the read state
+ * (`UserVideoConsumption`) and archive rows the user accumulated on
+ * that channel's videos.
  *
  * Videos the user still keeps are excluded from that cleanup, so their
  * state survives the unsubscribe untouched. A video is **kept** when
