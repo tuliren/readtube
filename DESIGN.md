@@ -89,6 +89,16 @@ Rule of thumb for budgeting: **generation cost ≈ clicks × ~$0.10–0.35** dep
 
 Metered off the `UserRequest` audit log (no counter table); `lib/usage/quota.ts` derives it. Only `TRANSCRIPT` requests count toward `MONTHLY_GENERATION_QUOTA` (`getGenerationUsage`, UTC calendar month); `getLifetimeUsage` groups all-time counts by type. Rows are only written when work actually happened, so every row counts regardless of `outcome`. Surfaced read-only on `/usage`; no enforcement yet.
 
+## Special marks & what survives an unsubscribe
+
+Removing a channel deletes the `UserSubscription` row and, for that channel's videos, the user's read (`UserVideoConsumption`) and `VideoArchive` rows. Videos the user **kept** are excluded from that cleanup and keep every row untouched. A video is kept when it carries one of the user's **special marks** — a `VideoStar`, a `VideoSave` (Read Later), or a `Note` — or when it already lives in their library as a `StandaloneVideo` or in one of their playlists. `lib/videos/marks.ts` is the single definition; `unsubscribeChannelForUser` in `lib/subscriptions.ts` is the one place that acts on it.
+
+`VideoArchive` and `UserVideoConsumption` are deliberately **not** marks. Archiving is a dismissal and a consumption row is just read state, so treating either as "keep this" would mean an aggressive triager could never actually shed a channel's backlog. Both still ride along for a video kept for another reason, so a kept video doesn't come back unread or un-archived.
+
+Because a marked video outlives its subscription, "the user marked it" is a first-class reachability reason everywhere a subscription was one: `videoReachableByUser` (the shared IDOR guard behind the reader page, `assertUserCanTouchVideo`, and `applyBulk`) and the `libraryScopeSql` scope behind ⌘K search. Without that, the rows we kept would be invisible and un-actionable.
+
+The **Starred / Read Later / Archived** views are correspondingly not scoped to subscribed channels (`isMarkScopedQuery` in `lib/inbox/buildWhere.ts`): a mark is a statement about one video, so each bucket holds everything the user put in it — kept videos from removed channels and library videos alike. The mark filter is itself a per-user relation check, so dropping the channel scope can't widen results past the user's own rows. **Inbox** and **Unread** stay channel-scoped: they're the subscription feed, and a removed channel must not keep publishing into them. That asymmetry is the intended behavior, not an oversight — a kept video is reachable through the bucket it was marked into, not through the feed.
+
 ## Analytics events
 
 Server-side Vercel Web Analytics custom events (`lib/analytics/events.ts`, via `@vercel/analytics/server`). Vercel caps a custom event at **2 properties**, so concerns are split across three event names rather than one:
