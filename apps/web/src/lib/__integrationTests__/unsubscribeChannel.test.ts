@@ -52,24 +52,52 @@ async function setup(opts: {
   return { userId: userSourceId, channelId: channel.id, videoIds };
 }
 
-async function seedTriageForAll(userId: string, videoIds: string[]) {
+/**
+ * Read state + archive, but none of the special marks. This is the
+ * state that a plain unsubscribe is expected to wipe.
+ */
+async function seedReadAndArchived(userId: string, videoIds: string[]) {
   for (const videoId of videoIds) {
     await global.testPrisma.userVideoConsumption.create({
       data: { user_id: userId, video_id: videoId },
     });
+    await global.testPrisma.videoArchive.create({
+      data: { user_id: userId, video_id: videoId },
+    });
+  }
+}
+
+async function seedTriageForAll(userId: string, videoIds: string[]) {
+  await seedReadAndArchived(userId, videoIds);
+  for (const videoId of videoIds) {
     await global.testPrisma.videoStar.create({
       data: { user_id: userId, video_id: videoId },
     });
     await global.testPrisma.videoSave.create({
       data: { user_id: userId, video_id: videoId },
     });
-    await global.testPrisma.videoArchive.create({
-      data: { user_id: userId, video_id: videoId },
-    });
     await global.testPrisma.note.create({
       data: { user_id: userId, video_id: videoId, body: 'note body' },
     });
   }
+}
+
+async function expectFullyCleaned(userId: string, videoIds: string[]) {
+  const where = { user_id: userId, video_id: { in: videoIds } };
+  expect(await global.testPrisma.userVideoConsumption.findMany({ where })).toEqual([]);
+  expect(await global.testPrisma.videoStar.findMany({ where })).toEqual([]);
+  expect(await global.testPrisma.videoSave.findMany({ where })).toEqual([]);
+  expect(await global.testPrisma.videoArchive.findMany({ where })).toEqual([]);
+  expect(await global.testPrisma.note.findMany({ where })).toEqual([]);
+}
+
+async function expectFullyKept(userId: string, videoId: string) {
+  const where = { user_id: userId, video_id: videoId };
+  expect(await global.testPrisma.userVideoConsumption.findFirst({ where })).not.toBeNull();
+  expect(await global.testPrisma.videoStar.findFirst({ where })).not.toBeNull();
+  expect(await global.testPrisma.videoSave.findFirst({ where })).not.toBeNull();
+  expect(await global.testPrisma.videoArchive.findFirst({ where })).not.toBeNull();
+  expect(await global.testPrisma.note.findFirst({ where })).not.toBeNull();
 }
 
 beforeEach(async () => {
@@ -104,16 +132,16 @@ describe('unsubscribeChannelForUser', () => {
     expect(result).toBeNull();
   });
 
-  it('wipes triage state for channel-only videos', async () => {
+  it('wipes read + archive state for unmarked videos', async () => {
     const { userId, channelId, videoIds } = await setup({
       userSourceId: 'u_plain',
       channelSourceId: 'ch_plain',
       videoCount: 3,
     });
-    await seedTriageForAll(userId, videoIds);
+    await seedReadAndArchived(userId, videoIds);
 
     const result = await unsubscribeChannelForUser(global.testPrisma, userId, channelId);
-    expect(result).toEqual({ cleanedVideoCount: 3 });
+    expect(result).toEqual({ cleanedVideoCount: 3, keptVideoCount: 0 });
 
     expect(
       await global.testPrisma.userSubscription.findFirst({
@@ -121,15 +149,115 @@ describe('unsubscribeChannelForUser', () => {
       })
     ).toBeNull();
 
-    const where = { user_id: userId, video_id: { in: videoIds } };
-    expect(await global.testPrisma.userVideoConsumption.findMany({ where })).toEqual([]);
-    expect(await global.testPrisma.videoStar.findMany({ where })).toEqual([]);
-    expect(await global.testPrisma.videoSave.findMany({ where })).toEqual([]);
-    expect(await global.testPrisma.videoArchive.findMany({ where })).toEqual([]);
-    expect(await global.testPrisma.note.findMany({ where })).toEqual([]);
+    await expectFullyCleaned(userId, videoIds);
 
     const videos = await global.testPrisma.video.findMany({ where: { id: { in: videoIds } } });
     expect(videos.length).toBe(3);
+  });
+
+  // The point of the feature: a deliberate mark outlives the
+  // subscription, and drags the video's read/archive state along with
+  // it, while everything unmarked is still cleaned up.
+  it.each<{ name: string; mark: (userId: string, videoId: string) => Promise<unknown> }>([
+    {
+      name: 'a star',
+      mark: (user_id, video_id) =>
+        global.testPrisma.videoStar.create({ data: { user_id, video_id } }),
+    },
+    {
+      name: 'a Read Later save',
+      mark: (user_id, video_id) =>
+        global.testPrisma.videoSave.create({ data: { user_id, video_id } }),
+    },
+    {
+      name: 'a note',
+      mark: (user_id, video_id) =>
+        global.testPrisma.note.create({ data: { user_id, video_id, body: 'keep me' } }),
+    },
+  ])('keeps a video held by $name', async ({ name, mark }) => {
+    const slug = name.replace(/\W+/g, '_');
+    const { userId, channelId, videoIds } = await setup({
+      userSourceId: `u_${slug}`,
+      channelSourceId: `ch_${slug}`,
+      videoCount: 3,
+    });
+    await seedReadAndArchived(userId, videoIds);
+
+    const keptVideoId = videoIds[0];
+    const cleanedVideoIds = videoIds.slice(1);
+    await mark(userId, keptVideoId);
+
+    const result = await unsubscribeChannelForUser(global.testPrisma, userId, channelId);
+    expect(result).toEqual({ cleanedVideoCount: 2, keptVideoCount: 1 });
+
+    const keptWhere = { user_id: userId, video_id: keptVideoId };
+    expect(
+      await global.testPrisma.userVideoConsumption.findFirst({ where: keptWhere })
+    ).not.toBeNull();
+    expect(await global.testPrisma.videoArchive.findFirst({ where: keptWhere })).not.toBeNull();
+
+    await expectFullyCleaned(userId, cleanedVideoIds);
+  });
+
+  it('keeps every mark type at once', async () => {
+    const { userId, channelId, videoIds } = await setup({
+      userSourceId: 'u_all_marks',
+      channelSourceId: 'ch_all_marks',
+      videoCount: 2,
+    });
+    await seedTriageForAll(userId, videoIds);
+
+    const result = await unsubscribeChannelForUser(global.testPrisma, userId, channelId);
+    expect(result).toEqual({ cleanedVideoCount: 0, keptVideoCount: 2 });
+
+    for (const videoId of videoIds) {
+      await expectFullyKept(userId, videoId);
+    }
+  });
+
+  it('does not treat an archive on its own as a reason to keep a video', async () => {
+    // Archiving is a dismissal, not a keep — otherwise unsubscribing
+    // could never shed the backlog of an aggressively triaged channel.
+    const { userId, channelId, videoIds } = await setup({
+      userSourceId: 'u_archived_only',
+      channelSourceId: 'ch_archived_only',
+      videoCount: 2,
+    });
+    for (const videoId of videoIds) {
+      await global.testPrisma.videoArchive.create({ data: { user_id: userId, video_id: videoId } });
+    }
+
+    const result = await unsubscribeChannelForUser(global.testPrisma, userId, channelId);
+    expect(result).toEqual({ cleanedVideoCount: 2, keptVideoCount: 0 });
+    expect(await global.testPrisma.videoArchive.findMany({ where: { user_id: userId } })).toEqual(
+      []
+    );
+  });
+
+  it('keeps a video held by several marks without double counting it', async () => {
+    const { userId, channelId, videoIds } = await setup({
+      userSourceId: 'u_multi_mark',
+      channelSourceId: 'ch_multi_mark',
+      videoCount: 3,
+    });
+    await seedReadAndArchived(userId, videoIds);
+
+    const keptVideoId = videoIds[0];
+    await global.testPrisma.videoStar.create({
+      data: { user_id: userId, video_id: keptVideoId },
+    });
+    await global.testPrisma.videoSave.create({
+      data: { user_id: userId, video_id: keptVideoId },
+    });
+    await global.testPrisma.note.create({
+      data: { user_id: userId, video_id: keptVideoId, body: 'first' },
+    });
+    await global.testPrisma.note.create({
+      data: { user_id: userId, video_id: keptVideoId, body: 'second' },
+    });
+
+    const result = await unsubscribeChannelForUser(global.testPrisma, userId, channelId);
+    expect(result).toEqual({ cleanedVideoCount: 2, keptVideoCount: 1 });
   });
 
   it('preserves triage state for videos the user also added as standalone', async () => {
@@ -138,44 +266,30 @@ describe('unsubscribeChannelForUser', () => {
       channelSourceId: 'ch_standalone',
       videoCount: 3,
     });
-    await seedTriageForAll(userId, videoIds);
+    await seedReadAndArchived(userId, videoIds);
 
-    const retainedVideoId = videoIds[0];
+    const keptVideoId = videoIds[0];
     const cleanedVideoIds = videoIds.slice(1);
     await global.testPrisma.standaloneVideo.create({
-      data: { user_id: userId, video_id: retainedVideoId },
+      data: { user_id: userId, video_id: keptVideoId },
     });
 
     const result = await unsubscribeChannelForUser(global.testPrisma, userId, channelId);
-    expect(result).toEqual({ cleanedVideoCount: 2 });
+    expect(result).toEqual({ cleanedVideoCount: 2, keptVideoCount: 1 });
 
     expect(
       await global.testPrisma.standaloneVideo.findFirst({
-        where: { user_id: userId, video_id: retainedVideoId },
+        where: { user_id: userId, video_id: keptVideoId },
       })
     ).not.toBeNull();
 
-    const survivorWhere = { user_id: userId, video_id: retainedVideoId };
-    const cleanedWhere = { user_id: userId, video_id: { in: cleanedVideoIds } };
-
+    const keptWhere = { user_id: userId, video_id: keptVideoId };
     expect(
-      await global.testPrisma.userVideoConsumption.findFirst({ where: survivorWhere })
+      await global.testPrisma.userVideoConsumption.findFirst({ where: keptWhere })
     ).not.toBeNull();
-    expect(await global.testPrisma.userVideoConsumption.findMany({ where: cleanedWhere })).toEqual(
-      []
-    );
+    expect(await global.testPrisma.videoArchive.findFirst({ where: keptWhere })).not.toBeNull();
 
-    expect(await global.testPrisma.videoStar.findFirst({ where: survivorWhere })).not.toBeNull();
-    expect(await global.testPrisma.videoStar.findMany({ where: cleanedWhere })).toEqual([]);
-
-    expect(await global.testPrisma.videoSave.findFirst({ where: survivorWhere })).not.toBeNull();
-    expect(await global.testPrisma.videoSave.findMany({ where: cleanedWhere })).toEqual([]);
-
-    expect(await global.testPrisma.videoArchive.findFirst({ where: survivorWhere })).not.toBeNull();
-    expect(await global.testPrisma.videoArchive.findMany({ where: cleanedWhere })).toEqual([]);
-
-    expect(await global.testPrisma.note.findFirst({ where: survivorWhere })).not.toBeNull();
-    expect(await global.testPrisma.note.findMany({ where: cleanedWhere })).toEqual([]);
+    await expectFullyCleaned(userId, cleanedVideoIds);
   });
 
   it('preserves triage state for videos that belong to one of the user’s playlists', async () => {
@@ -184,10 +298,10 @@ describe('unsubscribeChannelForUser', () => {
       channelSourceId: 'ch_playlist',
       videoCount: 3,
     });
-    await seedTriageForAll(userId, videoIds);
+    await seedReadAndArchived(userId, videoIds);
 
-    const retainedVideoId = videoIds[1];
-    const cleanedVideoIds = videoIds.filter((v) => v !== retainedVideoId);
+    const keptVideoId = videoIds[1];
+    const cleanedVideoIds = videoIds.filter((v) => v !== keptVideoId);
     const playlist = await global.testPrisma.playlist.create({
       data: {
         user_id: userId,
@@ -196,37 +310,23 @@ describe('unsubscribeChannelForUser', () => {
       },
     });
     await global.testPrisma.playlistVideo.create({
-      data: { playlist_id: playlist.id, video_id: retainedVideoId },
+      data: { playlist_id: playlist.id, video_id: keptVideoId },
     });
 
     const result = await unsubscribeChannelForUser(global.testPrisma, userId, channelId);
-    expect(result).toEqual({ cleanedVideoCount: 2 });
+    expect(result).toEqual({ cleanedVideoCount: 2, keptVideoCount: 1 });
 
-    const survivorWhere = { user_id: userId, video_id: retainedVideoId };
-    const cleanedWhere = { user_id: userId, video_id: { in: cleanedVideoIds } };
-
+    const keptWhere = { user_id: userId, video_id: keptVideoId };
     expect(
-      await global.testPrisma.userVideoConsumption.findFirst({ where: survivorWhere })
+      await global.testPrisma.userVideoConsumption.findFirst({ where: keptWhere })
     ).not.toBeNull();
-    expect(await global.testPrisma.userVideoConsumption.findMany({ where: cleanedWhere })).toEqual(
-      []
-    );
+    expect(await global.testPrisma.videoArchive.findFirst({ where: keptWhere })).not.toBeNull();
 
-    expect(await global.testPrisma.videoStar.findFirst({ where: survivorWhere })).not.toBeNull();
-    expect(await global.testPrisma.videoStar.findMany({ where: cleanedWhere })).toEqual([]);
-
-    expect(await global.testPrisma.videoSave.findFirst({ where: survivorWhere })).not.toBeNull();
-    expect(await global.testPrisma.videoSave.findMany({ where: cleanedWhere })).toEqual([]);
-
-    expect(await global.testPrisma.videoArchive.findFirst({ where: survivorWhere })).not.toBeNull();
-    expect(await global.testPrisma.videoArchive.findMany({ where: cleanedWhere })).toEqual([]);
-
-    expect(await global.testPrisma.note.findFirst({ where: survivorWhere })).not.toBeNull();
-    expect(await global.testPrisma.note.findMany({ where: cleanedWhere })).toEqual([]);
+    await expectFullyCleaned(userId, cleanedVideoIds);
 
     expect(
       await global.testPrisma.playlistVideo.findFirst({
-        where: { playlist_id: playlist.id, video_id: retainedVideoId },
+        where: { playlist_id: playlist.id, video_id: keptVideoId },
       })
     ).not.toBeNull();
   });
@@ -237,7 +337,7 @@ describe('unsubscribeChannelForUser', () => {
       channelSourceId: 'ch_cross_user',
       videoCount: 2,
     });
-    await seedTriageForAll(userId, videoIds);
+    await seedReadAndArchived(userId, videoIds);
 
     // Second user puts one of the channel's videos in their own playlist.
     await global.testPrisma.user.create({
@@ -257,10 +357,34 @@ describe('unsubscribeChannelForUser', () => {
     const result = await unsubscribeChannelForUser(global.testPrisma, userId, channelId);
     // Both videos should still be cleaned — the other user's playlist
     // must not shield `u_owner`'s triage state.
-    expect(result).toEqual({ cleanedVideoCount: 2 });
+    expect(result).toEqual({ cleanedVideoCount: 2, keptVideoCount: 0 });
 
-    const stars = await global.testPrisma.videoStar.findMany({ where: { user_id: userId } });
-    expect(stars).toEqual([]);
+    await expectFullyCleaned(userId, videoIds);
+  });
+
+  it('does not use another user’s mark as a retention reason', async () => {
+    const { userId, channelId, videoIds } = await setup({
+      userSourceId: 'u_mark_owner',
+      channelSourceId: 'ch_cross_mark',
+      videoCount: 2,
+    });
+    await seedReadAndArchived(userId, videoIds);
+
+    await global.testPrisma.user.create({
+      data: { source_id: 'u_mark_other', email: 'u_mark_other@example.com', name: 'Other' },
+    });
+    await global.testPrisma.videoStar.create({
+      data: { user_id: 'u_mark_other', video_id: videoIds[0] },
+    });
+
+    const result = await unsubscribeChannelForUser(global.testPrisma, userId, channelId);
+    expect(result).toEqual({ cleanedVideoCount: 2, keptVideoCount: 0 });
+
+    await expectFullyCleaned(userId, videoIds);
+    // The other user's star is untouched.
+    expect(
+      await global.testPrisma.videoStar.findFirst({ where: { user_id: 'u_mark_other' } })
+    ).not.toBeNull();
   });
 
   it('does not touch another user’s triage state on the shared channel', async () => {
@@ -314,7 +438,7 @@ describe('unsubscribeChannelForUser', () => {
     });
 
     const result = await unsubscribeChannelForUser(global.testPrisma, 'u_empty', channel.id);
-    expect(result).toEqual({ cleanedVideoCount: 0 });
+    expect(result).toEqual({ cleanedVideoCount: 0, keptVideoCount: 0 });
 
     expect(
       await global.testPrisma.userSubscription.findFirst({
