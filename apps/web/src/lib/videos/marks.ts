@@ -39,8 +39,10 @@ function markArms(userId: string): Prisma.VideoWhereInput[] {
  * legitimately reach: one from a channel they subscribe to, one in
  * their personal library (standalone add or a playlist they own), or
  * one they marked. This is the IDOR guard shared by the reader page,
- * the triage endpoints, and the bulk endpoint — they must not diverge,
- * or a video would be visible in a list but 403 on the action.
+ * the triage endpoints, the bulk endpoint, and the content endpoints
+ * (transcript / summary / article / read / meta) — they must not
+ * diverge, or a video would open in the reader but 404 on its
+ * transcript, or be visible in a list but 404 on the action.
  */
 export function videoReachableByUser(userId: string): Prisma.VideoWhereInput {
   return {

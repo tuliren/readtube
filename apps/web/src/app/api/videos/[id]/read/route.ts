@@ -2,6 +2,8 @@ import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 
+import { videoReachableByUser } from '@/lib/videos/marks';
+
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { userId } = await auth();
   if (userId == null) {
@@ -14,15 +16,12 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
 
   console.info(`[videos/read/POST] Marking video ${videoId} as read for user ${userId}`);
 
-  // IDOR check: ensure video belongs to a channel the user is subscribed to
+  // IDOR check: same reachability rule as the reader and the triage
+  // endpoints (subscription, library, or the user's own mark).
   const video = await prisma.video.findFirst({
     where: {
       id: videoId,
-      OR: [
-        { channel: { subscriptions: { some: { user_id: userId } } } },
-        { standalone: { some: { user_id: userId } } },
-        { playlist_items: { some: { playlist: { user_id: userId } } } },
-      ],
+      ...videoReachableByUser(userId),
     },
     select: { id: true },
   });

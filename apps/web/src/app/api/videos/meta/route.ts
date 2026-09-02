@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { requireUserId } from '@/lib/auth';
 import { detectPlatformTypeFromSourceId } from '@/lib/platforms';
+import { videoReachableByUser } from '@/lib/videos/marks';
 
 /**
  * Lightweight lookup for a video's display metadata, keyed by the
@@ -12,8 +13,8 @@ import { detectPlatformTypeFromSourceId } from '@/lib/platforms';
  * server-rendered, but the top bar lives in the dashboard shell and
  * needs a client-side signal.
  *
- * Access mirrors the reader: channel subscription, standalone, or
- * the video is in one of the user's playlists.
+ * Access mirrors the reader via `videoReachableByUser`: channel
+ * subscription, library membership, or the user's own mark.
  */
 export async function GET(request: NextRequest) {
   const authResult = await requireUserId();
@@ -42,11 +43,7 @@ export async function GET(request: NextRequest) {
     where: {
       source_type: sourceType,
       source_id: sourceId,
-      OR: [
-        { channel: { subscriptions: { some: { user_id: userId } } } },
-        { standalone: { some: { user_id: userId } } },
-        { playlist_items: { some: { playlist: { user_id: userId } } } },
-      ],
+      ...videoReachableByUser(userId),
     },
     select: {
       id: true,
