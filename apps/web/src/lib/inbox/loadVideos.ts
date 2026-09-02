@@ -123,7 +123,15 @@ export async function loadInboxVideos(
   // beyond the page boundary.
   if (query.unread === true) {
     where = {
-      AND: [where, buildUnreadClause(userId, channelIds, watermarkByChannelId)],
+      AND: [
+        where,
+        buildUnreadClause(userId, channelIds, watermarkByChannelId, {
+          // A mark-scoped view isn't channel-scoped, so its unread
+          // predicate can't be either — otherwise "starred and unread"
+          // would silently drop kept videos from removed channels.
+          includeUnscopedChannels: markScoped,
+        }),
+      ],
     };
   }
 

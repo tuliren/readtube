@@ -116,11 +116,19 @@ export function isMarkScopedQuery(query: InboxQuery): boolean {
  * Returned as a standalone clause (not folded into `buildVideoWhere`)
  * because it needs the watermark map, which the buildVideoWhere
  * callsite doesn't always have on hand.
+ *
+ * `includeUnscopedChannels` widens rule 2 to videos outside the user's
+ * subscriptions — set it whenever the surrounding query is mark-scoped
+ * (see `isMarkScopedQuery`), so "starred and unread" still reaches a
+ * kept video whose channel the user removed. Such a channel has no
+ * watermark, so those videos read as unread until an explicit
+ * consumption row says otherwise.
  */
 export function buildUnreadClause(
   userId: string,
   channelIds: string[],
-  watermarkByChannelId: Map<string, Date | null>
+  watermarkByChannelId: Map<string, Date | null>,
+  options: { includeUnscopedChannels?: boolean } = {}
 ): Prisma.VideoWhereInput {
   // Per-channel watermark predicate. For each channel either there's
   // no watermark (every video in that channel is above the line) or
@@ -132,6 +140,14 @@ export function buildUnreadClause(
     }
     return { channel_id: cid, ...videoNewerThanWatermark(watermark) };
   });
+
+  if (options.includeUnscopedChannels === true) {
+    // Everything outside the subscribed set has no watermark to clear.
+    // Spelled out rather than leaning on `notIn: []`, whose "matches
+    // everything" reading is the same empty-array surprise that makes
+    // a bare `OR: []` match everything.
+    perChannel.push(channelIds.length === 0 ? {} : { channel_id: { notIn: channelIds } });
+  }
 
   return {
     AND: [

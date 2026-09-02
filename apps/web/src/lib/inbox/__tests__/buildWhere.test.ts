@@ -160,6 +160,39 @@ describe('buildUnreadClause', () => {
     });
   });
 
+  it('adds a notIn arm for unscoped channels when includeUnscopedChannels is set', () => {
+    // Mark-scoped views aren't channel-scoped, so their unread arm has
+    // to reach kept videos whose channel the user removed.
+    const clause = buildUnreadClause(USER_ID, ['chan_a'], new Map([['chan_a', watermark]]), {
+      includeUnscopedChannels: true,
+    });
+    const orClause = (clause.AND as unknown as Array<{ OR?: unknown }>).find(
+      (entry) => entry.OR != null
+    );
+    expect(orClause).toEqual({
+      OR: [
+        {
+          channel_id: 'chan_a',
+          OR: [
+            { published_at: { gt: watermark } },
+            { AND: [{ published_at: null }, { created_at: { gt: watermark } }] },
+          ],
+        },
+        { channel_id: { notIn: ['chan_a'] } },
+      ],
+    });
+  });
+
+  it('emits a single unconditional arm when the user has no subscriptions left', () => {
+    // `notIn: []` and a bare `OR: []` both read as "match everything"
+    // in Prisma — spell the intent out instead of relying on that.
+    const clause = buildUnreadClause(USER_ID, [], new Map(), { includeUnscopedChannels: true });
+    const orClause = (clause.AND as unknown as Array<{ OR?: unknown }>).find(
+      (entry) => entry.OR != null
+    );
+    expect(orClause).toEqual({ OR: [{}] });
+  });
+
   it('produces a clause that combines the per-channel OR and consumption guard', () => {
     const clause = buildUnreadClause(USER_ID, ['chan_a'], new Map([['chan_a', watermark]]));
     expect(clause).toEqual({

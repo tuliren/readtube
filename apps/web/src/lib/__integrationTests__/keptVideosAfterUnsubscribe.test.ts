@@ -211,6 +211,23 @@ describe('views after unsubscribing a channel', () => {
     expect(await loadIds({ saved: true })).toEqual([seeded.saved]);
   });
 
+  it('composes a mark view with unread across the removed channel', async () => {
+    // A removed channel has no watermark left, so its kept videos are
+    // unread until an explicit consumption row says otherwise. The
+    // mark view isn't channel-scoped, so neither is its unread arm.
+    const seeded = await seed();
+    await unsubscribeChannelForUser(global.testPrisma, USER_ID, seeded.channelId);
+
+    expect(await loadIds({ starred: true, unread: true })).toEqual([seeded.starred]);
+
+    await global.testPrisma.userVideoConsumption.create({
+      data: { user_id: USER_ID, video_id: seeded.starred },
+    });
+    expect(await loadIds({ starred: true, unread: true })).toEqual([]);
+    // Reading it doesn't remove it from the Starred view itself.
+    expect(await loadIds({ starred: true })).toEqual([seeded.starred]);
+  });
+
   it('does not leak another user’s marked videos into the Starred view', async () => {
     const seeded = await seed();
     await global.testPrisma.user.create({
