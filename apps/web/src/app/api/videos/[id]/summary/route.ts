@@ -9,6 +9,7 @@ import { resolveTargetLanguage } from '@/lib/language/resolve';
 import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
 import { recordSummaryRequest } from '@/lib/usage/userRequest';
+import { videoReachableByUser } from '@/lib/videos/marks';
 import { claimSummaryRun, findActiveSummaryRun } from '@/lib/workflows/runRegistry';
 import { NDJSON_HEADERS, ndjsonResponseFromRun } from '@/lib/workflows/streamResponse';
 import { type SummaryStreamEvent, summaryWorkflow } from '@/lib/workflows/summary';
@@ -49,11 +50,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const video = await prisma.video.findFirst({
     where: {
       id,
-      OR: [
-        { channel: { subscriptions: { some: { user_id: userId } } } },
-        { standalone: { some: { user_id: userId } } },
-        { playlist_items: { some: { playlist: { user_id: userId } } } },
-      ],
+      ...videoReachableByUser(userId),
     },
     select: {
       id: true,
@@ -148,11 +145,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const video = await prisma.video.findFirst({
     where: {
       id,
-      OR: [
-        { channel: { subscriptions: { some: { user_id: userId } } } },
-        { standalone: { some: { user_id: userId } } },
-        { playlist_items: { some: { playlist: { user_id: userId } } } },
-      ],
+      ...videoReachableByUser(userId),
     },
     select: {
       id: true,

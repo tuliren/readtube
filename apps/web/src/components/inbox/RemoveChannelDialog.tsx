@@ -91,7 +91,7 @@ export default function RemoveChannelDialog({ target, currentChannelId, onClose 
               <>
                 <strong className="font-medium text-foreground">{target.name}</strong>
                 {
-                  ' will be removed from your subscribed channels. All your data associated with this channel and its videos will be permanently deleted. You can re-add the channel at any time, but your data cannot be recovered.'
+                  ' will be removed from your subscribed channels. Videos you starred, saved for later, or took notes on are kept, and stay in those views. Everything else from this channel, including read and archived state, is permanently deleted and cannot be recovered.'
                 }
               </>
             ) : null}

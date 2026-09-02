@@ -1,5 +1,7 @@
 import type { PrismaClient } from '@readtube/database';
 
+import { videoReachableByUser } from '@/lib/videos/marks';
+
 /**
  * Shared helpers for the star/save/archive endpoints. Each toggle delete
  * is a thin wrapper around `deleteMany` so repeated DELETE requests are
@@ -20,24 +22,21 @@ interface AssertArgs {
 }
 
 /**
- * Returns true when the user can act on the video — either they have
- * a subscription to the video's channel, or they've added it directly
- * via the individual-video / playlist flow (StandaloneVideo row).
- * Used by every triage endpoint to prevent IDOR before touching state.
+ * Returns true when the user can act on the video — they subscribe to
+ * its channel, they added it directly (standalone / playlist flow), or
+ * they marked it with a star, save, or note. Used by every triage
+ * endpoint to prevent IDOR before touching state.
+ *
+ * The mark arm is what keeps a video the user starred or annotated
+ * actionable after they unsubscribe from its channel — see
+ * `unsubscribeChannelForUser`.
  */
 export async function assertUserCanTouchVideo(
   prisma: PrismaClient,
   { userId, videoId }: AssertArgs
 ): Promise<boolean> {
   const row = await prisma.video.findFirst({
-    where: {
-      id: videoId,
-      OR: [
-        { channel: { subscriptions: { some: { user_id: userId } } } },
-        { standalone: { some: { user_id: userId } } },
-        { playlist_items: { some: { playlist: { user_id: userId } } } },
-      ],
-    },
+    where: { id: videoId, ...videoReachableByUser(userId) },
     select: { id: true },
   });
   return row != null;
@@ -135,20 +134,13 @@ export async function applyBulk(
     return { affected: 0 };
   }
 
-  // Scope: videos the user reaches via a channel subscription OR via
-  // their personal library (StandaloneVideo). Anything else is silently
-  // filtered. Mirrors the OR in assertUserCanTouchVideo — keeps IDOR out
-  // of bulk without needing to fail loudly on every stray id, and lets
-  // future library-scoped bulk actions work without a second fix.
+  // Scope: videos the user reaches via a channel subscription, their
+  // personal library, or their own marks. Anything else is silently
+  // filtered. Shares `videoReachableByUser` with assertUserCanTouchVideo
+  // — keeps IDOR out of bulk without needing to fail loudly on every
+  // stray id, and the two can't drift apart.
   const ownedVideos = await prisma.video.findMany({
-    where: {
-      id: { in: videoIds },
-      OR: [
-        { channel: { subscriptions: { some: { user_id: userId } } } },
-        { standalone: { some: { user_id: userId } } },
-        { playlist_items: { some: { playlist: { user_id: userId } } } },
-      ],
-    },
+    where: { id: { in: videoIds }, ...videoReachableByUser(userId) },
     select: { id: true },
   });
   const ownedIds = ownedVideos.map((v) => v.id);

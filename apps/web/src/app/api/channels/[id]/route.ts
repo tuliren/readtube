@@ -24,6 +24,10 @@ export async function DELETE(
     console.error(`[channels/DELETE] Channel ${channelId} not subscribed by user ${userId}`);
     return NextResponse.json({ error: 'Channel not found' }, { status: 404 });
   }
+  console.info(`[channels/DELETE] Unsubscribed channel ${channelId} for user ${userId}`, {
+    cleanedVideoCount: result.cleanedVideoCount,
+    keptVideoCount: result.keptVideoCount,
+  });
 
   return new NextResponse(null, { status: 204 });
 }

@@ -1,6 +1,6 @@
 import type { InboxQuery } from '@/lib/types';
 
-import { buildUnreadClause, buildVideoWhere } from '../buildWhere';
+import { buildUnreadClause, buildVideoWhere, isMarkScopedQuery } from '../buildWhere';
 
 // Every test uses this stable channel set and user to keep assertions
 // focused on the filter logic rather than scoping boilerplate.
@@ -21,6 +21,30 @@ describe('buildVideoWhere — channel scope', () => {
   it('falls back to the full allowed list when channelId is NOT in scope', () => {
     // IDOR-safe fallback — never trust the client param alone.
     const where = buildVideoWhere({ channelId: 'chan_intruder' }, USER_ID, CHANNEL_IDS);
+    expect(where.channel_id).toEqual({ in: CHANNEL_IDS });
+  });
+
+  it.each<{ name: string; query: InboxQuery }>([
+    { name: 'starred', query: { starred: true } },
+    { name: 'saved', query: { saved: true } },
+    { name: 'archived', query: { archived: true } },
+  ])('drops the channel scope for the $name view', ({ query }) => {
+    // A mark is a statement about one video, so those buckets hold
+    // everything the user marked — including videos whose channel they
+    // later removed. The mark filter itself scopes to this user.
+    const where = buildVideoWhere(query, USER_ID, CHANNEL_IDS);
+    expect(where.channel_id).toBeUndefined();
+  });
+
+  it('still honors an explicit in-scope channelId inside a mark view', () => {
+    const where = buildVideoWhere({ starred: true, channelId: 'chan_b' }, USER_ID, CHANNEL_IDS);
+    expect(where.channel_id).toBe('chan_b');
+  });
+
+  it('keeps the channel scope for the unread view', () => {
+    // Unread is the subscription feed — a removed channel must not
+    // keep publishing into it.
+    const where = buildVideoWhere({ unread: true }, USER_ID, CHANNEL_IDS);
     expect(where.channel_id).toEqual({ in: CHANNEL_IDS });
   });
 
@@ -53,14 +77,33 @@ describe('buildVideoWhere — date window', () => {
 });
 
 describe('buildVideoWhere — archive mode', () => {
-  it('excludes archived videos by default', () => {
-    const where = buildVideoWhere({}, USER_ID, CHANNEL_IDS);
+  it.each<{ name: string; query: InboxQuery }>([
+    { name: 'the default view', query: {} },
+    { name: 'the unread view', query: { unread: true } },
+  ])('excludes archived videos from $name', ({ query }) => {
+    const where = buildVideoWhere(query, USER_ID, CHANNEL_IDS);
     expect(where.archives).toEqual({ none: { user_id: USER_ID } });
   });
 
   it('shows only archived when archived=true', () => {
     const where = buildVideoWhere({ archived: true }, USER_ID, CHANNEL_IDS);
     expect(where.archives).toEqual({ some: { user_id: USER_ID } });
+  });
+
+  it.each<{ name: string; query: InboxQuery }>([
+    { name: 'Starred', query: { starred: true } },
+    { name: 'Read Later', query: { saved: true } },
+  ])('emits no archive filter for the $name view', ({ query }) => {
+    // Archiving clears a video from the inbox; it must not also empty
+    // the bucket the user deliberately put it in.
+    const where = buildVideoWhere(query, USER_ID, CHANNEL_IDS);
+    expect(where.archives).toBeUndefined();
+  });
+
+  it('intersects when archived is combined with a bucket', () => {
+    const where = buildVideoWhere({ starred: true, archived: true }, USER_ID, CHANNEL_IDS);
+    expect(where.archives).toEqual({ some: { user_id: USER_ID } });
+    expect(where.stars).toEqual({ some: { user_id: USER_ID } });
   });
 });
 
@@ -136,6 +179,39 @@ describe('buildUnreadClause', () => {
     });
   });
 
+  it('adds a notIn arm for unscoped channels when includeUnscopedChannels is set', () => {
+    // Mark-scoped views aren't channel-scoped, so their unread arm has
+    // to reach kept videos whose channel the user removed.
+    const clause = buildUnreadClause(USER_ID, ['chan_a'], new Map([['chan_a', watermark]]), {
+      includeUnscopedChannels: true,
+    });
+    const orClause = (clause.AND as unknown as Array<{ OR?: unknown }>).find(
+      (entry) => entry.OR != null
+    );
+    expect(orClause).toEqual({
+      OR: [
+        {
+          channel_id: 'chan_a',
+          OR: [
+            { published_at: { gt: watermark } },
+            { AND: [{ published_at: null }, { created_at: { gt: watermark } }] },
+          ],
+        },
+        { channel_id: { notIn: ['chan_a'] } },
+      ],
+    });
+  });
+
+  it('emits a single unconditional arm when the user has no subscriptions left', () => {
+    // `notIn: []` and a bare `OR: []` both read as "match everything"
+    // in Prisma — spell the intent out instead of relying on that.
+    const clause = buildUnreadClause(USER_ID, [], new Map(), { includeUnscopedChannels: true });
+    const orClause = (clause.AND as unknown as Array<{ OR?: unknown }>).find(
+      (entry) => entry.OR != null
+    );
+    expect(orClause).toEqual({ OR: [{}] });
+  });
+
   it('produces a clause that combines the per-channel OR and consumption guard', () => {
     const clause = buildUnreadClause(USER_ID, ['chan_a'], new Map([['chan_a', watermark]]));
     expect(clause).toEqual({
@@ -172,7 +248,23 @@ describe('buildVideoWhere — compositional sanity', () => {
 
     expect(where.channel_id).toBe('chan_a');
     expect(where.stars).toEqual({ some: { user_id: USER_ID } });
-    expect(where.archives).toEqual({ none: { user_id: USER_ID } });
+    // Starred exempts the view from the default archive exclusion.
+    expect(where.archives).toBeUndefined();
     expect(where.published_at).toEqual({ gte: new Date('2026-01-01') });
+  });
+});
+
+describe('isMarkScopedQuery', () => {
+  it.each<{ name: string; query: InboxQuery; expected: boolean }>([
+    { name: 'default inbox', query: {}, expected: false },
+    { name: 'unread', query: { unread: true }, expected: false },
+    { name: 'free-text search', query: { q: 'anything' }, expected: false },
+    { name: 'archived=false', query: { archived: false }, expected: false },
+    { name: 'starred', query: { starred: true }, expected: true },
+    { name: 'saved', query: { saved: true }, expected: true },
+    { name: 'archived', query: { archived: true }, expected: true },
+    { name: 'starred + unread', query: { starred: true, unread: true }, expected: true },
+  ])('$name -> $expected', ({ query, expected }) => {
+    expect(isMarkScopedQuery(query)).toBe(expected);
   });
 });

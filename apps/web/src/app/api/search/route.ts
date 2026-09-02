@@ -11,6 +11,7 @@ import {
 } from '@/lib/search/cjk';
 import { rankByMatchScore } from '@/lib/search/matchScore';
 import type { ChannelSearchHit, SearchResponse, VideoSearchHit } from '@/lib/search/types';
+import { videoMarkedByUserSql } from '@/lib/videos/marks';
 
 /** Most relevant N per section — the palette shows every row returned.
  *  VIDEO_LIMIT applies per match class (title / description), since
@@ -95,7 +96,11 @@ export async function GET(request: NextRequest) {
 
 /**
  * Restrict a video query to the user's library: videos from subscribed
- * channels, individually added standalone videos, and playlist videos.
+ * channels, individually added standalone videos, playlist videos, and
+ * videos the user marked (star / Read Later / note). The mark arm keeps
+ * a starred or annotated video findable after its channel is removed —
+ * it's the same reachability rule `videoReachableByUser` applies to the
+ * reader and the triage endpoints.
  */
 function libraryScopeSql(userId: string): Prisma.Sql {
   return Prisma.sql`(
@@ -111,6 +116,7 @@ function libraryScopeSql(userId: string): Prisma.Sql {
       JOIN "Playlist" p ON p."id" = pv."playlist_id"
       WHERE p."user_id" = ${userId}
     )
+    OR ${videoMarkedByUserSql(userId, Prisma.sql`v."id"`)}
   )`;
 }
 

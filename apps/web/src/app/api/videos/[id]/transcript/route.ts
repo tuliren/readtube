@@ -9,6 +9,7 @@ import {
 import type { TranscriptSegment } from '@/lib/platforms/types';
 import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
 import { computeTranscriptGaps } from '@/lib/transcripts/transcriptGaps';
+import { videoReachableByUser } from '@/lib/videos/marks';
 import { findActiveTranscriptGeneration } from '@/lib/workflows/runRegistry';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -33,11 +34,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const video = await prisma.video.findFirst({
     where: {
       id,
-      OR: [
-        { channel: { subscriptions: { some: { user_id: userId } } } },
-        { standalone: { some: { user_id: userId } } },
-        { playlist_items: { some: { playlist: { user_id: userId } } } },
-      ],
+      ...videoReachableByUser(userId),
     },
     select: {
       id: true,

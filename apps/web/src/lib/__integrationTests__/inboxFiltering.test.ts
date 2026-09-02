@@ -135,6 +135,37 @@ describe('buildVideoWhere end-to-end with Prisma', () => {
     expect(rows.map((r) => r.id)).toEqual([seeded.saved]);
   });
 
+  it.each<{ name: string; key: 'starred' | 'saved'; query: Parameters<typeof buildVideoWhere>[0] }>(
+    [
+      { name: 'Starred', key: 'starred', query: { starred: true } },
+      { name: 'Read Later', key: 'saved', query: { saved: true } },
+    ]
+  )('archiving a video does not drop it from the $name view', async ({ key, query }) => {
+    // Archiving is an inbox action — it clears the video from the feed
+    // without taking it out of the bucket the user put it in.
+    const seeded = await seed();
+    await global.testPrisma.videoArchive.create({
+      data: { user_id: USER_ID, video_id: seeded[key] },
+    });
+
+    const rows = await runFilter([seeded.channelId], query);
+    expect(rows.map((r) => r.id)).toEqual([seeded[key]]);
+
+    // ...and it does drop out of the feed.
+    const feed = await runFilter([seeded.channelId], {});
+    expect(feed.map((r) => r.id)).not.toContain(seeded[key]);
+  });
+
+  it('archived=true intersects with a bucket rather than replacing it', async () => {
+    const seeded = await seed();
+    await global.testPrisma.videoArchive.create({
+      data: { user_id: USER_ID, video_id: seeded.starred },
+    });
+
+    const rows = await runFilter([seeded.channelId], { starred: true, archived: true });
+    expect(rows.map((r) => r.id)).toEqual([seeded.starred]);
+  });
+
   it('archived=true flips to the archived bucket', async () => {
     const seeded = await seed();
     const rows = await runFilter([seeded.channelId], { archived: true });

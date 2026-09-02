@@ -7,6 +7,7 @@ import { TRANSCRIPT_GENERATION_MODEL } from '@/constants';
 import { fetchVideoDurationSeconds } from '@/lib/platforms/youtube/videoDuration';
 import { recordTranscriptRequest } from '@/lib/usage/userRequest';
 import { VercelEnv, getVercelEnv } from '@/lib/vercelEnv';
+import { videoReachableByUser } from '@/lib/videos/marks';
 import {
   claimTranscriptGeneration,
   findActiveTranscriptGeneration,
@@ -45,11 +46,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const video = await prisma.video.findFirst({
     where: {
       id,
-      OR: [
-        { channel: { subscriptions: { some: { user_id: userId } } } },
-        { standalone: { some: { user_id: userId } } },
-        { playlist_items: { some: { playlist: { user_id: userId } } } },
-      ],
+      ...videoReachableByUser(userId),
     },
     select: {
       id: true,

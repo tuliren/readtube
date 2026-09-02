@@ -7,6 +7,7 @@ import VideoReader from '@/components/reader/VideoReader';
 import { capTitle } from '@/lib/format/title';
 import { decorateVideo, loadTriageContext } from '@/lib/inbox/triage';
 import type { VideoData } from '@/lib/types';
+import { videoReachableByUser } from '@/lib/videos/marks';
 import { resolveVideoSourceId } from '@/lib/videos/resolveVideoSourceId';
 
 interface Props {
@@ -53,19 +54,14 @@ export default async function VideoPage({ params }: Props) {
   }
 
   const video = await prisma.video.findFirst({
-    // Reader access mirrors assertUserCanTouchVideo: either the user
-    // subscribes to the video's channel, or the video lives in their
-    // personal library (StandaloneVideo). Without the OR, clicking any
-    // video added via the "+ Add video" flow would 404 since those
-    // videos hang off an unsubscribed shadow channel.
-    where: {
-      id: stub.id,
-      OR: [
-        { channel: { subscriptions: { some: { user_id: userId } } } },
-        { standalone: { some: { user_id: userId } } },
-        { playlist_items: { some: { playlist: { user_id: userId } } } },
-      ],
-    },
+    // Reader access shares `videoReachableByUser` with
+    // assertUserCanTouchVideo: the user subscribes to the video's
+    // channel, the video lives in their personal library, or they
+    // marked it. Without the widened scope, a video added via the
+    // "+ Add video" flow would 404 (those hang off an unsubscribed
+    // shadow channel), and so would a starred or annotated video whose
+    // channel the user later removed.
+    where: { id: stub.id, ...videoReachableByUser(userId) },
     select: {
       id: true,
       source_id: true,

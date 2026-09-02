@@ -3,6 +3,7 @@ import { type PrismaClient, TranscriptSource, UserRequestOutcome } from '@readtu
 import { getPlatformByType } from '@/lib/platforms';
 import { SubtitleFetchError, type TranscriptSegment } from '@/lib/platforms/types';
 import { recordTranscriptRequest } from '@/lib/usage/userRequest';
+import { videoReachableByUser } from '@/lib/videos/marks';
 
 interface CachedTranscript {
   id: string;
@@ -37,8 +38,8 @@ export type EnsureTranscriptResult =
  * into so they share the same caching + retry behavior.
  *
  * Logic:
- *   1. IDOR check (the user must be subscribed to the channel that
- *      owns the video — same predicate as the GET /transcript route).
+ *   1. IDOR check (`videoReachableByUser` — same predicate as the
+ *      GET /transcript route and the reader page).
  *   2. If a Transcript row already exists for the video, return it.
  *   3. Otherwise, if Video.transcript_unavailable is already true,
  *      return { ok: false, reason: 'unavailable' } without touching
@@ -69,11 +70,7 @@ export async function ensureTranscript(
   const video = await prisma.video.findFirst({
     where: {
       id: videoDbId,
-      OR: [
-        { channel: { subscriptions: { some: { user_id: userId } } } },
-        { standalone: { some: { user_id: userId } } },
-        { playlist_items: { some: { playlist: { user_id: userId } } } },
-      ],
+      ...videoReachableByUser(userId),
     },
     select: {
       id: true,
