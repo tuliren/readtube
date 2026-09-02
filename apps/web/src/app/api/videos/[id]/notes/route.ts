@@ -2,21 +2,7 @@ import { prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { requireUserId } from '@/lib/auth';
-
-async function assertUserCanTouchVideo(userId: string, videoId: string): Promise<boolean> {
-  const row = await prisma.video.findFirst({
-    where: {
-      id: videoId,
-      OR: [
-        { channel: { subscriptions: { some: { user_id: userId } } } },
-        { standalone: { some: { user_id: userId } } },
-        { playlist_items: { some: { playlist: { user_id: userId } } } },
-      ],
-    },
-    select: { id: true },
-  });
-  return row != null;
-}
+import { assertUserCanTouchVideo } from '@/lib/inbox/triageActions';
 
 interface Params {
   params: Promise<{ id: string }>;
@@ -56,7 +42,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
 
   console.info(`[videos/notes/GET] Listing notes for video ${id}, user ${userId}`);
 
-  const ok = await assertUserCanTouchVideo(userId, id);
+  const ok = await assertUserCanTouchVideo(prisma, { userId, videoId: id });
   if (!ok) {
     console.error(`[videos/notes/GET] Video ${id} not accessible by user ${userId}`);
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -105,7 +91,7 @@ export async function POST(request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'Note too long' }, { status: 400 });
   }
 
-  const ok = await assertUserCanTouchVideo(userId, id);
+  const ok = await assertUserCanTouchVideo(prisma, { userId, videoId: id });
   if (!ok) {
     console.error(`[videos/notes/POST] Video ${id} not accessible by user ${userId}`);
     return NextResponse.json({ error: 'Not found' }, { status: 404 });

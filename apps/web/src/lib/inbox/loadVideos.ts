@@ -4,8 +4,9 @@ import type { PrismaClient } from '@readtube/database';
 import { containsCjk, likePattern, searchTerms } from '@/lib/search/cjk';
 import { effectivePublishDate } from '@/lib/subscriptions';
 import type { InboxQuery, VideoData } from '@/lib/types';
+import { videoMarkedByUserSql } from '@/lib/videos/marks';
 
-import { buildUnreadClause, buildVideoWhere } from './buildWhere';
+import { buildUnreadClause, buildVideoWhere, isMarkScopedQuery } from './buildWhere';
 import { PAGE_SIZE, extractInboxSearchParams, parseInboxQuery } from './filter';
 import { decorateVideo, loadTriageContext } from './triage';
 
@@ -60,7 +61,12 @@ export async function loadInboxVideos(
     select: { channel_id: true, read_at: true },
   });
   const channelIds = userSubs.map((s) => s.channel_id);
-  if (channelIds.length === 0) {
+  // With no subscriptions the channel-scoped views are empty by
+  // definition. The mark-scoped views aren't — a user who removed
+  // every channel still keeps the videos they starred, saved, or
+  // archived — so they have to run the real query.
+  const markScoped = isMarkScopedQuery(query);
+  if (channelIds.length === 0 && !markScoped) {
     return { videos: [], total: 0, page: 1, pageSize: PAGE_SIZE };
   }
   const watermarkByChannelId = new Map<string, Date | null>(
@@ -86,11 +92,19 @@ export async function loadInboxVideos(
           ' AND '
         )
       : Prisma.sql`"search_tsv" @@ plainto_tsquery('english', ${query.q})`;
+    // The id set only narrows the main findMany (which already carries
+    // the scope), so it's safe to widen it here to everything the user
+    // can see in any inbox view: subscribed channels plus videos they
+    // marked — a starred video whose channel they removed must stay
+    // searchable inside the Starred view.
     const rows = await prisma.$queryRaw<Array<{ id: string }>>`
-      SELECT "id" FROM "Video"
+      SELECT v."id" FROM "Video" v
       WHERE (${matchCondition})
-        AND "channel_id" IN (
-          SELECT "channel_id" FROM "UserSubscription" WHERE "user_id" = ${userId}
+        AND (
+          v."channel_id" IN (
+            SELECT "channel_id" FROM "UserSubscription" WHERE "user_id" = ${userId}
+          )
+          OR ${videoMarkedByUserSql(userId, Prisma.sql`v."id"`)}
         )
       LIMIT 500
     `;

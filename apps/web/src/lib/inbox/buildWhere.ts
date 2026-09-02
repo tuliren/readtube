@@ -22,6 +22,9 @@ import type { InboxQuery } from '@/lib/types';
  *   `buildVideoWhere` when `query.unread === true`. It used to be a JS
  *   post-filter in the route handler, but combined with `take: N` that
  *   silently dropped unread videos beyond the cap.
+ *
+ * Scoping rule: the mark-scoped views (Starred / Read Later / Archived)
+ * drop the channel scope — see `isMarkScopedQuery`.
  */
 export function buildVideoWhere(
   query: InboxQuery,
@@ -35,11 +38,12 @@ export function buildVideoWhere(
   // passed, validate membership (caller should ensure this, but be safe).
   // Library scopes skip this and restrict to a pre-computed id set at
   // the caller instead — the standalone / playlist views don't live on
-  // the channel axis at all.
+  // the channel axis at all. Mark-scoped views skip it too: their own
+  // `{ some: { user_id } }` filter is the scope (and the IDOR guard).
   if (!options.skipChannelScope) {
     if (query.channelId != null && channelIds.includes(query.channelId)) {
       where.channel_id = query.channelId;
-    } else {
+    } else if (!isMarkScopedQuery(query)) {
       where.channel_id = { in: channelIds };
     }
   }
@@ -72,6 +76,28 @@ export function buildVideoWhere(
   }
 
   return where;
+}
+
+/**
+ * True when the query is anchored on one of the user's own per-video
+ * marks — the Starred, Read Later, and Archived views.
+ *
+ * Those views are deliberately NOT scoped to the user's subscribed
+ * channels. A star, a Read Later save, or an archive is a statement
+ * about that one video, so the bucket should hold everything the user
+ * put in it: videos from a channel they later removed (whose marks
+ * `unsubscribeChannelForUser` now keeps) and videos in their personal
+ * library, not just videos that happen to sit under a live
+ * subscription. The mark filter is a per-user relation check, so
+ * dropping the channel scope can't widen the result past this user's
+ * own rows.
+ *
+ * The Inbox and Unread views stay channel-scoped: they're the
+ * subscription feed, and a removed channel should not keep publishing
+ * into them.
+ */
+export function isMarkScopedQuery(query: InboxQuery): boolean {
+  return query.starred === true || query.saved === true || query.archived === true;
 }
 
 /**

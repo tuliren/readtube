@@ -254,21 +254,33 @@ export async function markAllReadForUser(
 /**
  * Unsubscribe a user from a channel and clean up the user-scoped triage
  * state (consumption, stars, saves, archives, notes) for the channel's
- * videos. Videos the user still keeps for other reasons — a
- * StandaloneVideo row or membership in one of the user's playlists —
- * are intentionally excluded from the cleanup so the library-side
- * presentation retains its read state, stars, saves, archives, and
- * notes even after the subscription is dropped.
+ * videos.
+ *
+ * Videos the user still keeps are excluded from that cleanup, so their
+ * state survives the unsubscribe untouched. A video is **kept** when
+ * either:
+ *
+ *   - it carries one of the user's special marks — a star, a Read
+ *     Later save, or a note (see `lib/videos/marks.ts`), or
+ *   - it lives in the user's library already: a StandaloneVideo row,
+ *     or membership in one of the user's playlists.
+ *
+ * Kept videos remain reachable (`videoReachableByUser`) and keep
+ * showing up in the mark-scoped inbox views, so removing a channel
+ * never silently discards a video the user deliberately held on to.
+ * Read state and archive rows ride along for kept videos too — they're
+ * not keep reasons on their own, but a kept video shouldn't come back
+ * unread or un-archived.
  *
  * Returns `null` when the user is not subscribed to the channel (the
- * HTTP caller maps this to a 404). Otherwise returns the count of
- * cleaned-up videos.
+ * HTTP caller maps this to a 404). Otherwise returns how many of the
+ * channel's videos were cleaned up and how many were kept.
  */
 export async function unsubscribeChannelForUser(
   prisma: PrismaClient,
   userId: string,
   channelId: string
-): Promise<{ cleanedVideoCount: number } | null> {
+): Promise<{ cleanedVideoCount: number; keptVideoCount: number } | null> {
   const sub = await prisma.userSubscription.findFirst({
     where: { channel_id: channelId, user_id: userId },
     select: { id: true },
@@ -284,7 +296,7 @@ export async function unsubscribeChannelForUser(
     })
   ).map((v) => v.id);
 
-  const retainedVideoIds =
+  const keptVideoIds =
     channelVideoIds.length > 0
       ? new Set(
           (
@@ -300,6 +312,19 @@ export async function unsubscribeChannelForUser(
                 },
                 select: { video_id: true },
               }),
+              prisma.videoStar.findMany({
+                where: { user_id: userId, video_id: { in: channelVideoIds } },
+                select: { video_id: true },
+              }),
+              prisma.videoSave.findMany({
+                where: { user_id: userId, video_id: { in: channelVideoIds } },
+                select: { video_id: true },
+              }),
+              prisma.note.findMany({
+                where: { user_id: userId, video_id: { in: channelVideoIds } },
+                select: { video_id: true },
+                distinct: ['video_id'],
+              }),
             ])
           )
             .flat()
@@ -307,21 +332,24 @@ export async function unsubscribeChannelForUser(
         )
       : new Set<string>();
 
-  const videoIdsToCleanup = channelVideoIds.filter((id) => !retainedVideoIds.has(id));
+  const videoIdsToCleanup = channelVideoIds.filter((id) => !keptVideoIds.has(id));
   const userVideoFilter = { user_id: userId, video_id: { in: videoIdsToCleanup } };
 
+  // Only consumption and archive rows are deleted here: a video that
+  // still had a star, save, or note is by construction in
+  // `keptVideoIds`, so a `videoStar` / `videoSave` / `note` deleteMany
+  // over `videoIdsToCleanup` could only ever match rows the user
+  // created in the window between the reads above and this write —
+  // exactly the rows we must not touch.
   await prisma.$transaction([
     prisma.userSubscription.delete({ where: { id: sub.id } }),
     ...(videoIdsToCleanup.length > 0
       ? [
           prisma.userVideoConsumption.deleteMany({ where: userVideoFilter }),
-          prisma.videoStar.deleteMany({ where: userVideoFilter }),
-          prisma.videoSave.deleteMany({ where: userVideoFilter }),
           prisma.videoArchive.deleteMany({ where: userVideoFilter }),
-          prisma.note.deleteMany({ where: userVideoFilter }),
         ]
       : []),
   ]);
 
-  return { cleanedVideoCount: videoIdsToCleanup.length };
+  return { cleanedVideoCount: videoIdsToCleanup.length, keptVideoCount: keptVideoIds.size };
 }
