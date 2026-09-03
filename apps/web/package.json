@@ -71,7 +71,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@babel/core": "^8.0.0",
+    "@babel/core": "^8.0.1",
     "@chromatic-com/storybook": "^5.1.2",
     "@next/eslint-plugin-next": "^16.2.6",
     "@readtube/database": "*",
