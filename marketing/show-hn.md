@@ -3,24 +3,6 @@
 Adapted from the Product Hunt maker comment (`apps/web/src/app/producthunt/_lib/copy.ts`,
 `PH_FIRST_COMMENT`) on Sep 4, 2026. Owner submits; nothing here is published automatically.
 
-## What changed from the Product Hunt comment, and why
-
-- **Stale facts fixed.** The PH comment says a video without native captions "won't work";
-  the Gemini transcript-generation pipeline for caption-less videos has shipped since. It
-  also lists "chatting with videos" as a future plan; the ask-my-inbox chat exists now.
-  HN readers test claims, so the draft below only states what is live.
-- **HN register.** Dropped the "Hi Product Hunt 👋" opener, the emoji, and the
-  "Scroll less. Read more." sign-off. HN rewards plain first-person explanation, technical
-  detail, and honest limitations, and punishes taglines.
-- **More "how it works".** The transcription pipeline (URL ingestion in 20-minute windows,
-  the ~1 h ingestion cliff, per-video-hour cost) and the map-reduce article path with
-  embedding-based section cuts are the kind of detail that carries a Show HN thread.
-- **Sign-up wall softened.** HN dislikes tools that require an account to see anything.
-  Link a public reader page (`/p/videos/<id>`) so readers can see the output first. Pick
-  one at submission time; do not commit a specific video id here.
-- **The Claude Code angle stays**, phrased factually. It will draw comments either way;
-  owning it up front reads better than having it discovered.
-
 ## Title
 
 `Show HN: ReadTube – Read your YouTube subscriptions as articles instead of watching`
@@ -33,53 +15,32 @@ Adapted from the Product Hunt maker comment (`apps/web/src/app/producthunt/_lib/
 
 ## First comment (post as the maker, right after submitting)
 
-Hi HN, I'm Liren. ReadTube turns the YouTube channels you subscribe to into an inbox of
-readable posts. Every new video gets a short summary, a long summary, and a full-length
-article, and you triage them like email: star, save for later, archive, mark unread.
+Hi HN, I'm Liren, author of ReadTube. This is an app that turns YouTube subscriptions into a personal newsletter.
 
-Why: YouTube has a lot of high-quality long-form content (physics lecture series, two-hour
-interviews) that I wanted to keep up with but never had time to watch. Paste-a-URL
-summarizers exist, but they are one-off. I wanted the "follow" part, so the app polls the
-channels and the reading queue fills itself. Now I skim the summary and decide whether the
-article, the video, or neither is worth my time.
+YouTube has lots of high quality content. But videos can be difficult to consume efficiently, especially those that are long and about series topics (e.g. general relativity, quantum physics). So I created this app to solve this need.
+
+There are already tons of existing YouTube AI transcription websites. However, ReadTube is one step further in that it periodically fetches the updates from the channels I subscribe to, so I don't need to paste in the video URL each time. Also, it can generate two different versions of summaries: one short and one long, as well as a full length article. I can pick which length to consume according to the type of videos.
 
 How it works:
 
-- Channel and video metadata come from the YouTube Data API v3. Transcripts come from
-  TranscriptAPI, because captions are owner-OAuth-only on the official API. Bilibili
-  channels are supported through JustOneAPI.
-- Videos with no caption track can be transcribed on demand with Gemini. The server hands
-  Gemini the watch URL in 20-minute windows, transcribes them in parallel, and stitches
-  the result. It costs about $0.30 per video-hour, so it is an explicit button rather
-  than automatic. URL ingestion silently returns zero video tokens past roughly an hour,
-  which is why the windowing exists at all.
-- Summaries and articles are generated with GPT. Long transcripts go through a map-reduce
-  path: the transcript is split into sections at embedding-detected topic shifts, sections
-  are written in parallel, and a reduce pass consolidates the outline. Articles can be
-  generated in your own language.
-- Full-text search over everything you have read, notes and highlights, folders, playlist
-  import, and a chat over your inbox.
+- Channel and video metadata come from the YouTube Data API v3. Transcripts come from TranscriptAPI. Bilibili channels are supported through JustOneAPI.
+- Videos with no caption track can be transcribed on demand with Gemini.
+- Summaries and articles are generated with GPT. Long transcripts go through a map-reduce approach: the transcript is processed in small chunks in parallel, and a reducer stitches the outputs together.
+- Some other features: playlist import, translation, custom folders, notes, semantic search. I also plan to add chatting with videos in the future.
 - Stack: Next.js on Vercel, Postgres on Neon with Prisma, Clerk for auth.
 
-Source-available under the Elastic License 2.0: https://github.com/tuliren/readtube. Free
+The app is source-available under the Elastic License 2.0: https://github.com/tuliren/readtube. Free
 during the beta.
 
-One note on process: this is my first project built almost entirely with Claude Code. I set
-up the infrastructure and acted as the product manager and reviewer. Happy to talk about
-what that was like, good and bad.
+Personally, I really enjoy using this app. There are so many seemingly interesting but long interview videos that I would be curious about but never have the time to check out (e.g. Lex Fridman's channel). Now I can easily skim through the summary and decide whether it is worth reading or watching. Hope that it is helpful to you too.
 
-Sign-up is needed for the inbox, but public reader pages show what the output looks like:
-<link one public /p/videos page here>.
-
-Feedback welcome, especially on the reading experience and on what would make you use this
-over watching at 2x.
+Watch less. Read more.
 
 ## Submission notes
 
 - Post Tuesday to Thursday, 8–10am US Eastern. Stay in the thread for the first three
   hours; Show HN threads live or die on maker replies.
-- Expected questions and short answers (the license choice needs no justification; if it
-  comes up, state the license and move on):
+- Expected questions and short answers:
   - *Why not yt-dlp + Whisper locally?* Gemini URL ingestion needs no audio download and
     runs on Vercel; a local pipeline is a fine alternative for self-hosters.
   - *Isn't this just a summarizer?* The unit is the subscription, not the URL; the inbox
