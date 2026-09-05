@@ -1,6 +1,6 @@
 # Privacy Policy
 
-Last updated: August 20, 2026
+Last updated: September 4, 2026
 
 This Privacy Policy describes Our policies and procedures on the collection, use and disclosure of Your information when You use the Service and tells You about Your privacy rights and how the law protects You.
 
@@ -64,7 +64,7 @@ The Service fetches publicly available data about videos and channels (such as t
 
 #### AI-Generated Content
 
-When You request a transcript, summary, or article, or use features backed by semantic search, the relevant video content is sent to a third-party AI model provider to produce the output: the transcript text for summaries, articles, and search embeddings, or the video's public YouTube URL for transcript generation when a video has no captions. We use this data solely to generate the output You requested. The generated output is stored with Your Account so You can read it later. See "Service Providers (Sub-processors)" below for the providers involved.
+When You request a transcript, summary, or article, or use features backed by semantic search, the relevant video content is sent to a third-party AI model provider to produce the output: the transcript text for summaries, articles, and search embeddings, or the video's public YouTube URL for transcript generation when a video has no captions. When You ask a question in the inbox chat, the question You type and the matching passages from Your library are sent to the provider to produce the answer. We use this data solely to generate the output You requested; Your notes are never sent to an AI provider. The generated output is stored with Your Account so You can read it later. See "Service Providers (Sub-processors)" below for the providers involved.
 
 #### Signup Attribution
 
@@ -118,7 +118,7 @@ We use the following third-party service providers (sub-processors) to operate t
 - **Clerk** (authentication): account identity data such as Your email address, name, and login or OAuth identity.
 - **Vercel** (hosting, analytics, and AI request routing): operates Our website and API infrastructure; Service traffic, including the content of AI generation requests, passes through it. Vercel Web Analytics collects aggregated usage events.
 - **Neon** (database): stores Your account-linked Service data, including Your subscriptions, notes, transcripts, and generated content.
-- **OpenAI** and **Google** (AI model providers): transcript text from videos in Your library is sent to these providers to generate summaries, articles, and search embeddings at Your request. For videos without captions, the video's public YouTube URL is sent to Google's models to generate a transcript.
+- **OpenAI** and **Google** (AI model providers): transcript text from videos in Your library is sent to these providers to generate summaries, articles, and search embeddings at Your request, and the questions You type into the inbox chat are sent along with matching passages to produce answers. For videos without captions, the video's public YouTube URL is sent to Google's models to generate a transcript.
 - **Google Ads** (conversion measurement): when You sign up after clicking one of Our ads, a conversion event is reported to Google Ads via the Google tag.
 
 We may update this list as the Service evolves; material changes will be reflected in this Privacy Policy.

@@ -61,8 +61,7 @@ How it works:
   import, and a chat over your inbox.
 - Stack: Next.js on Vercel, Postgres on Neon with Prisma, Clerk for auth.
 
-Source-available under the Elastic License 2.0 (self-hosting is fine; the restriction is
-offering it as a hosted service to others): https://github.com/tuliren/readtube. Free
+Source-available under the Elastic License 2.0: https://github.com/tuliren/readtube. Free
 during the beta.
 
 One note on process: this is my first project built almost entirely with Claude Code. I set
@@ -79,17 +78,17 @@ over watching at 2x.
 
 - Post Tuesday to Thursday, 8–10am US Eastern. Stay in the thread for the first three
   hours; Show HN threads live or die on maker replies.
-- Expected questions and short answers:
-  - *Why ELv2 and not open source?* Keeps self-hosting and forks legal while stopping a
-    hosted clone; say so plainly.
+- Expected questions and short answers (the license choice needs no justification; if it
+  comes up, state the license and move on):
   - *Why not yt-dlp + Whisper locally?* Gemini URL ingestion needs no audio download and
     runs on Vercel; a local pipeline is a fine alternative for self-hosters.
   - *Isn't this just a summarizer?* The unit is the subscription, not the URL; the inbox
     and triage are the product.
-  - *What happens to my data / do you train on it?* The privacy page currently says
-    nothing about AI providers or training. Decide the answer before posting (transcripts
-    are sent to the OpenAI and Google APIs for generation; ReadTube itself trains
-    nothing) and add a line to the privacy page so the thread answer has a source.
+  - *What happens to my data / do you train on it?* Point at the privacy policy's
+    "AI-Generated Content" and "Service Providers (Sub-processors)" sections: OpenAI and
+    Google receive the transcript text (or, for caption-less videos, the public video
+    URL) to produce the output you asked for, and the output is stored with your account.
+    ReadTube trains nothing.
   - *Pricing?* Free during beta; paid tiers listed on the site are not purchasable yet.
 - Tag the site link with UTMs only if HN's link is not the bare homepage; HN strips
   nothing, but a bare `https://read.tube` reads better and the referrer
