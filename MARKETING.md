@@ -22,7 +22,7 @@ Goal: maximize **quality signups and activated users** through ads and marketing
 
 ## Assets
 
-- **Product Hunt launch package — ready, unlaunched.** A full review page lives at `/producthunt` (`apps/web/src/app/producthunt/`): tagline, description, topics, maker comment, and server-rendered gallery images. The `ProductHuntButton` is present but commented out in `Hero.tsx`/`Header.tsx`. This is the highest-leverage zero-dollar asset on the shelf.
+- **Product Hunt — launched (≈May 2026):** https://www.producthunt.com/posts/readtube-2 (post id 1140604). As of Sep 4, 2026 it shows 5 upvotes, 6 followers, no reviews; the launch predates attribution tracking (mid-Aug), so no signups are traceable to it and the launch-day traffic pattern is spent. The review page at `/producthunt` (`apps/web/src/app/producthunt/`) still holds the tagline, description, topics, maker comment, and gallery images for reuse (Show HN, directories). The `ProductHuntButton` (already wired to this post) is present but commented out in `Hero.tsx`/`Header.tsx`; enabling it is a social-proof call for the owner.
 - **Landing page:** hero with rotating verb + "Get Started" → `/sign-up` (Clerk), features ("Built for depth, not distraction"), pricing, FAQ. Public sample-video previews in the hero dropdown.
 - **SEO surface:** indexable public reader pages (`/p/videos/[videoId]`) with sitemap, robots.txt, canonicals, and a signup CTA — shipped in PRs #138–#141.
 
@@ -87,7 +87,7 @@ One niche newsletter or small creator in the productivity / PKM / digital-minima
 
 ### Z — Zero-dollar track (runs continuously alongside)
 
-- **Product Hunt launch** — the package is built and waiting at `/producthunt`. Owner submits; Claude preps final copy and timing. Do this before or alongside E1: paid clicks convert better when the product has social proof.
+- **Product Hunt launch** — done (≈May 2026, see Assets). Remaining PH levers are small: collect a few reviews from activated users, and decide whether to show the badge on the landing page.
 - **Show HN** — the source-available angle (ELv2, self-hostable) plays well there. Owner submits.
 - **Organic Reddit** — r/productivity, r/digitalminimalism, r/InternetIsBeautiful, r/SideProject; genuine posts, not link drops. Owner submits.
 - **SEO comparison/alternative pages** — "Eightify alternative", "NoteGPT alternative", "best YouTube summarizer" style pages; the category has heavy listicle competition but ReadTube's subscription-inbox angle is a real differentiator. Watch `--group-by landing` for which pages convert.
