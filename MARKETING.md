@@ -88,7 +88,7 @@ One niche newsletter or small creator in the productivity / PKM / digital-minima
 ### Z — Zero-dollar track (runs continuously alongside)
 
 - **Product Hunt launch** — done (≈May 2026, see Assets). Remaining PH levers are small: collect a few reviews from activated users, and decide whether to show the badge on the landing page.
-- **Show HN** — the source-available angle (ELv2, self-hostable) plays well there. Owner submits.
+- **Show HN** — the source-available angle (ELv2, self-hostable) plays well there. Draft title, first comment, and submission notes in `marketing/show-hn.md` (adapted from the Product Hunt maker comment with stale claims fixed). Owner submits.
 - **Organic Reddit** — r/productivity, r/digitalminimalism, r/InternetIsBeautiful, r/SideProject; genuine posts, not link drops. Owner submits.
 - **SEO comparison/alternative pages** — "Eightify alternative", "NoteGPT alternative", "best YouTube summarizer" style pages; the category has heavy listicle competition but ReadTube's subscription-inbox angle is a real differentiator. Watch `--group-by landing` for which pages convert.
 - **Public video pages** — already shipped; monitor indexing in Search Console and signups via `landing_page` values.
