@@ -93,6 +93,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
       channels,
       totalUnread,
       openAddChannel: () => setAddChannelTarget({ folderId: null }),
+      openAddVideo: () => setAddVideoTarget({ playlistId: null }),
       mutateChannels,
     }),
     [channels, totalUnread, mutateChannels]

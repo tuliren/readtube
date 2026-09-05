@@ -16,6 +16,11 @@ export interface DashboardState {
   channels: ChannelData[];
   totalUnread: number;
   openAddChannel: () => void;
+  /** Open the "Add video" modal with no playlist pre-selected. The
+   *  first-run inbox empty state offers this as the second path
+   *  (paste one video URL) for visitors who arrived with a single
+   *  video in mind rather than a channel to follow. */
+  openAddVideo: () => void;
   mutateChannels: KeyedMutator<ChannelData[]>;
 }
 

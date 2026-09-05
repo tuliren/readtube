@@ -22,7 +22,7 @@ Goal: maximize **quality signups and activated users** through ads and marketing
 
 ## Assets
 
-- **Product Hunt launch package — ready, unlaunched.** A full review page lives at `/producthunt` (`apps/web/src/app/producthunt/`): tagline, description, topics, maker comment, and server-rendered gallery images. The `ProductHuntButton` is present but commented out in `Hero.tsx`/`Header.tsx`. This is the highest-leverage zero-dollar asset on the shelf.
+- **Product Hunt — launched (≈May 2026):** https://www.producthunt.com/posts/readtube-2 (post id 1140604). As of Sep 4, 2026 it shows 5 upvotes, 6 followers, no reviews; the launch predates attribution tracking (mid-Aug), so no signups are traceable to it and the launch-day traffic pattern is spent. The review page at `/producthunt` (`apps/web/src/app/producthunt/`) still holds the tagline, description, topics, maker comment, and gallery images for reuse (Show HN, directories). The `ProductHuntButton` (already wired to this post) is present but commented out in `Hero.tsx`/`Header.tsx`; enabling it is a social-proof call for the owner.
 - **Landing page:** hero with rotating verb + "Get Started" → `/sign-up` (Clerk), features ("Built for depth, not distraction"), pricing, FAQ. Public sample-video previews in the hero dropdown.
 - **SEO surface:** indexable public reader pages (`/p/videos/[videoId]`) with sitemap, robots.txt, canonicals, and a signup CTA — shipped in PRs #138–#141.
 
@@ -65,7 +65,7 @@ Each experiment gets: a hypothesis, a budget cap, a duration, and a **decision r
 
 ## Experiment queue
 
-### E1 — Google Search exact-match probe ($150 cap) — ITERATING (live since Aug 16, 2026)
+### E1 — Google Search exact-match probe ($150 cap) — KILLED (ran Aug 16–31, 2026; closed out Sep 4)
 
 Hypothesis: people searching for YouTube summarizer tools have exactly the problem ReadTube solves, and the subscription-inbox angle differentiates it enough to convert clicks into signups at ≤ $5.
 
@@ -74,11 +74,12 @@ Hypothesis: people searching for YouTube summarizer tools have exactly the probl
 - Ads/keywords entered Google's ad review at launch; approved and serving as of Aug 17. Campaign-scoped assets added Aug 17 (4 sitelinks, 6 callouts, 1 structured snippet) plus the "ReadTube sign-up" conversion action; image assets are not available on this account (Google eligibility gate).
 - Success: per the decision rules; compare keywords via `--group-by term` and the Google Ads keywords report. Review cadence: every 3–4 days, first touchpoint ~Aug 19–20.
 - **Aug 20 review (iterate):** $35.90 spent — but 96% of it on `[youtube video to text]`, which delivered all 12 signups at $2.99 each with near-zero activation (2 activated, 0 consumed): transcription intent, not summarizer intent. Paused that keyword; the 8 summarizer keywords barely served at the $2 max-CPC cap (54 impressions combined), so the core hypothesis is still untested. Owner approved raising the cap to $3 (applied and verified same day). Next review ~Aug 23 decides whether summarizer terms can serve at all.
+- **Sep 4 close-out (kill):** the campaign spent its cap ($149.72) and ended Aug 31. Final: 1,717 impressions, 193 clicks, 11.24% CTR, $0.78 CPC; **29 signups → 6 activated → 2 consumed**, **$5.16/signup** (21% activation), $6.69/signup in the post-iteration phase. The search terms report shows ~85% of spend went to the plain query "youtube transcript" via close-variant matching, whichever transcript-flavored keyword was enabled; true summarizer exact terms had ~200 impressions in 16 days and 0/7 activation. Transcript-intent signups were the only ones that activated (6/22), read (2), or generated (5). Killed per rule; the transcript pocket carries into the re-scoped E2, and the activation problem (54 signups → 8 activated across *all* sources in the window) into the Z track.
 - Details, exact copy, and the build log: `marketing/diary/202608-google-exp1.md`.
 
-### E2 — Google competitor/alternative angle (~$100 cap) — after E1
+### E2 — Google Search transcript-intent probe ($150 cap proposed) — PLANNED, pending owner approval
 
-Second Google probe informed by E1's per-keyword results: competitor-alternative keywords (`[eightify alternative]`, `[notegpt alternative]`, `[recall ai alternative]`) plus whatever E1's `--group-by term` says worked, paired with comparison landing content from the Z track. Only runs if E1 isn't an outright kill of the channel.
+Re-scoped Sep 4, 2026 from the competitor-alternative angle, per E1's `--group-by term` and search-terms results: "youtube transcript" is the only Google Search query with real exact-match volume at probe CPCs ($0.56–0.82), it converts to signup at 13–15%, and it produced E1's only activations, readers, and generations. The probe pairs transcript-intent exact keywords (`[youtube transcript]`, `[youtube video transcript]`, `[youtube to text]`, …) with a dedicated `/youtube-transcript` landing page whose paste-a-URL flow survives sign-up and pre-opens the Add video modal. Competitor-alternative keywords stay as a small secondary ad group (≤ $30) so the original angle gets a free volume read; `[youtube summarizer]` at 229 impressions in 16 days says they will barely serve. **Prerequisites:** the Sep 4 first-run empty-state PR merged, the transcript landing page shipped (next Z-track item), owner approval of the re-scope and the $150 cap. Launch target mid/late September so the spend counts toward the Oct 13 credit deadline. Plan and draft creatives: `marketing/diary/202609-google-exp2.md`.
 
 ### E3 — Micro-sponsorship (~$100–150, one slot) — later
 
@@ -86,12 +87,12 @@ One niche newsletter or small creator in the productivity / PKM / digital-minima
 
 ### Z — Zero-dollar track (runs continuously alongside)
 
-- **Product Hunt launch** — the package is built and waiting at `/producthunt`. Owner submits; Claude preps final copy and timing. Do this before or alongside E1: paid clicks convert better when the product has social proof.
-- **Show HN** — the source-available angle (ELv2, self-hostable) plays well there. Owner submits.
+- **Product Hunt launch** — done (≈May 2026, see Assets). Remaining PH levers are small: collect a few reviews from activated users, and decide whether to show the badge on the landing page.
+- **Show HN** — the source-available angle (ELv2, self-hostable) plays well there. Draft title, first comment, and submission notes in `marketing/show-hn.md` (adapted from the Product Hunt maker comment with stale claims fixed). Owner submits.
 - **Organic Reddit** — r/productivity, r/digitalminimalism, r/InternetIsBeautiful, r/SideProject; genuine posts, not link drops. Owner submits.
 - **SEO comparison/alternative pages** — "Eightify alternative", "NoteGPT alternative", "best YouTube summarizer" style pages; the category has heavy listicle competition but ReadTube's subscription-inbox angle is a real differentiator. Watch `--group-by landing` for which pages convert.
 - **Public video pages** — already shipped; monitor indexing in Search Console and signups via `landing_page` values.
-- **Funnel conversion work** — at a few hundred visitors, signup-rate improvements beat more traffic.
+- **Funnel conversion work** — at a few hundred visitors, signup-rate improvements beat more traffic. **Activation is the measured bottleneck** (Aug 5 – Sep 4: 54 signups → 8 activated → 3 consumed, paid and organic alike). Shipped Sep 4: the first-run inbox empty state now offers "Paste a video URL" alongside "Add your first channel" and drops the stale `UCxxxxx` hint. **Next:** the `/youtube-transcript` landing page with a paste-URL input that survives sign-up and pre-opens the Add video modal (also E2's prerequisite); then watch activation in the attribution report.
 
 ## Budget ledger
 
@@ -100,8 +101,10 @@ One niche newsletter or small creator in the productivity / PKM / digital-minima
 | Aug 16, 2026 | E1 `202608-google-exp1` | $0.00 | — | — | **LIVE** (owner-approved); $150 cap, ends Aug 31; ads in review |
 | Aug 17, 2026 | E1 `202608-google-exp1` | $4.84 to date | — | — | Serving (7.55% CTR, $1.21 avg CPC); added sitelinks/callouts/snippet + sign-up conversion tracking; first review ~Aug 19–20 |
 | Aug 20, 2026 | E1 `202608-google-exp1` | $35.90 to date | 12 | 2 | **Iterate**: `[youtube video to text]` ate 96% of spend, $2.99/signup but ~zero activation → paused it; summarizer keywords barely served ($2 cap losing auctions); $2→$3 max-CPC raise owner-approved and applied |
+| Sep 4, 2026 | E1 `202608-google-exp1` | **$149.72 final** | 29 | 6 | **Kill**: ended Aug 31 at cap; $5.16/signup, 21% activation; ~85% of spend went to "youtube transcript" close variants (the only activating traffic); summarizer exact terms have no volume and 0/7 activation |
+| Sep 4, 2026 | E2 `202609-google-exp2` | $0.00 | — | — | **Planned** (re-scoped to transcript intent, $150 cap proposed); blocked on the transcript landing page and owner approval |
 
-Total spent: **$35.90** of the $150 E1 cap. Credit status: spend-$500-get-$500 offer on the shared ads account, deadline Oct 13, 2026 — $500 of combined spend needed for the payout.
+Total spent: **$149.72** (E1, concluded). No ReadTube spend is running. Credit status: **$149.70 of $500** toward the spend-$500-get-$500 offer on the shared ads account (the other product has spent $0), deadline Oct 13, 2026 — **$350.30 more combined spend** is needed for the payout; E2 at $150 gets partway, the rest has to come from either a scaled E2 or the other product.
 
 ## Experiment diary
 
