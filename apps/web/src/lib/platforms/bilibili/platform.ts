@@ -56,10 +56,10 @@ export class BilibiliPlatform extends VideoPlatform {
   }
 
   async fetchVideoSnapshot(videoId: string): Promise<VideoSnapshotResult> {
-    // Bilibili's `view` API already returns everything we need in a
-    // single call, with no realistic rate-limit risk against our
-    // serverless egress. No fallback path — the transcript is fetched
-    // separately by the reader.
+    // One view lookup covers everything we need (Bilibili directly,
+    // JustOneAPI's video-detail endpoint when Bilibili blocks our
+    // egress — see videoView.ts). The transcript is fetched separately
+    // by the reader.
     const snapshot = await fetchBilibiliVideoSnapshot(videoId);
     return { snapshot, prefetchedTranscript: null };
   }

@@ -5,12 +5,20 @@ import type { TranscriptSegment } from '@/lib/platforms/types';
 import { fetchBilibiliTranscriptViaJustOneApi } from './justOneApi';
 import { fetchKedouBilibiliSubtitle } from './kedouSubtitle';
 import { buildBilibiliVideoUrl } from './urls';
+import { resolveBilibiliAidCid } from './videoView';
 
+/**
+ * JustOneAPI first (needs aid + cid, resolved through
+ * `fetchBilibiliVideoView` so a blocked view endpoint doesn't take the
+ * whole JustOneAPI path down with it), kedou as the fallback. Only
+ * kedou's verdict decides whether the combined failure is permanent.
+ */
 export async function fetchBilibiliTranscript(
   bvid: string
 ): Promise<{ segments: TranscriptSegment[]; language: string }> {
   try {
-    return await fetchBilibiliTranscriptViaJustOneApi(bvid);
+    const ids = await resolveBilibiliAidCid(bvid);
+    return await fetchBilibiliTranscriptViaJustOneApi(bvid, ids);
   } catch (justOneErr) {
     try {
       return await fetchViaKedou(bvid);

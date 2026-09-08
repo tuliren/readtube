@@ -14,14 +14,14 @@ import { fetchBilibiliVideoSnapshot } from './videoSnapshot';
  *
  * JustOneAPI's envelope never carries the uploader's avatar (and has
  * no name when the list is empty), so whatever is still missing after
- * applying the caller's `hints` is backfilled with one
- * `x/web-interface/view` call on the newest bvid. That call goes to
- * Bilibili directly from our own egress and is subject to their risk
- * control (HTTP 412 for datacenter IPs), so it is best-effort: on
+ * applying the caller's `hints` is backfilled with one view lookup on
+ * the newest bvid (`fetchBilibiliVideoView`: Bilibili directly, then
+ * JustOneAPI's video-detail endpoint when Bilibili rejects our IP —
+ * one more paid call in that case). The lookup is best-effort: on
  * failure we log and leave the field null instead of failing the
- * snapshot — the paid JustOneAPI call has already succeeded by then,
- * and the refresh step never overwrites `logo_url` with an empty
- * value anyway.
+ * snapshot — the paid list call has already succeeded by then, and
+ * the refresh step never overwrites `logo_url` with an empty value
+ * anyway.
  *
  * On a refresh the caller passes the row's current name/logo as
  * hints, so a channel that already has an avatar makes no view call

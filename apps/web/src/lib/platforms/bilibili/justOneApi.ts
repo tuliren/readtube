@@ -1,3 +1,5 @@
+import { type BilibiliViewData, toBilibiliViewData } from './viewData';
+
 /**
  * Third-party wrapper around Bilibili's channel / upload-list data.
  * We delegate the IP-reputation and risk-control problem to
@@ -27,18 +29,16 @@
  *     message, recordTime
  *   }
  *
- * Channel avatar isn't in this response — the caller falls back to
- * one `x/web-interface/view` call on the newest bvid to backfill it.
+ * Channel avatar isn't in this response — the caller backfills it
+ * with one view lookup on the newest bvid (see videoView.ts).
  * Items also carry a very large `uri` field we never need; the mapper
  * ignores it and the dev script strips it before printing the raw.
  */
 
 const JUSTONEAPI_BASE_URL = 'https://api.justoneapi.com';
 const USER_VIDEO_LIST_V2_PATH = '/api/bilibili/get-user-video-list/v2';
+const VIDEO_DETAIL_V2_PATH = '/api/bilibili/get-video-detail/v2';
 const VIDEO_CAPTIONS_V2_PATH = '/api/bilibili/get-video-caption/v2';
-const BILIBILI_VIEW_URL = 'https://api.bilibili.com/x/web-interface/view';
-const BILIBILI_USER_AGENT =
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36';
 
 /** Platform-neutral video shape we emit from the mapper. */
 export interface JustOneApiVideo {
@@ -58,8 +58,8 @@ export interface JustOneApiChannel {
    *  when the response has no items. */
   name: string | null;
   /** Avatar URL. Not present in this response; channelSnapshot
-   *  backfills it via one x/web-interface/view call on the newest
-   *  bvid. Always null here. */
+   *  backfills it via one view lookup on the newest bvid
+   *  (videoView.ts). Always null here. */
   logoUrl: string | null;
 }
 
@@ -117,10 +117,26 @@ function getToken(): string {
 export async function fetchBilibiliChannelViaJustOneApi(
   mid: string
 ): Promise<JustOneApiChannelResult> {
+  const json = await getJustOneApiEnvelope(USER_VIDEO_LIST_V2_PATH, { uid: mid });
+  return parseResponse(mid, json);
+}
+
+/**
+ * GET a JustOneAPI endpoint and unwrap its outer envelope: throws
+ * `JustOneApiError` on a non-2xx status or a non-zero outer `code`,
+ * returns the parsed body otherwise. The token is appended here and
+ * redacted from the log line.
+ */
+async function getJustOneApiEnvelope(
+  path: string,
+  query: Record<string, string>
+): Promise<Record<string, unknown>> {
   const token = getToken();
-  const url = `${JUSTONEAPI_BASE_URL}${USER_VIDEO_LIST_V2_PATH}?token=${encodeURIComponent(token)}&uid=${encodeURIComponent(mid)}`;
-  const redactedUrl = url.replace(/token=[^&]+/, 'token=<redacted>');
-  console.info(`[bilibili/justOneApi] GET ${redactedUrl}`);
+  const qs = Object.entries({ token, ...query })
+    .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
+    .join('&');
+  const url = `${JUSTONEAPI_BASE_URL}${path}?${qs}`;
+  console.info(`[bilibili/justOneApi] GET ${url.replace(/token=[^&]+/, 'token=<redacted>')}`);
 
   const res = await fetch(url, {
     headers: { Accept: 'application/json' },
@@ -150,7 +166,46 @@ export async function fetchBilibiliChannelViaJustOneApi(
     });
   }
 
-  return parseResponse(mid, json);
+  return json;
+}
+
+// ─── Video detail ───────────────────────────────────────────────────
+
+/**
+ * Fetch one video's view data through JustOneAPI — the paid fallback
+ * `fetchBilibiliVideoView` uses when Bilibili's own view endpoint
+ * rejects our egress IP (HTTP 412).
+ *
+ * Endpoint: `GET /api/bilibili/get-video-detail/v2?token=&bvid=`
+ * Docs: https://docs.justoneapi.com/zh/api/bilibili/video-details-v2
+ *
+ * The response is the video page's `__INITIAL_STATE__` — tens of kB
+ * of channel menus, ad config, related videos — with the view payload
+ * at `data.videoData`, same field names as the view API (verified
+ * against a real response; see
+ * scripts/fetchBilibiliVideoDetailViaJustOneApi.ts).
+ */
+export async function fetchBilibiliVideoDetailViaJustOneApi(
+  bvid: string
+): Promise<BilibiliViewData> {
+  const json = await getJustOneApiEnvelope(VIDEO_DETAIL_V2_PATH, { bvid });
+  return parseVideoDetailResponse(bvid, json);
+}
+
+/** Internal: pull the view payload out of the video-detail envelope. */
+export function parseVideoDetailResponse(
+  bvid: string,
+  body: Record<string, unknown>
+): BilibiliViewData {
+  const videoData = (body.data as Record<string, unknown> | undefined)?.videoData;
+  if (videoData == null) {
+    throw new Error(`JustOneAPI video detail for ${bvid} has no data.videoData`);
+  }
+  const view = toBilibiliViewData(videoData);
+  if (view == null) {
+    throw new Error(`JustOneAPI video detail for ${bvid} is missing bvid or title`);
+  }
+  return view;
 }
 
 // ─── Mapper ─────────────────────────────────────────────────────────
@@ -293,48 +348,6 @@ interface JustOneApiCaptionsResponse {
   };
 }
 
-interface BilibiliViewAidCidResponse {
-  code: number;
-  message: string;
-  data?: {
-    aid?: number;
-    pages?: Array<{ cid?: number }>;
-  };
-}
-
-/**
- * Fetch aid + cid for a bvid from Bilibili's own view endpoint.
- * The captions endpoint needs both; aid is the legacy numeric video
- * id, cid is the part id (each part of a multi-part video has its
- * own — we use the first).
- */
-async function resolveBilibiliAidCid(bvid: string): Promise<{ aid: string; cid: string }> {
-  const url = `${BILIBILI_VIEW_URL}?bvid=${encodeURIComponent(bvid)}`;
-  const res = await fetch(url, {
-    headers: {
-      Accept: 'application/json',
-      'User-Agent': BILIBILI_USER_AGENT,
-      Referer: 'https://www.bilibili.com/',
-    },
-  });
-  if (!res.ok) {
-    throw new Error(`Bilibili view returned HTTP ${res.status}`);
-  }
-  const json = (await res.json()) as BilibiliViewAidCidResponse;
-  if (json.code !== 0 || json.data == null) {
-    throw new Error(`Bilibili view error: code=${json.code} message=${json.message}`);
-  }
-  const aid = typeof json.data.aid === 'number' ? json.data.aid : null;
-  const firstPageCid =
-    Array.isArray(json.data.pages) && typeof json.data.pages[0]?.cid === 'number'
-      ? json.data.pages[0].cid
-      : null;
-  if (aid == null || firstPageCid == null) {
-    throw new Error('Bilibili view response is missing aid or pages[0].cid');
-  }
-  return { aid: String(aid), cid: String(firstPageCid) };
-}
-
 /**
  * Rank caption tracks so we pick the most useful one for reading.
  * Lower = better. Prefer Chinese manual > English manual > AI Chinese
@@ -389,14 +402,19 @@ export interface JustOneApiTranscriptResult {
 }
 
 /**
- * Fetch a transcript for a Bilibili video through JustOneAPI as a
- * fallback for kedou. Three HTTP round-trips total:
+ * Fetch a transcript for a Bilibili video through JustOneAPI — the
+ * primary source; transcript.ts falls back to kedou when this throws.
+ * Two HTTP round-trips:
  *
- *   1. `api.bilibili.com/x/web-interface/view` → aid + cid.
- *   2. `api.justoneapi.com/api/bilibili/get-video-caption/v2` →
+ *   1. `api.justoneapi.com/api/bilibili/get-video-caption/v2` →
  *      list of subtitle tracks with `subtitle_url` + `lan`.
- *   3. The signed `aisubtitle.hdslb.com/.../...json` URL from that
+ *   2. The signed `aisubtitle.hdslb.com/.../...json` URL from that
  *      list → Bilibili's native subtitle JSON with timestamped lines.
+ *
+ * The captions endpoint wants `aid` + `cid` alongside the bvid; the
+ * caller resolves them first with `resolveBilibiliAidCid`
+ * (videoView.ts — Bilibili's view endpoint, JustOneAPI's video-detail
+ * fallback when that is blocked).
  *
  * Pick the best track by language (Chinese > English > AI-generated).
  *
@@ -406,12 +424,11 @@ export interface JustOneApiTranscriptResult {
  * transient or permanent based on context.
  */
 export async function fetchBilibiliTranscriptViaJustOneApi(
-  bvid: string
+  bvid: string,
+  ids: { aid: string; cid: string }
 ): Promise<JustOneApiTranscriptResult> {
   const token = getToken();
-
-  console.info(`[bilibili/justOneApi] transcript resolving aid/cid for ${bvid}`);
-  const { aid, cid } = await resolveBilibiliAidCid(bvid);
+  const { aid, cid } = ids;
 
   const captionsUrl =
     `${JUSTONEAPI_BASE_URL}${VIDEO_CAPTIONS_V2_PATH}` +
