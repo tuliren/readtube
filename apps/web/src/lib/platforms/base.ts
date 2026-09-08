@@ -24,6 +24,18 @@ export interface VideoSnapshotResult {
 }
 
 /**
+ * What the caller already knows about a channel when asking for a
+ * fresh snapshot — the existing DB row, on a refresh. See
+ * `VideoPlatform.fetchChannelSnapshot`.
+ */
+export interface ChannelSnapshotHints {
+  /** Current `Channel.name`, if the row exists. */
+  knownName?: string | null;
+  /** Current `Channel.logo_url`, if the row exists. */
+  knownLogoUrl?: string | null;
+}
+
+/**
  * Abstract base class for a video platform (YouTube, Bilibili, ...).
  * Concrete subclasses wrap the existing per-platform function modules
  * (`lib/youtube/*`, `lib/bilibili/*`). The subclasses never duplicate
@@ -64,8 +76,17 @@ export abstract class VideoPlatform {
    * `source_id` (UC-prefixed for YouTube, numeric mid for Bilibili).
    * Used by the refresh-channels cron and by the add-channel flow once
    * the caller has resolved the canonical source id.
+   *
+   * `hints` carries what the caller already holds for the channel so a
+   * platform whose primary source omits a field (Bilibili's list API
+   * has no avatar) can skip a secondary fetch for it instead of
+   * repeating that fetch on every refresh. Advisory only: platforms
+   * may ignore it, and the add-channel flow passes nothing.
    */
-  abstract fetchChannelSnapshot(channelSourceId: string): Promise<ChannelSnapshot>;
+  abstract fetchChannelSnapshot(
+    channelSourceId: string,
+    hints?: ChannelSnapshotHints
+  ): Promise<ChannelSnapshot>;
 
   /** Fetch the transcript for an existing video. */
   abstract fetchTranscript(videoId: string): Promise<PlatformTranscriptResult>;

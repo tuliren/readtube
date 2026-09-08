@@ -180,6 +180,14 @@ model Channel {
   created_at  DateTime          @default(now())
   updated_at  DateTime          @updatedAt
   checked_at  DateTime?
+  // When the most recent refresh attempt (cron or manual) failed. The
+  // cron skips rows that failed within FAILED_REFRESH_BACKOFF_MS (see
+  // lib/workflows/refresh-channels/steps.ts) so a persistently broken
+  // channel isn't re-fetched — and, for Bilibili, re-billed — on every
+  // 30-minute tick. Cleared by the next successful refresh. Kept
+  // separate from `checked_at`, which stays "last successful snapshot"
+  // and drives the sidebar timestamp + the manual-refresh cooldown.
+  refresh_failed_at DateTime?
   // Refresh dedup state — see ChannelStatus enum comment. Driven only
   // by the manual single-channel refresh route and the cron's per-row
   // step; the add-channel path leaves these alone (its upsert is

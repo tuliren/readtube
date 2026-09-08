@@ -39,6 +39,15 @@ TranscriptAPI fires when **either** of these is true:
 
 When RSS + TranscriptAPI both fail, the scrape-only build marks every video `isScraped: true` so a later healthy RSS pass doesn't get clobbered (create-on-insert, skip-on-update).
 
+## Channel refresh (cron)
+
+`refreshChannelsWorkflow` runs every 30 minutes and refreshes up to `BATCH_SIZE` subscribed channels whose `checked_at` is older than `STALE_DAYS`. Two rules keep a broken channel from turning into an upstream-call loop (`lib/workflows/refresh-channels/steps.ts`):
+
+- **No in-run retries.** `refreshChannel` wraps the whole attempt: any failure stamps `Channel.refresh_failed_at` and throws `FatalError`, so the workflow runtime does not retry the step. The next cron tick is the retry — in-run retries only re-ran the list fetch (a paid JustOneAPI call for Bilibili) to fail again on the same downstream error.
+- **Failure backoff.** `fetchStaleChannels` skips rows whose `refresh_failed_at` is within `FAILED_REFRESH_BACKOFF_MS` (6 h); a successful refresh clears the stamp. `checked_at` keeps meaning "last successful snapshot" — it drives the sidebar timestamp and the manual-refresh cooldown, so a failed channel can still be retried by hand right away.
+
+The refresh also passes the row's current name and logo to `fetchChannelSnapshot` as hints. Bilibili needs them: JustOneAPI's list endpoint never returns an avatar, so without the hint every refresh made an extra `x/web-interface/view` call straight to Bilibili, whose risk control rejects datacenter IPs with HTTP 412. That call is now skipped when the avatar is already stored and best-effort (logged, field left null) when it isn't.
+
 ## Playlist fetching
 
 `fetchPlaylistData` (`apps/web/src/lib/workflows/add-playlist/index.ts`) implements the add-playlist row of the overview table. The Data API tier is strictly richer than both legacy sources combined — the RSS path has publish dates but no durations, the scrape path has durations but no publish dates; the Data API has both, plus full descriptions and the per-video uploader channel (playlists can mix videos from many channels). Private playlists fall through to RSS/scrape as described above.
