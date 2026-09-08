@@ -9,6 +9,7 @@ import type { StaleChannel } from '@/lib/workflows/refresh-channels/steps';
 // ─── Imports (after mocks) ───────────────────────────────────────
 import {
   BATCH_SIZE,
+  FAILED_REFRESH_BACKOFF_MS,
   fetchStaleChannels,
   recoverStaleRefreshingChannels,
   refreshChannel,
@@ -56,7 +57,8 @@ const mockFetchBilibiliChannelSnapshot = jest.fn();
 
 jest.mock('@/lib/platforms/bilibili/channelSnapshot', () => ({
   ...jest.requireActual('@/lib/platforms/bilibili/channelSnapshot'),
-  fetchBilibiliChannelSnapshot: (mid: string) => mockFetchBilibiliChannelSnapshot(mid),
+  fetchBilibiliChannelSnapshot: (mid: string, hints?: unknown) =>
+    mockFetchBilibiliChannelSnapshot(mid, hints),
 }));
 
 // Stub the 'workflow' package — its own ESM `export` syntax can't be
@@ -69,6 +71,14 @@ jest.mock('workflow', () => ({
     workflowStartedAt: new Date(),
     url: 'http://test',
   }),
+  // `refreshChannel` rethrows failures as FatalError so the runtime
+  // doesn't retry the step; a minimal stand-in is enough here.
+  FatalError: class FatalError extends Error {
+    constructor(message?: string) {
+      super(message);
+      this.name = 'FatalError';
+    }
+  },
 }));
 
 // Same reason for `workflow/api`: runRegistry.ts imports `getRun`
@@ -102,6 +112,7 @@ async function createChannel(opts: {
   sourceId: string;
   name: string;
   checkedAt?: Date | null;
+  refreshFailedAt?: Date | null;
   subscribe?: boolean;
   platform?: VideoPlatformType;
 }) {
@@ -116,6 +127,7 @@ async function createChannel(opts: {
           ? `https://www.youtube.com/feeds/videos.xml?channel_id=${opts.sourceId}`
           : null,
       checked_at: opts.checkedAt ?? null,
+      refresh_failed_at: opts.refreshFailedAt ?? null,
     },
   });
   if (opts.subscribe !== false) {
@@ -293,6 +305,32 @@ describe('fetchStaleChannels', () => {
 
 // ─── recoverStaleRefreshingChannels ──────────────────────────────
 
+describe('fetchStaleChannels — failure backoff', () => {
+  it.each([
+    {
+      label: 'excludes a row that failed within FAILED_REFRESH_BACKOFF_MS',
+      failedAt: new Date(Date.now() - 60 * 60 * 1000),
+      expected: 0,
+    },
+    {
+      label: 'includes a row whose failure is older than FAILED_REFRESH_BACKOFF_MS',
+      failedAt: new Date(Date.now() - FAILED_REFRESH_BACKOFF_MS - 60 * 1000),
+      expected: 1,
+    },
+  ])('$label', async ({ failedAt, expected }) => {
+    await createChannel({
+      sourceId: 'UC_backoff',
+      name: 'Backoff',
+      checkedAt: null,
+      refreshFailedAt: failedAt,
+    });
+
+    const result = await fetchStaleChannels();
+
+    expect(result).toHaveLength(expected);
+  });
+});
+
 describe('recoverStaleRefreshingChannels', () => {
   it('reverts rows whose REFRESHING marker is older than the threshold', async () => {
     const stuck = await createChannel({ sourceId: 'UC_stuck', name: 'Stuck' });
@@ -355,6 +393,7 @@ describe('refreshChannel', () => {
       source_id: ch.source_id,
       name: ch.name,
       source_type: VideoPlatformType.YOUTUBE,
+      logo_url: null,
     };
     const resultOrNull = await refreshChannel(staleChannel, { claimRow: false });
     expect(resultOrNull).not.toBeNull();
@@ -387,6 +426,7 @@ describe('refreshChannel', () => {
         source_id: ch.source_id,
         name: ch.name,
         source_type: VideoPlatformType.YOUTUBE,
+        logo_url: null,
       },
       { claimRow: false }
     ))!;
@@ -426,6 +466,7 @@ describe('refreshChannel', () => {
         source_id: ch.source_id,
         name: ch.name,
         source_type: VideoPlatformType.YOUTUBE,
+        logo_url: null,
       },
       { claimRow: false }
     );
@@ -472,6 +513,7 @@ describe('refreshChannel', () => {
         source_id: ch.source_id,
         name: ch.name,
         source_type: VideoPlatformType.YOUTUBE,
+        logo_url: null,
       },
       { claimRow: false }
     ))!;
@@ -527,6 +569,7 @@ describe('refreshChannel', () => {
         source_id: ch.source_id,
         name: ch.name,
         source_type: VideoPlatformType.YOUTUBE,
+        logo_url: null,
       },
       { claimRow: false }
     );
@@ -560,6 +603,7 @@ describe('refreshChannel', () => {
         source_id: ch.source_id,
         name: ch.name,
         source_type: VideoPlatformType.YOUTUBE,
+        logo_url: null,
       },
       { claimRow: false }
     ))!;
@@ -622,6 +666,7 @@ describe('refreshChannel', () => {
         source_id: ch.source_id,
         name: ch.name,
         source_type: VideoPlatformType.YOUTUBE,
+        logo_url: null,
       },
       { claimRow: false }
     );
@@ -639,6 +684,67 @@ describe('refreshChannel', () => {
     });
     expect(video!.duration_seconds).toBe(120);
     expect(video!.title).toBe('Updated');
+  });
+});
+
+describe('refreshChannel — failure handling', () => {
+  it('stamps refresh_failed_at and rethrows as FatalError, leaving checked_at alone', async () => {
+    const ch = await createChannel({ sourceId: 'UC_fail_stamp', name: 'Fail', checkedAt: null });
+    // Every YouTube source has to fail: RSS + scrape here, and
+    // TranscriptAPI already rejects by default (see beforeEach).
+    mockFetchRssFeed.mockRejectedValueOnce(new Error('API down'));
+    mockScrapeChannel.mockRejectedValueOnce(new Error('YouTube blocked'));
+
+    await expect(
+      refreshChannel(
+        {
+          id: ch.id,
+          source_id: ch.source_id,
+          source_type: VideoPlatformType.YOUTUBE,
+          logo_url: null,
+          name: ch.name,
+        },
+        { claimRow: false }
+      )
+    ).rejects.toThrow('Refresh failed for channel');
+
+    const row = await global.testPrisma.channel.findUnique({ where: { id: ch.id } });
+    expect(row!.refresh_failed_at).not.toBeNull();
+    expect(row!.checked_at).toBeNull();
+  });
+
+  it('clears refresh_failed_at on a successful refresh', async () => {
+    const ch = await createChannel({
+      sourceId: 'UC_fail_clear',
+      name: 'Recovered',
+      checkedAt: null,
+      refreshFailedAt: new Date(Date.now() - FAILED_REFRESH_BACKOFF_MS - 60 * 1000),
+    });
+    mockFetchRssFeed.mockResolvedValueOnce(
+      makeRssFeed('Recovered', [
+        {
+          videoId: 'vid_recovered',
+          title: 'Back online',
+          published: '2026-03-01T00:00:00Z',
+          description: '',
+        },
+      ])
+    );
+
+    await refreshChannel(
+      {
+        id: ch.id,
+        source_id: ch.source_id,
+        source_type: VideoPlatformType.YOUTUBE,
+        logo_url: null,
+        name: ch.name,
+      },
+      { claimRow: false }
+    );
+
+    const row = await global.testPrisma.channel.findUnique({ where: { id: ch.id } });
+    expect(row!.refresh_failed_at).toBeNull();
+    expect(row!.checked_at).not.toBeNull();
   });
 });
 
@@ -669,6 +775,7 @@ describe('refreshChannel — Shorts filtering', () => {
         source_id: ch.source_id,
         name: ch.name,
         source_type: VideoPlatformType.YOUTUBE,
+        logo_url: null,
       },
       { claimRow: false }
     ))!;
@@ -716,6 +823,7 @@ describe('refreshChannel — Shorts filtering', () => {
         source_id: ch.source_id,
         name: ch.name,
         source_type: VideoPlatformType.YOUTUBE,
+        logo_url: null,
       },
       { claimRow: false }
     ))!;
@@ -757,6 +865,7 @@ describe('refreshChannel — Shorts filtering', () => {
         source_id: ch.source_id,
         name: ch.name,
         source_type: VideoPlatformType.YOUTUBE,
+        logo_url: null,
       },
       { claimRow: false }
     ))!;
@@ -801,6 +910,7 @@ describe('refreshChannel — Shorts filtering', () => {
         source_id: ch.source_id,
         name: ch.name,
         source_type: VideoPlatformType.YOUTUBE,
+        logo_url: null,
       },
       { claimRow: false }
     ))!;
@@ -891,6 +1001,12 @@ describe('refreshChannelsWorkflow', () => {
       where: { id: ch1.id },
     });
     expect(failedChannel!.checked_at).toBeNull();
+    // ...but the failure is recorded for the backoff, and the claim
+    // released so the row isn't stranded in REFRESHING.
+    expect(failedChannel!.refresh_failed_at).not.toBeNull();
+    expect(failedChannel!.status).toBe(ChannelStatus.READY);
+    const okChannel = await global.testPrisma.channel.findUnique({ where: { id: ch2.id } });
+    expect(okChannel!.refresh_failed_at).toBeNull();
   });
 
   it('claimRow:true skips a row already claimed by another path', async () => {
@@ -908,6 +1024,7 @@ describe('refreshChannelsWorkflow', () => {
         id: claimedByOther.id,
         source_id: claimedByOther.source_id,
         source_type: VideoPlatformType.YOUTUBE,
+        logo_url: null,
         name: claimedByOther.name,
       },
       { claimRow: true }
@@ -964,13 +1081,19 @@ describe('refreshChannel — Bilibili', () => {
         id: ch.id,
         source_id: ch.source_id,
         source_type: VideoPlatformType.BILIBILI,
+        logo_url: null,
         name: ch.name,
       },
       { claimRow: false }
     ))!;
 
     expect(result.videosProcessed).toBe(2);
-    expect(mockFetchBilibiliChannelSnapshot).toHaveBeenCalledWith('946974');
+    // The row's current name/logo travel along as hints so the
+    // platform can skip its avatar fallback when nothing is missing.
+    expect(mockFetchBilibiliChannelSnapshot).toHaveBeenCalledWith('946974', {
+      knownName: '影视飓风',
+      knownLogoUrl: null,
+    });
     expect(mockFetchRssFeed).not.toHaveBeenCalled();
 
     const videos = await global.testPrisma.video.findMany({

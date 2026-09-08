@@ -1,5 +1,5 @@
 import { ChannelStatus, type VideoPlatformType, prisma } from '@readtube/database';
-import { getWorkflowMetadata } from 'workflow';
+import { FatalError, getWorkflowMetadata } from 'workflow';
 
 import { hasChannelHandleConflict } from '@/lib/channels/handleConflict';
 import { STALE_DAYS } from '@/lib/channels/staleness';
@@ -26,17 +26,30 @@ const RATE_LIMIT_DELAY_MS = 250;
  */
 const STALE_REFRESHING_MS = 30 * 60 * 1000;
 
+/**
+ * How long the cron leaves a channel alone after a failed refresh.
+ * A failed attempt doesn't advance `checked_at`, so without this the
+ * row would stay at the front of the stale queue and be re-fetched on
+ * every 30-minute tick — 48 upstream calls a day for a channel that
+ * is broken upstream, and for Bilibili every one of those is a paid
+ * JustOneAPI call. Six hours caps a broken channel at 4 attempts a
+ * day while a transient blip still self-heals the same day.
+ */
+export const FAILED_REFRESH_BACKOFF_MS = 6 * 60 * 60 * 1000;
+
 export interface StaleChannel {
   id: string;
   source_id: string;
   source_type: VideoPlatformType;
   name: string;
+  logo_url: string | null;
 }
 
 export async function fetchStaleChannels(): Promise<StaleChannel[]> {
   'use step';
 
   const cutoff = new Date(Date.now() - STALE_DAYS * 24 * 60 * 60 * 1000);
+  const failedCutoff = new Date(Date.now() - FAILED_REFRESH_BACKOFF_MS);
 
   // Only refresh channels with at least one active UserSubscription.
   // "Shadow" channel rows created by the individual-video add flow exist
@@ -59,7 +72,11 @@ export async function fetchStaleChannels(): Promise<StaleChannel[]> {
 
   const rows = await prisma.channel.findMany({
     where: {
-      OR: [{ checked_at: null }, { checked_at: { lt: cutoff } }],
+      AND: [
+        { OR: [{ checked_at: null }, { checked_at: { lt: cutoff } }] },
+        // Leave recently-failed rows alone — see FAILED_REFRESH_BACKOFF_MS.
+        { OR: [{ refresh_failed_at: null }, { refresh_failed_at: { lt: failedCutoff } }] },
+      ],
       subscriptions: { some: {} },
       // Skip channels currently being refreshed by another workflow
       // (manual single-channel refresh, or a previous cron run that
@@ -72,7 +89,7 @@ export async function fetchStaleChannels(): Promise<StaleChannel[]> {
     },
     orderBy: { checked_at: { sort: 'asc', nulls: 'first' } },
     take: BATCH_SIZE,
-    select: { id: true, source_id: true, source_type: true, name: true },
+    select: { id: true, source_id: true, source_type: true, name: true, logo_url: true },
   });
   return rows;
 }
@@ -109,7 +126,7 @@ export async function fetchChannelById(channelId: string): Promise<StaleChannel 
 
   const row = await prisma.channel.findUnique({
     where: { id: channelId },
-    select: { id: true, source_id: true, source_type: true, name: true },
+    select: { id: true, source_id: true, source_type: true, name: true, logo_url: true },
   });
   return row;
 }
@@ -134,6 +151,15 @@ export interface RefreshResult {
  *     `claimRow: false`, the route has already done the claim with
  *     its own runId. The step skips the claim/release entirely so it
  *     doesn't fight the route over the lifecycle.
+ *
+ * Failure handling: any error — upstream fetch or DB — stamps
+ * `Channel.refresh_failed_at` and surfaces as a `FatalError`, so the
+ * workflow runtime does NOT retry the step. In-run retries bought
+ * nothing here (the next cron tick is the retry) and each one re-ran
+ * the paid Bilibili list call only to fail again on the same
+ * downstream error. The cron then backs the row off for
+ * `FAILED_REFRESH_BACKOFF_MS`; the manual route still returns its
+ * usual 500 to the user.
  */
 export async function refreshChannel(
   channel: StaleChannel,
@@ -161,10 +187,41 @@ export async function refreshChannel(
 }
 
 async function runRefreshChannel(channel: StaleChannel): Promise<RefreshResult> {
+  try {
+    return await fetchAndPersistSnapshot(channel);
+  } catch (err) {
+    // Log the original error here, with its stack — the FatalError
+    // that reaches the workflow only carries the message.
+    console.error(`[refresh-channels] Refresh failed for channel ${channel.id}:`, err);
+    await markRefreshFailed(channel.id);
+    const message = err instanceof Error ? err.message : String(err);
+    throw new FatalError(`Refresh failed for channel ${channel.id}: ${message}`);
+  }
+}
+
+async function markRefreshFailed(channelId: string): Promise<void> {
+  try {
+    await prisma.channel.update({
+      where: { id: channelId },
+      data: { refresh_failed_at: new Date() },
+    });
+  } catch (err) {
+    // Bookkeeping must never mask the real failure.
+    console.error(`[refresh-channels] Could not record refresh failure for ${channelId}:`, err);
+  }
+}
+
+async function fetchAndPersistSnapshot(channel: StaleChannel): Promise<RefreshResult> {
   await new Promise((r) => setTimeout(r, RATE_LIMIT_DELAY_MS));
 
   const platform = getPlatformByType(channel.source_type);
-  const snapshot = await platform.fetchChannelSnapshot(channel.source_id);
+  // Hand over what the row already holds so a platform whose list
+  // source omits a field (Bilibili: avatar) can skip its secondary
+  // fetch instead of repeating it on every refresh.
+  const snapshot = await platform.fetchChannelSnapshot(channel.source_id, {
+    knownName: channel.name,
+    knownLogoUrl: channel.logo_url,
+  });
 
   const nameUpdated = snapshot.name !== channel.name;
 
@@ -233,6 +290,7 @@ async function runRefreshChannel(channel: StaleChannel): Promise<RefreshResult> 
       ...(!isEmptyString(snapshot.logoUrl) ? { logo_url: snapshot.logoUrl } : {}),
       ...(!isEmptyString(snapshot.handle) && !handleConflict ? { handle: snapshot.handle } : {}),
       checked_at: new Date(),
+      refresh_failed_at: null,
     },
   });
 

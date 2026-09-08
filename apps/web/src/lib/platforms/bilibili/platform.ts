@@ -1,6 +1,7 @@
 import { VideoPlatformType } from '@readtube/database';
 
 import {
+  type ChannelSnapshotHints,
   type PlatformTranscriptResult,
   VideoPlatform,
   type VideoSnapshotResult,
@@ -63,8 +64,11 @@ export class BilibiliPlatform extends VideoPlatform {
     return { snapshot, prefetchedTranscript: null };
   }
 
-  fetchChannelSnapshot(channelSourceId: string): Promise<ChannelSnapshot> {
-    return fetchBilibiliChannelSnapshot(channelSourceId);
+  fetchChannelSnapshot(
+    channelSourceId: string,
+    hints?: ChannelSnapshotHints
+  ): Promise<ChannelSnapshot> {
+    return fetchBilibiliChannelSnapshot(channelSourceId, hints);
   }
 
   fetchTranscript(videoId: string): Promise<PlatformTranscriptResult> {

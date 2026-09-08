@@ -80,6 +80,7 @@ CREATE TABLE "Channel" (
     "status" "ChannelStatus" NOT NULL DEFAULT 'READY',
     "workflow_id" TEXT,
     "fetched_via" TEXT,
+    "refresh_failed_at" TIMESTAMP(3),
 
     CONSTRAINT "Channel_pkey" PRIMARY KEY ("id")
 );
