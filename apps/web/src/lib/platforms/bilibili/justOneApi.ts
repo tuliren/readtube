@@ -174,7 +174,7 @@ async function getJustOneApiEnvelope(
 /**
  * Fetch one video's view data through JustOneAPI — the paid fallback
  * `fetchBilibiliVideoView` uses when Bilibili's own view endpoint
- * rejects our egress IP (HTTP 412).
+ * refuses the request (risk control, rate limit) or errors out.
  *
  * Endpoint: `GET /api/bilibili/get-video-detail/v2?token=&bvid=`
  * Docs: https://docs.justoneapi.com/zh/api/bilibili/video-details-v2

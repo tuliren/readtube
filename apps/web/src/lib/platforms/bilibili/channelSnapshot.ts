@@ -16,7 +16,7 @@ import { fetchBilibiliVideoSnapshot } from './videoSnapshot';
  * no name when the list is empty), so whatever is still missing after
  * applying the caller's `hints` is backfilled with one view lookup on
  * the newest bvid (`fetchBilibiliVideoView`: Bilibili directly, then
- * JustOneAPI's video-detail endpoint when Bilibili rejects our IP —
+ * JustOneAPI's video-detail endpoint when Bilibili refuses the request —
  * one more paid call in that case). The lookup is best-effort: on
  * failure we log and leave the field null instead of failing the
  * snapshot — the paid list call has already succeeded by then, and

@@ -1,5 +1,10 @@
 import { fetchBilibiliVideoDetailViaJustOneApi } from '../justOneApi';
-import { BilibiliViewError, fetchBilibiliVideoView, resolveBilibiliAidCid } from '../videoView';
+import {
+  BILIBILI_USER_AGENT,
+  BilibiliViewError,
+  fetchBilibiliVideoView,
+  resolveBilibiliAidCid,
+} from '../videoView';
 import type { BilibiliViewData } from '../viewData';
 
 jest.mock('../justOneApi', () => ({
@@ -81,6 +86,10 @@ describe('fetchBilibiliVideoView', () => {
     // The free attempt is bounded by a timeout signal.
     const init = mockFetch.mock.calls[0]![1] as RequestInit;
     expect(init.signal).toBeInstanceOf(AbortSignal);
+    // Bilibili's risk control 412s a browser-looking UA that carries no
+    // cookies; the constant has to stay a plain non-browser one.
+    expect((init.headers as Record<string, string>)['User-Agent']).toBe(BILIBILI_USER_AGENT);
+    expect(BILIBILI_USER_AGENT).not.toMatch(/Mozilla/);
   });
 
   it.each([
@@ -108,6 +117,16 @@ describe('fetchBilibiliVideoView', () => {
         ),
     },
     {
+      label: 'a 200 carrying the risk-control code -352',
+      direct: () =>
+        mockFetch.mockResolvedValueOnce(jsonResponse({ code: -352, message: '-352', ttl: 1 })),
+    },
+    {
+      label: 'a 200 carrying the rate-limit code -509',
+      direct: () =>
+        mockFetch.mockResolvedValueOnce(jsonResponse({ code: -509, message: '超出限制' })),
+    },
+    {
       label: 'a malformed body',
       direct: () => mockFetch.mockResolvedValueOnce(jsonResponse({ hello: 'world' })),
     },
@@ -126,6 +145,7 @@ describe('fetchBilibiliVideoView', () => {
   });
 
   it.each([
+    { code: -403, message: '访问权限不足' },
     { code: -404, message: '啥都木有' },
     { code: 62002, message: '稿件不可见' },
   ])(

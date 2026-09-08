@@ -1,7 +1,8 @@
 /**
  * Probe script for JustOneAPI's Bilibili video-detail endpoint — the
  * paid fallback `fetchBilibiliVideoView` uses when Bilibili's own
- * `x/web-interface/view` rejects our egress IP (HTTP 412).
+ * `x/web-interface/view` refuses the request (HTTP 412 from risk
+ * control, rate limits, server errors).
  *
  * Docs: https://docs.justoneapi.com/zh/api/bilibili/video-details-v2
  *
@@ -22,6 +23,8 @@
 import { program } from 'commander';
 import { writeFileSync } from 'node:fs';
 
+import { BILIBILI_USER_AGENT } from '@/lib/platforms/bilibili/videoView';
+
 if (process.env.SCRIPT_ENV !== 'development') {
   console.error('This script can only be run in development environment.');
   process.exit(1);
@@ -30,8 +33,6 @@ if (process.env.SCRIPT_ENV !== 'development') {
 const JUSTONEAPI_BASE_URL = 'https://api.justoneapi.com';
 const VIDEO_DETAIL_PATH = '/api/bilibili/get-video-detail/v2';
 const BILIBILI_VIEW_URL = 'https://api.bilibili.com/x/web-interface/view';
-const BILIBILI_USER_AGENT =
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36';
 
 /** Truncate long strings so URL blobs don't dominate the dump. */
 function abbreviate(value: unknown): unknown {
