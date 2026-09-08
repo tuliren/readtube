@@ -1,4 +1,9 @@
-import { normalizeThumbnail, parseBilibiliSubtitleBody, parseResponse } from '../justOneApi';
+import {
+  normalizeThumbnail,
+  parseBilibiliSubtitleBody,
+  parseResponse,
+  parseVideoDetailResponse,
+} from '../justOneApi';
 
 const REAL_ENVELOPE_FIXTURE = {
   code: 0,
@@ -221,5 +226,77 @@ describe('parseBilibiliSubtitleBody', () => {
 
   it('returns [] for an empty body', () => {
     expect(parseBilibiliSubtitleBody([])).toEqual([]);
+  });
+});
+
+// ─── Video detail ───────────────────────────────────────────────────
+
+/**
+ * Shape of the real `get-video-detail/v2` envelope: the video page's
+ * `__INITIAL_STATE__`, with the view payload nested at
+ * `data.videoData`. Everything else in `data` is page chrome we ignore.
+ */
+const VIDEO_DETAIL_FIXTURE = {
+  code: 0,
+  message: null,
+  recordTime: '2026-09-08T02:00:00.000000000',
+  requestId: 'req-test',
+  data: {
+    spmidPrefix: '333.788',
+    channelKv: [{ channelId: 1, name: 'ignored' }],
+    aid: 123456,
+    bvid: 'BV1TEST000001',
+    cid: 777,
+    videoData: {
+      bvid: 'BV1TEST000001',
+      aid: 123456,
+      videos: 1,
+      pic: 'http://i2.hdslb.com/bfs/archive/cover.jpg',
+      title: 'A video',
+      pubdate: 1787281200,
+      ctime: 1786986317,
+      desc: 'A description',
+      duration: 695,
+      owner: { mid: 130, name: 'Uploader', face: 'https://i0.hdslb.com/bfs/face/f.jpg' },
+      stat: { view: 1 },
+      cid: 777,
+      pages: [{ cid: 777, page: 1, part: 'P1', duration: 695 }],
+    },
+    related: [],
+  },
+};
+
+describe('parseVideoDetailResponse', () => {
+  it('normalizes data.videoData into BilibiliViewData', () => {
+    const view = parseVideoDetailResponse('BV1TEST000001', VIDEO_DETAIL_FIXTURE);
+
+    expect(view).toEqual({
+      bvid: 'BV1TEST000001',
+      title: 'A video',
+      aid: 123456,
+      cid: 777,
+      desc: 'A description',
+      pic: 'http://i2.hdslb.com/bfs/archive/cover.jpg',
+      pubdate: 1787281200,
+      duration: 695,
+      owner: { mid: 130, name: 'Uploader', face: 'https://i0.hdslb.com/bfs/face/f.jpg' },
+      pages: [{ cid: 777 }],
+    });
+  });
+
+  it.each([
+    { label: 'data is missing', body: { code: 0 }, error: 'no data.videoData' },
+    {
+      label: 'videoData is missing',
+      body: { code: 0, data: { aid: 1 } },
+      error: 'no data.videoData',
+    },
+    {
+      label: 'videoData has no title',
+      body: { code: 0, data: { videoData: { bvid: 'BV1TEST000001' } } },
+      error: 'missing bvid or title',
+    },
+  ])('throws when $label', ({ body, error }) => {
+    expect(() => parseVideoDetailResponse('BV1TEST000001', body)).toThrow(error);
   });
 });

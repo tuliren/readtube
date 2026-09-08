@@ -1,8 +1,8 @@
 /**
  * Probe script for JustOneAPI's Bilibili captions endpoint.
- * Takes a BV id, looks up the aid + cid from api.bilibili.com's
- * `x/web-interface/view` (which we already hit in
- * fetchBilibiliVideoSnapshot), then calls JustOneAPI's
+ * Takes a BV id, looks up the aid + cid through `fetchBilibiliVideoView`
+ * (Bilibili's view endpoint, JustOneAPI's video-detail fallback when
+ * that is blocked), then calls JustOneAPI's
  * `/api/bilibili/get-video-caption/v2` and dumps the raw response.
  *
  * Docs: https://docs.justoneapi.com/zh/api/bilibili/video-captions-v2
@@ -30,6 +30,8 @@
  */
 import { program } from 'commander';
 
+import { fetchBilibiliVideoView } from '@/lib/platforms/bilibili/videoView';
+
 if (process.env.SCRIPT_ENV !== 'development') {
   console.error('This script can only be run in development environment.');
   process.exit(1);
@@ -37,68 +39,34 @@ if (process.env.SCRIPT_ENV !== 'development') {
 
 const JUSTONEAPI_BASE_URL = 'https://api.justoneapi.com';
 const CAPTIONS_PATH = '/api/bilibili/get-video-caption/v2';
-const BILIBILI_VIEW_URL = 'https://api.bilibili.com/x/web-interface/view';
-const BILIBILI_USER_AGENT =
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36';
-
-interface ViewPage {
-  cid?: unknown;
-  page?: unknown;
-  part?: unknown;
-  duration?: unknown;
-}
-
-interface ViewResponse {
-  code: number;
-  message: string;
-  data?: {
-    bvid?: string;
-    aid?: number;
-    cid?: number;
-    title?: string;
-    pages?: ViewPage[];
-  };
-}
 
 async function fetchAidCid(
   bvid: string,
   pageIndex: number
 ): Promise<{ aid: string; cid: string; title: string; totalPages: number }> {
-  const url = `${BILIBILI_VIEW_URL}?bvid=${encodeURIComponent(bvid)}`;
-  const res = await fetch(url, {
-    headers: {
-      Accept: 'application/json',
-      'User-Agent': BILIBILI_USER_AGENT,
-      Referer: 'https://www.bilibili.com/',
-    },
-  });
-  if (!res.ok) {
-    throw new Error(`Bilibili view returned HTTP ${res.status}`);
+  const view = await fetchBilibiliVideoView(bvid);
+  if (view.aid == null) {
+    throw new Error('Bilibili view data is missing aid');
   }
-  const json = (await res.json()) as ViewResponse;
-  if (json.code !== 0 || json.data == null) {
-    throw new Error(`Bilibili view error: code=${json.code} message=${json.message}`);
+  if (view.pages.length === 0) {
+    throw new Error('Bilibili view data has no pages[]');
   }
-
-  const { aid, pages = [], title = '' } = json.data;
-  if (typeof aid !== 'number') {
-    throw new Error('Bilibili view response is missing aid');
-  }
-  if (!Array.isArray(pages) || pages.length === 0) {
-    throw new Error('Bilibili view response has no pages[]');
-  }
-  if (pageIndex < 1 || pageIndex > pages.length) {
+  if (pageIndex < 1 || pageIndex > view.pages.length) {
     throw new Error(
-      `--page ${pageIndex} out of range. Video has ${pages.length} part(s); pass 1..${pages.length}.`
+      `--page ${pageIndex} out of range. Video has ${view.pages.length} part(s); pass 1..${view.pages.length}.`
     );
   }
-  const selected = pages[pageIndex - 1];
-  const cid = typeof selected?.cid === 'number' ? selected.cid : null;
+  const cid = view.pages[pageIndex - 1]?.cid;
   if (cid == null) {
     throw new Error(`Page ${pageIndex} has no cid`);
   }
 
-  return { aid: String(aid), cid: String(cid), title, totalPages: pages.length };
+  return {
+    aid: String(view.aid),
+    cid: String(cid),
+    title: view.title,
+    totalPages: view.pages.length,
+  };
 }
 
 (async () => {
