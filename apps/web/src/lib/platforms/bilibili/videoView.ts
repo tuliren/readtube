@@ -2,8 +2,10 @@ import { fetchBilibiliVideoDetailViaJustOneApi } from './justOneApi';
 import { type BilibiliViewData, toBilibiliViewData } from './viewData';
 
 const BILIBILI_VIEW_URL = 'https://api.bilibili.com/x/web-interface/view';
-const BILIBILI_USER_AGENT =
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36';
+// Probe: Bilibili's risk control answers a browser-looking UA that carries
+// no cookies with HTTP 412, while a plain non-browser UA gets through from
+// residential IPs. Testing whether the same holds from Vercel's egress.
+const BILIBILI_USER_AGENT = 'readtube/1.0 (+https://read.tube)';
 
 /**
  * A blocked request comes back as an instant 412 today; the timeout
