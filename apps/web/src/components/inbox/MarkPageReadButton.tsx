@@ -1,8 +1,8 @@
 'use client';
 
+import { StickyNoteCheck } from 'lucide-react';
 import { useState } from 'react';
 
-import TablerFileCheckIcon from '@/components/icons/TablerFileCheckIcon';
 import type { VideoData } from '@/lib/types';
 
 import { useTriage } from './useTriage';
@@ -35,7 +35,7 @@ export default function MarkPageReadButton({ videos }: { videos: VideoData[] }) 
       aria-label="Mark this page as read"
       title="Mark this page as read"
     >
-      <TablerFileCheckIcon className="h-4 w-4" />
+      <StickyNoteCheck className="h-4 w-4" />
       <span className="hidden sidebar:inline">
         {marking ? 'Marking…' : 'Mark this page as read'}
       </span>
