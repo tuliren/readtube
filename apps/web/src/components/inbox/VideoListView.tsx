@@ -313,6 +313,7 @@ export default function VideoListView({
           channelCheckedAt={headerChannelCheckedAt}
           unreadCount={headerUnread}
           totalVideos={totalVideos}
+          videos={videoList}
           trailing={headerTrailing}
           markAllReadBody={headerMarkAllReadBody}
           hideSearch={library != null}

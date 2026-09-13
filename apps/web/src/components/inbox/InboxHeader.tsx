@@ -1,7 +1,7 @@
 'use client';
 
-import { CheckCheck, RefreshCw } from 'lucide-react';
-import { usePathname, useRouter } from 'next/navigation';
+import { RefreshCw } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { useSWRConfig } from 'swr';
@@ -9,11 +9,12 @@ import { useSWRConfig } from 'swr';
 import ExternalLinkActions from '@/components/ExternalLinkActions';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { MANUAL_REFRESH_DAYS, canManuallyRefresh } from '@/lib/channels/staleness';
-import type { VideoPlatform } from '@/lib/types';
+import type { VideoData, VideoPlatform } from '@/lib/types';
 import { buildChannelLink } from '@/lib/urls/watchUrl';
 import { isProduction } from '@/lib/vercelEnv';
 
 import ChannelAvatar from './ChannelAvatar';
+import HeaderReadActions from './HeaderReadActions';
 import Pagination from './Pagination';
 import SearchInput from './SearchInput';
 
@@ -39,6 +40,8 @@ interface Props {
   /** Total videos that match the current filter (across all pages).
    *  Drives the Page X of Y control on the right side of the header. */
   totalVideos: number;
+  /** The currently displayed page, including its effective read state. */
+  videos: VideoData[];
   /** Optional trailing content after the title (e.g. ExternalLinkActions). */
   trailing?: React.ReactNode;
   /** Override the body sent to POST /api/videos/mark-all-read.
@@ -60,14 +63,13 @@ export default function InboxHeader({
   channelCheckedAt,
   unreadCount,
   totalVideos,
+  videos,
   trailing,
   markAllReadBody,
   hideSearch,
 }: Props) {
   const { mutate } = useSWRConfig();
   const router = useRouter();
-  const pathname = usePathname();
-  const [marking, setMarking] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const showRefresh = channelId != null;
   const checkedAtDate = channelCheckedAt != null ? new Date(channelCheckedAt) : null;
@@ -106,38 +108,6 @@ export default function InboxHeader({
       router.refresh();
     } finally {
       setRefreshing(false);
-    }
-  }
-
-  async function handleMarkAllRead() {
-    setMarking(true);
-    try {
-      const res = await fetch('/api/videos/mark-all-read', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(markAllReadBody ?? (channelId != null ? { channelId } : {})),
-      });
-      if (!res.ok) {
-        return;
-      }
-      // Refresh the sidebar unread badges and any /api/videos* keys.
-      await Promise.all([
-        mutate('/api/channels'),
-        mutate('/api/playlists'),
-        mutate((key) => typeof key === 'string' && key.startsWith('/api/videos')),
-      ]);
-      // Library pages render via SSR for the first paint and a SWR
-      // fallback after that, but the server-rendered payload carries
-      // readAt snapshotted at request time. Kick an RSC refresh so
-      // subsequent paints (e.g. after fallback expires) match.
-      if (
-        pathname === '/videos/standalone' ||
-        pathname?.startsWith('/videos/playlists/') === true
-      ) {
-        router.refresh();
-      }
-    } finally {
-      setMarking(false);
     }
   }
 
@@ -194,19 +164,12 @@ export default function InboxHeader({
               </Tooltip>
             </TooltipProvider>
           )}
-          {unreadCount > 0 && (
-            <button
-              onClick={handleMarkAllRead}
-              disabled={marking}
-              className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50 disabled:hover:bg-transparent"
-              title="Mark all as read"
-            >
-              <CheckCheck className="h-4 w-4" />
-              <span className="hidden sidebar:inline">
-                {marking ? 'Marking…' : 'Mark all as read'}
-              </span>
-            </button>
-          )}
+          <HeaderReadActions
+            videos={videos}
+            unreadCount={unreadCount}
+            body={markAllReadBody ?? (channelId != null ? { channelId } : {})}
+            scopeName={channelName}
+          />
         </div>
       </div>
       {/* Video count + pagination on the left, search on the right.

@@ -5,6 +5,7 @@ import {
   countUnreadVideos,
   getSubscribedChannelsWithUnread,
   markAllReadForUser,
+  markFolderReadForUser,
 } from '@/lib/subscriptions';
 
 // Helper: create a user, a channel, and N videos with descending published_at.
@@ -687,4 +688,90 @@ describe('getSubscribedChannelsWithUnread', () => {
       expect(unread).toBe(0);
     });
   });
+});
+
+describe('markFolderReadForUser', () => {
+  it('marks all channels in the folder while leaving other folders, unfiled channels, and users untouched', async () => {
+    const userId = 'folder-reader';
+    await global.testPrisma.user.createMany({
+      data: [
+        { source_id: userId, email: 'folder-reader@example.com', name: 'Reader' },
+        { source_id: 'other-reader', email: 'other-reader@example.com', name: 'Other' },
+      ],
+    });
+    const folder = await global.testPrisma.folder.create({
+      data: { user_id: userId, name: 'Target' },
+    });
+    const otherFolder = await global.testPrisma.folder.create({
+      data: { user_id: userId, name: 'Other' },
+    });
+    const channelIds: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      const channel = await global.testPrisma.channel.create({
+        data: {
+          source_id: `folder-channel-${i}`,
+          name: `Channel ${i}`,
+          rss_url: `https://example.com/feed/${i}`,
+        },
+      });
+      channelIds.push(channel.id);
+      await global.testPrisma.userSubscription.create({
+        data: {
+          user_id: userId,
+          channel_id: channel.id,
+          folder_id: i < 2 ? folder.id : i === 2 ? otherFolder.id : null,
+        },
+      });
+      await global.testPrisma.video.create({
+        data: {
+          channel_id: channel.id,
+          source_id: `folder-video-${i}`,
+          title: `Video ${i}`,
+          published_at: new Date('2020-01-01'),
+        },
+      });
+    }
+    await global.testPrisma.userSubscription.create({
+      data: { user_id: 'other-reader', channel_id: channelIds[0] },
+    });
+    const before = Date.now();
+    expect(await markFolderReadForUser(global.testPrisma, userId, folder.id)).toEqual({
+      channels: 2,
+    });
+    const subscriptions = await global.testPrisma.userSubscription.findMany();
+    for (const sub of subscriptions) {
+      if (sub.user_id === userId && sub.folder_id === folder.id) {
+        expect(sub.read_at!.getTime()).toBeGreaterThanOrEqual(before);
+        expect(
+          await countUnreadVideos(global.testPrisma, userId, sub.channel_id, sub.read_at)
+        ).toBe(0);
+      } else {
+        expect(sub.read_at).toBeNull();
+        expect(
+          await countUnreadVideos(global.testPrisma, sub.user_id, sub.channel_id, sub.read_at)
+        ).toBe(1);
+      }
+    }
+  });
+
+  it.each(['missing', 'other-user', 'empty'])(
+    'handles a %s folder without marking unrelated subscriptions',
+    async (scenario) => {
+      await setupChannelWithVideos({
+        userSourceId: 'folder-owner',
+        channelSourceId: 'folder-channel',
+        videoCount: 1,
+      });
+      const folder = await global.testPrisma.folder.create({
+        data: { user_id: 'folder-owner', name: 'Empty folder' },
+      });
+      const result = await markFolderReadForUser(
+        global.testPrisma,
+        scenario === 'other-user' ? 'someone-else' : 'folder-owner',
+        scenario === 'missing' ? 'missing-folder' : folder.id
+      );
+      expect(result).toEqual(scenario === 'empty' ? { channels: 0 } : null);
+      expect((await global.testPrisma.userSubscription.findFirstOrThrow()).read_at).toBeNull();
+    }
+  );
 });

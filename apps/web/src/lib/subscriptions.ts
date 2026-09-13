@@ -251,6 +251,26 @@ export async function markAllReadForUser(
   return { channels: result.count };
 }
 
+/** Mark only the current user's subscriptions in an owned folder as read. */
+export async function markFolderReadForUser(
+  prisma: PrismaClient,
+  userId: string,
+  folderId: string
+): Promise<{ channels: number } | null> {
+  const folder = await prisma.folder.findFirst({
+    where: { id: folderId, user_id: userId },
+    select: { id: true },
+  });
+  if (folder == null) {
+    return null;
+  }
+  const result = await prisma.userSubscription.updateMany({
+    where: { user_id: userId, folder_id: folderId },
+    data: { read_at: new Date() },
+  });
+  return { channels: result.count };
+}
+
 /**
  * Unsubscribe a user from a channel and clean up the read state
  * (`UserVideoConsumption`) and archive rows the user accumulated on

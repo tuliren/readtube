@@ -2,7 +2,7 @@
 
 import { UserButton } from '@clerk/nextjs';
 import { AdjustmentsHorizontalIcon, ChartBarIcon } from '@heroicons/react/24/outline';
-import { CheckCheck, Menu, PanelLeft, RefreshCw } from 'lucide-react';
+import { Menu, PanelLeft, RefreshCw } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -197,7 +197,12 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
         {!isMobile && (
           <aside
             className="relative flex shrink-0 flex-col border-r border-border bg-sidebar"
-            style={{ width: collapsed ? 56 : width }}
+            style={{
+              width: collapsed ? 56 : width,
+              // Keep at least two thirds of the viewport for the main content.
+              // Preserve the preferred width so it returns when the window grows.
+              maxWidth: collapsed ? undefined : 'calc(100vw / 3)',
+            }}
           >
             <div className="flex h-14 shrink-0 items-center border-b border-border px-3">
               {collapsed ? (
@@ -270,7 +275,6 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
               onOpenSidebar={() => setMobileOpen(true)}
               selectedChannel={selectedChannel}
               libraryTitle={libraryTitle}
-              totalUnread={totalUnread}
             />
           )}
           {children}
@@ -301,14 +305,12 @@ function MobileTopBar({
   onOpenSidebar,
   selectedChannel,
   libraryTitle,
-  totalUnread,
 }: {
   onOpenSidebar: () => void;
   selectedChannel: ChannelData | null;
   /** Title for library routes (All / Standalone / a specific playlist)
    *  when no channel is selected. */
   libraryTitle: string | null;
-  totalUnread: number;
 }) {
   const pathname = usePathname();
   const playlistId = pathname?.startsWith('/videos/playlists/')
@@ -317,7 +319,6 @@ function MobileTopBar({
   const { mutate } = useSWRConfig();
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
-  const [marking, setMarking] = useState(false);
   const showRefresh = selectedChannel != null;
   const checkedAtDate =
     selectedChannel?.checkedAt != null ? new Date(selectedChannel.checkedAt) : null;
@@ -326,8 +327,6 @@ function MobileTopBar({
   const refreshTooltip = refreshAllowed
     ? 'Pull latest videos + metadata for this channel'
     : `Refreshed recently. Try again after ${MANUAL_REFRESH_DAYS} day${MANUAL_REFRESH_DAYS === 1 ? '' : 's'} since the last refresh.`;
-  const unreadCount = selectedChannel != null ? selectedChannel.unreadCount : totalUnread;
-  const showMarkAll = unreadCount > 0;
 
   async function handleRefreshChannel() {
     if (selectedChannel == null || refreshing || !refreshAllowed) {
@@ -350,29 +349,6 @@ function MobileTopBar({
       router.refresh();
     } finally {
       setRefreshing(false);
-    }
-  }
-
-  async function handleMarkAllRead() {
-    if (marking) {
-      return;
-    }
-    setMarking(true);
-    try {
-      const res = await fetch('/api/videos/mark-all-read', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(selectedChannel != null ? { channelId: selectedChannel.id } : {}),
-      });
-      if (!res.ok) {
-        return;
-      }
-      await Promise.all([
-        mutate('/api/channels'),
-        mutate((key) => typeof key === 'string' && key.startsWith('/api/videos')),
-      ]);
-    } finally {
-      setMarking(false);
     }
   }
 
@@ -428,18 +404,7 @@ function MobileTopBar({
         {playlistId != null && playlistId.length > 0 && (
           <RefreshPlaylistButton key={playlistId} playlistId={playlistId} />
         )}
-        {showMarkAll && (
-          <button
-            type="button"
-            onClick={handleMarkAllRead}
-            disabled={marking}
-            className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50 disabled:hover:bg-transparent"
-            aria-label="Mark all as read"
-            title="Mark all as read"
-          >
-            <CheckCheck className="h-5 w-5" />
-          </button>
-        )}
+        <div id="mobile-read-actions" className="flex items-center" />
         <ThemeSelector />
       </div>
     </div>

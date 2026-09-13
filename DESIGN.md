@@ -108,6 +108,8 @@ Metered off the `UserRequest` audit log (no counter table); `lib/usage/quota.ts`
 
 ## Special marks & what survives an unsubscribe
 
+Channel and folder menus can mark all their channels' videos as read by advancing only the user's matching `UserSubscription.read_at` watermarks. Folder ownership is checked before updating its subscriptions. The list header's **Mark this page as read** action instead sends the displayed unread video IDs to the bulk-read endpoint; it never advances a watermark, so older videos on other pages or excluded by filters remain unread.
+
 Removing a channel deletes the `UserSubscription` row and, for that channel's videos, the user's read (`UserVideoConsumption`) and `VideoArchive` rows. Videos the user **kept** are excluded from that cleanup and keep every row untouched. A video is kept when it carries one of the user's **special marks** — a `VideoStar`, a `VideoSave` (Read Later), or a `Note` — or when it already lives in their library as a `StandaloneVideo` or in one of their playlists. `lib/videos/marks.ts` is the single definition; `unsubscribeChannelForUser` in `lib/subscriptions.ts` is the one place that acts on it.
 
 `VideoArchive` and `UserVideoConsumption` are deliberately **not** marks. Archiving is a dismissal and a consumption row is just read state, so treating either as "keep this" would mean an aggressive triager could never actually shed a channel's backlog. Both still ride along for a video kept for another reason, so a kept video doesn't come back unread or un-archived.
