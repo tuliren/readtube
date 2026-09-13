@@ -1,10 +1,8 @@
 'use client';
 
 import { RefreshCw } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import { useState } from 'react';
-import { toast } from 'sonner';
-import { useSWRConfig } from 'swr';
+
+import { useRefreshSource } from './useRefreshSource';
 
 export default function RefreshPlaylistButton({
   playlistId,
@@ -13,40 +11,12 @@ export default function RefreshPlaylistButton({
   playlistId: string;
   compact?: boolean;
 }) {
-  const { mutate } = useSWRConfig();
-  const router = useRouter();
-  const [refreshing, setRefreshing] = useState(false);
-
-  async function handleRefresh() {
-    if (refreshing) {
-      return;
-    }
-    setRefreshing(true);
-    try {
-      const res = await fetch(`/api/playlists/${playlistId}/refresh`, { method: 'POST' });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error ?? 'Failed to refresh playlist');
-      }
-      const body = (await res.json()) as { videosProcessed: number };
-      toast.success(`Refreshed: ${body.videosProcessed} videos processed`);
-      await mutate(
-        (key) =>
-          typeof key === 'string' &&
-          (key === '/api/channels' || key === '/api/playlists' || key.startsWith('/api/videos'))
-      );
-      router.refresh();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to refresh playlist');
-    } finally {
-      setRefreshing(false);
-    }
-  }
+  const { refresh, refreshing } = useRefreshSource('playlists', playlistId);
 
   return (
     <button
       type="button"
-      onClick={handleRefresh}
+      onClick={refresh}
       disabled={refreshing}
       aria-label="Refresh playlist"
       title="Pull latest videos and metadata for this playlist"

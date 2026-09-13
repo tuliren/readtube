@@ -19,6 +19,7 @@ import type { ChannelData, FolderData } from '@/lib/types';
 import { channelHref } from '@/lib/urls/channelHref';
 
 import ChannelAvatar from './ChannelAvatar';
+import RefreshSourceMenuItem from './RefreshSourceMenuItem';
 import { SidebarBadge, SidebarRowContent, sidebarRowClass } from './SidebarRow';
 
 interface Props {
@@ -86,6 +87,11 @@ export default function DraggableChannelLink({
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
+            <RefreshSourceMenuItem
+              source="channels"
+              id={channel.id}
+              checkedAt={channel.checkedAt}
+            />
             {/*
               "Move to folder" is a nested submenu so the top level stays
               tidy as more per-channel actions land (rename, mute,
