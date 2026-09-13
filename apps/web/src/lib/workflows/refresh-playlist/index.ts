@@ -7,7 +7,13 @@ import { persistPlaylistVideos } from '@/lib/workflows/add-playlist/persistPlayl
 
 const REFRESH_CLAIM_MS = 10 * 60 * 1000;
 
-export class PlaylistRefreshLimitedError extends Error {}
+export class PlaylistRefreshLimitedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PlaylistRefreshLimitedError';
+    Object.setPrototypeOf(this, new.target.prototype);
+  }
+}
 
 /** Refresh an owned playlist without changing its read state or existing order. */
 export async function refreshPlaylistForUser(
