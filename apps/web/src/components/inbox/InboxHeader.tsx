@@ -19,7 +19,7 @@ import HeaderReadActions from './HeaderReadActions';
 import Pagination from './Pagination';
 import SearchInput from './SearchInput';
 
-interface Props {
+export interface InboxHeaderProps {
   channelId: string | null;
   /** Platform source id — YouTube UC-prefixed id, or Bilibili numeric
    *  mid. Null for aggregate views (Inbox / Starred / etc). */
@@ -68,7 +68,7 @@ export default function InboxHeader({
   trailing,
   markAllReadBody,
   hideSearch,
-}: Props) {
+}: InboxHeaderProps) {
   const { mutate } = useSWRConfig();
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
