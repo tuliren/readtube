@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 
 import ExternalLinkActions from '@/components/ExternalLinkActions';
 
@@ -21,6 +21,8 @@ export const Default: Story = {
     await userEvent.hover(open);
     await expect(await page.findByRole('tooltip')).toHaveTextContent('Open on YouTube');
     await userEvent.unhover(open);
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(page.queryByRole('tooltip')).not.toBeInTheDocument());
     const copy = canvas.getByRole('button', { name: 'Copy URL' });
     await userEvent.hover(copy);
     await expect(await page.findByRole('tooltip', { name: 'Copy URL' })).toHaveTextContent(
