@@ -426,7 +426,7 @@ function MobileTopBar({
       )}
       <div className="ml-auto flex shrink-0 items-center gap-1">
         {playlistId != null && playlistId.length > 0 && (
-          <RefreshPlaylistButton key={playlistId} playlistId={playlistId} compact />
+          <RefreshPlaylistButton key={playlistId} playlistId={playlistId} />
         )}
         {showMarkAll && (
           <button
