@@ -45,7 +45,11 @@ export default function MarkPageReadButton({ videos }: { videos: VideoData[] }) 
           </span>
         </TooltipTrigger>
         <TooltipContent side="bottom">
-          {marking ? 'Marking…' : 'Mark this page as read'}
+          {marking
+            ? 'Marking…'
+            : unreadIds.length === 0
+              ? 'Mark this page as read. Nothing unread.'
+              : 'Mark this page as read'}
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>

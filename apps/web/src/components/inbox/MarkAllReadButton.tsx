@@ -21,9 +21,11 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 export default function MarkAllReadButton({
   body,
   scopeName,
+  disabled = false,
 }: {
   body: Record<string, unknown>;
   scopeName: string;
+  disabled?: boolean;
 }) {
   const { mutate } = useSWRConfig();
   const router = useRouter();
@@ -41,7 +43,7 @@ export default function MarkAllReadButton({
             : 'all your subscribed channels';
 
   async function handleConfirm() {
-    if (marking) {
+    if (marking || disabled) {
       return;
     }
     setMarking(true);
@@ -73,16 +75,21 @@ export default function MarkAllReadButton({
       <TooltipProvider delayDuration={200}>
         <Tooltip>
           <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={() => setOpen(true)}
-              className="inline-flex shrink-0 items-center rounded-md px-2 py-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-              aria-label="Mark all as read"
-            >
-              <CheckCheck className="h-4 w-4" />
-            </button>
+            <span className="inline-flex">
+              <button
+                type="button"
+                onClick={() => setOpen(true)}
+                disabled={disabled || marking}
+                className="inline-flex shrink-0 items-center rounded-md px-2 py-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50 disabled:hover:bg-transparent"
+                aria-label="Mark all as read"
+              >
+                <CheckCheck className="h-4 w-4" />
+              </button>
+            </span>
           </TooltipTrigger>
-          <TooltipContent side="bottom">Mark all as read</TooltipContent>
+          <TooltipContent side="bottom">
+            {disabled ? 'Mark all as read. Nothing unread.' : 'Mark all as read'}
+          </TooltipContent>
         </Tooltip>
       </TooltipProvider>
       <AlertDialog
@@ -105,7 +112,7 @@ export default function MarkAllReadButton({
           <AlertDialogFooter>
             <AlertDialogCancel disabled={marking}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              disabled={marking}
+              disabled={marking || disabled}
               onClick={(event) => {
                 event.preventDefault();
                 void handleConfirm();

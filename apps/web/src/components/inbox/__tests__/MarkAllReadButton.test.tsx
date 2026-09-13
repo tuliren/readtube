@@ -2,11 +2,13 @@
 import { act } from 'react';
 import { type Root, createRoot } from 'react-dom/client';
 
+import HeaderReadActions from '../HeaderReadActions';
 import MarkAllReadButton from '../MarkAllReadButton';
 
 const mockMutate = jest.fn();
 const mockRefresh = jest.fn();
 const mockError = jest.fn();
+jest.mock('../SidebarContext', () => ({ useSidebar: () => ({ isMobile: false }) }));
 jest.mock('swr', () => ({ useSWRConfig: () => ({ mutate: mockMutate }) }));
 jest.mock('next/navigation', () => ({ useRouter: () => ({ refresh: mockRefresh }) }));
 jest.mock('sonner', () => ({ toast: { error: (...args: unknown[]) => mockError(...args) } }));
@@ -88,4 +90,23 @@ it('keeps the dialog open and shows an error when the request fails', async () =
   expect(mockRefresh).not.toHaveBeenCalled();
   expect(document.querySelector('[role="alertdialog"]')).not.toBeNull();
   expect(dialogButton('Mark all as read').disabled).toBe(false);
+});
+
+it('keeps both actions visible and disabled when nothing is unread', async () => {
+  await act(async () =>
+    root.render(<HeaderReadActions videos={[]} unreadCount={0} body={{}} scopeName="Inbox" />)
+  );
+  const buttons = container.querySelectorAll<HTMLButtonElement>('button');
+  expect(buttons).toHaveLength(2);
+  expect(Array.from(buttons).map((button) => button.disabled)).toEqual([true, true]);
+  expect(Array.from(buttons).map((button) => button.getAttribute('aria-label'))).toEqual([
+    'Mark this page as read',
+    'Mark all as read',
+  ]);
+  await act(async () => {
+    buttons[0].click();
+    buttons[1].click();
+  });
+  expect(mockFetch).not.toHaveBeenCalled();
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull();
 });

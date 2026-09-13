@@ -30,7 +30,7 @@ export default function HeaderReadActions({
   const actions = (
     <div className="flex shrink-0 items-center gap-1">
       <MarkPageReadButton videos={videos} />
-      {unreadCount > 0 && <MarkAllReadButton body={body} scopeName={scopeName} />}
+      <MarkAllReadButton body={body} scopeName={scopeName} disabled={unreadCount === 0} />
     </div>
   );
   if (isMobile) {
