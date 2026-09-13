@@ -19,6 +19,7 @@ import type { ChannelData, FolderData } from '@/lib/types';
 import { channelHref } from '@/lib/urls/channelHref';
 
 import ChannelAvatar from './ChannelAvatar';
+import MarkAllReadMenuItem from './MarkAllReadMenuItem';
 import { SidebarBadge, SidebarRowContent, sidebarRowClass } from './SidebarRow';
 
 interface Props {
@@ -32,7 +33,7 @@ interface Props {
 /**
  * One channel row in the sidebar. The row is draggable (to move the
  * channel into a folder) AND has a per-row ⋯ actions dropdown (Move to…
- * for now, more actions will land as features ship).
+ * and Mark all as read).
  *
  * setNodeRef + listeners go on the Link only (not the wrapping li), so
  * the ⋯ menu button is a sibling outside the draggable zone — clicking
@@ -86,6 +87,10 @@ export default function DraggableChannelLink({
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
+            <MarkAllReadMenuItem
+              scope={{ channelId: channel.id }}
+              unreadCount={channel.unreadCount}
+            />
             {/*
               "Move to folder" is a nested submenu so the top level stays
               tidy as more per-channel actions land (rename, mute,

@@ -21,6 +21,7 @@ import {
 import type { ChannelData, FolderData } from '@/lib/types';
 
 import DraggableChannelLink from './DraggableChannelLink';
+import MarkAllReadMenuItem from './MarkAllReadMenuItem';
 import { SidebarBadge, sidebarRowClass } from './SidebarRow';
 
 interface Props {
@@ -112,15 +113,16 @@ export default function FolderGroup({
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <MarkAllReadMenuItem scope={{ folderId: folder.id }} unreadCount={unread} />
             <DropdownMenuItem onSelect={onAddChannel}>
               <Plus className="mr-2 h-4 w-4" />
               Add channel
             </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={onRename}>
               <Pencil className="mr-2 h-4 w-4" />
               Rename folder
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={onDelete} className="text-red-600">
               <Trash2 className="mr-2 h-4 w-4" />
               Delete folder
