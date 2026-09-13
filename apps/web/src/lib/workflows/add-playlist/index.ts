@@ -208,6 +208,10 @@ export async function addPlaylistForUser(args: {
 
   // Reached only on a fresh add — the idempotent "already have this
   // playlist" case returns early above. Playlists are YouTube-only.
+  await prisma.playlist.update({
+    where: { id: playlist.id },
+    data: { checked_at: new Date() },
+  });
   await trackContentAdded('playlist', 'youtube');
 
   return { playlistId: playlist.id, playlistName: name, videosProcessed };

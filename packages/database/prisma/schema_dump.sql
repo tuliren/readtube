@@ -244,6 +244,8 @@ CREATE TABLE "Playlist" (
     "read_at" TIMESTAMP(3),
     "custom_name" TEXT,
     "fetched_via" TEXT,
+    "checked_at" TIMESTAMP(3),
+    "refresh_started_at" TIMESTAMP(3),
 
     CONSTRAINT "Playlist_pkey" PRIMARY KEY ("id")
 );

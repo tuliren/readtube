@@ -3,7 +3,10 @@ import '@tests/integration-tests';
 import type { RssChannel } from '@/lib/platforms/youtube/channelRss';
 import type { ScrapedPlaylist } from '@/lib/platforms/youtube/playlistScrape';
 import { addPlaylistForUser } from '@/lib/workflows/add-playlist';
-import { refreshPlaylistForUser } from '@/lib/workflows/refresh-playlist';
+import {
+  PlaylistRefreshLimitedError,
+  refreshPlaylistForUser,
+} from '@/lib/workflows/refresh-playlist';
 
 // ─── Module mocks ────────────────────────────────────────────────
 
@@ -50,6 +53,7 @@ async function resetDb() {
 }
 
 beforeEach(async () => {
+  delete process.env.NEXT_PUBLIC_VERCEL_ENV;
   mockFetchRssFeed.mockReset();
   mockScrapePlaylist.mockReset();
   // These tests exercise the RSS/scrape fallback chain — keep the
@@ -58,6 +62,10 @@ beforeEach(async () => {
   // Default: RSS 404s so we go through the scrape path.
   mockFetchRssFeed.mockRejectedValue(new Error('RSS fetch failed: 404 Not Found'));
   await resetDb();
+});
+
+afterEach(() => {
+  delete process.env.NEXT_PUBLIC_VERCEL_ENV;
 });
 
 // ─── Tests ───────────────────────────────────────────────────────
@@ -509,7 +517,89 @@ describe('refreshPlaylistForUser', () => {
         where: { id: added.playlistId },
         include: { items: true },
       })
-    ).toEqual(before);
+    ).toEqual({ ...before, updated_at: expect.any(Date) });
+  });
+
+  it.each([
+    { ageHours: null, allowed: true },
+    { ageHours: 23, allowed: false },
+    { ageHours: 25, allowed: true },
+  ])(
+    'enforces the production cooldown with a timestamp $ageHours hours old',
+    async ({ ageHours, allowed }) => {
+      mockScrapePlaylist.mockResolvedValue(refreshedFeed());
+      const added = await addPlaylistForUser({ userId: TEST_USER_ID, input: PL_ID });
+      const timestamp = ageHours == null ? null : new Date(Date.now() - ageHours * 60 * 60 * 1000);
+      await global.testPrisma.playlist.update({
+        where: { id: added.playlistId },
+        data: { checked_at: timestamp },
+      });
+      mockFetchRssFeed.mockClear();
+      mockScrapePlaylist.mockClear();
+      process.env.NEXT_PUBLIC_VERCEL_ENV = 'production';
+      const refresh = refreshPlaylistForUser(global.testPrisma, TEST_USER_ID, added.playlistId);
+      if (allowed) {
+        await expect(refresh).resolves.toEqual({ videosProcessed: 2 });
+        const playlist = await global.testPrisma.playlist.findUniqueOrThrow({
+          where: { id: added.playlistId },
+        });
+        expect(playlist.checked_at!.getTime()).toBeGreaterThan(Date.now() - 10_000);
+        expect(playlist.refresh_started_at).toBeNull();
+        await expect(
+          refreshPlaylistForUser(global.testPrisma, TEST_USER_ID, added.playlistId)
+        ).rejects.toBeInstanceOf(PlaylistRefreshLimitedError);
+        expect(mockScrapePlaylist).toHaveBeenCalledTimes(1);
+      } else {
+        await expect(refresh).rejects.toBeInstanceOf(PlaylistRefreshLimitedError);
+        expect(mockScrapePlaylist).not.toHaveBeenCalled();
+        expect(mockFetchRssFeed).not.toHaveBeenCalled();
+      }
+    }
+  );
+
+  it('blocks concurrent fetches and recovers abandoned claims', async () => {
+    mockScrapePlaylist.mockResolvedValueOnce(refreshedFeed());
+    const added = await addPlaylistForUser({ userId: TEST_USER_ID, input: PL_ID });
+    await global.testPrisma.playlist.update({
+      where: { id: added.playlistId },
+      data: {
+        checked_at: null,
+        refresh_started_at: new Date(Date.now() - 11 * 60 * 1000),
+      },
+    });
+    process.env.NEXT_PUBLIC_VERCEL_ENV = 'production';
+    mockScrapePlaylist.mockClear();
+    mockScrapePlaylist.mockImplementationOnce(async () => {
+      await expect(
+        refreshPlaylistForUser(global.testPrisma, TEST_USER_ID, added.playlistId)
+      ).rejects.toBeInstanceOf(PlaylistRefreshLimitedError);
+      return refreshedFeed();
+    });
+    await expect(
+      refreshPlaylistForUser(global.testPrisma, TEST_USER_ID, added.playlistId)
+    ).resolves.toEqual({ videosProcessed: 2 });
+    expect(mockScrapePlaylist).toHaveBeenCalledTimes(1);
+  });
+
+  it('starts the cooldown after a successful import and leaves it unchanged by read-state updates', async () => {
+    mockScrapePlaylist.mockResolvedValueOnce(refreshedFeed());
+    const added = await addPlaylistForUser({ userId: TEST_USER_ID, input: PL_ID });
+    const playlist = await global.testPrisma.playlist.findUniqueOrThrow({
+      where: { id: added.playlistId },
+    });
+    expect(playlist.checked_at).not.toBeNull();
+    await global.testPrisma.playlist.update({
+      where: { id: added.playlistId },
+      data: { read_at: new Date() },
+    });
+    expect(
+      (await global.testPrisma.playlist.findUniqueOrThrow({ where: { id: added.playlistId } }))
+        .checked_at
+    ).toEqual(playlist.checked_at);
+    process.env.NEXT_PUBLIC_VERCEL_ENV = 'production';
+    await expect(
+      refreshPlaylistForUser(global.testPrisma, TEST_USER_ID, added.playlistId)
+    ).rejects.toBeInstanceOf(PlaylistRefreshLimitedError);
   });
 
   it('does not recreate a playlist deleted during the fetch', async () => {
