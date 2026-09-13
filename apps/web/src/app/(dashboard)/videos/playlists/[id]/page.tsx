@@ -4,6 +4,7 @@ import type { Metadata } from 'next';
 import { notFound, redirect } from 'next/navigation';
 
 import ExternalLinkActions from '@/components/ExternalLinkActions';
+import RefreshPlaylistButton from '@/components/inbox/RefreshPlaylistButton';
 import VideoListView from '@/components/inbox/VideoListView';
 import { loadInboxVideos, searchParamsToInboxQuery } from '@/lib/inbox/loadVideos';
 
@@ -77,7 +78,12 @@ export default async function PlaylistPage({ params, searchParams }: Props) {
         title,
         emptyMessage: 'No videos in this playlist.',
         markAllReadBody: { playlistId: playlist.id },
-        trailing: <ExternalLinkActions url={youtubeUrl} label="Open on YouTube" />,
+        trailing: (
+          <>
+            <ExternalLinkActions url={youtubeUrl} label="Open on YouTube" />
+            <RefreshPlaylistButton playlistId={playlist.id} />
+          </>
+        ),
       }}
       showRemoveFromLibrary
     />

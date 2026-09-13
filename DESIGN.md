@@ -56,6 +56,8 @@ Consumers: add-video (`fetchBilibiliVideoSnapshot`), the transcript path's `aid`
 
 ## Playlist fetching
 
+The playlist header offers a manual refresh on desktop and mobile. `POST /api/playlists/[id]/refresh` verifies ownership before fetching through the same source chain used for imports, then atomically upserts video metadata and appends missing entries. Existing entry order, custom names, and read state (including the playlist watermark) survive. Missing source entries are retained because RSS and scrape responses can be partial. Refresh does not create a new playlist or count as a new import.
+
 `fetchPlaylistData` (`apps/web/src/lib/workflows/add-playlist/index.ts`) implements the add-playlist row of the overview table. The Data API tier is strictly richer than both legacy sources combined — the RSS path has publish dates but no durations, the scrape path has durations but no publish dates; the Data API has both, plus full descriptions and the per-video uploader channel (playlists can mix videos from many channels). Private playlists fall through to RSS/scrape as described above.
 
 ## Scheduled premieres / upcoming livestreams

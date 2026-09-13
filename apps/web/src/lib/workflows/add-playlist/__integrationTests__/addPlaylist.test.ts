@@ -411,6 +411,7 @@ describe('refreshPlaylistForUser', () => {
   it('refreshes in place, appends new entries, and preserves user state across repeated refreshes', async () => {
     const initialFeed = refreshedFeed();
     initialFeed.videos = [initialFeed.videos[0]];
+    initialFeed.videos[0].title = 'Original title';
     mockScrapePlaylist.mockResolvedValueOnce(initialFeed);
     const added = await addPlaylistForUser({ userId: TEST_USER_ID, input: PL_ID });
     const watermark = new Date('2020-01-01');
