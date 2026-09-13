@@ -49,7 +49,7 @@ export default async function PlaylistPage({ params, searchParams }: Props) {
 
   const playlist = await prisma.playlist.findFirst({
     where: { id, user_id: userId },
-    select: { id: true, name: true, custom_name: true, source_id: true },
+    select: { id: true, name: true, custom_name: true, source_id: true, checked_at: true },
   });
   if (playlist == null) {
     notFound();
@@ -81,7 +81,10 @@ export default async function PlaylistPage({ params, searchParams }: Props) {
         trailing: (
           <>
             <ExternalLinkActions url={youtubeUrl} label="Open on YouTube" />
-            <RefreshPlaylistButton playlistId={playlist.id} />
+            <RefreshPlaylistButton
+              playlistId={playlist.id}
+              checkedAt={playlist.checked_at?.toISOString() ?? null}
+            />
           </>
         ),
       }}

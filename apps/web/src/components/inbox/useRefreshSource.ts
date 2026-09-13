@@ -5,10 +5,25 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { useSWRConfig } from 'swr';
 
+import { useSidebarData } from '@/components/dashboard/SidebarDataContext';
+import { canManuallyRefresh } from '@/lib/channels/staleness';
+import { isProduction } from '@/lib/vercelEnv';
+
 export type RefreshSource = 'channels' | 'playlists';
 
 /** Shared request and cache refresh for header and dropdown refresh controls. */
-export function useRefreshSource(source: RefreshSource, id: string, allowed = true) {
+export function useRefreshSource(
+  source: RefreshSource,
+  id: string,
+  initialCheckedAt: string | null = null
+) {
+  const { playlists } = useSidebarData();
+  const checkedAt =
+    source === 'playlists'
+      ? (playlists.find((playlist) => playlist.id === id)?.checkedAt ?? initialCheckedAt)
+      : initialCheckedAt;
+  const allowed =
+    !isProduction() || canManuallyRefresh(checkedAt != null ? new Date(checkedAt) : null);
   const { mutate } = useSWRConfig();
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
@@ -23,6 +38,9 @@ export function useRefreshSource(source: RefreshSource, id: string, allowed = tr
     try {
       const res = await fetch(`/api/${source}/${id}/refresh`, { method: 'POST' });
       if (!res.ok) {
+        if (res.status === 429) {
+          await mutate(source === 'playlists' ? '/api/playlists' : '/api/channels');
+        }
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error ?? errorMessage);
       }
@@ -41,5 +59,5 @@ export function useRefreshSource(source: RefreshSource, id: string, allowed = tr
     }
   }
 
-  return { refresh, refreshing };
+  return { refresh, refreshing, allowed };
 }

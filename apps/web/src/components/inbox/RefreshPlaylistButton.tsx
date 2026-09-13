@@ -6,8 +6,14 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 
 import { useRefreshSource } from './useRefreshSource';
 
-export default function RefreshPlaylistButton({ playlistId }: { playlistId: string }) {
-  const { refresh, refreshing } = useRefreshSource('playlists', playlistId);
+export default function RefreshPlaylistButton({
+  playlistId,
+  checkedAt,
+}: {
+  playlistId: string;
+  checkedAt?: string | null;
+}) {
+  const { refresh, refreshing, allowed } = useRefreshSource('playlists', playlistId, checkedAt);
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -17,7 +23,7 @@ export default function RefreshPlaylistButton({ playlistId }: { playlistId: stri
             <button
               type="button"
               onClick={refresh}
-              disabled={refreshing}
+              disabled={refreshing || !allowed}
               aria-label="Refresh playlist"
               aria-busy={refreshing}
               className="inline-flex shrink-0 items-center rounded-md px-2 py-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50 disabled:hover:bg-transparent"
@@ -27,7 +33,11 @@ export default function RefreshPlaylistButton({ playlistId }: { playlistId: stri
           </span>
         </TooltipTrigger>
         <TooltipContent side="bottom">
-          {refreshing ? 'Refreshing…' : 'Refresh playlist'}
+          {refreshing
+            ? 'Refreshing…'
+            : allowed
+              ? 'Refresh playlist'
+              : 'Refreshed recently. Try again after 24 hours.'}
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>

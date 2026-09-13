@@ -14,6 +14,7 @@ export interface PlaylistData {
   /** User-supplied override; null until the user renames. */
   customName: string | null;
   sortOrder: number;
+  checkedAt: string | null;
   videoCount: number;
   unreadCount: number;
   thumbnailUrl: string | null;
@@ -37,6 +38,7 @@ export async function GET() {
       custom_name: true,
       sort_order: true,
       read_at: true,
+      checked_at: true,
       _count: { select: { items: true } },
       items: {
         orderBy: { sort_order: 'asc' },
@@ -67,6 +69,7 @@ export async function GET() {
         name: row.name,
         customName: row.custom_name,
         sortOrder: row.sort_order,
+        checkedAt: row.checked_at?.toISOString() ?? null,
         videoCount: row._count.items,
         unreadCount,
         thumbnailUrl: row.items[0]?.video.thumbnail_url ?? null,

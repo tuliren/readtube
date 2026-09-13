@@ -221,7 +221,11 @@ function PlaylistEntry({
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">
-          <RefreshSourceMenuItem source="playlists" id={playlist.id} />
+          <RefreshSourceMenuItem
+            source="playlists"
+            id={playlist.id}
+            checkedAt={playlist.checkedAt}
+          />
           <DropdownMenuItem onSelect={onRequestAddVideo}>
             <Plus className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
             Add video
