@@ -21,7 +21,11 @@ export default function RefreshSourceMenuItem({
     <DropdownMenuItem
       disabled={refreshing || !allowed}
       onSelect={() => void refresh()}
-      title={allowed ? undefined : 'Refreshed recently. Try again after 24 hours.'}
+      title={
+        allowed
+          ? undefined
+          : `${source === 'playlists' ? 'Checked' : 'Refreshed'} recently. Try again after 24 hours.`
+      }
     >
       <RefreshCw
         className={`mr-2 h-3.5 w-3.5 text-muted-foreground ${refreshing ? 'animate-spin' : ''}`}

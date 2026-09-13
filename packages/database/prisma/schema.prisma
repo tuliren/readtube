@@ -554,10 +554,8 @@ model Playlist {
   // considered read. null means no watermark — read state comes
   // purely from UserVideoConsumption rows.
   read_at     DateTime?
-  // Last successful import/refresh; anchors the manual refresh cooldown.
+  // Last import/refresh attempt; failed refreshes also consume the cooldown.
   checked_at DateTime?
-  // Short-lived claim to prevent concurrent upstream refreshes.
-  refresh_started_at DateTime?
   created_at  DateTime          @default(now())
   updated_at  DateTime          @updatedAt
   // Which fetch approach produced this playlist: data_api | rss |

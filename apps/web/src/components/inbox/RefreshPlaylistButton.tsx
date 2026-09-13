@@ -37,7 +37,7 @@ export default function RefreshPlaylistButton({
             ? 'Refreshing…'
             : allowed
               ? 'Refresh playlist'
-              : 'Refreshed recently. Try again after 24 hours.'}
+              : 'Checked recently. Try again after 24 hours.'}
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>

@@ -54,6 +54,11 @@ export function useRefreshSource(
       router.refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : errorMessage);
+      if (source === 'playlists') {
+        // Failed attempts consume the cooldown too; update disabled controls.
+        await mutate('/api/playlists');
+        router.refresh();
+      }
     } finally {
       setRefreshing(false);
     }

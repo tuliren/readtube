@@ -501,23 +501,38 @@ describe('refreshPlaylistForUser', () => {
     }
   );
 
-  it('leaves the playlist untouched when all fetch sources fail', async () => {
+  it('preserves playlist contents but consumes the cooldown when all fetch sources fail', async () => {
     mockScrapePlaylist.mockResolvedValueOnce(refreshedFeed());
     const added = await addPlaylistForUser({ userId: TEST_USER_ID, input: PL_ID });
+    await global.testPrisma.playlist.update({
+      where: { id: added.playlistId },
+      data: { checked_at: new Date(Date.now() - 25 * 60 * 60 * 1000) },
+    });
     const before = await global.testPrisma.playlist.findUniqueOrThrow({
       where: { id: added.playlistId },
       include: { items: true },
     });
+    process.env.NEXT_PUBLIC_VERCEL_ENV = 'production';
+    mockScrapePlaylist.mockClear();
     mockScrapePlaylist.mockRejectedValueOnce(new Error('Upstream unavailable'));
+    const startedBefore = Date.now();
     await expect(
       refreshPlaylistForUser(global.testPrisma, TEST_USER_ID, added.playlistId)
     ).rejects.toThrow('Upstream unavailable');
-    expect(
-      await global.testPrisma.playlist.findUniqueOrThrow({
-        where: { id: added.playlistId },
-        include: { items: true },
-      })
-    ).toEqual({ ...before, updated_at: expect.any(Date) });
+    const after = await global.testPrisma.playlist.findUniqueOrThrow({
+      where: { id: added.playlistId },
+      include: { items: true },
+    });
+    expect(after).toEqual({
+      ...before,
+      checked_at: expect.any(Date),
+      updated_at: expect.any(Date),
+    });
+    expect(after.checked_at!.getTime()).toBeGreaterThanOrEqual(startedBefore);
+    await expect(
+      refreshPlaylistForUser(global.testPrisma, TEST_USER_ID, added.playlistId)
+    ).rejects.toBeInstanceOf(PlaylistRefreshLimitedError);
+    expect(mockScrapePlaylist).toHaveBeenCalledTimes(1);
   });
 
   it.each([
@@ -544,7 +559,6 @@ describe('refreshPlaylistForUser', () => {
           where: { id: added.playlistId },
         });
         expect(playlist.checked_at!.getTime()).toBeGreaterThan(Date.now() - 10_000);
-        expect(playlist.refresh_started_at).toBeNull();
         await expect(
           refreshPlaylistForUser(global.testPrisma, TEST_USER_ID, added.playlistId)
         ).rejects.toBeInstanceOf(PlaylistRefreshLimitedError);
@@ -557,19 +571,23 @@ describe('refreshPlaylistForUser', () => {
     }
   );
 
-  it('blocks concurrent fetches and recovers abandoned claims', async () => {
+  it('records the attempt before fetching and blocks concurrent production fetches', async () => {
     mockScrapePlaylist.mockResolvedValueOnce(refreshedFeed());
     const added = await addPlaylistForUser({ userId: TEST_USER_ID, input: PL_ID });
     await global.testPrisma.playlist.update({
       where: { id: added.playlistId },
       data: {
         checked_at: null,
-        refresh_started_at: new Date(Date.now() - 11 * 60 * 1000),
       },
     });
     process.env.NEXT_PUBLIC_VERCEL_ENV = 'production';
     mockScrapePlaylist.mockClear();
+    let attemptedAt: Date | null = null;
     mockScrapePlaylist.mockImplementationOnce(async () => {
+      attemptedAt = (
+        await global.testPrisma.playlist.findUniqueOrThrow({ where: { id: added.playlistId } })
+      ).checked_at;
+      expect(attemptedAt).not.toBeNull();
       await expect(
         refreshPlaylistForUser(global.testPrisma, TEST_USER_ID, added.playlistId)
       ).rejects.toBeInstanceOf(PlaylistRefreshLimitedError);
@@ -579,6 +597,10 @@ describe('refreshPlaylistForUser', () => {
       refreshPlaylistForUser(global.testPrisma, TEST_USER_ID, added.playlistId)
     ).resolves.toEqual({ videosProcessed: 2 });
     expect(mockScrapePlaylist).toHaveBeenCalledTimes(1);
+    expect(
+      (await global.testPrisma.playlist.findUniqueOrThrow({ where: { id: added.playlistId } }))
+        .checked_at
+    ).toEqual(attemptedAt);
   });
 
   it('starts the cooldown after a successful import and leaves it unchanged by read-state updates', async () => {

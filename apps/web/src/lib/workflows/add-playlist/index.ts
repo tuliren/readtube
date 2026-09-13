@@ -144,6 +144,7 @@ export async function addPlaylistForUser(args: {
     return { playlistId: existing.id, playlistName: existing.name, videosProcessed: 0 };
   }
 
+  const checkedAt = new Date();
   let feed: PlaylistFeed;
   try {
     feed = await fetchPlaylistData(ytPlaylistId);
@@ -174,6 +175,7 @@ export async function addPlaylistForUser(args: {
       name,
       sort_order: nextOrder,
       fetched_via: feed.fetchedVia,
+      checked_at: checkedAt,
     },
     select: { id: true },
   });
@@ -208,10 +210,6 @@ export async function addPlaylistForUser(args: {
 
   // Reached only on a fresh add — the idempotent "already have this
   // playlist" case returns early above. Playlists are YouTube-only.
-  await prisma.playlist.update({
-    where: { id: playlist.id },
-    data: { checked_at: new Date() },
-  });
   await trackContentAdded('playlist', 'youtube');
 
   return { playlistId: playlist.id, playlistName: name, videosProcessed };
