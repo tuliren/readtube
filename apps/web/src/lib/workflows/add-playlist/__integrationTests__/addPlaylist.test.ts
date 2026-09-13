@@ -535,13 +535,17 @@ describe('refreshPlaylistForUser', () => {
     expect(mockScrapePlaylist).toHaveBeenCalledTimes(1);
   });
 
-  it.each([
-    { ageHours: null, allowed: true },
-    { ageHours: 23, allowed: false },
-    { ageHours: 25, allowed: true },
-  ])(
-    'enforces the production cooldown with a timestamp $ageHours hours old',
-    async ({ ageHours, allowed }) => {
+  it.each(
+    ['preview', 'production'].flatMap((environment) =>
+      [
+        { ageHours: null, allowed: true },
+        { ageHours: 23, allowed: false },
+        { ageHours: 25, allowed: true },
+      ].map((testCase) => ({ ...testCase, environment }))
+    )
+  )(
+    'enforces the $environment cooldown with a timestamp $ageHours hours old',
+    async ({ ageHours, allowed, environment }) => {
       mockScrapePlaylist.mockResolvedValue(refreshedFeed());
       const added = await addPlaylistForUser({ userId: TEST_USER_ID, input: PL_ID });
       const timestamp = ageHours == null ? null : new Date(Date.now() - ageHours * 60 * 60 * 1000);
@@ -551,7 +555,7 @@ describe('refreshPlaylistForUser', () => {
       });
       mockFetchRssFeed.mockClear();
       mockScrapePlaylist.mockClear();
-      process.env.NEXT_PUBLIC_VERCEL_ENV = 'production';
+      process.env.NEXT_PUBLIC_VERCEL_ENV = environment;
       const refresh = refreshPlaylistForUser(global.testPrisma, TEST_USER_ID, added.playlistId);
       if (allowed) {
         await expect(refresh).resolves.toEqual({ videosProcessed: 2 });

@@ -7,18 +7,19 @@ import { toast } from 'sonner';
 import { useSWRConfig } from 'swr';
 
 import ExternalLinkActions from '@/components/ExternalLinkActions';
+import { iconActionClassName } from '@/components/iconActionStyles';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { MANUAL_REFRESH_DAYS, canManuallyRefresh } from '@/lib/channels/staleness';
 import type { VideoData, VideoPlatform } from '@/lib/types';
 import { buildChannelLink } from '@/lib/urls/watchUrl';
-import { isProduction } from '@/lib/vercelEnv';
+import { isDevelopment } from '@/lib/vercelEnv';
 
 import ChannelAvatar from './ChannelAvatar';
 import HeaderReadActions from './HeaderReadActions';
 import Pagination from './Pagination';
 import SearchInput from './SearchInput';
 
-interface Props {
+export interface InboxHeaderProps {
   channelId: string | null;
   /** Platform source id — YouTube UC-prefixed id, or Bilibili numeric
    *  mid. Null for aggregate views (Inbox / Starred / etc). */
@@ -67,15 +68,14 @@ export default function InboxHeader({
   trailing,
   markAllReadBody,
   hideSearch,
-}: Props) {
+}: InboxHeaderProps) {
   const { mutate } = useSWRConfig();
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
   const showRefresh = channelId != null;
   const checkedAtDate = channelCheckedAt != null ? new Date(channelCheckedAt) : null;
-  // Cooldown only applies in production. Preview + local dev have no
-  // limit so we can iterate without waiting a day between refreshes.
-  const refreshAllowed = !isProduction() || canManuallyRefresh(checkedAtDate);
+  // Only local development bypasses the cooldown.
+  const refreshAllowed = isDevelopment() || canManuallyRefresh(checkedAtDate);
   const refreshDisabled = refreshing || !refreshAllowed;
   const refreshTooltip = refreshAllowed
     ? 'Pull latest videos + metadata for this channel'
@@ -126,50 +126,61 @@ export default function InboxHeader({
           <h1 className="hidden min-w-0 truncate text-sm font-semibold text-foreground sidebar:block">
             {channelName}
           </h1>
-          {channelSourceId != null && channelPlatform != null && (
-            <ExternalLinkActions
-              url={buildChannelLink(channelPlatform, channelSourceId).url}
-              label={`Open channel on ${buildChannelLink(channelPlatform, channelSourceId).platformName}`}
-            />
-          )}
-          {trailing}
-          {channelId == null && unreadCount > 0 && (
-            <span className="shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-700">
-              {unreadCount}
-            </span>
-          )}
-          {showRefresh && (
-            <TooltipProvider delayDuration={200}>
-              <Tooltip>
-                {/* The disabled state strips pointer events from the
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  tabIndex={0}
+                  aria-label={`Unread video(s): ${unreadCount}`}
+                  className="shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-700"
+                >
+                  {unreadCount}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Unread video(s): {unreadCount}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <div className="flex shrink-0 items-center gap-1">
+            {channelSourceId != null && channelPlatform != null && (
+              <ExternalLinkActions
+                url={buildChannelLink(channelPlatform, channelSourceId).url}
+                label={`Open channel on ${buildChannelLink(channelPlatform, channelSourceId).platformName}`}
+              />
+            )}
+            {trailing}
+            {showRefresh && (
+              <TooltipProvider delayDuration={200}>
+                <Tooltip>
+                  {/* The disabled state strips pointer events from the
                     button, which would also strip the Radix tooltip's
                     hover detection. Wrap in a span so the trigger still
                     receives mouseenter while the inner button stays
                     semantically disabled. */}
-                <TooltipTrigger asChild>
-                  <span className="hidden sidebar:inline-flex">
-                    <button
-                      type="button"
-                      onClick={handleRefreshChannel}
-                      disabled={refreshDisabled}
-                      aria-label="Refresh channel"
-                      aria-busy={refreshing}
-                      className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50 disabled:hover:bg-transparent"
-                    >
-                      <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-                    </button>
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">{refreshTooltip}</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-          <HeaderReadActions
-            videos={videos}
-            unreadCount={unreadCount}
-            body={markAllReadBody ?? (channelId != null ? { channelId } : {})}
-            scopeName={channelName}
-          />
+                  <TooltipTrigger asChild>
+                    <span className="hidden sidebar:inline-flex">
+                      <button
+                        type="button"
+                        onClick={handleRefreshChannel}
+                        disabled={refreshDisabled}
+                        aria-label="Refresh channel"
+                        aria-busy={refreshing}
+                        className={iconActionClassName}
+                      >
+                        <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                      </button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">{refreshTooltip}</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+            <HeaderReadActions
+              videos={videos}
+              unreadCount={unreadCount}
+              body={markAllReadBody ?? (channelId != null ? { channelId } : {})}
+              scopeName={channelName}
+            />
+          </div>
         </div>
       </div>
       {/* Video count + pagination on the left, search on the right.

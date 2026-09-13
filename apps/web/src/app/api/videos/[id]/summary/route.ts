@@ -9,6 +9,7 @@ import { resolveTargetLanguage } from '@/lib/language/resolve';
 import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
 import { recordSummaryRequest } from '@/lib/usage/userRequest';
+import { VercelEnv, getVercelEnv } from '@/lib/vercelEnv';
 import { videoReachableByUser } from '@/lib/videos/marks';
 import { claimSummaryRun, findActiveSummaryRun } from '@/lib/workflows/runRegistry';
 import { NDJSON_HEADERS, ndjsonResponseFromRun } from '@/lib/workflows/streamResponse';
@@ -139,6 +140,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // Empty body — fall through to generating all fields
   }
   const fieldsToGenerate: SummaryField[] = requestedFields ?? [...SUMMARY_FIELDS];
+  if (
+    fieldsToGenerate.length !== SUMMARY_FIELDS.length &&
+    getVercelEnv(process.env.VERCEL_ENV) !== VercelEnv.DEVELOPMENT
+  ) {
+    return NextResponse.json(
+      { error: 'Content regeneration is only available in local development.' },
+      { status: 403 }
+    );
+  }
 
   // Look up title + channel name first; ensureTranscript will do
   // its own IDOR check + transcript resolution.

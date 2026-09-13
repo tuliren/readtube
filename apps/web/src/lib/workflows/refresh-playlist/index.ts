@@ -1,7 +1,7 @@
 import type { PrismaClient } from '@readtube/database';
 
 import { MANUAL_REFRESH_DAYS } from '@/lib/channels/staleness';
-import { isProduction } from '@/lib/vercelEnv';
+import { isDevelopment } from '@/lib/vercelEnv';
 import { fetchPlaylistData } from '@/lib/workflows/add-playlist';
 import { persistPlaylistVideos } from '@/lib/workflows/add-playlist/persistPlaylistVideos';
 
@@ -30,12 +30,12 @@ export async function refreshPlaylistForUser(
   const startedAt = new Date();
   const cutoff = new Date(startedAt.getTime() - MANUAL_REFRESH_DAYS * 24 * 60 * 60 * 1000);
   // Reserve the 24-hour allowance before fetching. The conditional update
-  // admits only one production request, and failures keep the timestamp.
+  // admits only one staging or production request, and failures keep the timestamp.
   const claim = await prisma.playlist.updateMany({
     where: {
       id: playlistId,
       user_id: userId,
-      ...(isProduction() ? { OR: [{ checked_at: null }, { checked_at: { lte: cutoff } }] } : {}),
+      ...(!isDevelopment() ? { OR: [{ checked_at: null }, { checked_at: { lte: cutoff } }] } : {}),
     },
     data: { checked_at: startedAt },
   });

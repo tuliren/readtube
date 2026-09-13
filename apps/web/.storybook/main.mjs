@@ -1,4 +1,6 @@
 export default {
+  // Match staging restrictions when reviewing deployed UI states.
+  env: (config) => ({ ...config, NEXT_PUBLIC_VERCEL_ENV: 'preview' }),
   stories: [
     '../src/**/__stories__/**/*.stories.@(js|jsx|ts|tsx)',
     '../src/**/__stories__/**/*.mdx',

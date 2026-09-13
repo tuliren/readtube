@@ -3,6 +3,7 @@
 import { StickyNoteCheck } from 'lucide-react';
 import { useState } from 'react';
 
+import { iconActionClassName } from '@/components/iconActionStyles';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { VideoData } from '@/lib/types';
 
@@ -36,7 +37,7 @@ export default function MarkPageReadButton({ videos }: { videos: VideoData[] }) 
               type="button"
               onClick={handleMarkPageRead}
               disabled={marking || unreadIds.length === 0}
-              className="inline-flex shrink-0 items-center rounded-md px-2 py-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50 disabled:hover:bg-transparent"
+              className={iconActionClassName}
               aria-label="Mark this page as read"
               aria-busy={marking}
             >

@@ -9,6 +9,7 @@ import { resolveTargetLanguage } from '@/lib/language/resolve';
 import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
 import { recordArticleRequest } from '@/lib/usage/userRequest';
+import { VercelEnv, getVercelEnv } from '@/lib/vercelEnv';
 import { videoReachableByUser } from '@/lib/videos/marks';
 import { type ArticleStreamEvent, articleWorkflow } from '@/lib/workflows/article';
 import { ARTICLE_PROMPT_VERSION } from '@/lib/workflows/article/steps';
@@ -134,6 +135,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
   const style = parseStyle(body.style);
   const force = body.force === true;
+  if (force && getVercelEnv(process.env.VERCEL_ENV) !== VercelEnv.DEVELOPMENT) {
+    return NextResponse.json(
+      { error: 'Content regeneration is only available in local development.' },
+      { status: 403 }
+    );
+  }
+
   if (!style) {
     console.error(`[article/POST] Invalid style: ${body.style}`);
     return NextResponse.json({ error: 'Invalid style' }, { status: 400 });

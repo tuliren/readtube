@@ -9,7 +9,7 @@ import { consumeNdjsonStream } from '@/lib/reader/consumeNdjsonStream';
 import { extractArticleHeadings } from '@/lib/reader/extractArticleHeadings';
 import { buildScheduledMessage, parseScheduledResponse } from '@/lib/reader/scheduledVideoToast';
 import { useFollowBottom } from '@/lib/reader/useFollowBottom';
-import { isProduction } from '@/lib/vercelEnv';
+import { isDevelopment } from '@/lib/vercelEnv';
 
 import ArticleMarkdown from './ArticleMarkdown';
 import ExportMarkdownButtons from './ExportMarkdownButtons';
@@ -454,7 +454,7 @@ export default function ArticleReader({
   // different output every time, not a user-facing affordance. Gated
   // on non-prod AND non-public so it never renders on app.readtube
   // deploys or public-share pages.
-  const showRegenerate = !isProduction() && !publicMode;
+  const showRegenerate = isDevelopment() && !publicMode;
 
   const trimmedContent = content.trim();
   const hasExportableContent = trimmedContent.length > 0;

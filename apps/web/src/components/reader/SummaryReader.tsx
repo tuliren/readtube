@@ -8,7 +8,7 @@ import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { consumeNdjsonStream } from '@/lib/reader/consumeNdjsonStream';
 import { buildScheduledMessage, parseScheduledResponse } from '@/lib/reader/scheduledVideoToast';
 import { useFollowBottom } from '@/lib/reader/useFollowBottom';
-import { isProduction } from '@/lib/vercelEnv';
+import { isDevelopment } from '@/lib/vercelEnv';
 
 import ArticleMarkdown from './ArticleMarkdown';
 import ExportMarkdownButtons from './ExportMarkdownButtons';
@@ -592,7 +592,7 @@ export default function SummaryReader({
   // Regenerate is a dev-only escape hatch — costs tokens, can produce
   // worse output than a cached run, and shouldn't be exposed to end
   // users in production.
-  const showRegenerate = !isProduction() && !publicMode;
+  const showRegenerate = isDevelopment() && !publicMode;
 
   // summary.short / summary.full are already frontmatter-stripped —
   // GET parses on receipt, POST streams clean structured-output
