@@ -2,6 +2,7 @@
 
 import { RefreshCw } from 'lucide-react';
 
+import { iconActionClassName } from '@/components/iconActionStyles';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 import { useRefreshSource } from './useRefreshSource';
@@ -26,7 +27,7 @@ export default function RefreshPlaylistButton({
               disabled={refreshing || !allowed}
               aria-label="Refresh playlist"
               aria-busy={refreshing}
-              className="inline-flex shrink-0 items-center rounded-md px-2 py-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50 disabled:hover:bg-transparent"
+              className={iconActionClassName}
             >
               <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
             </button>

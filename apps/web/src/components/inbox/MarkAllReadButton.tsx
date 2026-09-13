@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { useSWRConfig } from 'swr';
 
+import { iconActionClassName } from '@/components/iconActionStyles';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -80,7 +81,7 @@ export default function MarkAllReadButton({
                 type="button"
                 onClick={() => setOpen(true)}
                 disabled={disabled || marking}
-                className="inline-flex shrink-0 items-center rounded-md px-2 py-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50 disabled:hover:bg-transparent"
+                className={iconActionClassName}
                 aria-label="Mark all as read"
               >
                 <CheckCheck className="h-4 w-4" />

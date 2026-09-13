@@ -3,6 +3,8 @@
 import { Check, Copy, ExternalLink } from 'lucide-react';
 import { useState } from 'react';
 
+import { iconActionClassName } from '@/components/iconActionStyles';
+
 interface Props {
   url: string;
   label?: string;
@@ -33,21 +35,17 @@ export default function ExternalLinkActions({ url, label }: Props) {
         target="_blank"
         rel="noopener noreferrer"
         title={label ?? 'Open on YouTube'}
-        className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+        className={iconActionClassName}
       >
-        <ExternalLink className="h-3.5 w-3.5" />
+        <ExternalLink className="h-4 w-4" />
       </a>
       <button
         type="button"
         onClick={handleCopy}
         title={copied ? 'Copied!' : 'Copy URL'}
-        className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+        className={iconActionClassName}
       >
-        {copied ? (
-          <Check className="h-3.5 w-3.5 text-green-500" />
-        ) : (
-          <Copy className="h-3.5 w-3.5" />
-        )}
+        {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
       </button>
     </span>
   );
