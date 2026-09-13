@@ -91,7 +91,6 @@ export default function DraggableChannelLink({
               scope={{ channelId: channel.id }}
               unreadCount={channel.unreadCount}
             />
-            <DropdownMenuSeparator />
             {/*
               "Move to folder" is a nested submenu so the top level stays
               tidy as more per-channel actions land (rename, mute,
