@@ -1,8 +1,19 @@
 'use client';
 
 import { useDraggable } from '@dnd-kit/core';
-import { Check, CircleDashed, FolderIcon, FolderInput, MoreHorizontal, Trash2 } from 'lucide-react';
+import {
+  Check,
+  CheckCheck,
+  CircleDashed,
+  FolderIcon,
+  FolderInput,
+  MoreHorizontal,
+  Trash2,
+} from 'lucide-react';
 import Link from 'next/link';
+import { useState } from 'react';
+import { toast } from 'sonner';
+import { useSWRConfig } from 'swr';
 
 import {
   DropdownMenu,
@@ -32,7 +43,7 @@ interface Props {
 /**
  * One channel row in the sidebar. The row is draggable (to move the
  * channel into a folder) AND has a per-row ⋯ actions dropdown (Move to…
- * for now, more actions will land as features ship).
+ * and Mark all as read).
  *
  * setNodeRef + listeners go on the Link only (not the wrapping li), so
  * the ⋯ menu button is a sibling outside the draggable zone — clicking
@@ -50,6 +61,35 @@ export default function DraggableChannelLink({
   onMoveTo,
   onRemove,
 }: Props) {
+  const { mutate } = useSWRConfig();
+  const [marking, setMarking] = useState(false);
+
+  async function handleMarkAllRead() {
+    if (marking) {
+      return;
+    }
+    setMarking(true);
+    try {
+      const res = await fetch('/api/videos/mark-all-read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channelId: channel.id }),
+      });
+      if (!res.ok) {
+        throw new Error('Failed to mark channel as read');
+      }
+      await mutate(
+        (key) =>
+          typeof key === 'string' &&
+          (key === '/api/channels' || key === '/api/playlists' || key.startsWith('/api/videos'))
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to mark channel as read');
+    } finally {
+      setMarking(false);
+    }
+  }
+
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: channel.id,
   });
@@ -86,6 +126,14 @@ export default function DraggableChannelLink({
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem
+              disabled={marking || channel.unreadCount === 0}
+              onSelect={() => void handleMarkAllRead()}
+            >
+              <CheckCheck className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
+              {marking ? 'Marking…' : 'Mark all as read'}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             {/*
               "Move to folder" is a nested submenu so the top level stays
               tidy as more per-channel actions land (rename, mute,
