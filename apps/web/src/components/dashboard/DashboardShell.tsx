@@ -420,6 +420,7 @@ function MobileTopBar({
         </div>
       )}
       <div className="ml-auto flex shrink-0 items-center gap-1">
+        <div id="mobile-page-read-action" className="flex items-center" />
         {showMarkAll && (
           <button
             type="button"

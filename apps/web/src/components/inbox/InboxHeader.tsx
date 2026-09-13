@@ -198,6 +198,7 @@ export default function InboxHeader({
               </Tooltip>
             </TooltipProvider>
           )}
+          <MarkPageReadButton videos={videos} />
           {unreadCount > 0 && (
             <button
               onClick={handleMarkAllRead}
@@ -219,10 +220,7 @@ export default function InboxHeader({
           reachable while the user is reading rows. Library views
           render pagination but hide the search box. */}
       <div className="flex items-center justify-between gap-2 px-4 py-2 sidebar:pt-0">
-        <div className="flex items-center gap-1">
-          <Pagination total={totalVideos} />
-          <MarkPageReadButton videos={videos} />
-        </div>
+        <Pagination total={totalVideos} />
         {!hideSearch && <SearchInput />}
       </div>
     </div>

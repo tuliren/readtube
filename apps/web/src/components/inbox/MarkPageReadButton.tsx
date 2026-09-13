@@ -1,14 +1,25 @@
 'use client';
 
 import { StickyNoteCheck } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import type { VideoData } from '@/lib/types';
 
+import { useSidebar } from './SidebarContext';
 import { useTriage } from './useTriage';
 
 export default function MarkPageReadButton({ videos }: { videos: VideoData[] }) {
   const { bulk } = useTriage();
+  const { isMobile } = useSidebar();
+  const [mobileTarget, setMobileTarget] = useState<HTMLElement | null>(null);
+
+  // The mobile action row belongs to the dashboard shell, while the current
+  // page's videos belong to this header. A portal keeps the action beside
+  // Mark all as read without copying page data into the shell's state.
+  useEffect(() => {
+    setMobileTarget(isMobile ? document.getElementById('mobile-page-read-action') : null);
+  }, [isMobile]);
   const [marking, setMarking] = useState(false);
   const unreadIds = videos.filter((video) => video.readAt == null).map((video) => video.id);
 
@@ -26,7 +37,7 @@ export default function MarkPageReadButton({ videos }: { videos: VideoData[] }) 
     }
   }
 
-  return (
+  const button = (
     <button
       type="button"
       onClick={handleMarkPageRead}
@@ -41,4 +52,9 @@ export default function MarkPageReadButton({ videos }: { videos: VideoData[] }) 
       </span>
     </button>
   );
+
+  if (isMobile) {
+    return mobileTarget != null ? createPortal(button, mobileTarget) : null;
+  }
+  return button;
 }
