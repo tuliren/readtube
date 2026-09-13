@@ -114,16 +114,15 @@ export default function FolderGroup({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <MarkAllReadMenuItem scope={{ folderId: folder.id }} unreadCount={unread} />
-            <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={onAddChannel}>
               <Plus className="mr-2 h-4 w-4" />
               Add channel
             </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={onRename}>
               <Pencil className="mr-2 h-4 w-4" />
               Rename folder
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={onDelete} className="text-red-600">
               <Trash2 className="mr-2 h-4 w-4" />
               Delete folder
