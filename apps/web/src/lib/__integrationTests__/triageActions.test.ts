@@ -347,6 +347,34 @@ describe('applyBulk', () => {
     expect(count).toBe(1);
   });
 
+  it('mark_read leaves off-page videos unread and preserves the subscription watermark', async () => {
+    const { channelId, videoId } = await seedUserVideo({
+      userSourceId: 'page-reader',
+      channelSourceId: 'page-channel',
+      videoSourceId: 'page-video',
+    });
+    await global.testPrisma.video.create({
+      data: {
+        channel_id: channelId,
+        source_id: 'off-page-video',
+        title: 'Off-page video',
+        published_at: new Date('2025-01-01'),
+      },
+    });
+
+    await applyBulk(global.testPrisma, 'page-reader', [videoId], { type: 'mark_read' });
+    await applyBulk(global.testPrisma, 'page-reader', [videoId], { type: 'mark_read' });
+
+    const rows = await global.testPrisma.userVideoConsumption.findMany({
+      where: { user_id: 'page-reader' },
+    });
+    expect(rows.map((row) => row.video_id)).toEqual([videoId]);
+    const subscription = await global.testPrisma.userSubscription.findFirstOrThrow({
+      where: { user_id: 'page-reader', channel_id: channelId },
+    });
+    expect(subscription.read_at).toBeNull();
+  });
+
   it('is a no-op for empty videoIds', async () => {
     const result = await applyBulk(global.testPrisma, 'user1', [], { type: 'star' });
     expect(result.affected).toBe(0);

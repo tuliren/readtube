@@ -9,11 +9,12 @@ import { useSWRConfig } from 'swr';
 import ExternalLinkActions from '@/components/ExternalLinkActions';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { MANUAL_REFRESH_DAYS, canManuallyRefresh } from '@/lib/channels/staleness';
-import type { VideoPlatform } from '@/lib/types';
+import type { VideoData, VideoPlatform } from '@/lib/types';
 import { buildChannelLink } from '@/lib/urls/watchUrl';
 import { isProduction } from '@/lib/vercelEnv';
 
 import ChannelAvatar from './ChannelAvatar';
+import MarkPageReadButton from './MarkPageReadButton';
 import Pagination from './Pagination';
 import SearchInput from './SearchInput';
 
@@ -39,6 +40,8 @@ interface Props {
   /** Total videos that match the current filter (across all pages).
    *  Drives the Page X of Y control on the right side of the header. */
   totalVideos: number;
+  /** The currently displayed page, including its effective read state. */
+  videos: VideoData[];
   /** Optional trailing content after the title (e.g. ExternalLinkActions). */
   trailing?: React.ReactNode;
   /** Override the body sent to POST /api/videos/mark-all-read.
@@ -60,6 +63,7 @@ export default function InboxHeader({
   channelCheckedAt,
   unreadCount,
   totalVideos,
+  videos,
   trailing,
   markAllReadBody,
   hideSearch,
@@ -215,7 +219,10 @@ export default function InboxHeader({
           reachable while the user is reading rows. Library views
           render pagination but hide the search box. */}
       <div className="flex items-center justify-between gap-2 px-4 py-2 sidebar:pt-0">
-        <Pagination total={totalVideos} />
+        <div className="flex items-center gap-1">
+          <Pagination total={totalVideos} />
+          <MarkPageReadButton videos={videos} />
+        </div>
         {!hideSearch && <SearchInput />}
       </div>
     </div>
