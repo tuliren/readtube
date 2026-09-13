@@ -196,7 +196,12 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
         {!isMobile && (
           <aside
             className="relative flex shrink-0 flex-col border-r border-border bg-sidebar"
-            style={{ width: collapsed ? 56 : width }}
+            style={{
+              width: collapsed ? 56 : width,
+              // Keep at least two thirds of the viewport for the main content.
+              // Preserve the preferred width so it returns when the window grows.
+              maxWidth: collapsed ? undefined : 'calc(100vw / 3)',
+            }}
           >
             <div className="flex h-14 shrink-0 items-center border-b border-border px-3">
               {collapsed ? (
