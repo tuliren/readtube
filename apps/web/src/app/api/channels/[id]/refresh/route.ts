@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getRun, start } from 'workflow/api';
 
 import { MANUAL_REFRESH_DAYS, canManuallyRefresh } from '@/lib/channels/staleness';
-import { isProduction } from '@/lib/vercelEnv';
+import { isDevelopment } from '@/lib/vercelEnv';
 import { refreshSingleChannelWorkflow } from '@/lib/workflows/refresh-channels';
 import {
   claimChannelRefresh,
@@ -51,10 +51,9 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     console.error(`[channels/refresh] Channel ${channelId} not subscribed by user ${userId}`);
     return NextResponse.json({ error: 'Channel not found' }, { status: 404 });
   }
-  // Cooldown only applies in production — preview + local dev should
-  // refresh on demand. The exclusive-claim check below still guards
-  // against concurrent refresh storms regardless of environment.
-  if (isProduction() && !canManuallyRefresh(sub.channel.checked_at)) {
+  // Staging and production enforce the same cooldown. Local development
+  // bypasses it, but still uses the exclusive claim below.
+  if (!isDevelopment() && !canManuallyRefresh(sub.channel.checked_at)) {
     console.error(`[channels/refresh] Channel ${channelId} refreshed too recently`);
     return NextResponse.json(
       {

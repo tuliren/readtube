@@ -7,7 +7,7 @@ import { useSWRConfig } from 'swr';
 
 import { useSidebarData } from '@/components/dashboard/SidebarDataContext';
 import { canManuallyRefresh } from '@/lib/channels/staleness';
-import { isProduction } from '@/lib/vercelEnv';
+import { isDevelopment } from '@/lib/vercelEnv';
 
 export type RefreshSource = 'channels' | 'playlists';
 
@@ -23,7 +23,7 @@ export function useRefreshSource(
       ? (playlists.find((playlist) => playlist.id === id)?.checkedAt ?? initialCheckedAt)
       : initialCheckedAt;
   const allowed =
-    !isProduction() || canManuallyRefresh(checkedAt != null ? new Date(checkedAt) : null);
+    isDevelopment() || canManuallyRefresh(checkedAt != null ? new Date(checkedAt) : null);
   const { mutate } = useSWRConfig();
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
