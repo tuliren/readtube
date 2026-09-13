@@ -26,6 +26,7 @@ import { playlistDisplayName } from '@/lib/inbox/playlistName';
 
 import DeletePlaylistDialog from './DeletePlaylistDialog';
 import NewPlaylistDialog from './NewPlaylistDialog';
+import RefreshSourceMenuItem from './RefreshSourceMenuItem';
 import RenamePlaylistDialog from './RenamePlaylistDialog';
 import { useSidebar } from './SidebarContext';
 import { SidebarBadge, SidebarRowContent, sidebarRowClass } from './SidebarRow';
@@ -220,6 +221,11 @@ function PlaylistEntry({
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">
+          <RefreshSourceMenuItem
+            source="playlists"
+            id={playlist.id}
+            checkedAt={playlist.checkedAt}
+          />
           <DropdownMenuItem onSelect={onRequestAddVideo}>
             <Plus className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
             Add video

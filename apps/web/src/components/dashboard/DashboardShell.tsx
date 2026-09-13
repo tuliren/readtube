@@ -15,6 +15,7 @@ import ChannelSection from '@/components/inbox/ChannelSection';
 import { CommandPaletteProvider } from '@/components/inbox/CommandPalette';
 import GlobalSearchButton from '@/components/inbox/GlobalSearchButton';
 import { KeyboardShortcutsProvider } from '@/components/inbox/KeyboardShortcutsProvider';
+import RefreshPlaylistButton from '@/components/inbox/RefreshPlaylistButton';
 import {
   SidebarExpandedOverride,
   SidebarProvider,
@@ -311,6 +312,10 @@ function MobileTopBar({
    *  when no channel is selected. */
   libraryTitle: string | null;
 }) {
+  const pathname = usePathname();
+  const playlistId = pathname?.startsWith('/videos/playlists/')
+    ? pathname.slice('/videos/playlists/'.length).split('/')[0]
+    : null;
   const { mutate } = useSWRConfig();
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
@@ -396,6 +401,9 @@ function MobileTopBar({
         </div>
       )}
       <div className="ml-auto flex shrink-0 items-center gap-1">
+        {playlistId != null && playlistId.length > 0 && (
+          <RefreshPlaylistButton key={playlistId} playlistId={playlistId} />
+        )}
         <div id="mobile-read-actions" className="flex items-center" />
         <ThemeSelector />
       </div>

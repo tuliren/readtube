@@ -149,14 +149,14 @@ export default function InboxHeader({
                 <TooltipTrigger asChild>
                   <span className="hidden sidebar:inline-flex">
                     <button
+                      type="button"
                       onClick={handleRefreshChannel}
                       disabled={refreshDisabled}
+                      aria-label="Refresh channel"
+                      aria-busy={refreshing}
                       className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50 disabled:hover:bg-transparent"
                     >
                       <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-                      <span className="hidden sidebar:inline">
-                        {refreshing ? 'Refreshing…' : 'Refresh'}
-                      </span>
                     </button>
                   </span>
                 </TooltipTrigger>

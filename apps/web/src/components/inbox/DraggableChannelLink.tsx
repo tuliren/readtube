@@ -20,6 +20,7 @@ import { channelHref } from '@/lib/urls/channelHref';
 
 import ChannelAvatar from './ChannelAvatar';
 import MarkAllReadMenuItem from './MarkAllReadMenuItem';
+import RefreshSourceMenuItem from './RefreshSourceMenuItem';
 import { SidebarBadge, SidebarRowContent, sidebarRowClass } from './SidebarRow';
 
 interface Props {
@@ -87,6 +88,11 @@ export default function DraggableChannelLink({
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
+            <RefreshSourceMenuItem
+              source="channels"
+              id={channel.id}
+              checkedAt={channel.checkedAt}
+            />
             <MarkAllReadMenuItem
               scope={{ channelId: channel.id }}
               unreadCount={channel.unreadCount}

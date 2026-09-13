@@ -11,6 +11,7 @@ export interface PlaylistRow {
   name: string;
   customName: string | null;
   sortOrder: number;
+  checkedAt: string | null;
   videoCount: number;
   unreadCount: number;
   thumbnailUrl: string | null;
