@@ -1,5 +1,6 @@
 import type { Prisma, PrismaClient, VideoPlatformType } from '@readtube/database';
 
+import { CONSUMPTION_WINDOW_DAYS } from '@/lib/channels/consumption';
 import {
   NEW_SUBSCRIPTION_MODE,
   type NewSubscriptionMode,
@@ -106,7 +107,8 @@ export async function countUnreadVideos(
 /**
  * The shape returned by `getSubscribedChannelsWithUnread`. One row per
  * subscription, denormalized to include channel metadata, the user's
- * watermark, and the unread count — all computed in a single SQL query.
+ * watermark, the unread count, and the consumption-window counts — all
+ * computed in a single SQL query.
  */
 export interface SubscribedChannelWithUnread {
   channel_id: string;
@@ -125,6 +127,16 @@ export interface SubscribedChannelWithUnread {
   created_at: Date;
   checked_at: Date | null;
   unread_count: number;
+  // Videos published in the trailing consumption window (see
+  // `lib/channels/consumption.ts`), floored at this subscription's
+  // own created_at.
+  consumption_total: number;
+  // Of those, the ones the user has both read and that carry a READY
+  // Summary or Article.
+  consumption_consumed: number;
+  // True when the subscription is younger than the window, so the
+  // window actually starts at the subscribe date. Copy only.
+  consumption_since_subscribed: boolean;
 }
 
 /**
@@ -134,12 +146,23 @@ export interface SubscribedChannelWithUnread {
  * both the per-subscription `read_at` watermark and individual
  * UserVideoConsumption rows.
  *
+ * The same statement also carries the consumption-window counts that back
+ * the sidebar's per-channel consumption meter (see
+ * `lib/channels/consumption.ts` for the metric's definition). They ride
+ * along in a LATERAL rather than a second round-trip because every caller
+ * of this function renders the sidebar, which needs both.
+ *
+ * `now` is injectable so tests can pin the trailing window.
+ *
  * Returns rows sorted by channel name (case-insensitive).
  */
 export async function getSubscribedChannelsWithUnread(
   prisma: PrismaClient,
-  userId: string
+  userId: string,
+  now: Date = new Date()
 ): Promise<SubscribedChannelWithUnread[]> {
+  const windowStart = new Date(now.getTime() - CONSUMPTION_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+
   // COUNT(*) returns BIGINT in Postgres, which Prisma surfaces as `bigint`.
   // We convert to `number` below — channel video counts will never overflow.
   const rows = await prisma.$queryRaw<
@@ -158,6 +181,9 @@ export async function getSubscribedChannelsWithUnread(
       created_at: Date;
       checked_at: Date | null;
       unread_count: bigint;
+      consumption_total: bigint;
+      consumption_consumed: bigint;
+      consumption_since_subscribed: boolean;
     }>
   >`
     SELECT
@@ -174,7 +200,10 @@ export async function getSubscribedChannelsWithUnread(
       c."logo_url"     AS logo_url,
       c."created_at"   AS created_at,
       c."checked_at"   AS checked_at,
-      COUNT(v."id")    AS unread_count
+      COUNT(v."id")    AS unread_count,
+      cw."total"       AS consumption_total,
+      cw."consumed"    AS consumption_consumed,
+      us."created_at" > ${windowStart} AS consumption_since_subscribed
     FROM "UserSubscription" us
     JOIN "Channel" c ON c."id" = us."channel_id"
     LEFT JOIN "Video" v ON v."channel_id" = us."channel_id"
@@ -187,10 +216,58 @@ export async function getSubscribedChannelsWithUnread(
         FROM "UserVideoConsumption" k
         WHERE k."video_id" = v."id" AND k."user_id" = us."user_id"
       )
+    -- Consumption window: videos published since the later of the
+    -- windowStart parameter and the subscribe date. The published_at
+    -- branch is spelled out separately (instead of a COALESCE on both
+    -- sides) so the planner can still use
+    -- video_index_on_channel_published_at; the COALESCE guard against
+    -- us."created_at" then trims the pre-subscription tail.
+    LEFT JOIN LATERAL (
+      SELECT
+        COUNT(*) AS total,
+        COUNT(*) FILTER (
+          WHERE (
+            EXISTS (
+              SELECT 1
+              FROM "UserVideoConsumption" ck
+              WHERE ck."video_id" = cv."id" AND ck."user_id" = us."user_id"
+            )
+            OR (
+              us."read_at" IS NOT NULL
+              AND COALESCE(cv."published_at", cv."created_at") <= us."read_at"
+            )
+          )
+          AND EXISTS (
+            SELECT 1
+            FROM "Transcript" t
+            WHERE t."video_id" = cv."id"
+              AND (
+                EXISTS (
+                  SELECT 1
+                  FROM "Summary" s
+                  WHERE s."transcript_id" = t."id" AND s."status" = 'READY'
+                )
+                OR EXISTS (
+                  SELECT 1
+                  FROM "Article" a
+                  WHERE a."transcript_id" = t."id" AND a."status" = 'READY'
+                )
+              )
+          )
+        ) AS consumed
+      FROM "Video" cv
+      WHERE cv."channel_id" = us."channel_id"
+        AND (
+          cv."published_at" >= ${windowStart}
+          OR (cv."published_at" IS NULL AND cv."created_at" >= ${windowStart})
+        )
+        AND COALESCE(cv."published_at", cv."created_at") >= us."created_at"
+    ) cw ON TRUE
     WHERE us."user_id" = ${userId}
     GROUP BY
-      us."channel_id", us."read_at", us."folder_id", us."priority", us."mute_until",
-      c."source_type", c."source_id", c."name", c."handle", c."rss_url", c."logo_url", c."created_at", c."checked_at"
+      us."channel_id", us."read_at", us."folder_id", us."priority", us."mute_until", us."created_at",
+      c."source_type", c."source_id", c."name", c."handle", c."rss_url", c."logo_url", c."created_at", c."checked_at",
+      cw."total", cw."consumed"
     ORDER BY LOWER(c."name") ASC
   `;
 
@@ -209,6 +286,9 @@ export async function getSubscribedChannelsWithUnread(
     created_at: row.created_at,
     checked_at: row.checked_at,
     unread_count: Number(row.unread_count),
+    consumption_total: Number(row.consumption_total),
+    consumption_consumed: Number(row.consumption_consumed),
+    consumption_since_subscribed: row.consumption_since_subscribed,
   }));
 }
 

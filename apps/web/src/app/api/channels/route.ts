@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { start } from 'workflow/api';
 
 import { platformLabel, trackContentAdded } from '@/lib/analytics/events';
+import { toChannelData } from '@/lib/channels/channelData';
 import { isChannelFresh } from '@/lib/channels/staleness';
 import { ensureUserExists } from '@/lib/db/user';
 import { detectChannelSource } from '@/lib/platforms';
@@ -38,23 +39,7 @@ export async function GET() {
   // counts (with watermark + consumption filter), all in one round-trip.
   const rows = await getSubscribedChannelsWithUnread(prisma, userId);
 
-  return NextResponse.json(
-    rows.map((row) => ({
-      id: row.channel_id,
-      sourceId: row.source_id,
-      platform: row.source_type,
-      name: row.name,
-      handle: row.handle,
-      rssUrl: row.rss_url,
-      logoUrl: row.logo_url ?? null,
-      createdAt: row.created_at,
-      checkedAt: row.checked_at,
-      unreadCount: row.unread_count,
-      folderId: row.folder_id,
-      priority: row.priority,
-      muteUntil: row.mute_until,
-    }))
-  );
+  return NextResponse.json(rows.map(toChannelData));
 }
 
 export async function POST(request: NextRequest) {
@@ -224,6 +209,10 @@ async function finishSubscribe(userId: string, channelId: string) {
       folderId: null,
       priority: 0,
       muteUntil: null,
+      // A brand-new subscription's consumption window starts now, so it
+      // is empty by construction. The next /api/channels revalidation
+      // fills it in as the user works through the channel.
+      consumption: { total: 0, consumed: 0, sinceSubscribed: true },
     },
     { status: 201 }
   );

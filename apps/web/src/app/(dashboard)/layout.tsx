@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { ReactNode } from 'react';
 
 import DashboardShell from '@/components/dashboard/DashboardShell';
+import { toChannelData } from '@/lib/channels/channelData';
 import { ensureUserExists } from '@/lib/db/user';
 import { getSubscribedChannelsWithUnread } from '@/lib/subscriptions';
 import type { ChannelData, FolderData } from '@/lib/types';
@@ -36,21 +37,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
       select: { id: true, name: true, sort_order: true },
     }),
   ]);
-  const channels: ChannelData[] = subscriptionRows.map((row) => ({
-    id: row.channel_id,
-    sourceId: row.source_id,
-    platform: row.source_type,
-    name: row.name,
-    handle: row.handle,
-    rssUrl: row.rss_url,
-    logoUrl: row.logo_url ?? null,
-    createdAt: row.created_at.toISOString(),
-    checkedAt: row.checked_at != null ? row.checked_at.toISOString() : null,
-    unreadCount: row.unread_count,
-    folderId: row.folder_id,
-    priority: row.priority,
-    muteUntil: row.mute_until != null ? row.mute_until.toISOString() : null,
-  }));
+  const channels: ChannelData[] = subscriptionRows.map(toChannelData);
   const folders: FolderData[] = folderRows.map((row) => ({
     id: row.id,
     name: row.name,
