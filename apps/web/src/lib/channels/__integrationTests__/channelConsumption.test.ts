@@ -40,13 +40,15 @@ async function setupSubscription(opts: {
  * Create one video and, optionally, the read state + generated artifact
  * that together make it count as consumed.
  */
+type Artifact = 'summary' | 'article' | 'generating-summary';
+
 async function addVideo(opts: {
   channelId: string;
   sourceId: string;
   publishedDaysAgo: number | null;
   createdDaysAgo?: number;
   read?: boolean;
-  artifact?: 'summary' | 'article' | 'generating-summary' | null;
+  artifact?: Artifact | null;
 }) {
   const video = await global.testPrisma.video.create({
     data: {
@@ -65,36 +67,38 @@ async function addVideo(opts: {
   }
 
   if (opts.artifact != null) {
-    const transcript = await global.testPrisma.transcript.create({
-      data: { video_id: video.id, text: 'transcript text', fetched_at: NOW },
-    });
-    if (opts.artifact === 'article') {
-      await global.testPrisma.article.create({
-        data: {
-          transcript_id: transcript.id,
-          style: ArticleStyle.NARRATIVE,
-          prompt_version: 'v1',
-          model: 'test-model',
-          content: 'article body',
-        },
-      });
-    } else {
-      await global.testPrisma.summary.create({
-        data: {
-          transcript_id: transcript.id,
-          prompt_version: 'v1',
-          model: 'test-model',
-          short: 'summary body',
-          status:
-            opts.artifact === 'generating-summary'
-              ? GenerationStatus.GENERATING
-              : GenerationStatus.READY,
-        },
-      });
-    }
+    await addArtifact(video.id, opts.artifact);
   }
 
   return video.id;
+}
+
+/** Generate content for an existing video, as a later user action would. */
+async function addArtifact(videoId: string, kind: Artifact) {
+  const transcript = await global.testPrisma.transcript.create({
+    data: { video_id: videoId, text: 'transcript text', fetched_at: NOW },
+  });
+  if (kind === 'article') {
+    await global.testPrisma.article.create({
+      data: {
+        transcript_id: transcript.id,
+        style: ArticleStyle.NARRATIVE,
+        prompt_version: 'v1',
+        model: 'test-model',
+        content: 'article body',
+      },
+    });
+    return;
+  }
+  await global.testPrisma.summary.create({
+    data: {
+      transcript_id: transcript.id,
+      prompt_version: 'v1',
+      model: 'test-model',
+      short: 'summary body',
+      status: kind === 'generating-summary' ? GenerationStatus.GENERATING : GenerationStatus.READY,
+    },
+  });
 }
 
 async function consumptionFor(channelId: string) {
@@ -339,5 +343,68 @@ describe('consumption window bounds', () => {
     expect(light?.consumption_consumed).toBe(0);
     expect(light?.consumption_total).toBe(3);
     expect(light?.unread_count).toBe(3);
+  });
+});
+
+describe('read first, generate later', () => {
+  // The metric is evaluated over current rows rather than accumulated
+  // from events, so the order of the two halves never matters. A video
+  // marked read to skip it, and only later given a summary the user
+  // actually reads, flips to consumed on the next sidebar load. The
+  // read state persists across the generation either way: the
+  // consumption upsert is a no-op on re-open, and a watermark only
+  // moves forward.
+  it.each([
+    ['an explicit mark-as-read', false],
+    ['a bulk mark-as-read watermark', true],
+  ])('counts a video read via %s and generated afterwards', async (_label, viaWatermark) => {
+    const channelId = await setupSubscription({
+      channelSourceId: `ch_late_${viaWatermark}`,
+      subscribedDaysAgo: 365,
+      readAt: viaWatermark ? daysAgo(1) : null,
+    });
+    const videoId = await addVideo({
+      channelId,
+      sourceId: `v_late_${viaWatermark}`,
+      publishedDaysAgo: 5,
+      read: !viaWatermark,
+      artifact: null,
+    });
+
+    // Skipped: read, but nothing generated.
+    expect(await consumptionFor(channelId)).toEqual({
+      total: 1,
+      consumed: 0,
+      sinceSubscribed: false,
+    });
+
+    // The user changes their mind and generates content for it.
+    await addArtifact(videoId, 'summary');
+
+    expect(await consumptionFor(channelId)).toEqual({
+      total: 1,
+      consumed: 1,
+      sinceSubscribed: false,
+    });
+  });
+
+  it('leaves an unread video unconsumed when content is generated for it', async () => {
+    const channelId = await setupSubscription({
+      channelSourceId: 'ch_generated_unread',
+      subscribedDaysAgo: 365,
+    });
+    const videoId = await addVideo({
+      channelId,
+      sourceId: 'v_generated_unread',
+      publishedDaysAgo: 5,
+    });
+
+    await addArtifact(videoId, 'summary');
+
+    expect(await consumptionFor(channelId)).toEqual({
+      total: 1,
+      consumed: 0,
+      sinceSubscribed: false,
+    });
   });
 });
