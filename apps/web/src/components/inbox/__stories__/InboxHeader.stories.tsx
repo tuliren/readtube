@@ -22,7 +22,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Channel and playlist headers use the real shared toolbar. Storybook uses the staging environment so recent refreshes enforce the cooldown. Hover or focus the unread badge and disabled refresh control to inspect their tooltips.',
+          'Channel and playlist headers use the real shared toolbar. Storybook uses the staging environment so recent refreshes enforce the cooldown. Hover or focus the unread badge, the consumption ring, and the disabled refresh control to inspect their tooltips.',
       },
     },
   },
@@ -35,6 +35,7 @@ const meta = {
     channelName: 'Example channel',
     channelLogoUrl: null,
     channelCheckedAt: null,
+    consumption: { total: 20, consumed: 15 },
     unreadCount: 12,
     totalVideos: 72,
     videos: [unreadVideo],
@@ -68,6 +69,18 @@ export const ChannelCooldown: Story = {
   },
 };
 
+export const ChannelUnrated: Story = {
+  args: { consumption: { total: 1, consumed: 0 } },
+  play: async ({ canvasElement }) => {
+    const label = 'Not rated yet: this channel has only 1 video, and it takes 3 to rate one';
+    const ring = within(canvasElement).getByLabelText(label);
+    await expect(ring).toBeVisible();
+    await userEvent.hover(ring);
+    await expect(await within(document.body).findByRole('tooltip')).toHaveTextContent(label);
+    await userEvent.unhover(ring);
+  },
+};
+
 export const AllRead: Story = {
   args: { unreadCount: 0, videos: [{ ...unreadVideo, readAt: '2026-01-01T00:00:00Z' }] },
   play: async ({ canvasElement }) => {
@@ -91,6 +104,7 @@ export const Playlist: Story = {
     channelSourceId: null,
     channelPlatform: null,
     channelName: 'Example playlist',
+    consumption: null,
     unreadCount: 1,
     hideSearch: true,
     markAllReadBody: { playlistId: 'example-playlist' },

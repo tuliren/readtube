@@ -209,10 +209,12 @@ async function finishSubscribe(userId: string, channelId: string) {
       folderId: null,
       priority: 0,
       muteUntil: null,
-      // A brand-new subscription's consumption window starts now, so it
-      // is empty by construction. The next /api/channels revalidation
-      // fills it in as the user works through the channel.
-      consumption: { total: 0, consumed: 0, sinceSubscribed: true },
+      // Provisional: computing the real counts here would mean another
+      // pass over the channel's videos on a path that has no need for
+      // them. The caller's mutate() revalidates /api/channels right
+      // after, which replaces this with the real sample, and a
+      // just-subscribed channel has nothing consumed either way.
+      consumption: { total: 0, consumed: 0 },
     },
     { status: 201 }
   );

@@ -9,12 +9,14 @@ import { useSWRConfig } from 'swr';
 import ExternalLinkActions from '@/components/ExternalLinkActions';
 import { iconActionClassName } from '@/components/iconActionStyles';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import type { ChannelConsumption } from '@/lib/channels/consumption';
 import { MANUAL_REFRESH_DAYS, canManuallyRefresh } from '@/lib/channels/staleness';
 import type { VideoData, VideoPlatform } from '@/lib/types';
 import { buildChannelLink } from '@/lib/urls/watchUrl';
 import { isDevelopment } from '@/lib/vercelEnv';
 
 import ChannelAvatar from './ChannelAvatar';
+import ConsumptionMeter from './ConsumptionMeter';
 import HeaderReadActions from './HeaderReadActions';
 import Pagination from './Pagination';
 import SearchInput from './SearchInput';
@@ -37,6 +39,10 @@ export interface InboxHeaderProps {
    *  for shadow channels that have never been refreshed. Ignored
    *  when channelId is null. */
   channelCheckedAt: string | null;
+  /** Consumption counts for the active channel, rendered as the ring
+   *  between the title and the unread badge. Null for the aggregate
+   *  and library views, which have no single channel to rate. */
+  consumption: ChannelConsumption | null;
   unreadCount: number;
   /** Total videos that match the current filter (across all pages).
    *  Drives the Page X of Y control on the right side of the header. */
@@ -62,6 +68,7 @@ export default function InboxHeader({
   channelName,
   channelLogoUrl,
   channelCheckedAt,
+  consumption,
   unreadCount,
   totalVideos,
   videos,
@@ -126,6 +133,7 @@ export default function InboxHeader({
           <h1 className="hidden min-w-0 truncate text-sm font-semibold text-foreground sidebar:block">
             {channelName}
           </h1>
+          {consumption != null && <ConsumptionMeter consumption={consumption} />}
           <TooltipProvider delayDuration={200}>
             <Tooltip>
               <TooltipTrigger asChild>

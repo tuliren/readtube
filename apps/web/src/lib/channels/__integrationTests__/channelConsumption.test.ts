@@ -1,14 +1,14 @@
 import { ArticleStyle, GenerationStatus } from '@readtube/database';
 import '@tests/integration-tests';
 
-import { CONSUMPTION_WINDOW_DAYS } from '@/lib/channels/consumption';
+import { CONSUMPTION_RECENT_VIDEO_COUNT } from '@/lib/channels/consumption';
 import { getSubscribedChannelsWithUnread } from '@/lib/subscriptions';
 
 const USER_ID = 'u_consumption';
 const NOW = new Date('2026-06-15T12:00:00Z');
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** `days` days before the pinned NOW. */
+/** `days` days before a pinned reference point, so ordering is deterministic. */
 function daysAgo(days: number): Date {
   return new Date(NOW.getTime() - days * DAY_MS);
 }
@@ -36,12 +36,12 @@ async function setupSubscription(opts: {
   return channel.id;
 }
 
+type Artifact = 'summary' | 'article' | 'generating-summary';
+
 /**
  * Create one video and, optionally, the read state + generated artifact
  * that together make it count as consumed.
  */
-type Artifact = 'summary' | 'article' | 'generating-summary';
-
 async function addVideo(opts: {
   channelId: string;
   sourceId: string;
@@ -102,16 +102,12 @@ async function addArtifact(videoId: string, kind: Artifact) {
 }
 
 async function consumptionFor(channelId: string) {
-  const rows = await getSubscribedChannelsWithUnread(global.testPrisma, USER_ID, NOW);
+  const rows = await getSubscribedChannelsWithUnread(global.testPrisma, USER_ID);
   const row = rows.find((r) => r.channel_id === channelId);
   if (row == null) {
     throw new Error(`No row for channel ${channelId}`);
   }
-  return {
-    total: row.consumption_total,
-    consumed: row.consumption_consumed,
-    sinceSubscribed: row.consumption_since_subscribed,
-  };
+  return { total: row.consumption_total, consumed: row.consumption_consumed };
 }
 
 beforeEach(async () => {
@@ -161,11 +157,7 @@ describe('consumption counts', () => {
       artifact: null,
     });
 
-    expect(await consumptionFor(channelId)).toEqual({
-      total: 4,
-      consumed: 1,
-      sinceSubscribed: false,
-    });
+    expect(await consumptionFor(channelId)).toEqual({ total: 4, consumed: 1 });
   });
 
   it.each([
@@ -185,11 +177,7 @@ describe('consumption counts', () => {
       artifact,
     });
 
-    expect(await consumptionFor(channelId)).toEqual({
-      total: 1,
-      consumed: expected,
-      sinceSubscribed: false,
-    });
+    expect(await consumptionFor(channelId)).toEqual({ total: 1, consumed: expected });
   });
 
   it('treats a watermark-covered video as read even without a consumption row', async () => {
@@ -211,106 +199,16 @@ describe('consumption counts', () => {
       artifact: 'summary',
     });
 
-    expect(await consumptionFor(channelId)).toEqual({
-      total: 2,
-      consumed: 1,
-      sinceSubscribed: false,
-    });
+    expect(await consumptionFor(channelId)).toEqual({ total: 2, consumed: 1 });
   });
 
-  it('falls back to created_at for videos with no published_at', async () => {
-    const channelId = await setupSubscription({
-      channelSourceId: 'ch_null_date',
-      subscribedDaysAgo: 365,
-    });
-    await addVideo({
-      channelId,
-      sourceId: 'v_null_in_window',
-      publishedDaysAgo: null,
-      createdDaysAgo: 10,
-      read: true,
-      artifact: 'summary',
-    });
-    await addVideo({
-      channelId,
-      sourceId: 'v_null_out_of_window',
-      publishedDaysAgo: null,
-      createdDaysAgo: CONSUMPTION_WINDOW_DAYS + 10,
-      read: true,
-      artifact: 'summary',
-    });
-
-    expect(await consumptionFor(channelId)).toEqual({
-      total: 1,
-      consumed: 1,
-      sinceSubscribed: false,
-    });
-  });
-});
-
-describe('consumption window bounds', () => {
-  it('ignores videos published before the trailing window', async () => {
-    const channelId = await setupSubscription({
-      channelSourceId: 'ch_window',
-      subscribedDaysAgo: 365,
-    });
-    await addVideo({ channelId, sourceId: 'v_inside', publishedDaysAgo: 1 });
-    await addVideo({
-      channelId,
-      sourceId: 'v_edge',
-      publishedDaysAgo: CONSUMPTION_WINDOW_DAYS - 1,
-    });
-    await addVideo({
-      channelId,
-      sourceId: 'v_outside',
-      publishedDaysAgo: CONSUMPTION_WINDOW_DAYS + 1,
-    });
-
-    expect(await consumptionFor(channelId)).toEqual({
-      total: 2,
-      consumed: 0,
-      sinceSubscribed: false,
-    });
-  });
-
-  it('floors the window at the subscribe date and flags it in the payload', async () => {
-    const channelId = await setupSubscription({
-      channelSourceId: 'ch_young',
-      subscribedDaysAgo: 10,
-    });
-    await addVideo({
-      channelId,
-      sourceId: 'v_after_subscribe',
-      publishedDaysAgo: 5,
-      read: true,
-      artifact: 'summary',
-    });
-    await addVideo({
-      channelId,
-      sourceId: 'v_before_subscribe',
-      publishedDaysAgo: 30,
-      read: true,
-      artifact: 'summary',
-    });
-
-    expect(await consumptionFor(channelId)).toEqual({
-      total: 1,
-      consumed: 1,
-      sinceSubscribed: true,
-    });
-  });
-
-  it('reports an empty window for a channel with no videos', async () => {
+  it('reports an empty sample for a channel with no videos', async () => {
     const channelId = await setupSubscription({
       channelSourceId: 'ch_empty',
       subscribedDaysAgo: 200,
     });
 
-    expect(await consumptionFor(channelId)).toEqual({
-      total: 0,
-      consumed: 0,
-      sinceSubscribed: false,
-    });
+    expect(await consumptionFor(channelId)).toEqual({ total: 0, consumed: 0 });
   });
 
   it('scopes counts per channel and leaves the unread count untouched', async () => {
@@ -333,7 +231,7 @@ describe('consumption window bounds', () => {
       await addVideo({ channelId: lightId, sourceId: `v_light_${i}`, publishedDaysAgo: i + 1 });
     }
 
-    const rows = await getSubscribedChannelsWithUnread(global.testPrisma, USER_ID, NOW);
+    const rows = await getSubscribedChannelsWithUnread(global.testPrisma, USER_ID);
     const heavy = rows.find((r) => r.channel_id === heavyId);
     const light = rows.find((r) => r.channel_id === lightId);
 
@@ -343,6 +241,105 @@ describe('consumption window bounds', () => {
     expect(light?.consumption_consumed).toBe(0);
     expect(light?.consumption_total).toBe(3);
     expect(light?.unread_count).toBe(3);
+  });
+});
+
+describe('the most-recent-videos sample', () => {
+  it('caps the sample at the configured video count', async () => {
+    const channelId = await setupSubscription({
+      channelSourceId: 'ch_cap',
+      subscribedDaysAgo: 3650,
+    });
+    // Every video consumed, but five more than the sample holds. The
+    // oldest five fall out, so the counts cap rather than growing.
+    for (let i = 0; i < CONSUMPTION_RECENT_VIDEO_COUNT + 5; i++) {
+      await addVideo({
+        channelId,
+        sourceId: `v_cap_${i}`,
+        publishedDaysAgo: i + 1,
+        read: true,
+        artifact: 'summary',
+      });
+    }
+
+    expect(await consumptionFor(channelId)).toEqual({
+      total: CONSUMPTION_RECENT_VIDEO_COUNT,
+      consumed: CONSUMPTION_RECENT_VIDEO_COUNT,
+    });
+  });
+
+  it('keeps the newest videos and drops the oldest ones', async () => {
+    const channelId = await setupSubscription({
+      channelSourceId: 'ch_order',
+      subscribedDaysAgo: 3650,
+    });
+    // Newest CONSUMPTION_RECENT_VIDEO_COUNT videos are untouched; every
+    // video older than the sample is consumed. If the sample took the
+    // wrong end, consumed would be the whole sample instead of zero.
+    for (let i = 0; i < CONSUMPTION_RECENT_VIDEO_COUNT; i++) {
+      await addVideo({ channelId, sourceId: `v_new_${i}`, publishedDaysAgo: i + 1 });
+    }
+    for (let i = 0; i < 5; i++) {
+      await addVideo({
+        channelId,
+        sourceId: `v_old_${i}`,
+        publishedDaysAgo: CONSUMPTION_RECENT_VIDEO_COUNT + i + 1,
+        read: true,
+        artifact: 'summary',
+      });
+    }
+
+    expect(await consumptionFor(channelId)).toEqual({
+      total: CONSUMPTION_RECENT_VIDEO_COUNT,
+      consumed: 0,
+    });
+  });
+
+  it('counts videos published long before the user subscribed', async () => {
+    // The whole point of sampling by video count rather than by
+    // calendar window: a channel that stopped publishing years ago,
+    // whose back catalogue the user worked through, still rates.
+    const channelId = await setupSubscription({
+      channelSourceId: 'ch_dormant',
+      subscribedDaysAgo: 30,
+    });
+    for (let i = 0; i < 5; i++) {
+      await addVideo({
+        channelId,
+        sourceId: `v_dormant_${i}`,
+        publishedDaysAgo: 900 + i,
+        read: true,
+        artifact: 'summary',
+      });
+    }
+
+    expect(await consumptionFor(channelId)).toEqual({ total: 5, consumed: 5 });
+  });
+
+  it('orders by created_at for videos with no published_at', async () => {
+    const channelId = await setupSubscription({
+      channelSourceId: 'ch_null_date',
+      subscribedDaysAgo: 3650,
+    });
+    // One null-date video that is recent by created_at, and enough
+    // dated videos to fill the sample without it. It should still make
+    // the cut, pushing out the oldest dated video.
+    await addVideo({
+      channelId,
+      sourceId: 'v_null_recent',
+      publishedDaysAgo: null,
+      createdDaysAgo: 1,
+      read: true,
+      artifact: 'summary',
+    });
+    for (let i = 0; i < CONSUMPTION_RECENT_VIDEO_COUNT; i++) {
+      await addVideo({ channelId, sourceId: `v_dated_${i}`, publishedDaysAgo: i + 2 });
+    }
+
+    expect(await consumptionFor(channelId)).toEqual({
+      total: CONSUMPTION_RECENT_VIDEO_COUNT,
+      consumed: 1,
+    });
   });
 });
 
@@ -372,20 +369,12 @@ describe('read first, generate later', () => {
     });
 
     // Skipped: read, but nothing generated.
-    expect(await consumptionFor(channelId)).toEqual({
-      total: 1,
-      consumed: 0,
-      sinceSubscribed: false,
-    });
+    expect(await consumptionFor(channelId)).toEqual({ total: 1, consumed: 0 });
 
     // The user changes their mind and generates content for it.
     await addArtifact(videoId, 'summary');
 
-    expect(await consumptionFor(channelId)).toEqual({
-      total: 1,
-      consumed: 1,
-      sinceSubscribed: false,
-    });
+    expect(await consumptionFor(channelId)).toEqual({ total: 1, consumed: 1 });
   });
 
   it('leaves an unread video unconsumed when content is generated for it', async () => {
@@ -401,10 +390,6 @@ describe('read first, generate later', () => {
 
     await addArtifact(videoId, 'summary');
 
-    expect(await consumptionFor(channelId)).toEqual({
-      total: 1,
-      consumed: 0,
-      sinceSubscribed: false,
-    });
+    expect(await consumptionFor(channelId)).toEqual({ total: 1, consumed: 0 });
   });
 });

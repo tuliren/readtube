@@ -1,6 +1,6 @@
 import type { Prisma, PrismaClient, VideoPlatformType } from '@readtube/database';
 
-import { CONSUMPTION_WINDOW_DAYS } from '@/lib/channels/consumption';
+import { CONSUMPTION_RECENT_VIDEO_COUNT } from '@/lib/channels/consumption';
 import {
   NEW_SUBSCRIPTION_MODE,
   type NewSubscriptionMode,
@@ -127,16 +127,13 @@ export interface SubscribedChannelWithUnread {
   created_at: Date;
   checked_at: Date | null;
   unread_count: number;
-  // Videos published in the trailing consumption window (see
-  // `lib/channels/consumption.ts`), floored at this subscription's
-  // own created_at.
+  // How many videos the consumption rate is computed over: the
+  // channel's video count, capped at CONSUMPTION_RECENT_VIDEO_COUNT
+  // (see `lib/channels/consumption.ts`).
   consumption_total: number;
   // Of those, the ones the user has both read and that carry a READY
   // Summary or Article.
   consumption_consumed: number;
-  // True when the subscription is younger than the window, so the
-  // window actually starts at the subscribe date. Copy only.
-  consumption_since_subscribed: boolean;
 }
 
 /**
@@ -146,23 +143,18 @@ export interface SubscribedChannelWithUnread {
  * both the per-subscription `read_at` watermark and individual
  * UserVideoConsumption rows.
  *
- * The same statement also carries the consumption-window counts that back
- * the sidebar's per-channel consumption meter (see
+ * The same statement also carries the consumption counts that back the
+ * sidebar's per-channel consumption ring (see
  * `lib/channels/consumption.ts` for the metric's definition). They ride
  * along in a LATERAL rather than a second round-trip because every caller
  * of this function renders the sidebar, which needs both.
- *
- * `now` is injectable so tests can pin the trailing window.
  *
  * Returns rows sorted by channel name (case-insensitive).
  */
 export async function getSubscribedChannelsWithUnread(
   prisma: PrismaClient,
-  userId: string,
-  now: Date = new Date()
+  userId: string
 ): Promise<SubscribedChannelWithUnread[]> {
-  const windowStart = new Date(now.getTime() - CONSUMPTION_WINDOW_DAYS * 24 * 60 * 60 * 1000);
-
   // COUNT(*) returns BIGINT in Postgres, which Prisma surfaces as `bigint`.
   // We convert to `number` below — channel video counts will never overflow.
   const rows = await prisma.$queryRaw<
@@ -183,7 +175,6 @@ export async function getSubscribedChannelsWithUnread(
       unread_count: bigint;
       consumption_total: bigint;
       consumption_consumed: bigint;
-      consumption_since_subscribed: boolean;
     }>
   >`
     SELECT
@@ -202,8 +193,7 @@ export async function getSubscribedChannelsWithUnread(
       c."checked_at"   AS checked_at,
       COUNT(v."id")    AS unread_count,
       cw."total"       AS consumption_total,
-      cw."consumed"    AS consumption_consumed,
-      us."created_at" > ${windowStart} AS consumption_since_subscribed
+      cw."consumed"    AS consumption_consumed
     FROM "UserSubscription" us
     JOIN "Channel" c ON c."id" = us."channel_id"
     LEFT JOIN "Video" v ON v."channel_id" = us."channel_id"
@@ -216,12 +206,11 @@ export async function getSubscribedChannelsWithUnread(
         FROM "UserVideoConsumption" k
         WHERE k."video_id" = v."id" AND k."user_id" = us."user_id"
       )
-    -- Consumption window: videos published since the later of the
-    -- windowStart parameter and the subscribe date. The published_at
-    -- branch is spelled out separately (instead of a COALESCE on both
-    -- sides) so the planner can still use
-    -- video_index_on_channel_published_at; the COALESCE guard against
-    -- us."created_at" then trims the pre-subscription tail.
+    -- Consumption sample: the channel's N most recent videos, by
+    -- effective publish date. Counting videos rather than days is what
+    -- keeps a slow channel ratable — a calendar window reports "no
+    -- data" for anything that hasn't posted lately, even when the user
+    -- worked through its whole back catalogue.
     LEFT JOIN LATERAL (
       SELECT
         COUNT(*) AS total,
@@ -255,17 +244,17 @@ export async function getSubscribedChannelsWithUnread(
               )
           )
         ) AS consumed
-      FROM "Video" cv
-      WHERE cv."channel_id" = us."channel_id"
-        AND (
-          cv."published_at" >= ${windowStart}
-          OR (cv."published_at" IS NULL AND cv."created_at" >= ${windowStart})
-        )
-        AND COALESCE(cv."published_at", cv."created_at") >= us."created_at"
+      FROM (
+        SELECT v2."id", v2."published_at", v2."created_at"
+        FROM "Video" v2
+        WHERE v2."channel_id" = us."channel_id"
+        ORDER BY COALESCE(v2."published_at", v2."created_at") DESC
+        LIMIT ${CONSUMPTION_RECENT_VIDEO_COUNT}
+      ) cv
     ) cw ON TRUE
     WHERE us."user_id" = ${userId}
     GROUP BY
-      us."channel_id", us."read_at", us."folder_id", us."priority", us."mute_until", us."created_at",
+      us."channel_id", us."read_at", us."folder_id", us."priority", us."mute_until",
       c."source_type", c."source_id", c."name", c."handle", c."rss_url", c."logo_url", c."created_at", c."checked_at",
       cw."total", cw."consumed"
     ORDER BY LOWER(c."name") ASC
@@ -288,7 +277,6 @@ export async function getSubscribedChannelsWithUnread(
     unread_count: Number(row.unread_count),
     consumption_total: Number(row.consumption_total),
     consumption_consumed: Number(row.consumption_consumed),
-    consumption_since_subscribed: row.consumption_since_subscribed,
   }));
 }
 

@@ -1,3 +1,6 @@
+'use client';
+
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   type ChannelConsumption,
   consumptionRate,
@@ -11,11 +14,20 @@ const RADIUS = (SIZE - STROKE) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 /**
+ * How long the pointer has to rest on the ring before the tooltip opens.
+ * Short on purpose: the ring is a glanceable shape with no number on it,
+ * so the tooltip is the only way to get the counts, and the native
+ * `title` delay this replaced (roughly a second, and not configurable)
+ * was long enough that the numbers felt unreachable.
+ */
+const TOOLTIP_DELAY_MS = 100;
+
+/**
  * Circular progress ring showing how much of a channel the user actually
  * consumes (see `lib/channels/consumption.ts` for the metric). Sits
- * immediately after the channel name, not out on the right rail: it
- * describes the channel, so it belongs beside the channel's label rather
- * than in the column the unread count owns.
+ * immediately after the channel name in the sidebar and in the list
+ * header: it describes the channel, so it belongs beside the channel's
+ * label rather than in the column the unread count owns.
  *
  * Two states:
  *
@@ -32,63 +44,69 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
  * explicit `text-muted-foreground`, so the ring stays gray on the active
  * blue row and picks up the right gray in dark mode without a second
  * color scale.
+ *
+ * Carries its own `TooltipProvider` so it can drop into any row without
+ * the caller supplying one, and so its delay stays short regardless of
+ * whatever an ambient provider uses for the rest of that surface.
  */
 export default function ConsumptionMeter({ consumption }: { consumption: ChannelConsumption }) {
   const rate = consumptionRate(consumption);
   const tooltip = consumptionTooltip(consumption);
 
   return (
-    <span
-      className="shrink-0 text-muted-foreground"
-      role="img"
-      aria-label={tooltip}
-      title={tooltip}
-    >
-      <svg
-        width={SIZE}
-        height={SIZE}
-        viewBox={`0 0 ${SIZE} ${SIZE}`}
-        fill="none"
-        className="block"
-        aria-hidden="true"
-      >
-        {rate == null ? (
-          <circle
-            cx={CENTER}
-            cy={CENTER}
-            r={RADIUS}
-            stroke="currentColor"
-            strokeWidth={STROKE}
-            strokeOpacity={0.35}
-            strokeDasharray="2 2.2"
-          />
-        ) : (
-          <>
-            <circle
-              cx={CENTER}
-              cy={CENTER}
-              r={RADIUS}
-              stroke="currentColor"
-              strokeWidth={STROKE}
-              strokeOpacity={0.2}
-            />
-            {/* Butt caps, not round: a round cap on a zero-length dash
-                renders as a dot in some browsers, which would show a
-                0% channel as if it had a sliver of progress. */}
-            <circle
-              cx={CENTER}
-              cy={CENTER}
-              r={RADIUS}
-              stroke="currentColor"
-              strokeWidth={STROKE}
-              strokeOpacity={0.85}
-              strokeLinecap="butt"
-              strokeDasharray={`${rate * CIRCUMFERENCE} ${CIRCUMFERENCE}`}
-              transform={`rotate(-90 ${CENTER} ${CENTER})`}
-            />
-          </>
-        )}
-      </svg>
-    </span>
+    <TooltipProvider delayDuration={TOOLTIP_DELAY_MS}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="shrink-0 text-muted-foreground" role="img" aria-label={tooltip}>
+            <svg
+              width={SIZE}
+              height={SIZE}
+              viewBox={`0 0 ${SIZE} ${SIZE}`}
+              fill="none"
+              className="block"
+              aria-hidden="true"
+            >
+              {rate == null ? (
+                <circle
+                  cx={CENTER}
+                  cy={CENTER}
+                  r={RADIUS}
+                  stroke="currentColor"
+                  strokeWidth={STROKE}
+                  strokeOpacity={0.35}
+                  strokeDasharray="2 2.2"
+                />
+              ) : (
+                <>
+                  <circle
+                    cx={CENTER}
+                    cy={CENTER}
+                    r={RADIUS}
+                    stroke="currentColor"
+                    strokeWidth={STROKE}
+                    strokeOpacity={0.2}
+                  />
+                  {/* Butt caps, not round: a round cap on a zero-length
+                      dash renders as a dot in some browsers, which would
+                      show a 0% channel as if it had a sliver of progress. */}
+                  <circle
+                    cx={CENTER}
+                    cy={CENTER}
+                    r={RADIUS}
+                    stroke="currentColor"
+                    strokeWidth={STROKE}
+                    strokeOpacity={0.85}
+                    strokeLinecap="butt"
+                    strokeDasharray={`${rate * CIRCUMFERENCE} ${CIRCUMFERENCE}`}
+                    transform={`rotate(-90 ${CENTER} ${CENTER})`}
+                  />
+                </>
+              )}
+            </svg>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">{tooltip}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }

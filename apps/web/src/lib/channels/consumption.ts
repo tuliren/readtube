@@ -14,11 +14,13 @@
  *      the generated piece, so a video with no artifact was at best
  *      skimmed.
  *
- * The rate is `consumed / total` over the videos published in a trailing
- * window, floored at the subscription's own `created_at` so a three-day-old
- * subscription is judged on three days of videos rather than ninety. The
- * SQL that produces those two counts lives in
- * `getSubscribedChannelsWithUnread` (`lib/subscriptions.ts`).
+ * The rate is `consumed / total` over the channel's
+ * `CONSUMPTION_RECENT_VIDEO_COUNT` most recent videos. Counting videos
+ * rather than days is what keeps a slow channel ratable: a calendar
+ * window says "no data" for anything that hasn't posted lately, even
+ * when the user worked through its whole back catalogue. The SQL that
+ * produces the two counts lives in `getSubscribedChannelsWithUnread`
+ * (`lib/subscriptions.ts`).
  *
  * The sidebar renders the rate as a circular progress ring and never as a
  * number: the question is "do I actually read this?", and a percentage on
@@ -26,13 +28,18 @@
  * counts go in the row's tooltip.
  */
 
-/** Trailing window, in days, that the metric looks at. */
-export const CONSUMPTION_WINDOW_DAYS = 90;
+/**
+ * How many of the channel's most recent videos the rate is computed
+ * over. Big enough that one skipped video doesn't swing it, small
+ * enough that it tracks what the user does now rather than what they
+ * did years ago.
+ */
+export const CONSUMPTION_RECENT_VIDEO_COUNT = 20;
 
 /**
- * Minimum number of videos in the window before a rate is computed.
- * Below this, one skipped video swings the rate by 50 points, which
- * would render a confidently wrong ring on a quiet channel.
+ * Minimum number of videos before a rate is computed. Below this, one
+ * skipped video swings the rate by 50 points, which would render a
+ * confidently wrong ring on a channel that has barely published.
  */
 export const CONSUMPTION_MIN_SAMPLE = 3;
 
@@ -43,24 +50,21 @@ export const CONSUMPTION_HIGH_RATE = 0.5;
 export const CONSUMPTION_MEDIUM_RATE = 0.2;
 
 /**
- * `unknown` means "too few videos in the window to say". It still draws a
- * ring, in a flat dashed gray, so the column stays aligned and the row
- * can explain itself on hover rather than silently omitting the
- * indicator.
+ * `unknown` means "too few videos to say". It still draws a ring, in a
+ * flat dashed gray, so the column stays aligned and the row can explain
+ * itself on hover rather than silently omitting the indicator.
  */
 export type ConsumptionLevel = 'unknown' | 'low' | 'medium' | 'high';
 
 /** Raw per-channel counts, as returned by the sidebar channels payload. */
 export interface ChannelConsumption {
-  /** Videos published in the window. */
+  /**
+   * How many videos the rate is computed over: the channel's video
+   * count, capped at `CONSUMPTION_RECENT_VIDEO_COUNT`.
+   */
   total: number;
   /** Of those, the ones that meet the consumed definition above. */
   consumed: number;
-  /**
-   * True when the subscription is younger than `CONSUMPTION_WINDOW_DAYS`,
-   * so the window starts at the subscribe date instead. Only affects copy.
-   */
-  sinceSubscribed: boolean;
 }
 
 const LEVEL_LABELS: Record<Exclude<ConsumptionLevel, 'unknown'>, string> = {
@@ -70,9 +74,9 @@ const LEVEL_LABELS: Record<Exclude<ConsumptionLevel, 'unknown'>, string> = {
 };
 
 /**
- * Consumed fraction in [0, 1], or null when the window holds too few
- * videos to be worth reporting. The ring reads this directly — the
- * levels below only name it in prose.
+ * Consumed fraction in [0, 1], or null when there are too few videos to
+ * be worth reporting. The ring reads this directly — the levels below
+ * only name it in prose.
  */
 export function consumptionRate(consumption: ChannelConsumption): number | null {
   if (consumption.total < CONSUMPTION_MIN_SAMPLE) {
@@ -96,12 +100,6 @@ export function consumptionLevel(consumption: ChannelConsumption): ConsumptionLe
   return 'low';
 }
 
-function windowPhrase(consumption: ChannelConsumption): string {
-  return consumption.sinceSubscribed
-    ? 'since you subscribed'
-    : `in the last ${CONSUMPTION_WINDOW_DAYS} days`;
-}
-
 /**
  * Tooltip for the ring. Always returns a string: an unrated channel has
  * to be able to say *why* it is a flat gray ring rather than leaving the
@@ -113,16 +111,15 @@ function windowPhrase(consumption: ChannelConsumption): string {
  */
 export function consumptionTooltip(consumption: ChannelConsumption): string {
   const level = consumptionLevel(consumption);
-  const period = windowPhrase(consumption);
   if (level === 'unknown') {
     if (consumption.total === 0) {
-      return `Not rated yet: no videos ${period}`;
+      return 'Not rated yet: this channel has no videos';
     }
     const plural = consumption.total === 1 ? 'video' : 'videos';
     return (
-      `Not rated yet: only ${consumption.total} ${plural} ${period}, ` +
-      `and it takes ${CONSUMPTION_MIN_SAMPLE} to rate a channel`
+      `Not rated yet: this channel has only ${consumption.total} ${plural}, ` +
+      `and it takes ${CONSUMPTION_MIN_SAMPLE} to rate one`
     );
   }
-  return `${LEVEL_LABELS[level]}: you read ${consumption.consumed} of ${consumption.total} videos ${period}`;
+  return `${LEVEL_LABELS[level]}: you read ${consumption.consumed} of the ${consumption.total} most recent videos`;
 }

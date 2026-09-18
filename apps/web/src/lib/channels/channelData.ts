@@ -25,7 +25,6 @@ export function toChannelData(row: SubscribedChannelWithUnread): ChannelData {
     consumption: {
       total: row.consumption_total,
       consumed: row.consumption_consumed,
-      sinceSubscribed: row.consumption_since_subscribed,
     },
   };
 }
