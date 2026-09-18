@@ -8,7 +8,7 @@
  *   1. The user has read it — an explicit `UserVideoConsumption` row, or
  *      coverage by the subscription's `read_at` watermark. This is the
  *      same "read" the inbox uses, so the metric never disagrees with
- *      the unread badge sitting next to it.
+ *      the unread badge on the same row.
  *   2. It has generated content — a READY `Summary` or a READY `Article`
  *      on one of its transcripts. Reading in this product means reading
  *      the generated piece, so a video with no artifact was at best
@@ -20,19 +20,19 @@
  * SQL that produces those two counts lives in
  * `getSubscribedChannelsWithUnread` (`lib/subscriptions.ts`).
  *
- * Levels (not the raw percentage) are what the sidebar renders: the point
- * of the indicator is "do I actually read this?", which is an ordinal
- * question, and a percentage would compete with the unread count for
- * attention. The exact numbers go in the row's tooltip.
+ * The sidebar renders the rate as a circular progress ring and never as a
+ * number: the question is "do I actually read this?", and a percentage on
+ * every row would compete with the unread count for attention. The exact
+ * counts go in the row's tooltip.
  */
 
 /** Trailing window, in days, that the metric looks at. */
 export const CONSUMPTION_WINDOW_DAYS = 90;
 
 /**
- * Minimum number of videos in the window before a level is assigned.
+ * Minimum number of videos in the window before a rate is computed.
  * Below this, one skipped video swings the rate by 50 points, which
- * would render a confidently wrong meter on a quiet channel.
+ * would render a confidently wrong ring on a quiet channel.
  */
 export const CONSUMPTION_MIN_SAMPLE = 3;
 
@@ -43,9 +43,10 @@ export const CONSUMPTION_HIGH_RATE = 0.5;
 export const CONSUMPTION_MEDIUM_RATE = 0.2;
 
 /**
- * `unknown` means "too few videos in the window to say" and renders
- * nothing at all, which is deliberately different from `low` (a channel
- * we *do* have evidence about, and the evidence says you skip it).
+ * `unknown` means "too few videos in the window to say". It still draws a
+ * ring, in a flat dashed gray, so the column stays aligned and the row
+ * can explain itself on hover rather than silently omitting the
+ * indicator.
  */
 export type ConsumptionLevel = 'unknown' | 'low' | 'medium' | 'high';
 
@@ -62,18 +63,7 @@ export interface ChannelConsumption {
   sinceSubscribed: boolean;
 }
 
-/** Number of filled bars the meter draws, out of `CONSUMPTION_METER_BARS`. */
-export const CONSUMPTION_METER_BARS = 3;
-
-const FILLED_BARS: Record<ConsumptionLevel, number> = {
-  unknown: 0,
-  low: 1,
-  medium: 2,
-  high: 3,
-};
-
-const LEVEL_LABELS: Record<ConsumptionLevel, string> = {
-  unknown: 'Not enough videos yet',
+const LEVEL_LABELS: Record<Exclude<ConsumptionLevel, 'unknown'>, string> = {
   low: 'Rarely read',
   medium: 'Sometimes read',
   high: 'Often read',
@@ -81,7 +71,8 @@ const LEVEL_LABELS: Record<ConsumptionLevel, string> = {
 
 /**
  * Consumed fraction in [0, 1], or null when the window holds too few
- * videos to be worth reporting.
+ * videos to be worth reporting. The ring reads this directly — the
+ * levels below only name it in prose.
  */
 export function consumptionRate(consumption: ChannelConsumption): number | null {
   if (consumption.total < CONSUMPTION_MIN_SAMPLE) {
@@ -90,7 +81,7 @@ export function consumptionRate(consumption: ChannelConsumption): number | null 
   return consumption.consumed / consumption.total;
 }
 
-/** Bucket the rate into the ordinal level the meter renders. */
+/** Bucket the rate into the ordinal level the tooltip names. */
 export function consumptionLevel(consumption: ChannelConsumption): ConsumptionLevel {
   const rate = consumptionRate(consumption);
   if (rate == null) {
@@ -105,26 +96,33 @@ export function consumptionLevel(consumption: ChannelConsumption): ConsumptionLe
   return 'low';
 }
 
-export function consumptionFilledBars(level: ConsumptionLevel): number {
-  return FILLED_BARS[level];
+function windowPhrase(consumption: ChannelConsumption): string {
+  return consumption.sinceSubscribed
+    ? 'since you subscribed'
+    : `in the last ${CONSUMPTION_WINDOW_DAYS} days`;
 }
 
 /**
- * One-line tooltip for the meter, e.g.
- * `Often read: 8 of 12 videos in the last 90 days`.
- * Returns null for `unknown`, where the meter renders nothing anyway.
+ * Tooltip for the ring. Always returns a string: an unrated channel has
+ * to be able to say *why* it is a flat gray ring rather than leaving the
+ * user to guess, so the unrated copy names both the video count it has
+ * and the count it needs.
+ *
+ * Deliberately free of a percentage. The ring is the percentage; a number
+ * beside it would only invite comparing two renderings of the same thing.
  */
-export function consumptionTooltip(consumption: ChannelConsumption): string | null {
-  const rate = consumptionRate(consumption);
-  if (rate == null) {
-    return null;
+export function consumptionTooltip(consumption: ChannelConsumption): string {
+  const level = consumptionLevel(consumption);
+  const period = windowPhrase(consumption);
+  if (level === 'unknown') {
+    if (consumption.total === 0) {
+      return `Not rated yet: no videos ${period}`;
+    }
+    const plural = consumption.total === 1 ? 'video' : 'videos';
+    return (
+      `Not rated yet: only ${consumption.total} ${plural} ${period}, ` +
+      `and it takes ${CONSUMPTION_MIN_SAMPLE} to rate a channel`
+    );
   }
-  const period = consumption.sinceSubscribed
-    ? 'since you subscribed'
-    : `in the last ${CONSUMPTION_WINDOW_DAYS} days`;
-  return (
-    `${LEVEL_LABELS[consumptionLevel(consumption)]}: ` +
-    `you read ${consumption.consumed} of ${consumption.total} videos ${period} ` +
-    `(${Math.round(rate * 100)}%)`
-  );
+  return `${LEVEL_LABELS[level]}: you read ${consumption.consumed} of ${consumption.total} videos ${period}`;
 }

@@ -3,7 +3,6 @@ import {
   CONSUMPTION_WINDOW_DAYS,
   type ChannelConsumption,
   type ConsumptionLevel,
-  consumptionFilledBars,
   consumptionLevel,
   consumptionRate,
   consumptionTooltip,
@@ -46,31 +45,45 @@ describe('consumptionLevel', () => {
   });
 });
 
-describe('consumptionFilledBars', () => {
-  it.each<[ConsumptionLevel, number]>([
-    ['unknown', 0],
-    ['low', 1],
-    ['medium', 2],
-    ['high', 3],
-  ])('fills %i bars for %s', (level, expected) => {
-    expect(consumptionFilledBars(level)).toBe(expected);
-  });
-});
-
 describe('consumptionTooltip', () => {
-  it('returns null below the minimum sample', () => {
-    expect(consumptionTooltip(consumption(1, 1))).toBeNull();
+  it.each<[string, ChannelConsumption, string]>([
+    [
+      'a rated channel',
+      consumption(12, 8),
+      `Often read: you read 8 of 12 videos in the last ${CONSUMPTION_WINDOW_DAYS} days`,
+    ],
+    [
+      'a rated channel on a young subscription',
+      consumption(10, 1, true),
+      'Rarely read: you read 1 of 10 videos since you subscribed',
+    ],
+  ])('names the level and the counts for %s', (_label, input, expected) => {
+    expect(consumptionTooltip(input)).toBe(expected);
   });
 
-  it('names the level, the counts, and the rounded percentage', () => {
-    expect(consumptionTooltip(consumption(12, 8))).toBe(
-      `Often read: you read 8 of 12 videos in the last ${CONSUMPTION_WINDOW_DAYS} days (67%)`
-    );
+  it('never quotes a percentage, since the ring already is one', () => {
+    expect(consumptionTooltip(consumption(12, 8))).not.toMatch(/%/);
   });
 
-  it('swaps the period for a subscription younger than the window', () => {
-    expect(consumptionTooltip(consumption(10, 1, true))).toBe(
-      'Rarely read: you read 1 of 10 videos since you subscribed (10%)'
-    );
+  it.each<[string, ChannelConsumption, string]>([
+    [
+      'no videos at all',
+      consumption(0, 0),
+      `Not rated yet: no videos in the last ${CONSUMPTION_WINDOW_DAYS} days`,
+    ],
+    [
+      'a single video',
+      consumption(1, 1),
+      `Not rated yet: only 1 video in the last ${CONSUMPTION_WINDOW_DAYS} days, ` +
+        `and it takes ${CONSUMPTION_MIN_SAMPLE} to rate a channel`,
+    ],
+    [
+      'a young subscription below the sample',
+      consumption(2, 0, true),
+      'Not rated yet: only 2 videos since you subscribed, ' +
+        `and it takes ${CONSUMPTION_MIN_SAMPLE} to rate a channel`,
+    ],
+  ])('explains why %s leaves the ring unrated', (_label, input, expected) => {
+    expect(consumptionTooltip(input)).toBe(expected);
   });
 });

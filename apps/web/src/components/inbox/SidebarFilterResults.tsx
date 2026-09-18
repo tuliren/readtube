@@ -136,10 +136,8 @@ export default function SidebarFilterResults({ query, channels, selectedChannelI
                   </span>
                 )}
                 <span className="truncate">{displayChannelName(channel.name)}</span>
-                <span className="ml-auto flex shrink-0 items-center gap-1.5">
-                  <ConsumptionMeter consumption={channel.consumption} />
-                  <SidebarBadge count={channel.unreadCount} />
-                </span>
+                <ConsumptionMeter consumption={channel.consumption} />
+                <SidebarBadge count={channel.unreadCount} />
               </Link>
             </li>
           ))}

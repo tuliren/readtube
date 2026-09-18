@@ -73,12 +73,8 @@ export default function DraggableChannelLink({
           )}
           <SidebarRowContent
             label={displayChannelName(channel.name)}
-            trailing={
-              <span className="ml-auto flex shrink-0 items-center gap-1.5">
-                <ConsumptionMeter consumption={channel.consumption} />
-                <SidebarBadge count={channel.unreadCount} />
-              </span>
-            }
+            afterLabel={<ConsumptionMeter consumption={channel.consumption} />}
+            trailing={<SidebarBadge count={channel.unreadCount} />}
           />
         </Link>
 

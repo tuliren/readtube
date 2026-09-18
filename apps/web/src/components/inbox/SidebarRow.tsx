@@ -56,6 +56,13 @@ interface ContentProps {
    *  for attention. View rows and folder headers still pass one. */
   icon?: LucideIcon;
   label: string;
+  /** Optional slot pinned immediately after the label, before the
+   *  `ml-auto` gap. For annotations that describe the row's subject
+   *  (e.g. the channel consumption ring) rather than a count, which
+   *  belongs on the right edge in `trailing`. It sits outside the
+   *  truncating label span, so a long label shortens instead of pushing
+   *  it off the row. */
+  afterLabel?: React.ReactNode;
   /** Optional trailing slot — usually a SidebarBadge, but callers can pass
    *  custom nodes (e.g. a priority dot). Rendered on the right edge and
    *  auto-pushed via `ml-auto` so the label gets the remaining space. */
@@ -64,14 +71,16 @@ interface ContentProps {
 
 /**
  * Standard row body: optional icon on the left at `h-4 w-4`, label that
- * truncates, and an optional trailing slot. Callers wrap this in whatever
- * interactive element (Link / button / li) they need.
+ * truncates, an optional slot right after the label, and an optional
+ * trailing slot. Callers wrap this in whatever interactive element
+ * (Link / button / li) they need.
  */
-export function SidebarRowContent({ icon: Icon, label, trailing }: ContentProps) {
+export function SidebarRowContent({ icon: Icon, label, afterLabel, trailing }: ContentProps) {
   return (
     <>
       {Icon != null && <Icon className="h-4 w-4 shrink-0" />}
       <span className="truncate">{label}</span>
+      {afterLabel}
       {trailing}
     </>
   );

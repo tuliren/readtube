@@ -25,32 +25,66 @@ async function render(consumption: ChannelConsumption) {
   await act(async () => root.render(<ConsumptionMeter consumption={consumption} />));
 }
 
-function filledBarCount(): number {
-  return container.querySelectorAll('span.opacity-70').length;
+function circles(): SVGCircleElement[] {
+  return Array.from(container.querySelectorAll('circle'));
+}
+
+/** Consumed fraction the progress arc actually draws, from its dash pattern. */
+function arcFraction(): number {
+  const arc = circles()[1];
+  const [drawn, circumference] = (arc.getAttribute('stroke-dasharray') ?? '')
+    .split(' ')
+    .map(Number);
+  return drawn / circumference;
 }
 
 describe('ConsumptionMeter', () => {
-  it('renders nothing below the minimum sample', async () => {
+  it('draws a single dashed ring when there is too little data to rate', async () => {
     await render({ total: 2, consumed: 2, sinceSubscribed: false });
-    expect(container.innerHTML).toBe('');
+    expect(circles().length).toBe(1);
+    expect(circles()[0].getAttribute('stroke-dasharray')).toBe('2 2.2');
   });
 
   it.each([
-    ['rarely read', 10, 1, 1],
-    ['sometimes read', 10, 3, 2],
-    ['often read', 10, 8, 3],
-  ])('fills %i of three bars for a %s channel', async (_label, total, consumed, expected) => {
+    ['nothing read', 10, 0, 0],
+    ['a quarter read', 8, 2, 0.25],
+    ['half read', 10, 5, 0.5],
+    ['everything read', 10, 10, 1],
+  ])('sweeps the arc over %s', async (_label, total, consumed, expected) => {
     await render({ total, consumed, sinceSubscribed: false });
-    expect(container.querySelectorAll('span[style]').length).toBe(3);
-    expect(filledBarCount()).toBe(expected);
+    // A track plus the progress arc drawn over it.
+    expect(circles().length).toBe(2);
+    expect(arcFraction()).toBeCloseTo(expected);
   });
 
-  it('exposes the counts through the accessible label and tooltip', async () => {
-    await render({ total: 10, consumed: 8, sinceSubscribed: false });
-    const meter = container.querySelector('span[role="img"]');
-    expect(meter?.getAttribute('aria-label')).toBe(
-      'Often read: you read 8 of 10 videos in the last 90 days (80%)'
+  it('starts the arc at twelve o_clock', async () => {
+    await render({ total: 10, consumed: 5, sinceSubscribed: false });
+    expect(circles()[1].getAttribute('transform')).toBe('rotate(-90 7 7)');
+  });
+
+  it('keeps the arc lighter on the track than on itself', async () => {
+    await render({ total: 10, consumed: 5, sinceSubscribed: false });
+    const [track, arc] = circles();
+    expect(Number(track.getAttribute('stroke-opacity'))).toBeLessThan(
+      Number(arc.getAttribute('stroke-opacity'))
     );
-    expect(meter?.getAttribute('title')).toBe(meter?.getAttribute('aria-label'));
+  });
+
+  it.each([
+    [
+      'a rated channel',
+      { total: 10, consumed: 8, sinceSubscribed: false },
+      'Often read: you read 8 of 10 videos in the last 90 days',
+    ],
+    [
+      'an unrated channel',
+      { total: 1, consumed: 0, sinceSubscribed: false },
+      'Not rated yet: only 1 video in the last 90 days, and it takes 3 to rate a channel',
+    ],
+  ])('explains %s through the label and tooltip', async (_label, consumption, expected) => {
+    await render(consumption);
+    const meter = container.querySelector('span[role="img"]');
+    expect(meter?.getAttribute('aria-label')).toBe(expected);
+    expect(meter?.getAttribute('title')).toBe(expected);
   });
 });

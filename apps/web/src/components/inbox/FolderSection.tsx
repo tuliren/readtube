@@ -163,7 +163,7 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
         <div className="my-1 h-px w-6 bg-border" />
         {channels.map((channel) => {
           const active = selectedChannelId === channel.id;
-          // The 56px rail has no room for the consumption meter, so the
+          // The 56px rail has no room for the consumption ring, so the
           // tooltip is the only place the rating can surface there.
           const consumption = consumptionTooltip(channel.consumption);
           return (
@@ -191,9 +191,7 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
                   {channel.name}
                   {channel.unreadCount > 0 ? ` (${channel.unreadCount})` : ''}
                 </span>
-                {consumption != null && (
-                  <span className="mt-0.5 block text-xs opacity-80">{consumption}</span>
-                )}
+                <span className="mt-0.5 block text-xs opacity-80">{consumption}</span>
               </TooltipContent>
             </Tooltip>
           );
