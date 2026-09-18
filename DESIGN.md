@@ -120,6 +120,16 @@ The **Starred / Read Later / Archived** views are correspondingly not scoped to 
 
 **Archive vs. the buckets.** Archiving is an inbox action: it clears a video from the feed views (Inbox, Unread) and nothing else. It does **not** remove the video from Starred or Read Later. `buildVideoWhere` applies its default `archives: { none }` exclusion only when neither `starred` nor `saved` is set, so archiving a starred video — a normal way to clear it from the inbox while keeping the star — leaves it right where the user put it. Setting `archived=true` alongside a bucket still wins, giving the intersection (`?starred=1&archived=1` = archived ∩ starred). Before this was written down the behavior was the accident of a single `else` branch: a starred video that got archived silently vanished from Starred, and after an unsubscribe it would have been invisible in every view at once.
 
+## Channel consumption meter
+
+A per-channel, per-user answer to "do I actually read this, or does it just pile up?", rendered as a three-bar meter left of the unread badge on every sidebar channel row. Definition, thresholds, and copy live in `lib/channels/consumption.ts`; the counts are produced by `getSubscribedChannelsWithUnread` in `lib/subscriptions.ts`.
+
+A video counts as **consumed** when it is both **read** and **has generated content**. Read is the same notion the inbox uses (a `UserVideoConsumption` row, or coverage by the subscription's `read_at` watermark), so the meter never disagrees with the unread badge beside it; a bulk mark-as-read therefore counts, which is deliberate rather than overlooked. Generated content means a `READY` `Summary` or `Article` on one of the video's transcripts, which is what keeps the metric honest: reading here means reading the generated piece, so a video dismissed without one was at best skimmed. `Summary` and `Article` rows are global per transcript, so it is the read half that makes the pair per-user.
+
+The rate is `consumed / total` over the videos published in the trailing `CONSUMPTION_WINDOW_DAYS`, floored at the subscription's own `created_at`. That floor is what stops a three-day-old subscription from being scored against ninety days of videos it never saw; `consumption_since_subscribed` rides along purely so the tooltip can say "since you subscribed" instead of naming a window that didn't apply. Below `CONSUMPTION_MIN_SAMPLE` videos the level is `unknown` and the meter renders nothing at all, which is deliberately distinct from `low` (a channel we do have evidence about, and the evidence says you skip it).
+
+Nothing is stored: the metric is derived on every sidebar load from rows that already exist, so there is no counter column to backfill, drift, or keep in sync with a delete. It rides the existing sidebar query as a `LATERAL` rather than a second round-trip, since every caller of that query renders the sidebar and needs both numbers.
+
 ## Analytics events
 
 Server-side Vercel Web Analytics custom events (`lib/analytics/events.ts`, via `@vercel/analytics/server`). Vercel caps a custom event at **2 properties**, so concerns are split across three event names rather than one:
