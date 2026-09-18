@@ -23,6 +23,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { consumptionTooltip } from '@/lib/channels/consumption';
 import { displayChannelName } from '@/lib/inbox/channelName';
 import type { ChannelData } from '@/lib/types';
 import { channelHref } from '@/lib/urls/channelHref';
@@ -162,6 +163,9 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
         <div className="my-1 h-px w-6 bg-border" />
         {channels.map((channel) => {
           const active = selectedChannelId === channel.id;
+          // The 56px rail has no room for the consumption meter, so the
+          // tooltip is the only place the rating can surface there.
+          const consumption = consumptionTooltip(channel.consumption);
           return (
             <Tooltip key={channel.id}>
               <TooltipTrigger asChild>
@@ -183,8 +187,13 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
                 </Link>
               </TooltipTrigger>
               <TooltipContent side="right">
-                {channel.name}
-                {channel.unreadCount > 0 ? ` (${channel.unreadCount})` : ''}
+                <span>
+                  {channel.name}
+                  {channel.unreadCount > 0 ? ` (${channel.unreadCount})` : ''}
+                </span>
+                {consumption != null && (
+                  <span className="mt-0.5 block text-xs opacity-80">{consumption}</span>
+                )}
               </TooltipContent>
             </Tooltip>
           );
