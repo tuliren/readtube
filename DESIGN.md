@@ -138,6 +138,22 @@ The tooltip is a Radix tooltip on a short delay, not the native `title` attribut
 
 Nothing is stored: the metric is derived on every sidebar load from rows that already exist, so there is no counter column to backfill, drift, or keep in sync with a delete. It rides the existing sidebar query as a `LATERAL` rather than a second round-trip, since every caller of that query renders the sidebar and needs both numbers.
 
+## List scroll memory
+
+Opening a video from a list navigates to a new route, so the list page unmounts. Without help, coming back would land the user at the top of the list. This feature puts them back where they were.
+
+**Where the position lives.** In `sessionStorage`, managed by `lib/inbox/scrollMemory.ts`. The hook `useListScrollRestoration` in `components/inbox/` does the reading and writing, and `VideoListView` attaches it to the list's scroll container. Session storage has exactly the lifetime we want: it survives the trip into the reader and is gone when the tab closes. The alternatives do not work here. Putting the position in the URL would mean rewriting the URL on every scroll. The browser's own scroll restoration does not apply, because the list scrolls inside a div rather than the window, and the Back link is an ordinary link rather than a history back.
+
+**How a list is identified.** Each saved position is keyed by the list's path and query string, the same value the reader's Back link points at (`buildReturnTo` in `lib/inbox/filter.ts`). `normalizeListKey` sorts the query parameters and decodes the path so the reader and the list always compute the same key. At most 20 positions are kept. Every storage call is wrapped in try/catch, because Safari private mode throws.
+
+**Telling a return apart from a fresh visit.** Clicking Inbox in the sidebar should start at the top even if a position is saved. Only coming back from a video should restore. The reader makes that distinction: when it opens, it writes down the key of the list it will send the user back to. The next list to mount reads that key and clears it right away, before its data has loaded, and restores only if the key is its own. Clearing it immediately matters. If the list waited until it had rows, a return to an empty list would leave the key behind, and it would fire on some later visit to that list. A video opened without a `returnTo` (a pasted URL, the "Add video" modal, a citation in Ask) writes nothing, because it was not opened from a list.
+
+**What is saved.** The scroll offset, plus the id of the row at the top of the viewport and how far that row sits from the top edge. On restore, the row wins. The video the user just read often disappears from the list they return to (the unread inbox, for example), which moves every row below it up. Following the row puts them back on the same video instead of one row off. The plain offset is the fallback when that row is gone.
+
+**When it is saved.** Once, when the list unmounts. Every way out of a list unmounts it, so that one cleanup covers row clicks, the command palette, and sidebar navigation alike, and nothing is written while the user scrolls. Changing the filter, the search text, or the page while on the list scrolls it back to the top and drops the saved position, which belonged to the list the user just left.
+
+Implementation details (why the write happens in a layout-effect cleanup, why the container is held in state behind a callback ref, the second pass when the mobile breakpoint changes the row heights) are explained in comments in the hook.
+
 ## Analytics events
 
 Server-side Vercel Web Analytics custom events (`lib/analytics/events.ts`, via `@vercel/analytics/server`). Vercel caps a custom event at **2 properties**, so concerns are split across three event names rather than one:
