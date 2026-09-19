@@ -333,6 +333,18 @@ describe('useListScrollRestoration', () => {
       expect(scroller().scrollTop).toBe(400);
     });
 
+    it('does not replay a position that an empty return never applied', async () => {
+      // Empty return, then a revalidation brings rows, then the
+      // breakpoint flips. Nothing was restored, so there is nothing
+      // for the re-anchor pass to re-apply; the stale position must
+      // not have been kept for it.
+      await mount('/inbox', { rows: [] });
+      await mount('/inbox', { rows: IDS });
+      rowHeight = 60;
+      await mount('/inbox', { layoutKey: 'mobile' });
+      expect(scroller().scrollTop).toBe(0);
+    });
+
     it('does not re-anchor the outgoing list after a filter change', async () => {
       await mount('/inbox');
       await mount('/inbox?starred=1');

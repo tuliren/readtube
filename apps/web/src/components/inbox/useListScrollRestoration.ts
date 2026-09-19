@@ -166,9 +166,14 @@ export function useListScrollRestoration({ listKey, ready, layoutKey }: Options)
       return;
     }
     const position = readListScroll(listKey);
-    // An empty list has nothing to restore into. It still counts as
-    // restored (above), so the write on the way out replaces the
-    // stale entry rather than leaving it for a later visit.
+    // The row check exists for `restoredPositionRef`, not for the
+    // scroll: on an empty container the browser clamps scrollTop to 0
+    // regardless. Keeping a position the list never applied out of
+    // that ref is what stops the re-anchor effect below from replaying
+    // it against rows that arrive later, should the breakpoint then
+    // flip. The empty list still counts as restored (above), so the
+    // write on the way out replaces the stale entry rather than
+    // leaving it for a later visit.
     if (position == null || anchorRows(container).length === 0) {
       return;
     }
