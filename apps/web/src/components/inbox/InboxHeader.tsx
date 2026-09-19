@@ -133,7 +133,9 @@ export default function InboxHeader({
           <h1 className="hidden min-w-0 truncate text-sm font-semibold text-foreground sidebar:block">
             {channelName}
           </h1>
-          {consumption != null && <ConsumptionMeter consumption={consumption} />}
+          {consumption != null && (
+            <ConsumptionMeter consumption={consumption} tooltipSide="bottom" tooltipAlign="start" />
+          )}
           <TooltipProvider delayDuration={200}>
             <Tooltip>
               <TooltipTrigger asChild>

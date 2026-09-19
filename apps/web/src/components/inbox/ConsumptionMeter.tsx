@@ -5,6 +5,7 @@ import {
   type ChannelConsumption,
   consumptionRate,
   consumptionTooltip,
+  consumptionTooltipText,
 } from '@/lib/channels/consumption';
 
 const SIZE = 14;
@@ -21,6 +22,18 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
  * was long enough that the numbers felt unreachable.
  */
 const TOOLTIP_DELAY_MS = 100;
+
+interface Props {
+  consumption: ChannelConsumption;
+  /** Which edge the tooltip opens from. The sidebar defaults to `right`,
+   *  where there is room beside the rail; the list header passes
+   *  `bottom`, since there is nothing to its right but more header. */
+  tooltipSide?: 'top' | 'right' | 'bottom' | 'left';
+  /** How the tooltip lines up along that edge. `start` keeps a
+   *  bottom-opening tooltip from hanging off to the left of a ring that
+   *  sits near the start of a wide row. */
+  tooltipAlign?: 'start' | 'center' | 'end';
+}
 
 /**
  * Circular progress ring showing how much of a channel the user actually
@@ -49,15 +62,23 @@ const TOOLTIP_DELAY_MS = 100;
  * the caller supplying one, and so its delay stays short regardless of
  * whatever an ambient provider uses for the rest of that surface.
  */
-export default function ConsumptionMeter({ consumption }: { consumption: ChannelConsumption }) {
+export default function ConsumptionMeter({
+  consumption,
+  tooltipSide = 'right',
+  tooltipAlign = 'center',
+}: Props) {
   const rate = consumptionRate(consumption);
-  const tooltip = consumptionTooltip(consumption);
+  const { headline, detail } = consumptionTooltip(consumption);
 
   return (
     <TooltipProvider delayDuration={TOOLTIP_DELAY_MS}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <span className="shrink-0 text-muted-foreground" role="img" aria-label={tooltip}>
+          <span
+            className="shrink-0 text-muted-foreground"
+            role="img"
+            aria-label={consumptionTooltipText(consumption)}
+          >
             <svg
               width={SIZE}
               height={SIZE}
@@ -105,7 +126,12 @@ export default function ConsumptionMeter({ consumption }: { consumption: Channel
             </svg>
           </span>
         </TooltipTrigger>
-        <TooltipContent side="bottom">{tooltip}</TooltipContent>
+        {/* max-w forces the detail to wrap instead of stretching into a
+            single unreadable line at 12px. */}
+        <TooltipContent side={tooltipSide} align={tooltipAlign} className="max-w-56 leading-snug">
+          <p className="font-medium">{headline}</p>
+          <p className="opacity-80">{detail}</p>
+        </TooltipContent>
       </Tooltip>
     </TooltipProvider>
   );

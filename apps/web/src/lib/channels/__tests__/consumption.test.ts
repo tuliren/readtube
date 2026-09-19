@@ -2,9 +2,11 @@ import {
   CONSUMPTION_MIN_SAMPLE,
   type ChannelConsumption,
   type ConsumptionLevel,
+  type ConsumptionTooltip,
   consumptionLevel,
   consumptionRate,
   consumptionTooltip,
+  consumptionTooltipText,
 } from '../consumption';
 
 function consumption(total: number, consumed: number): ChannelConsumption {
@@ -45,34 +47,61 @@ describe('consumptionLevel', () => {
 });
 
 describe('consumptionTooltip', () => {
-  it.each<[string, ChannelConsumption, string]>([
-    ['a full sample', consumption(20, 15), 'Often read: you read 15 of the 20 most recent videos'],
+  it.each<[string, ChannelConsumption, ConsumptionTooltip]>([
+    [
+      'a full sample',
+      consumption(20, 15),
+      { headline: 'Often read', detail: 'You read 15 of the 20 most recent videos.' },
+    ],
     [
       'a channel shorter than the sample',
       consumption(8, 1),
-      'Rarely read: you read 1 of the 8 most recent videos',
+      { headline: 'Rarely read', detail: 'You read 1 of the 8 most recent videos.' },
     ],
-  ])('names the level and the counts for %s', (_label, input, expected) => {
-    expect(consumptionTooltip(input)).toBe(expected);
+  ])('splits the verdict from the counts for %s', (_label, input, expected) => {
+    expect(consumptionTooltip(input)).toEqual(expected);
   });
 
   it('never quotes a percentage, since the ring already is one', () => {
-    expect(consumptionTooltip(consumption(20, 15))).not.toMatch(/%/);
+    expect(consumptionTooltipText(consumption(20, 15))).not.toMatch(/%/);
   });
 
-  it.each<[string, ChannelConsumption, string]>([
-    ['no videos at all', consumption(0, 0), 'Not rated yet: this channel has no videos'],
+  it.each<[string, ChannelConsumption, ConsumptionTooltip]>([
+    [
+      'no videos at all',
+      consumption(0, 0),
+      { headline: 'Not rated yet', detail: 'This channel has no videos.' },
+    ],
     [
       'a single video',
       consumption(1, 1),
-      `Not rated yet: this channel has only 1 video, and it takes ${CONSUMPTION_MIN_SAMPLE} to rate one`,
+      {
+        headline: 'Not rated yet',
+        detail: `This channel has only 1 video, and it takes ${CONSUMPTION_MIN_SAMPLE} to rate one.`,
+      },
     ],
     [
       'two videos',
       consumption(2, 0),
-      `Not rated yet: this channel has only 2 videos, and it takes ${CONSUMPTION_MIN_SAMPLE} to rate one`,
+      {
+        headline: 'Not rated yet',
+        detail: `This channel has only 2 videos, and it takes ${CONSUMPTION_MIN_SAMPLE} to rate one.`,
+      },
     ],
   ])('explains why %s leaves the ring unrated', (_label, input, expected) => {
-    expect(consumptionTooltip(input)).toBe(expected);
+    expect(consumptionTooltip(input)).toEqual(expected);
+  });
+});
+
+describe('consumptionTooltipText', () => {
+  it.each<[string, ChannelConsumption, string]>([
+    [
+      'a rated channel',
+      consumption(20, 15),
+      'Often read. You read 15 of the 20 most recent videos.',
+    ],
+    ['an unrated channel', consumption(0, 0), 'Not rated yet. This channel has no videos.'],
+  ])('flattens both lines into one label for %s', (_label, input, expected) => {
+    expect(consumptionTooltipText(input)).toBe(expected);
   });
 });

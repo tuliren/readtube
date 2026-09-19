@@ -186,12 +186,13 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
                   )}
                 </Link>
               </TooltipTrigger>
-              <TooltipContent side="right">
-                <span>
+              <TooltipContent side="right" className="max-w-56 leading-snug">
+                <span className="block font-medium">
                   {channel.name}
                   {channel.unreadCount > 0 ? ` (${channel.unreadCount})` : ''}
                 </span>
-                <span className="mt-0.5 block text-xs opacity-80">{consumption}</span>
+                <span className="mt-1 block">{consumption.headline}</span>
+                <span className="block opacity-80">{consumption.detail}</span>
               </TooltipContent>
             </Tooltip>
           );

@@ -72,11 +72,13 @@ export const ChannelCooldown: Story = {
 export const ChannelUnrated: Story = {
   args: { consumption: { total: 1, consumed: 0 } },
   play: async ({ canvasElement }) => {
-    const label = 'Not rated yet: this channel has only 1 video, and it takes 3 to rate one';
-    const ring = within(canvasElement).getByLabelText(label);
+    const detail = 'This channel has only 1 video, and it takes 3 to rate one.';
+    const ring = within(canvasElement).getByLabelText(`Not rated yet. ${detail}`);
     await expect(ring).toBeVisible();
     await userEvent.hover(ring);
-    await expect(await within(document.body).findByRole('tooltip')).toHaveTextContent(label);
+    const tooltip = await within(document.body).findByRole('tooltip');
+    await expect(tooltip).toHaveTextContent('Not rated yet');
+    await expect(tooltip).toHaveTextContent(detail);
     await userEvent.unhover(ring);
   },
 };

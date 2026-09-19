@@ -101,25 +101,52 @@ export function consumptionLevel(consumption: ChannelConsumption): ConsumptionLe
 }
 
 /**
- * Tooltip for the ring. Always returns a string: an unrated channel has
- * to be able to say *why* it is a flat gray ring rather than leaving the
- * user to guess, so the unrated copy names both the video count it has
+ * Tooltip copy for the ring, split into a verdict and the evidence
+ * behind it so the surface can stack them on separate lines. Run
+ * together on one line the sentence is long enough to be a chore to
+ * read at 12px, which is the whole reason it is two fields.
+ */
+export interface ConsumptionTooltip {
+  /** The verdict, on its own line: "Often read", "Not rated yet". */
+  headline: string;
+  /** The counts behind the verdict, wrapping onto as many lines as it needs. */
+  detail: string;
+}
+
+/**
+ * Tooltip for the ring. Always returns copy: an unrated channel has to
+ * be able to say *why* it is a flat gray ring rather than leaving the
+ * user to guess, so the unrated detail names both the video count it has
  * and the count it needs.
  *
  * Deliberately free of a percentage. The ring is the percentage; a number
  * beside it would only invite comparing two renderings of the same thing.
  */
-export function consumptionTooltip(consumption: ChannelConsumption): string {
+export function consumptionTooltip(consumption: ChannelConsumption): ConsumptionTooltip {
   const level = consumptionLevel(consumption);
   if (level === 'unknown') {
     if (consumption.total === 0) {
-      return 'Not rated yet: this channel has no videos';
+      return { headline: 'Not rated yet', detail: 'This channel has no videos.' };
     }
     const plural = consumption.total === 1 ? 'video' : 'videos';
-    return (
-      `Not rated yet: this channel has only ${consumption.total} ${plural}, ` +
-      `and it takes ${CONSUMPTION_MIN_SAMPLE} to rate one`
-    );
+    return {
+      headline: 'Not rated yet',
+      detail:
+        `This channel has only ${consumption.total} ${plural}, ` +
+        `and it takes ${CONSUMPTION_MIN_SAMPLE} to rate one.`,
+    };
   }
-  return `${LEVEL_LABELS[level]}: you read ${consumption.consumed} of the ${consumption.total} most recent videos`;
+  return {
+    headline: LEVEL_LABELS[level],
+    detail: `You read ${consumption.consumed} of the ${consumption.total} most recent videos.`,
+  };
+}
+
+/**
+ * The same copy as one string, for an `aria-label`. Assistive tech reads
+ * a label, not a layout, so the two lines collapse into one sentence.
+ */
+export function consumptionTooltipText(consumption: ChannelConsumption): string {
+  const { headline, detail } = consumptionTooltip(consumption);
+  return `${headline}. ${detail}`;
 }

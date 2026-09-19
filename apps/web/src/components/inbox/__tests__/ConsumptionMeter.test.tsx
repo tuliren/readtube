@@ -74,15 +74,20 @@ describe('ConsumptionMeter', () => {
     [
       'a rated channel',
       { total: 10, consumed: 8 },
-      'Often read: you read 8 of the 10 most recent videos',
+      'Often read. You read 8 of the 10 most recent videos.',
     ],
     [
       'an unrated channel',
       { total: 1, consumed: 0 },
-      'Not rated yet: this channel has only 1 video, and it takes 3 to rate one',
+      'Not rated yet. This channel has only 1 video, and it takes 3 to rate one.',
     ],
-  ])('explains %s through its accessible label', async (_label, consumption, expected) => {
-    await render(consumption);
-    expect(container.querySelector('span[role="img"]')?.getAttribute('aria-label')).toBe(expected);
-  });
+  ])(
+    'flattens both tooltip lines into the accessible label for %s',
+    async (_label, consumption, expected) => {
+      await render(consumption);
+      expect(container.querySelector('span[role="img"]')?.getAttribute('aria-label')).toBe(
+        expected
+      );
+    }
+  );
 });
