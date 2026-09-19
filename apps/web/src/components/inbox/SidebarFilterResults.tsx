@@ -14,6 +14,7 @@ import type { ChannelData } from '@/lib/types';
 import { channelHref } from '@/lib/urls/channelHref';
 
 import ChannelAvatar from './ChannelAvatar';
+import ConsumptionMeter from './ConsumptionMeter';
 import { SidebarBadge, SidebarRowContent, sidebarRowClass } from './SidebarRow';
 
 interface Props {
@@ -135,6 +136,7 @@ export default function SidebarFilterResults({ query, channels, selectedChannelI
                   </span>
                 )}
                 <span className="truncate">{displayChannelName(channel.name)}</span>
+                <ConsumptionMeter consumption={channel.consumption} />
                 <SidebarBadge count={channel.unreadCount} />
               </Link>
             </li>

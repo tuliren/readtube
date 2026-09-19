@@ -6,6 +6,7 @@ import useSWR from 'swr';
 
 import NotesPanelResponsive from '@/components/NotesPanelResponsive';
 import { useDashboard } from '@/components/dashboard/DashboardContext';
+import type { ChannelConsumption } from '@/lib/channels/consumption';
 import {
   PAGE_SIZE,
   encodeInboxQuery,
@@ -204,6 +205,7 @@ export default function VideoListView({
   let headerChannelSourceId: string | null;
   let headerChannelPlatform: VideoPlatform | null;
   let headerChannelCheckedAt: string | null;
+  let headerConsumption: ChannelConsumption | null;
   let headerMarkAllReadBody: Record<string, unknown> | undefined;
   let headerTrailing: React.ReactNode | undefined;
 
@@ -216,6 +218,7 @@ export default function VideoListView({
     headerChannelSourceId = null;
     headerChannelPlatform = null;
     headerChannelCheckedAt = null;
+    headerConsumption = null;
     headerMarkAllReadBody = library.markAllReadBody;
     headerTrailing = library.trailing;
   } else {
@@ -230,6 +233,7 @@ export default function VideoListView({
     headerChannelSourceId = selectedChannel?.sourceId ?? null;
     headerChannelPlatform = selectedChannel?.platform ?? null;
     headerChannelCheckedAt = selectedChannel?.checkedAt ?? null;
+    headerConsumption = selectedChannel?.consumption ?? null;
     headerMarkAllReadBody = undefined;
     headerTrailing = undefined;
   }
@@ -311,6 +315,7 @@ export default function VideoListView({
           channelName={headerName}
           channelLogoUrl={headerLogoUrl}
           channelCheckedAt={headerChannelCheckedAt}
+          consumption={headerConsumption}
           unreadCount={headerUnread}
           totalVideos={totalVideos}
           videos={videoList}

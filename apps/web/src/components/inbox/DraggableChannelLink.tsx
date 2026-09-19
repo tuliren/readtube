@@ -19,6 +19,7 @@ import type { ChannelData, FolderData } from '@/lib/types';
 import { channelHref } from '@/lib/urls/channelHref';
 
 import ChannelAvatar from './ChannelAvatar';
+import ConsumptionMeter from './ConsumptionMeter';
 import MarkAllReadMenuItem from './MarkAllReadMenuItem';
 import RefreshSourceMenuItem from './RefreshSourceMenuItem';
 import { SidebarBadge, SidebarRowContent, sidebarRowClass } from './SidebarRow';
@@ -72,6 +73,7 @@ export default function DraggableChannelLink({
           )}
           <SidebarRowContent
             label={displayChannelName(channel.name)}
+            afterLabel={<ConsumptionMeter consumption={channel.consumption} />}
             trailing={<SidebarBadge count={channel.unreadCount} />}
           />
         </Link>

@@ -1,3 +1,5 @@
+import type { ChannelConsumption } from '@/lib/channels/consumption';
+
 export type VideoPlatform = 'YOUTUBE' | 'BILIBILI';
 
 export interface ChannelData {
@@ -29,6 +31,10 @@ export interface ChannelData {
   folderId: string | null;
   priority: number;
   muteUntil: string | null;
+  /** Counts backing the sidebar consumption meter. See
+   *  `lib/channels/consumption.ts` for what "consumed" means and how the
+   *  counts turn into a level. */
+  consumption: ChannelConsumption;
 }
 
 export interface FolderData {

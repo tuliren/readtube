@@ -1,5 +1,6 @@
 import type { Prisma, PrismaClient, VideoPlatformType } from '@readtube/database';
 
+import { CONSUMPTION_RECENT_VIDEO_COUNT } from '@/lib/channels/consumption';
 import {
   NEW_SUBSCRIPTION_MODE,
   type NewSubscriptionMode,
@@ -106,7 +107,8 @@ export async function countUnreadVideos(
 /**
  * The shape returned by `getSubscribedChannelsWithUnread`. One row per
  * subscription, denormalized to include channel metadata, the user's
- * watermark, and the unread count — all computed in a single SQL query.
+ * watermark, the unread count, and the consumption-window counts — all
+ * computed in a single SQL query.
  */
 export interface SubscribedChannelWithUnread {
   channel_id: string;
@@ -125,6 +127,13 @@ export interface SubscribedChannelWithUnread {
   created_at: Date;
   checked_at: Date | null;
   unread_count: number;
+  // How many videos the consumption rate is computed over: the
+  // channel's video count, capped at CONSUMPTION_RECENT_VIDEO_COUNT
+  // (see `lib/channels/consumption.ts`).
+  consumption_total: number;
+  // Of those, the ones the user has both read and that carry a READY
+  // Summary or Article.
+  consumption_consumed: number;
 }
 
 /**
@@ -133,6 +142,12 @@ export interface SubscribedChannelWithUnread {
  * Video in one statement, returning per-channel unread counts that respect
  * both the per-subscription `read_at` watermark and individual
  * UserVideoConsumption rows.
+ *
+ * The same statement also carries the consumption counts that back the
+ * sidebar's per-channel consumption ring (see
+ * `lib/channels/consumption.ts` for the metric's definition). They ride
+ * along in a LATERAL rather than a second round-trip because every caller
+ * of this function renders the sidebar, which needs both.
  *
  * Returns rows sorted by channel name (case-insensitive).
  */
@@ -158,6 +173,8 @@ export async function getSubscribedChannelsWithUnread(
       created_at: Date;
       checked_at: Date | null;
       unread_count: bigint;
+      consumption_total: bigint;
+      consumption_consumed: bigint;
     }>
   >`
     SELECT
@@ -174,7 +191,9 @@ export async function getSubscribedChannelsWithUnread(
       c."logo_url"     AS logo_url,
       c."created_at"   AS created_at,
       c."checked_at"   AS checked_at,
-      COUNT(v."id")    AS unread_count
+      COUNT(v."id")    AS unread_count,
+      cw."total"       AS consumption_total,
+      cw."consumed"    AS consumption_consumed
     FROM "UserSubscription" us
     JOIN "Channel" c ON c."id" = us."channel_id"
     LEFT JOIN "Video" v ON v."channel_id" = us."channel_id"
@@ -187,10 +206,57 @@ export async function getSubscribedChannelsWithUnread(
         FROM "UserVideoConsumption" k
         WHERE k."video_id" = v."id" AND k."user_id" = us."user_id"
       )
+    -- Consumption sample: the channel's N most recent videos, by
+    -- effective publish date. Counting videos rather than days is what
+    -- keeps a slow channel ratable — a calendar window reports "no
+    -- data" for anything that hasn't posted lately, even when the user
+    -- worked through its whole back catalogue.
+    LEFT JOIN LATERAL (
+      SELECT
+        COUNT(*) AS total,
+        COUNT(*) FILTER (
+          WHERE (
+            EXISTS (
+              SELECT 1
+              FROM "UserVideoConsumption" ck
+              WHERE ck."video_id" = cv."id" AND ck."user_id" = us."user_id"
+            )
+            OR (
+              us."read_at" IS NOT NULL
+              AND COALESCE(cv."published_at", cv."created_at") <= us."read_at"
+            )
+          )
+          AND EXISTS (
+            SELECT 1
+            FROM "Transcript" t
+            WHERE t."video_id" = cv."id"
+              AND (
+                EXISTS (
+                  SELECT 1
+                  FROM "Summary" s
+                  WHERE s."transcript_id" = t."id" AND s."status" = 'READY'
+                )
+                OR EXISTS (
+                  SELECT 1
+                  FROM "Article" a
+                  WHERE a."transcript_id" = t."id" AND a."status" = 'READY'
+                )
+              )
+          )
+        ) AS consumed
+      FROM (
+        SELECT v2."id", v2."published_at", v2."created_at"
+        FROM "Video" v2
+        WHERE v2."channel_id" = us."channel_id"
+        ORDER BY COALESCE(v2."published_at", v2."created_at") DESC
+        LIMIT ${CONSUMPTION_RECENT_VIDEO_COUNT}
+      ) cv
+    ) cw ON TRUE
     WHERE us."user_id" = ${userId}
     GROUP BY
       us."channel_id", us."read_at", us."folder_id", us."priority", us."mute_until",
-      c."source_type", c."source_id", c."name", c."handle", c."rss_url", c."logo_url", c."created_at", c."checked_at"
+      c."source_type", c."source_id", c."name", c."handle", c."rss_url", c."logo_url", c."created_at", c."checked_at",
+      cw."total", cw."consumed"
     ORDER BY LOWER(c."name") ASC
   `;
 
@@ -209,6 +275,8 @@ export async function getSubscribedChannelsWithUnread(
     created_at: row.created_at,
     checked_at: row.checked_at,
     unread_count: Number(row.unread_count),
+    consumption_total: Number(row.consumption_total),
+    consumption_consumed: Number(row.consumption_consumed),
   }));
 }
 
