@@ -11,6 +11,7 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command';
+import { buildReturnTo } from '@/lib/inbox/filter';
 import { bestMatchScore } from '@/lib/search/matchScore';
 import type { SearchResponse, VideoSearchHit } from '@/lib/search/types';
 import { channelHref } from '@/lib/urls/channelHref';
@@ -91,18 +92,10 @@ export default function CommandPaletteDialog({ items, open, setOpen }: Props) {
   );
 
   // Where the reader's Back link should land after opening a video hit.
-  // Mirrors VideoList: forward an existing returnTo verbatim (palette
-  // opened from inside the reader), otherwise the current list URL.
-  const returnTo = useMemo(() => {
-    const existing = searchParams.get('returnTo');
-    if (existing != null && existing.length > 0) {
-      return existing;
-    }
-    const listParams = new URLSearchParams(searchParams);
-    listParams.delete('returnTo');
-    const qs = listParams.toString();
-    return qs.length > 0 ? `${pathname}?${qs}` : pathname;
-  }, [pathname, searchParams]);
+  // Same helper VideoList uses: forward an existing returnTo verbatim
+  // (palette opened from inside the reader), otherwise the current
+  // list URL.
+  const returnTo = useMemo(() => buildReturnTo(pathname, searchParams), [pathname, searchParams]);
 
   // Registered commands are filtered in-process (they never hit the
   // server): empty query shows all of them, otherwise substring match

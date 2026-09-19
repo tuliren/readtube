@@ -1,6 +1,6 @@
 'use client';
 
-import { useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 
@@ -9,17 +9,20 @@ import { useDashboard } from '@/components/dashboard/DashboardContext';
 import type { ChannelConsumption } from '@/lib/channels/consumption';
 import {
   PAGE_SIZE,
+  buildReturnTo,
   encodeInboxQuery,
   extractInboxSearchParams,
   parseInboxQuery,
 } from '@/lib/inbox/filter';
 import type { InboxVideosResult } from '@/lib/inbox/loadVideos';
+import { normalizeListKey } from '@/lib/inbox/scrollMemory';
 import { resolveInboxView } from '@/lib/inbox/views';
 import type { InboxQuery, VideoData, VideoPlatform } from '@/lib/types';
 
 import InboxHeader from './InboxHeader';
 import { useSidebar } from './SidebarContext';
 import VideoList from './VideoList';
+import { useListScrollRestoration } from './useListScrollRestoration';
 
 const fetcher = (url: string) =>
   fetch(url).then((r) => {
@@ -102,6 +105,7 @@ export default function VideoListView({
 }: Props) {
   const { channels, totalUnread, openAddChannel, openAddVideo } = useDashboard();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
 
   // Build the videos fetch URL from the full InboxQuery (including filter
   // chips, search text, saved views). We round-trip through the canonical
@@ -244,6 +248,19 @@ export default function VideoListView({
   // surface there.
   const showNoChannelsCta = library == null && channels.length === 0;
 
+  // Identity of the list on screen, shared with the reader through
+  // the `returnTo` round-trip so it can arm the scroll restore for
+  // exactly this view. Must be the same value VideoList stamps on
+  // each row's href.
+  const listKey = useMemo(
+    () => normalizeListKey(buildReturnTo(pathname, searchParams)),
+    [pathname, searchParams]
+  );
+  const scrollContainerRef = useListScrollRestoration({
+    listKey,
+    ready: !isLoadingVideos && videoList.length > 0,
+  });
+
   const { isMobile } = useSidebar();
   const [notesVideo, setNotesVideo] = useState<{ id: string; title: string } | null>(null);
 
@@ -323,7 +340,7 @@ export default function VideoListView({
           markAllReadBody={headerMarkAllReadBody}
           hideSearch={library != null}
         />
-        <div className="flex-1 overflow-y-auto">
+        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
           <VideoList
             videos={videoList}
             selectedVideoId={selectedVideoId}

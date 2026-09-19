@@ -482,7 +482,11 @@ export default function VideoRow({
   );
 
   return (
-    <li className="group">
+    // The id doubles as the scroll-memory anchor: VideoListView finds
+    // the row at the top of the viewport through this attribute so it
+    // can put the user back on the same row after a trip into the
+    // reader. See `useListScrollRestoration`.
+    <li className="group" data-video-id={video.id}>
       <div
         className={`relative flex items-start gap-2 py-3 pl-2 pr-4 transition-colors ${
           isSelected

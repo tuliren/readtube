@@ -4,6 +4,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { buildReturnTo } from '@/lib/inbox/filter';
 import type { VideoData } from '@/lib/types';
 
 import BulkActionBar from './BulkActionBar';
@@ -75,27 +76,11 @@ export default function VideoList({
     setNow(Date.now());
   }, []);
 
-  // Build the full path-and-query the reader's Back link should
-  // return to, forwarded as `?returnTo=<encoded-url>`.
-  //
-  // Two cases:
-  //   1. We're on a list page (`/inbox?starred=1`, `/channels/@mkbhd`)
-  //      — compose pathname + searchParams so the back link can
-  //      restore the exact list, whether the scope was in the path
-  //      or the query string.
-  //   2. We're already in the reader at `/videos/<id>?returnTo=<url>`
-  //      — forward that value verbatim so navigating between sibling
-  //      videos doesn't lose the back-target.
-  const returnTo = (() => {
-    const existing = searchParams.get('returnTo');
-    if (existing != null && existing.length > 0) {
-      return existing;
-    }
-    const listParams = new URLSearchParams(searchParams);
-    listParams.delete('returnTo');
-    const qs = listParams.toString();
-    return qs.length > 0 ? `${pathname}?${qs}` : pathname;
-  })();
+  // The full path-and-query the reader's Back link should return to,
+  // forwarded as `?returnTo=<encoded-url>`. Doubles as the identity
+  // of this list for the scroll memory, so VideoListView derives its
+  // key from the same helper.
+  const returnTo = buildReturnTo(pathname, searchParams);
 
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   // Track the last toggled-on video ID for Shift+click range selection.

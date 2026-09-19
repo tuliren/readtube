@@ -164,3 +164,27 @@ export function extractInboxSearchParams(raw: URLSearchParams): URLSearchParams 
   copy.delete(RETURN_TO_PARAM);
   return copy;
 }
+
+/**
+ * Build the `returnTo` value for links out of a list into the
+ * reader: the full path + query of the list the user is leaving, so
+ * the Back link can restore the exact view.
+ *
+ * Two cases:
+ *   1. On a list page (`/inbox?starred=1`, `/channels/@handle`) —
+ *      compose pathname + params so the back link restores the exact
+ *      list, whether the scope was in the path or the query string.
+ *   2. Already in the reader at `/videos/<id>?returnTo=<url>` —
+ *      forward that value verbatim so navigating between sibling
+ *      videos doesn't lose the back-target.
+ */
+export function buildReturnTo(pathname: string, params: URLSearchParams): string {
+  const existing = params.get(RETURN_TO_PARAM);
+  if (existing != null && existing.length > 0) {
+    return existing;
+  }
+  const listParams = new URLSearchParams(params);
+  listParams.delete(RETURN_TO_PARAM);
+  const qs = listParams.toString();
+  return qs.length > 0 ? `${pathname}?${qs}` : pathname;
+}
