@@ -49,8 +49,12 @@ export function measureListScroll(container: HTMLElement): ListScrollPosition {
  * offset when the anchor is gone — the list may have been refiltered
  * while the user was away — which still lands them in the right
  * neighborhood.
+ *
+ * Returns whether the position landed on a row. Only an anchored
+ * position is worth re-applying later: replaying a raw offset after
+ * the row heights change yields the same number.
  */
-export function restoreListScroll(container: HTMLElement, position: ListScrollPosition): void {
+export function restoreListScroll(container: HTMLElement, position: ListScrollPosition): boolean {
   if (position.anchorId != null) {
     const row = anchorRows(container).find(
       (candidate) => candidate.getAttribute(SCROLL_ANCHOR_ATTRIBUTE) === position.anchorId
@@ -62,10 +66,11 @@ export function restoreListScroll(container: HTMLElement, position: ListScrollPo
       // container's own padding. The browser clamps the result to
       // the scrollable range on its own.
       container.scrollTop += currentTop - position.anchorOffset;
-      return;
+      return true;
     }
   }
   container.scrollTop = position.offset;
+  return false;
 }
 
 interface Options {
@@ -166,19 +171,23 @@ export function useListScrollRestoration({ listKey, ready, layoutKey }: Options)
       return;
     }
     const position = readListScroll(listKey);
-    // The row check exists for `restoredPositionRef`, not for the
-    // scroll: on an empty container the browser clamps scrollTop to 0
-    // regardless. Keeping a position the list never applied out of
-    // that ref is what stops the re-anchor effect below from replaying
-    // it against rows that arrive later, should the breakpoint then
-    // flip. The empty list still counts as restored (above), so the
-    // write on the way out replaces the stale entry rather than
-    // leaving it for a later visit.
+    // An empty list has nothing to restore into. It still counts as
+    // restored (above), so the write on the way out replaces the
+    // stale entry rather than leaving it for a later visit.
     if (position == null || anchorRows(container).length === 0) {
       return;
     }
-    scrollTo(container, () => restoreListScroll(container, position));
-    restoredPositionRef.current = position;
+    let anchored = false;
+    scrollTo(container, () => {
+      anchored = restoreListScroll(container, position);
+    });
+    // Keep the position for the re-anchor pass only if it landed on a
+    // row. A position that fell back to the raw offset has nothing
+    // for that pass to re-apply, and one the list never applied at
+    // all must not be replayed against rows that arrive later.
+    if (anchored) {
+      restoredPositionRef.current = position;
+    }
   }, [ready, listKey, container]);
 
   // Re-anchor when the row layout changes under a restore the user

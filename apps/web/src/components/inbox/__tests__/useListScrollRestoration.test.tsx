@@ -114,7 +114,9 @@ describe('measureListScroll', () => {
 describe('restoreListScroll', () => {
   it('puts the anchor row back at the same place', () => {
     const scroller = buildList(['a', 'b', 'c', 'd', 'e', 'f']);
-    restoreListScroll(scroller, { offset: 250, anchorId: 'c', anchorOffset: -50 });
+    expect(restoreListScroll(scroller, { offset: 250, anchorId: 'c', anchorOffset: -50 })).toBe(
+      true
+    );
     expect(scroller.scrollTop).toBe(250);
   });
 
@@ -123,7 +125,9 @@ describe('restoreListScroll', () => {
     // so every remaining row moved up by one. The raw offset would
     // now land a row too low; the anchor keeps 'c' where it was.
     const scroller = buildList(['b', 'c', 'd', 'e', 'f']);
-    restoreListScroll(scroller, { offset: 250, anchorId: 'c', anchorOffset: -50 });
+    expect(restoreListScroll(scroller, { offset: 250, anchorId: 'c', anchorOffset: -50 })).toBe(
+      true
+    );
     expect(scroller.scrollTop).toBe(150);
   });
 
@@ -132,7 +136,7 @@ describe('restoreListScroll', () => {
     { name: 'nothing was anchored', anchorId: null },
   ])('falls back to the raw offset when $name', ({ anchorId }) => {
     const scroller = buildList(['a', 'b', 'c']);
-    restoreListScroll(scroller, { offset: 250, anchorId, anchorOffset: -50 });
+    expect(restoreListScroll(scroller, { offset: 250, anchorId, anchorOffset: -50 })).toBe(false);
     expect(scroller.scrollTop).toBe(250);
   });
 });
