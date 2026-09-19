@@ -221,14 +221,6 @@ describe('useListScrollRestoration', () => {
   });
 
   describe('persistence', () => {
-    beforeEach(() => {
-      jest.useFakeTimers();
-    });
-
-    afterEach(() => {
-      jest.useRealTimers();
-    });
-
     async function scrollTo(offset: number) {
       await act(async () => {
         scroller().scrollTop = offset;
@@ -236,18 +228,13 @@ describe('useListScrollRestoration', () => {
       });
     }
 
-    it('records the position after a scroll settles', async () => {
+    it('records nothing while the user is merely scrolling', async () => {
       await mount('/inbox');
       await scrollTo(250);
       expect(readListScroll('/inbox')).toBeNull();
-
-      await act(async () => {
-        jest.advanceTimersByTime(150);
-      });
-      expect(readListScroll('/inbox')).toEqual({ offset: 250, anchorId: 'c', anchorOffset: -50 });
     });
 
-    it('captures a scroll that lands right before the list unmounts', async () => {
+    it('records the position when the list unmounts', async () => {
       await mount('/inbox');
       await scrollTo(250);
       await act(async () => root.unmount());
@@ -257,18 +244,54 @@ describe('useListScrollRestoration', () => {
       root = createRoot(container);
     });
 
+    it('records the position when the page goes away', async () => {
+      await mount('/inbox');
+      await scrollTo(250);
+      await act(async () => {
+        window.dispatchEvent(new Event('pagehide'));
+      });
+      expect(readListScroll('/inbox')).toEqual({ offset: 250, anchorId: 'c', anchorOffset: -50 });
+    });
+
     it('records against the list the user is actually looking at', async () => {
       await mount('/inbox');
+      await scrollTo(250);
       await mount('/inbox?starred=1');
       await scrollTo(100);
-      await act(async () => {
-        jest.advanceTimersByTime(150);
-      });
+      await act(async () => root.unmount());
+      expect(readListScroll('/inbox')).toBeNull();
       expect(readListScroll('/inbox?starred=1')).toEqual({
         offset: 100,
         anchorId: 'b',
         anchorOffset: 0,
       });
+
+      root = createRoot(container);
+    });
+
+    it('keeps the last offset when the container is detached before it can be measured', async () => {
+      await mount('/inbox');
+      await scrollTo(250);
+      await act(async () => {
+        container.remove();
+        window.dispatchEvent(new Event('pagehide'));
+      });
+      // No anchor to measure against, but the offset alone still
+      // lands the user in the right neighborhood.
+      expect(readListScroll('/inbox')).toEqual({ offset: 250, anchorId: null, anchorOffset: 0 });
+    });
+
+    it('records a restored position that the user never touched', async () => {
+      saveListScroll('/inbox', { offset: 250, anchorId: 'c', anchorOffset: -50 });
+      armListScrollRestore('/inbox');
+      await mount('/inbox');
+      await act(async () => {
+        container.remove();
+        window.dispatchEvent(new Event('pagehide'));
+      });
+      // The restore seeds the fallback offset, so a detached persist
+      // right after it cannot rewind the list to the top.
+      expect(readListScroll('/inbox')?.offset).toBe(250);
     });
   });
 });

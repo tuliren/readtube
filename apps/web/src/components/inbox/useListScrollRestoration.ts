@@ -16,14 +16,6 @@ import {
  */
 export const SCROLL_ANCHOR_ATTRIBUTE = 'data-video-id';
 
-/**
- * Throttle window for persisting the position. A trailing-edge
- * throttle rather than a debounce so a long, continuous scroll still
- * checkpoints along the way instead of writing nothing until the
- * user stops. The unmount flush covers the final window.
- */
-const PERSIST_THROTTLE_MS = 150;
-
 function anchorRows(container: HTMLElement): HTMLElement[] {
   return Array.from(container.querySelectorAll<HTMLElement>(`[${SCROLL_ANCHOR_ATTRIBUTE}]`));
 }
@@ -113,6 +105,8 @@ export function useListScrollRestoration({ listKey, ready }: Options) {
   // container is sitting at offset 0 and writing that would clobber
   // the position we are about to restore.
   const restoredRef = useRef(false);
+  // Last offset seen while the container was still measurable.
+  const lastOffsetRef = useRef(0);
 
   useLayoutEffect(() => {
     if (restoredRef.current || !ready) {
@@ -134,6 +128,9 @@ export function useListScrollRestoration({ listKey, ready }: Options) {
       return;
     }
     restoreListScroll(container, position);
+    // A programmatic scroll does not reliably raise a scroll event,
+    // so seed the fallback offset rather than wait for one.
+    lastOffsetRef.current = container.scrollTop;
   }, [ready, listKey]);
 
   // Changing the filter, the search text, or the page replaces the
@@ -149,52 +146,55 @@ export function useListScrollRestoration({ listKey, ready }: Options) {
     const container = containerRef.current;
     if (container != null) {
       container.scrollTop = 0;
+      lastOffsetRef.current = 0;
     }
   }, [listKey]);
 
-  // A layout effect, not a passive one, purely for its cleanup: React
-  // defers passive cleanups until after the commit, by which point
-  // the container has been detached and its scrollTop reads 0. Layout
-  // cleanups run during the mutation phase, while the node is still
-  // in the document and still knows where it was scrolled to.
+  // The position is written once, on the way out, rather than as the
+  // user scrolls: every route out of a list unmounts it, so the
+  // cleanup below is a single choke point that catches a row click, a
+  // command-palette jump, and a sidebar navigation alike — no need to
+  // hang a save off each of those call sites, and no storage traffic
+  // during a scroll.
+  //
+  // A layout effect, not a passive one, purely for that cleanup:
+  // React defers passive cleanups until after the commit, by which
+  // point the container has been detached and its scrollTop reads 0.
+  // Layout cleanups run during the mutation phase, while the node is
+  // still in the document and still knows where it was scrolled to.
   useLayoutEffect(() => {
     const container = containerRef.current;
     if (container == null) {
       return;
     }
-    let timer: ReturnType<typeof setTimeout> | null = null;
 
-    const flush = () => {
-      timer = null;
-      // A detached node reports scrollTop 0; persisting that on the
-      // way out would erase a perfectly good position.
-      if (!restoredRef.current || !container.isConnected) {
-        return;
-      }
-      saveListScroll(listKeyRef.current, measureListScroll(container));
+    // One property read per scroll event — no measuring, no storage.
+    // Its only job is to keep a usable offset around in case the
+    // container is already detached when we come to persist, which
+    // would otherwise cost us the position entirely.
+    const onScroll = () => {
+      lastOffsetRef.current = container.scrollTop;
     };
 
-    const onScroll = () => {
-      if (timer != null) {
+    const persist = () => {
+      if (!restoredRef.current) {
         return;
       }
-      timer = setTimeout(flush, PERSIST_THROTTLE_MS);
+      const position = container.isConnected
+        ? measureListScroll(container)
+        : { offset: lastOffsetRef.current, anchorId: null, anchorOffset: 0 };
+      saveListScroll(listKeyRef.current, position);
     };
 
     container.addEventListener('scroll', onScroll, { passive: true });
     // Covers the paths that skip React teardown entirely: a real page
     // load, a tab close, a bfcache suspend.
-    window.addEventListener('pagehide', flush);
+    window.addEventListener('pagehide', persist);
 
     return () => {
       container.removeEventListener('scroll', onScroll);
-      window.removeEventListener('pagehide', flush);
-      if (timer != null) {
-        clearTimeout(timer);
-      }
-      // Catches a scroll that lands inside the throttle window right
-      // before the user clicks into a video.
-      flush();
+      window.removeEventListener('pagehide', persist);
+      persist();
     };
   }, []);
 
