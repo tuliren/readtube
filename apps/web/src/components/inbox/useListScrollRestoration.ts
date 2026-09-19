@@ -71,7 +71,12 @@ export function restoreListScroll(container: HTMLElement, position: ListScrollPo
 interface Options {
   /** Canonical identity of the list being shown, from `normalizeListKey`. */
   listKey: string;
-  /** True once rows are on screen, so there is something to anchor to. */
+  /**
+   * True once the list's data has arrived, rows or an empty result.
+   * An empty list has nothing to restore into but still counts as
+   * restored: that lets the write on the way out replace the stale
+   * position with the empty list's own, instead of preserving it.
+   */
   ready: boolean;
   /**
    * Opaque token for the row layout in force. When it changes before
@@ -114,10 +119,11 @@ export function useListScrollRestoration({ listKey, ready, layoutKey }: Options)
     listKeyRef.current = listKey;
   }, [listKey]);
 
-  // The armed key is consumed at most once per mount. `read` guards
-  // the consumption rather than the effect's dep list because React
-  // StrictMode runs mount effects twice in development, and the
-  // second pass would otherwise find the key already cleared.
+  // The armed key is consumed once per mount, on the first run of the
+  // restore effect and before it checks whether the list is ready.
+  // `read` guards the consumption rather than the effect's dep list
+  // because React StrictMode runs mount effects twice in development,
+  // and the second pass would otherwise find the key already cleared.
   const armedRef = useRef<{ read: boolean; key: string | null }>({ read: false, key: null });
   // Gates persistence: until the restore pass has had its chance, the
   // container is sitting at offset 0 and writing that would clobber
@@ -142,18 +148,28 @@ export function useListScrollRestoration({ listKey, ready, layoutKey }: Options)
   };
 
   useLayoutEffect(() => {
-    if (restoredRef.current || !ready || container == null) {
-      return;
-    }
+    // Spend the arm before any readiness check. Gating it on rows
+    // would leave the key in storage whenever the return lands on an
+    // empty list (the unread inbox after its last video, say) or on
+    // the no-channels CTA, and a leaked arm fires on whatever visit
+    // to that list comes next: a fresh sidebar click, or this same
+    // mount minutes later when a revalidation finally brings rows.
+    // Either way the user is dropped at a position they never left.
     if (!armedRef.current.read) {
       armedRef.current = { read: true, key: takeArmedListScrollKey() };
+    }
+    if (restoredRef.current || !ready || container == null) {
+      return;
     }
     restoredRef.current = true;
     if (armedRef.current.key !== listKey) {
       return;
     }
     const position = readListScroll(listKey);
-    if (position == null) {
+    // An empty list has nothing to restore into. It still counts as
+    // restored (above), so the write on the way out replaces the
+    // stale entry rather than leaving it for a later visit.
+    if (position == null || anchorRows(container).length === 0) {
       return;
     }
     scrollTo(container, () => restoreListScroll(container, position));

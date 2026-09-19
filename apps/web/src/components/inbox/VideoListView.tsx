@@ -257,13 +257,17 @@ export default function VideoListView({
     [pathname, searchParams]
   );
   const { isMobile } = useSidebar();
-  // VideoRow renders a structurally different row per breakpoint, and
-  // the breakpoint resolves a beat after mount, so a restore that ran
-  // against the desktop rows has to be re-applied once the real ones
-  // are in. See the re-anchor effect in `useListScrollRestoration`.
+  // `ready` means the data has arrived, not that rows exist: an empty
+  // result is a settled list and has to count, or an empty return
+  // would never spend the armed restore and a later visit would pick
+  // it up. VideoRow renders a structurally different row per
+  // breakpoint, and the breakpoint resolves a beat after mount, so a
+  // restore that ran against the desktop rows has to be re-applied
+  // once the real ones are in. See the re-anchor effect in
+  // `useListScrollRestoration`.
   const scrollContainerRef = useListScrollRestoration({
     listKey,
-    ready: !isLoadingVideos && videoList.length > 0,
+    ready: !isLoadingVideos,
     layoutKey: isMobile ? 'mobile' : 'desktop',
   });
 

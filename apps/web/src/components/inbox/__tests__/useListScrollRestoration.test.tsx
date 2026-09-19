@@ -2,7 +2,12 @@
 import { act } from 'react';
 import { type Root, createRoot } from 'react-dom/client';
 
-import { armListScrollRestore, readListScroll, saveListScroll } from '@/lib/inbox/scrollMemory';
+import {
+  armListScrollRestore,
+  readListScroll,
+  saveListScroll,
+  takeArmedListScrollKey,
+} from '@/lib/inbox/scrollMemory';
 
 import {
   measureListScroll,
@@ -144,9 +149,11 @@ describe('useListScrollRestoration', () => {
     layoutKey: string;
     /** Mirrors VideoListView swapping the whole list out for a CTA. */
     withScroller: boolean;
+    /** Row ids on screen; empty mirrors a list whose data arrived empty. */
+    rows: string[];
   }
 
-  function Harness({ listKey, ready, layoutKey, withScroller }: HarnessProps) {
+  function Harness({ listKey, ready, layoutKey, withScroller, rows }: HarnessProps) {
     const ref = useListScrollRestoration({ listKey, ready, layoutKey });
     if (!withScroller) {
       return <p>nothing to show yet</p>;
@@ -154,7 +161,7 @@ describe('useListScrollRestoration', () => {
     return (
       <div ref={ref} data-scroller="">
         <ul>
-          {IDS.map((id) => (
+          {rows.map((id) => (
             <li key={id} data-video-id={id} />
           ))}
         </ul>
@@ -171,7 +178,7 @@ describe('useListScrollRestoration', () => {
   }
 
   async function mount(listKey: string, options: Partial<Omit<HarnessProps, 'listKey'>> = {}) {
-    const { ready = true, layoutKey = 'desktop', withScroller = true } = options;
+    const { ready = true, layoutKey = 'desktop', withScroller = true, rows = IDS } = options;
     await act(async () =>
       root.render(
         <Harness
@@ -179,9 +186,15 @@ describe('useListScrollRestoration', () => {
           ready={ready}
           layoutKey={layoutKey}
           withScroller={withScroller}
+          rows={rows}
         />
       )
     );
+  }
+
+  async function remount() {
+    await act(async () => root.unmount());
+    root = createRoot(container);
   }
 
   async function scrollTo(offset: number) {
@@ -222,7 +235,7 @@ describe('useListScrollRestoration', () => {
     expect(scroller().scrollTop).toBe(0);
   });
 
-  it('waits for rows before restoring', async () => {
+  it('waits for the data before restoring', async () => {
     saveListScroll('/inbox', { offset: 250, anchorId: 'c', anchorOffset: -50 });
     armListScrollRestore('/inbox');
     await mount('/inbox', { ready: false });
@@ -235,11 +248,45 @@ describe('useListScrollRestoration', () => {
     saveListScroll('/inbox', { offset: 250, anchorId: 'c', anchorOffset: -50 });
     armListScrollRestore('/inbox');
     await mount('/inbox');
-    await act(async () => root.unmount());
-
-    root = createRoot(container);
+    await remount();
     await mount('/inbox');
     expect(scroller().scrollTop).toBe(0);
+  });
+
+  // A return that lands on a list with nothing to restore into has to
+  // spend the arm all the same. Left in storage, it would fire on the
+  // next visit to that list: a fresh sidebar click, or the same mount
+  // once a revalidation brings rows.
+  it.each<{ name: string; options: Partial<Omit<HarnessProps, 'listKey'>> }>([
+    { name: 'the data never arrives', options: { ready: false } },
+    { name: 'the data arrives empty', options: { rows: [] } },
+    { name: 'the scroller never renders', options: { withScroller: false } },
+  ])('spends the arm at mount even when $name', async ({ options }) => {
+    saveListScroll('/inbox', { offset: 250, anchorId: 'c', anchorOffset: -50 });
+    armListScrollRestore('/inbox');
+    await mount('/inbox', options);
+    expect(takeArmedListScrollKey()).toBeNull();
+
+    await remount();
+    await mount('/inbox');
+    expect(scroller().scrollTop).toBe(0);
+  });
+
+  it('does not restore into rows that arrive after an empty result', async () => {
+    saveListScroll('/inbox', { offset: 250, anchorId: 'c', anchorOffset: -50 });
+    armListScrollRestore('/inbox');
+    await mount('/inbox', { rows: [] });
+    expect(scroller().scrollTop).toBe(0);
+    await mount('/inbox', { rows: IDS });
+    expect(scroller().scrollTop).toBe(0);
+  });
+
+  it('replaces the remembered position when the list arrives empty', async () => {
+    saveListScroll('/inbox', { offset: 250, anchorId: 'c', anchorOffset: -50 });
+    armListScrollRestore('/inbox');
+    await mount('/inbox', { rows: [] });
+    await remount();
+    expect(readListScroll('/inbox')).toEqual({ offset: 0, anchorId: null, anchorOffset: 0 });
   });
 
   it('picks up a scroller that only arrives on a later render', async () => {
@@ -255,10 +302,8 @@ describe('useListScrollRestoration', () => {
 
     // And the write on the way out is wired up too.
     await scrollTo(100);
-    await act(async () => root.unmount());
+    await remount();
     expect(readListScroll('/inbox')).toEqual({ offset: 100, anchorId: 'b', anchorOffset: 0 });
-
-    root = createRoot(container);
   });
 
   describe('row layout changing under a restore', () => {
@@ -319,11 +364,8 @@ describe('useListScrollRestoration', () => {
     it('records the position when the list unmounts', async () => {
       await mount('/inbox');
       await scrollTo(250);
-      await act(async () => root.unmount());
+      await remount();
       expect(readListScroll('/inbox')).toEqual({ offset: 250, anchorId: 'c', anchorOffset: -50 });
-
-      // Keep afterEach's unmount well-defined.
-      root = createRoot(container);
     });
 
     it('records the position when the page goes away', async () => {
@@ -340,15 +382,13 @@ describe('useListScrollRestoration', () => {
       await scrollTo(250);
       await mount('/inbox?starred=1');
       await scrollTo(100);
-      await act(async () => root.unmount());
+      await remount();
       expect(readListScroll('/inbox')).toBeNull();
       expect(readListScroll('/inbox?starred=1')).toEqual({
         offset: 100,
         anchorId: 'b',
         anchorOffset: 0,
       });
-
-      root = createRoot(container);
     });
 
     it('keeps the last offset when the container is detached before it can be measured', async () => {
