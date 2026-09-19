@@ -152,7 +152,12 @@ export function useListScrollRestoration({ listKey, ready }: Options) {
     }
   }, [listKey]);
 
-  useEffect(() => {
+  // A layout effect, not a passive one, purely for its cleanup: React
+  // defers passive cleanups until after the commit, by which point
+  // the container has been detached and its scrollTop reads 0. Layout
+  // cleanups run during the mutation phase, while the node is still
+  // in the document and still knows where it was scrolled to.
+  useLayoutEffect(() => {
     const container = containerRef.current;
     if (container == null) {
       return;
