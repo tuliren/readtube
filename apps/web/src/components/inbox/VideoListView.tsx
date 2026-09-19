@@ -256,12 +256,17 @@ export default function VideoListView({
     () => normalizeListKey(buildReturnTo(pathname, searchParams)),
     [pathname, searchParams]
   );
+  const { isMobile } = useSidebar();
+  // VideoRow renders a structurally different row per breakpoint, and
+  // the breakpoint resolves a beat after mount, so a restore that ran
+  // against the desktop rows has to be re-applied once the real ones
+  // are in. See the re-anchor effect in `useListScrollRestoration`.
   const scrollContainerRef = useListScrollRestoration({
     listKey,
     ready: !isLoadingVideos && videoList.length > 0,
+    layoutKey: isMobile ? 'mobile' : 'desktop',
   });
 
-  const { isMobile } = useSidebar();
   const [notesVideo, setNotesVideo] = useState<{ id: string; title: string } | null>(null);
 
   // Close the notes panel when the video list changes (channel switch,

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import {
   type ListScrollPosition,
@@ -73,22 +73,40 @@ interface Options {
   listKey: string;
   /** True once rows are on screen, so there is something to anchor to. */
   ready: boolean;
+  /**
+   * Opaque token for the row layout in force. When it changes before
+   * the user has scrolled, the restore is re-applied against the new
+   * row heights — see the re-anchor effect below for why that matters.
+   */
+  layoutKey: string;
 }
 
 /**
  * Remembers and restores the scroll position of a video list across
  * the trip into the reader and back.
  *
- * Returns a ref for the scrolling container. Rows inside it are
- * matched by `SCROLL_ANCHOR_ATTRIBUTE`.
+ * Returns a callback ref for the scrolling container. Rows inside it
+ * are matched by `SCROLL_ANCHOR_ATTRIBUTE`.
  *
  * Restoring is deliberately once-per-mount and gated on an armed key
  * (see `lib/inbox/scrollMemory`): coming back from a video lands you
  * where you were, while a fresh navigation to the same list starts
  * at the top.
  */
-export function useListScrollRestoration({ listKey, ready }: Options) {
-  const containerRef = useRef<HTMLDivElement>(null);
+export function useListScrollRestoration({ listKey, ready, layoutKey }: Options) {
+  // The container is state, not a plain ref, and the ref handed back
+  // is a callback: every effect below needs to run *when the node
+  // arrives*, which is not always the mount. `VideoListView` returns
+  // a no-channels CTA in place of the list, so a user who adds their
+  // first channel attaches the scroller to an already-mounted
+  // component. A `useRef` read inside a `[]`-dep effect would find
+  // null on that mount and never look again, leaving the list with no
+  // scroll listener and no write on the way out — the whole feature
+  // silently dead until a reload.
+  const [container, setContainer] = useState<HTMLDivElement | null>(null);
+  const containerRef = useCallback((node: HTMLDivElement | null) => {
+    setContainer(node);
+  }, []);
 
   // Latest key, for the effects below that outlive a given render.
   const listKeyRef = useRef(listKey);
@@ -107,13 +125,24 @@ export function useListScrollRestoration({ listKey, ready }: Options) {
   const restoredRef = useRef(false);
   // Last offset seen while the container was still measurable.
   const lastOffsetRef = useRef(0);
+  // The offset we last set ourselves. A programmatic scroll raises a
+  // scroll event a frame later that is indistinguishable from a real
+  // one, so the handler tells them apart by comparing against this
+  // rather than by trying to filter the event.
+  const ownOffsetRef = useRef(0);
+  // The position the restore put the user at, kept so the re-anchor
+  // effect below can apply it again. Null once the user takes over.
+  const restoredPositionRef = useRef<ListScrollPosition | null>(null);
+
+  /** Scroll the container ourselves, and note that we did. */
+  const scrollTo = (node: HTMLElement, apply: () => void) => {
+    apply();
+    lastOffsetRef.current = node.scrollTop;
+    ownOffsetRef.current = node.scrollTop;
+  };
 
   useLayoutEffect(() => {
-    if (restoredRef.current || !ready) {
-      return;
-    }
-    const container = containerRef.current;
-    if (container == null) {
+    if (restoredRef.current || !ready || container == null) {
       return;
     }
     if (!armedRef.current.read) {
@@ -127,11 +156,38 @@ export function useListScrollRestoration({ listKey, ready }: Options) {
     if (position == null) {
       return;
     }
-    restoreListScroll(container, position);
-    // A programmatic scroll does not reliably raise a scroll event,
-    // so seed the fallback offset rather than wait for one.
-    lastOffsetRef.current = container.scrollTop;
-  }, [ready, listKey]);
+    scrollTo(container, () => restoreListScroll(container, position));
+    restoredPositionRef.current = position;
+  }, [ready, listKey, container]);
+
+  // Re-anchor when the row layout changes under a restore the user
+  // has not touched yet.
+  //
+  // `SidebarProvider` resolves its mobile breakpoint in a passive
+  // effect, so the first client render is always the desktop one, and
+  // `VideoRow` renders a structurally different row per branch. On a
+  // phone that means the restore above runs against desktop row
+  // heights, and the corrected heights land a beat later — leaving
+  // the user off by the accumulated difference of every row above the
+  // anchor. Re-applying the same anchor against the new heights puts
+  // them back on the row they were reading.
+  //
+  // Only while the position is still ours. Once the user has scrolled
+  // — a breakpoint they crossed by resizing the window, say — being
+  // yanked back to a remembered offset is worse than the drift, so
+  // the scroll handler below retires the position for good.
+  const previousLayoutKeyRef = useRef(layoutKey);
+  useLayoutEffect(() => {
+    if (previousLayoutKeyRef.current === layoutKey) {
+      return;
+    }
+    previousLayoutKeyRef.current = layoutKey;
+    const position = restoredPositionRef.current;
+    if (position == null || container == null) {
+      return;
+    }
+    scrollTo(container, () => restoreListScroll(container, position));
+  }, [layoutKey, container]);
 
   // Changing the filter, the search text, or the page replaces the
   // list under a mounted component. Start that new list at the top
@@ -143,12 +199,15 @@ export function useListScrollRestoration({ listKey, ready }: Options) {
       return;
     }
     previousKeyRef.current = listKey;
-    const container = containerRef.current;
+    // The remembered position belonged to the outgoing list; applying
+    // it to this one would anchor a row that is no longer there.
+    restoredPositionRef.current = null;
     if (container != null) {
-      container.scrollTop = 0;
-      lastOffsetRef.current = 0;
+      scrollTo(container, () => {
+        container.scrollTop = 0;
+      });
     }
-  }, [listKey]);
+  }, [listKey, container]);
 
   // The position is written once, on the way out, rather than as the
   // user scrolls: every route out of a list unmounts it, so the
@@ -163,17 +222,21 @@ export function useListScrollRestoration({ listKey, ready }: Options) {
   // Layout cleanups run during the mutation phase, while the node is
   // still in the document and still knows where it was scrolled to.
   useLayoutEffect(() => {
-    const container = containerRef.current;
     if (container == null) {
       return;
     }
 
     // One property read per scroll event — no measuring, no storage.
-    // Its only job is to keep a usable offset around in case the
-    // container is already detached when we come to persist, which
-    // would otherwise cost us the position entirely.
+    // It keeps a usable offset around in case the container is
+    // already detached when we come to persist, which would otherwise
+    // cost us the position entirely, and it retires the restored
+    // position the moment the scroll came from the user rather than
+    // from us.
     const onScroll = () => {
       lastOffsetRef.current = container.scrollTop;
+      if (container.scrollTop !== ownOffsetRef.current) {
+        restoredPositionRef.current = null;
+      }
     };
 
     const persist = () => {
@@ -196,7 +259,7 @@ export function useListScrollRestoration({ listKey, ready }: Options) {
       window.removeEventListener('pagehide', persist);
       persist();
     };
-  }, []);
+  }, [container]);
 
   return containerRef;
 }

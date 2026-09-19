@@ -19,6 +19,9 @@ import {
 const ROW_HEIGHT = 100;
 const VIEWPORT_HEIGHT = 300;
 
+/** Mutable so a test can shrink the rows the way the mobile breakpoint does. */
+let rowHeight = ROW_HEIGHT;
+
 const scrollTops = new WeakMap<Element, number>();
 let originalScrollTop: PropertyDescriptor | undefined;
 let originalGetRect: typeof HTMLElement.prototype.getBoundingClientRect;
@@ -48,7 +51,7 @@ function installLayoutStubs() {
     const scroller = this.closest('[data-scroller]');
     if (this.hasAttribute('data-video-id') && scroller != null) {
       const rows = Array.from(scroller.querySelectorAll('[data-video-id]'));
-      return rect(rows.indexOf(this) * ROW_HEIGHT - scroller.scrollTop, ROW_HEIGHT);
+      return rect(rows.indexOf(this) * rowHeight - scroller.scrollTop, rowHeight);
     }
     return rect(0, 0);
   };
@@ -76,6 +79,7 @@ function buildList(ids: string[]): HTMLElement {
 
 beforeEach(() => {
   installLayoutStubs();
+  rowHeight = ROW_HEIGHT;
   window.sessionStorage.clear();
 });
 
@@ -134,8 +138,19 @@ describe('useListScrollRestoration', () => {
 
   const IDS = ['a', 'b', 'c', 'd', 'e', 'f'];
 
-  function Harness({ listKey, ready }: { listKey: string; ready: boolean }) {
-    const ref = useListScrollRestoration({ listKey, ready });
+  interface HarnessProps {
+    listKey: string;
+    ready: boolean;
+    layoutKey: string;
+    /** Mirrors VideoListView swapping the whole list out for a CTA. */
+    withScroller: boolean;
+  }
+
+  function Harness({ listKey, ready, layoutKey, withScroller }: HarnessProps) {
+    const ref = useListScrollRestoration({ listKey, ready, layoutKey });
+    if (!withScroller) {
+      return <p>nothing to show yet</p>;
+    }
     return (
       <div ref={ref} data-scroller="">
         <ul>
@@ -155,8 +170,25 @@ describe('useListScrollRestoration', () => {
     return el;
   }
 
-  async function mount(listKey: string, ready = true) {
-    await act(async () => root.render(<Harness listKey={listKey} ready={ready} />));
+  async function mount(listKey: string, options: Partial<Omit<HarnessProps, 'listKey'>> = {}) {
+    const { ready = true, layoutKey = 'desktop', withScroller = true } = options;
+    await act(async () =>
+      root.render(
+        <Harness
+          listKey={listKey}
+          ready={ready}
+          layoutKey={layoutKey}
+          withScroller={withScroller}
+        />
+      )
+    );
+  }
+
+  async function scrollTo(offset: number) {
+    await act(async () => {
+      scroller().scrollTop = offset;
+      scroller().dispatchEvent(new Event('scroll'));
+    });
   }
 
   beforeEach(() => {
@@ -193,9 +225,9 @@ describe('useListScrollRestoration', () => {
   it('waits for rows before restoring', async () => {
     saveListScroll('/inbox', { offset: 250, anchorId: 'c', anchorOffset: -50 });
     armListScrollRestore('/inbox');
-    await mount('/inbox', false);
+    await mount('/inbox', { ready: false });
     expect(scroller().scrollTop).toBe(0);
-    await mount('/inbox', true);
+    await mount('/inbox', { ready: true });
     expect(scroller().scrollTop).toBe(250);
   });
 
@@ -210,6 +242,63 @@ describe('useListScrollRestoration', () => {
     expect(scroller().scrollTop).toBe(0);
   });
 
+  it('picks up a scroller that only arrives on a later render', async () => {
+    // VideoListView renders a CTA instead of the list until the user
+    // has a channel. Adding one attaches the scroller to a component
+    // that is already mounted, which a `[]`-dep effect reading a ref
+    // would never notice.
+    saveListScroll('/inbox', { offset: 250, anchorId: 'c', anchorOffset: -50 });
+    armListScrollRestore('/inbox');
+    await mount('/inbox', { withScroller: false });
+    await mount('/inbox', { withScroller: true });
+    expect(scroller().scrollTop).toBe(250);
+
+    // And the write on the way out is wired up too.
+    await scrollTo(100);
+    await act(async () => root.unmount());
+    expect(readListScroll('/inbox')).toEqual({ offset: 100, anchorId: 'b', anchorOffset: 0 });
+
+    root = createRoot(container);
+  });
+
+  describe('row layout changing under a restore', () => {
+    beforeEach(() => {
+      saveListScroll('/inbox', { offset: 250, anchorId: 'c', anchorOffset: -50 });
+      armListScrollRestore('/inbox');
+    });
+
+    it('re-anchors to the same row when the rows change height', async () => {
+      await mount('/inbox');
+      expect(scroller().scrollTop).toBe(250);
+
+      // The mobile breakpoint resolves a beat after mount and every
+      // row gets shorter. 'c' still belongs 50px above the top edge,
+      // which is now 2 * 60 + 50.
+      rowHeight = 60;
+      await mount('/inbox', { layoutKey: 'mobile' });
+      expect(scroller().scrollTop).toBe(170);
+    });
+
+    it('leaves the position alone once the user has scrolled', async () => {
+      await mount('/inbox');
+      await scrollTo(400);
+
+      rowHeight = 60;
+      await mount('/inbox', { layoutKey: 'mobile' });
+      expect(scroller().scrollTop).toBe(400);
+    });
+
+    it('does not re-anchor the outgoing list after a filter change', async () => {
+      await mount('/inbox');
+      await mount('/inbox?starred=1');
+      expect(scroller().scrollTop).toBe(0);
+
+      rowHeight = 60;
+      await mount('/inbox?starred=1', { layoutKey: 'mobile' });
+      expect(scroller().scrollTop).toBe(0);
+    });
+  });
+
   it('starts at the top when the filter changes under a mounted list', async () => {
     saveListScroll('/inbox', { offset: 250, anchorId: 'c', anchorOffset: -50 });
     armListScrollRestore('/inbox');
@@ -221,13 +310,6 @@ describe('useListScrollRestoration', () => {
   });
 
   describe('persistence', () => {
-    async function scrollTo(offset: number) {
-      await act(async () => {
-        scroller().scrollTop = offset;
-        scroller().dispatchEvent(new Event('scroll'));
-      });
-    }
-
     it('records nothing while the user is merely scrolling', async () => {
       await mount('/inbox');
       await scrollTo(250);
