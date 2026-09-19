@@ -143,12 +143,19 @@ export default function VideoReader({
   // covers every way into the reader at once — row click, command
   // palette, keyboard shortcut, and the sibling-video links that
   // forward `returnTo` verbatim.
+  //
+  // Only a real `returnTo` arms it. Without one the user reached this
+  // video some way that isn't a return from a list at all — a pasted
+  // URL, the "Add video" modal, a citation in Ask — and `backHref` is
+  // the `/inbox` fallback rather than a list they were ever on.
+  // Arming on that would drop them into the middle of an inbox they
+  // last scrolled minutes ago and never left through here.
   useEffect(() => {
-    if (publicMode) {
+    if (publicMode || !isSafeReturnTo) {
       return;
     }
     armListScrollRestore(normalizeListKey(backHref));
-  }, [publicMode, backHref]);
+  }, [publicMode, isSafeReturnTo, backHref]);
   const { url: watchUrl, platformName } = buildWatchLink(video.platform, video.sourceId);
   const { url: channelUrl } = buildChannelLink(video.platform, video.channelSourceId);
 

@@ -29,6 +29,7 @@ import type { VideoData } from '@/lib/types';
 
 import { useSidebar } from './SidebarContext';
 import VideoLibraryMenuItems from './VideoLibraryMenuItems';
+import { SCROLL_ANCHOR_ATTRIBUTE } from './useListScrollRestoration';
 import { useTriage } from './useTriage';
 
 /**
@@ -485,8 +486,10 @@ export default function VideoRow({
     // The id doubles as the scroll-memory anchor: VideoListView finds
     // the row at the top of the viewport through this attribute so it
     // can put the user back on the same row after a trip into the
-    // reader. See `useListScrollRestoration`.
-    <li className="group" data-video-id={video.id}>
+    // reader. Spread from the shared constant rather than spelled out,
+    // so the row and the reader that queries for it cannot drift.
+    // See `useListScrollRestoration`.
+    <li className="group" {...{ [SCROLL_ANCHOR_ATTRIBUTE]: video.id }}>
       <div
         className={`relative flex items-start gap-2 py-3 pl-2 pr-4 transition-colors ${
           isSelected
