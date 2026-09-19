@@ -34,7 +34,7 @@
  * enough that it tracks what the user does now rather than what they
  * did years ago.
  */
-export const CONSUMPTION_RECENT_VIDEO_COUNT = 20;
+export const CONSUMPTION_RECENT_VIDEO_COUNT = 30;
 
 /**
  * Minimum number of videos before a rate is computed. Below this, one
