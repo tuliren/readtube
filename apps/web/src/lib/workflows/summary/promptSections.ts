@@ -10,7 +10,7 @@ export const SUMMARY_FIELDS: readonly SummaryField[] = ['headline', 'full', 'sho
 /**
  * Per-field generation rules. Single source of truth for the model-facing
  * text: buildSummaryPrompt embeds these as prompt sections, and
- * buildSummarySchema reuses them as the structured-output field
+ * buildSummarySchema (schema.ts) reuses them as the structured-output field
  * descriptions, so the two can never drift apart.
  */
 export const SECTION_BODIES: Record<SummaryField, string> = {
