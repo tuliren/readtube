@@ -13,17 +13,19 @@
  * `DEFAULT_AI_MODEL`. Requires `AI_GATEWAY_API_KEY` and `DATABASE_URL`.
  *
  * Usage:
- *   yarn script scripts/compareModels.ts <videoId> <modelA> <modelB> [--lang ja] [--platform BILIBILI]
+ *   yarn script scripts/compareModels.ts <videoId> <modelA> <modelB> [--lang zh-Hans] [--platform BILIBILI]
  *   yarn script:prod scripts/compareModels.ts <videoId> <modelA> <modelB>
  *
  * <videoId> is the platform's own id (`Video.source_id`), not the DB id.
- * --lang sets the target language (BCP-47); omitted means the
- * transcript's original language, like the app's "Original" option.
+ * --lang picks the target language from the reader picker's list
+ * (`TARGET_LANGUAGES`); the default `original` keeps the transcript's
+ * own language, like the app's "Original" option. `--help` lists the
+ * choices.
  */
 import { VideoPlatformType, prisma } from '@readtube/database';
 import { generateObject } from 'ai';
 import { execFile } from 'child_process';
-import { program } from 'commander';
+import { Option, program } from 'commander';
 import { mkdirSync, writeFileSync } from 'fs';
 import path from 'path';
 
@@ -35,12 +37,15 @@ import {
   sectionContent,
 } from '@/lib/ai/modelComparison';
 import { detectLanguage } from '@/lib/language/detect';
+import { TARGET_LANGUAGES } from '@/lib/language/names';
 import type { TranscriptSegment } from '@/lib/platforms/types';
 import { buildSummaryPrompt } from '@/lib/workflows/summary/buildPrompt';
 import { SUMMARY_FIELDS } from '@/lib/workflows/summary/promptSections';
 import { type SummaryObject, buildSummarySchema } from '@/lib/workflows/summary/schema';
 
 const OUTPUT_DIR = path.join(__dirname, 'output');
+/** `--lang` value for the transcript's own language (no translation). */
+const ORIGINAL_LANGUAGE = 'original';
 
 /** The gateway reports per-request cost in provider metadata; it may
  *  arrive as a number or a numeric string. */
@@ -86,21 +91,25 @@ async function main(): Promise<void> {
     .argument('<videoId>', 'platform video id (Video.source_id)')
     .argument('<modelA>', 'AI Gateway model slug, e.g. openai/gpt-6-luna')
     .argument('<modelB>', 'AI Gateway model slug to compare against')
-    .option('--lang <code>', 'target language (BCP-47); defaults to the original language')
-    .option('--platform <platform>', 'video platform', VideoPlatformType.YOUTUBE)
+    .addOption(
+      new Option('--lang <code>', 'target language')
+        .choices([ORIGINAL_LANGUAGE, ...TARGET_LANGUAGES.map((language) => language.code)])
+        .default(ORIGINAL_LANGUAGE)
+    )
+    .addOption(
+      new Option('--platform <platform>', 'video platform')
+        .choices(Object.values(VideoPlatformType))
+        .default(VideoPlatformType.YOUTUBE)
+    )
     .option('--no-open', 'do not open the HTML report')
     .parse();
   const [videoId, modelA, modelB] = program.args;
-  const opts = program.opts<{ lang?: string; platform: string; open: boolean }>();
-
-  const platform = opts.platform.toUpperCase();
-  if (!Object.values<string>(VideoPlatformType).includes(platform)) {
-    throw new Error(`Unknown platform "${opts.platform}".`);
-  }
+  const opts = program.opts<{ lang: string; platform: VideoPlatformType; open: boolean }>();
+  const platform = opts.platform;
 
   const video = await prisma.video.findUnique({
     where: {
-      video_unique_source: { source_type: platform as VideoPlatformType, source_id: videoId },
+      video_unique_source: { source_type: platform, source_id: videoId },
     },
     select: {
       title: true,
@@ -122,7 +131,7 @@ async function main(): Promise<void> {
 
   const segments = JSON.parse(transcript.text) as TranscriptSegment[];
   const transcriptText = segments.map((s) => s.text).join(' ');
-  const target = opts.lang ?? null;
+  const target = opts.lang === ORIGINAL_LANGUAGE ? null : opts.lang;
   // Mirrors resolveTranscriptLanguage without its cache write-back, so
   // this script stays read-only.
   const sourceLanguage =
