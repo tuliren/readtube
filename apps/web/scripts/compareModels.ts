@@ -19,8 +19,8 @@
  * <videoId> is the platform's own id (`Video.source_id`), not the DB id.
  * --lang picks the target language from the reader picker's list
  * (`TARGET_LANGUAGES`); the default `original` keeps the transcript's
- * own language, like the app's "Original" option. `--help` lists the
- * choices.
+ * own language, like the app's "Original" option. `cn` is an alias
+ * for `zh-Hans`. `--help` lists the choices.
  */
 import { VideoPlatformType, prisma } from '@readtube/database';
 import { generateObject } from 'ai';
@@ -46,6 +46,8 @@ import { type SummaryObject, buildSummarySchema } from '@/lib/workflows/summary/
 const OUTPUT_DIR = path.join(__dirname, 'output');
 /** `--lang` value for the transcript's own language (no translation). */
 const ORIGINAL_LANGUAGE = 'original';
+/** Shorthand `--lang` values mapped to their `TARGET_LANGUAGES` code. */
+const LANGUAGE_ALIASES: Record<string, string> = { cn: 'zh-Hans' };
 
 /** The gateway reports per-request cost in provider metadata; it may
  *  arrive as a number or a numeric string. */
@@ -93,7 +95,11 @@ async function main(): Promise<void> {
     .argument('<modelB>', 'AI Gateway model slug to compare against')
     .addOption(
       new Option('--lang <code>', 'target language')
-        .choices([ORIGINAL_LANGUAGE, ...TARGET_LANGUAGES.map((language) => language.code)])
+        .choices([
+          ORIGINAL_LANGUAGE,
+          ...TARGET_LANGUAGES.map((language) => language.code),
+          ...Object.keys(LANGUAGE_ALIASES),
+        ])
         .default(ORIGINAL_LANGUAGE)
     )
     .addOption(
@@ -131,7 +137,8 @@ async function main(): Promise<void> {
 
   const segments = JSON.parse(transcript.text) as TranscriptSegment[];
   const transcriptText = segments.map((s) => s.text).join(' ');
-  const target = opts.lang === ORIGINAL_LANGUAGE ? null : opts.lang;
+  const lang = LANGUAGE_ALIASES[opts.lang] ?? opts.lang;
+  const target = lang === ORIGINAL_LANGUAGE ? null : lang;
   // Mirrors resolveTranscriptLanguage without its cache write-back, so
   // this script stays read-only.
   const sourceLanguage =
