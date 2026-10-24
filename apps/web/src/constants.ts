@@ -15,7 +15,7 @@ export const CONTACT_EMAIL = `contact@${DOMAIN}`;
 // openai/gpt-5.4-mini: $0.74 / $4.5
 // openai/gpt-5.4: $2.5 / $15 - too expensive
 // anthropic/claude-haiku-4.5: $1 / $5 - slow
-export const DEFAULT_AI_MODEL = 'openai/gpt-5.6-luna';
+export const DEFAULT_AI_MODEL = 'openai/gpt-6-luna';
 
 /**
  * Model for semantic embeddings. 1536 native dims matches the pgvector
@@ -51,7 +51,7 @@ export const DEFAULT_EMBEDDING_MODEL = 'openai/text-embedding-3-small';
  * Pricing ≈ $0.75/M input, $3.75/M output ≈ $0.30 per video hour at
  * MEDIA_RESOLUTION_LOW. Requires `GEMINI_API_KEY`.
  */
-export const TRANSCRIPT_GENERATION_MODEL = 'gemini-3.7-flash';
+export const TRANSCRIPT_GENERATION_MODEL = 'gemini-3.8-flash';
 
 /** Base URL for the native Google Generative Language REST API. */
 export const TRANSCRIPT_GENERATION_NATIVE_ENDPOINT =
