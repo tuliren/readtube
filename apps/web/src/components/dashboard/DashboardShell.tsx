@@ -161,6 +161,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
                     underneath the X glyph. */}
                 <div className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-5">
                   <SheetTitle className="text-base font-bold text-foreground">ReadTube</SheetTitle>
+                  <AddButton onClick={() => setAddRequest({})} />
                   {/* No keyboard chip in the drawer — touch devices
                       have no ⌘K, the button itself is the affordance. */}
                   <GlobalSearchButton showShortcut={false} />
@@ -179,7 +180,6 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
                     </UserButton.MenuItems>
                   </UserButton>
                 </div>
-                <SidebarAddRow onAdd={() => setAddRequest({})} />
                 {renderSidebarContent(false)}
               </SidebarExpandedOverride>
             </SheetContent>
@@ -209,11 +209,10 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
                   <PanelLeft className="h-4 w-4" />
                 </button>
               ) : (
-                // Container for GlobalSearchButton's ⌘K chip, which hides
-                // when the sidebar is too narrow to fit it beside the name.
-                <div className="@container flex min-w-0 flex-1 items-center justify-between gap-2 px-2">
+                <div className="flex min-w-0 flex-1 items-center justify-between gap-2 px-2">
                   <span className="truncate text-base font-bold text-foreground">ReadTube</span>
-                  <div className="flex shrink-0 items-center gap-0.5">
+                  <div className="flex shrink-0 items-center gap-1">
+                    <AddButton onClick={() => setAddRequest({})} />
                     <GlobalSearchButton />
                     <button
                       type="button"
@@ -229,14 +228,10 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
               )}
             </div>
 
-            {collapsed ? (
-              <TooltipProvider delayDuration={300}>
-                <div className="flex shrink-0 justify-center pt-3">
-                  <AddButton variant="icon" onClick={() => setAddRequest({})} />
-                </div>
-              </TooltipProvider>
-            ) : (
-              <SidebarAddRow onAdd={() => setAddRequest({})} />
+            {collapsed && (
+              <div className="flex shrink-0 justify-center pt-3">
+                <AddButton tooltipSide="right" onClick={() => setAddRequest({})} />
+              </div>
             )}
             {renderSidebarContent(collapsed)}
 
@@ -288,19 +283,6 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
         <Toaster />
       </div>
     </DashboardCtx.Provider>
-  );
-}
-
-/**
- * The unified Add button in its own row right under the sidebar
- * header. Kept out of the header itself so the app name, search, and
- * collapse controls are never squeezed at narrow sidebar widths.
- */
-function SidebarAddRow({ onAdd }: { onAdd: () => void }) {
-  return (
-    <div className="shrink-0 px-3 pt-3">
-      <AddButton variant="sidebar" onClick={onAdd} />
-    </div>
   );
 }
 

@@ -25,6 +25,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { consumptionTooltip } from '@/lib/channels/consumption';
 import { displayChannelName } from '@/lib/inbox/channelName';
+import { partitionChannelsByFolder } from '@/lib/inbox/partitionChannels';
 import type { ChannelData } from '@/lib/types';
 import { channelHref } from '@/lib/urls/channelHref';
 
@@ -121,26 +122,7 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
     void moveChannel(channelId, folderId);
   }
 
-  // Partition channels by folder. We treat "unknown folder id" as root so
-  // that channels stay visible in two cases:
-  //   1. Initial render: channels come from SSR fallback data already
-  //      populated, but `folders` is [] until the client-side /api/folders
-  //      fetch completes. Without this fallback, foldered channels would
-  //      flash out of view for the first 100ms.
-  //   2. Stale state: a folder was deleted in another tab; its channels
-  //      still carry the old folder_id until the next /api/channels
-  //      revalidation. We'd rather show them at root than hide them.
-  const folderIds = new Set(folders.map((f) => f.id));
-  const rootChannels = channels.filter((c) => c.folderId == null || !folderIds.has(c.folderId));
-  const byFolder = new Map<string, ChannelData[]>();
-  for (const channel of channels) {
-    if (channel.folderId == null || !folderIds.has(channel.folderId)) {
-      continue;
-    }
-    const existing = byFolder.get(channel.folderId) ?? [];
-    existing.push(channel);
-    byFolder.set(channel.folderId, existing);
-  }
+  const { rootChannels, byFolder } = partitionChannelsByFolder(channels, folders);
 
   // Collapsed mode: show channel avatars (or initials) with tooltips, no
   // drag-drop or folder structure. A simple "+ Add" button at the top.
