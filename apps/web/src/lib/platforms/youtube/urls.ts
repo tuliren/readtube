@@ -85,6 +85,51 @@ export function extractHandle(input: string): string | null {
   return match ? match[1] : null;
 }
 
+// ─── Video URL parsing ───────────────────────────────────────────
+
+/**
+ * Extracts a YouTube video id from several common URL shapes. Also
+ * accepts a bare 11-char id.
+ */
+export function extractVideoId(input: string): string | null {
+  if (input == null || typeof input !== 'string') {
+    return null;
+  }
+  const trimmed = input.trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+
+  // Bare video id (11 chars, A-Za-z0-9_-)
+  if (YOUTUBE_VIDEO_ID_PATTERN.test(trimmed)) {
+    return trimmed;
+  }
+
+  const url = parseUrlLoose(trimmed);
+  if (url == null) {
+    return null;
+  }
+  const host = url.hostname.toLowerCase();
+  if (host === 'youtu.be') {
+    const id = url.pathname.replace(/^\/+/, '').split('/')[0];
+    return YOUTUBE_VIDEO_ID_PATTERN.test(id) ? id : null;
+  }
+  if (!host.includes('youtube.com')) {
+    return null;
+  }
+  // /watch?v=<id>
+  const v = url.searchParams.get('v');
+  if (v != null && YOUTUBE_VIDEO_ID_PATTERN.test(v)) {
+    return v;
+  }
+  // /shorts/<id> or /embed/<id> or /live/<id>
+  const m = url.pathname.match(/^\/(?:shorts|embed|live)\/([\w-]{11})/);
+  if (m != null) {
+    return m[1];
+  }
+  return null;
+}
+
 // ─── Playlist URL parsing ────────────────────────────────────────
 
 /**
