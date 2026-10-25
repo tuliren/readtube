@@ -2,7 +2,7 @@ import LifetimeUsage from '@/components/usage/LifetimeUsage';
 import UsageMeter from '@/components/usage/UsageMeter';
 import type { GenerationUsage, LifetimeUsage as LifetimeUsageData } from '@/lib/usage/quota';
 
-interface Props {
+export interface UsageOverviewProps {
   usage: GenerationUsage;
   lifetime: LifetimeUsageData;
 }
@@ -11,7 +11,7 @@ interface Props {
  * Presentational body of the /usage page. Kept free of auth and data
  * fetching so Storybook can render the whole page from fixtures.
  */
-export default function UsageOverview({ usage, lifetime }: Props) {
+export default function UsageOverview({ usage, lifetime }: UsageOverviewProps) {
   return (
     <div className="mx-auto w-full max-w-2xl px-6 py-10">
       <h1 className="mb-6 text-2xl font-semibold text-foreground">Usage</h1>
