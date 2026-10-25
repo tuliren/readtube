@@ -33,6 +33,16 @@ export function sidebarRowClass(active: boolean): string {
   return `${BASE_ROW_CLASS} ${active ? ACTIVE_ROW_CLASS : INACTIVE_ROW_CLASS}`;
 }
 
+/** Icon-only item in the collapsed 56px rail (views, Standalone videos,
+ *  and the Playlists / Channels menu triggers). */
+export function railItemClass(active: boolean): string {
+  return `flex items-center justify-center rounded-md p-2 ${
+    active
+      ? 'bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300'
+      : 'text-foreground hover:bg-accent'
+  }`;
+}
+
 /**
  * Standard unread-count badge. Blue by default. Every row that shows a
  * count uses this so folder headers, channels, and the Inbox row all

@@ -14,6 +14,7 @@ import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 
 import { useCollapseState } from '@/components/dashboard/CollapseStateContext';
+import { useDashboard } from '@/components/dashboard/DashboardContext';
 import { type PlaylistRow, useSidebarData } from '@/components/dashboard/SidebarDataContext';
 import {
   DropdownMenu,
@@ -25,7 +26,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { playlistDisplayName } from '@/lib/inbox/playlistName';
 
 import DeletePlaylistDialog from './DeletePlaylistDialog';
-import NewPlaylistDialog from './NewPlaylistDialog';
+import RailPlaylistsMenu from './RailPlaylistsMenu';
 import RefreshSourceMenuItem from './RefreshSourceMenuItem';
 import RenamePlaylistDialog from './RenamePlaylistDialog';
 import { useSidebar } from './SidebarContext';
@@ -48,8 +49,8 @@ export default function PlaylistsSection({ onAddVideo }: Props) {
   const pathname = usePathname();
   const { collapsed } = useSidebar();
   const { playlistsCollapsed, togglePlaylists } = useCollapseState();
-  const { playlists, mutatePlaylists } = useSidebarData();
-  const [addPlaylistOpen, setAddPlaylistOpen] = useState(false);
+  const { playlists } = useSidebarData();
+  const { openAdd } = useDashboard();
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [renameTarget, setRenameTarget] = useState<{
     id: string;
@@ -63,44 +64,56 @@ export default function PlaylistsSection({ onAddVideo }: Props) {
     ? pathname.slice('/videos/playlists/'.length).split('/')[0]
     : null;
 
+  // Collapsed rail: one Playlists icon whose menu lists every playlist,
+  // instead of one icon per playlist.
+  if (collapsed) {
+    return (
+      <div className="px-1 pt-0.5">
+        <RailPlaylistsMenu
+          playlists={playlists}
+          activePlaylistId={activePlaylistId}
+          onAddPlaylist={() => openAdd({ kind: 'playlist' })}
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className={collapsed ? 'px-1 pt-4' : 'px-3 pt-4'}>
-      {!collapsed && (
-        <div className="mb-1 flex items-center justify-between pl-2">
-          <button
-            type="button"
-            onClick={togglePlaylists}
-            className="flex items-center gap-1 text-left"
-            aria-expanded={!sectionCollapsed}
-            aria-label={sectionCollapsed ? 'Expand playlists' : 'Collapse playlists'}
-          >
-            {sectionCollapsed ? (
-              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-            ) : (
-              <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-            )}
-            <span className="text-base font-semibold text-foreground">Playlists</span>
-          </button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground data-[state=open]:bg-accent data-[state=open]:text-foreground"
-                aria-label="Add playlist"
-                title="Add playlist"
-              >
-                <Plus className="h-3.5 w-3.5" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuItem onSelect={() => setAddPlaylistOpen(true)}>
-                <ListMusic className="mr-2 h-4 w-4 text-muted-foreground" />
-                Add playlist
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      )}
+    <div className="px-3 pt-4">
+      <div className="mb-1 flex items-center justify-between pl-2">
+        <button
+          type="button"
+          onClick={togglePlaylists}
+          className="flex items-center gap-1 text-left"
+          aria-expanded={!sectionCollapsed}
+          aria-label={sectionCollapsed ? 'Expand playlists' : 'Collapse playlists'}
+        >
+          {sectionCollapsed ? (
+            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          )}
+          <span className="text-base font-semibold text-foreground">Playlists</span>
+        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground data-[state=open]:bg-accent data-[state=open]:text-foreground"
+              aria-label="Add playlist"
+              title="Add playlist"
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuItem onSelect={() => openAdd({ kind: 'playlist' })}>
+              <ListMusic className="mr-2 h-4 w-4 text-muted-foreground" />
+              Add playlist
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
       {sectionCollapsed ? null : (
         <ul className="space-y-0.5">
           {playlists.map((p) => (
@@ -108,7 +121,6 @@ export default function PlaylistsSection({ onAddVideo }: Props) {
               key={p.id}
               playlist={p}
               active={activePlaylistId === p.id}
-              sidebarCollapsed={collapsed}
               onRequestAddVideo={() => onAddVideo(p.id)}
               onRequestRename={() =>
                 setRenameTarget({ id: p.id, name: p.name, customName: p.customName })
@@ -119,11 +131,6 @@ export default function PlaylistsSection({ onAddVideo }: Props) {
         </ul>
       )}
 
-      <NewPlaylistDialog
-        open={addPlaylistOpen}
-        onOpenChange={setAddPlaylistOpen}
-        onCreated={() => void mutatePlaylists()}
-      />
       <RenamePlaylistDialog target={renameTarget} onClose={() => setRenameTarget(null)} />
       <DeletePlaylistDialog
         target={deleteTarget}
@@ -137,7 +144,6 @@ export default function PlaylistsSection({ onAddVideo }: Props) {
 interface PlaylistEntryProps {
   playlist: PlaylistRow;
   active: boolean;
-  sidebarCollapsed: boolean;
   onRequestAddVideo: () => void;
   onRequestRename: () => void;
   onRequestDelete: () => void;
@@ -152,42 +158,12 @@ interface PlaylistEntryProps {
 function PlaylistEntry({
   playlist,
   active,
-  sidebarCollapsed,
   onRequestAddVideo,
   onRequestRename,
   onRequestDelete,
 }: PlaylistEntryProps) {
   const href = `/videos/playlists/${playlist.id}`;
   const label = playlistDisplayName(playlist);
-  if (sidebarCollapsed) {
-    return (
-      <li>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Link
-              href={href}
-              className={`flex items-center justify-center rounded-md p-2 ${
-                active
-                  ? 'bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300'
-                  : 'text-foreground hover:bg-accent'
-              }`}
-            >
-              {playlist.thumbnailUrl != null ? (
-                <img
-                  src={playlist.thumbnailUrl}
-                  alt=""
-                  className="h-4 w-4 rounded-sm object-cover"
-                />
-              ) : (
-                <ListMusic className="h-4 w-4" />
-              )}
-            </Link>
-          </TooltipTrigger>
-          <TooltipContent side="right">{label}</TooltipContent>
-        </Tooltip>
-      </li>
-    );
-  }
   return (
     <li className="group flex items-center">
       <Link href={href} className={`${sidebarRowClass(active)} min-w-0 flex-1`}>

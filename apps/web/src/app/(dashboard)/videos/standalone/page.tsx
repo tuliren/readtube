@@ -33,7 +33,7 @@ export default async function VideosStandalonePage({ searchParams }: Props) {
   if (initial.total === 0) {
     return (
       <div className="flex flex-1 flex-col">
-        <LibraryEmptyState emptyMessage="Add a YouTube video or playlist to get started." />
+        <LibraryEmptyState emptyMessage="Paste a video or playlist link to start reading. Standalone videos and playlists you add show up here." />
       </div>
     );
   }

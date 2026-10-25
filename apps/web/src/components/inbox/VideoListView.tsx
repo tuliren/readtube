@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 
 import NotesPanelResponsive from '@/components/NotesPanelResponsive';
+import AddOnboardingPanel from '@/components/add/AddOnboardingPanel';
 import { useDashboard } from '@/components/dashboard/DashboardContext';
 import type { ChannelConsumption } from '@/lib/channels/consumption';
 import {
@@ -103,7 +104,7 @@ export default function VideoListView({
   library,
   showRemoveFromLibrary,
 }: Props) {
-  const { channels, totalUnread, openAddChannel, openAddVideo } = useDashboard();
+  const { channels, totalUnread, openAdd } = useDashboard();
   const searchParams = useSearchParams();
   const pathname = usePathname();
 
@@ -294,41 +295,12 @@ export default function VideoListView({
     }
   }
 
-  // Two paths out of the empty inbox. Following a channel is the
-  // product's thesis and stays primary, but a large share of new
-  // signups arrive from "youtube transcript" / "summarize this video"
-  // searches with one specific video in mind; without a visible way
-  // to paste that URL they bounce before ever reading anything. The
-  // format hints live in the modals (which also accept @handles), so
-  // this surface only has to route the two intents.
+  // First-run onboarding. One unified Add button covers both intents
+  // new signups arrive with: following a channel (the product's thesis)
+  // and reading one specific video they searched for. The panel's demo
+  // shows that a single pasted link of any kind just works.
   if (showNoChannelsCta) {
-    return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
-        <div className="max-w-md">
-          <p className="text-lg font-semibold text-foreground">Your inbox is empty</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Follow a YouTube or Bilibili channel and every new video lands here as a readable
-            summary and article.
-          </p>
-        </div>
-        <button
-          onClick={openAddChannel}
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-        >
-          Add your first channel
-        </button>
-        <p className="text-sm text-muted-foreground">
-          Just want to read one video?{' '}
-          <button
-            type="button"
-            onClick={openAddVideo}
-            className="font-medium text-foreground underline underline-offset-4 hover:text-blue-600"
-          >
-            Paste a video URL
-          </button>
-        </p>
-      </div>
-    );
+    return <AddOnboardingPanel onAdd={openAdd} />;
   }
 
   return (

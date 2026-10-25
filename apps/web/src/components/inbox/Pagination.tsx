@@ -57,7 +57,7 @@ export default function Pagination({ total }: Props) {
   }
 
   return (
-    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+    <div className="flex shrink-0 items-center gap-2 whitespace-nowrap text-xs text-muted-foreground">
       <span className="tabular-nums">
         {hasMultiplePages
           ? `${firstRow}–${lastRow} of ${total}`
@@ -75,8 +75,15 @@ export default function Pagination({ total }: Props) {
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
+          {/* Shortened to "1 / 2" when the nearest `@container` (the
+              inbox header's pagination row) is narrow. */}
           <span className="px-1 tabular-nums">
-            Page {currentPage} of {totalPages}
+            <span className="hidden @min-[30rem]:inline">
+              Page {currentPage} of {totalPages}
+            </span>
+            <span className="@min-[30rem]:hidden">
+              {currentPage} / {totalPages}
+            </span>
           </span>
           <button
             type="button"

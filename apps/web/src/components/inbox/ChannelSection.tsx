@@ -61,7 +61,12 @@ export default function ChannelSection({
 
   return (
     <TooltipProvider delayDuration={300}>
-      <nav className="flex min-w-0 flex-col overflow-x-hidden overflow-y-auto">
+      {/* The collapsed rail scrolls in DashboardShell's container, which
+          hides its scrollbar. A second scroller here would show one and
+          push the rail icons off center. */}
+      <nav
+        className={`flex min-w-0 flex-col overflow-x-hidden ${collapsed ? '' : 'overflow-y-auto'}`}
+      >
         {!collapsed && <SidebarFilterInput value={filter} onChange={setFilter} />}
         {filtering ? (
           <SidebarFilterResults

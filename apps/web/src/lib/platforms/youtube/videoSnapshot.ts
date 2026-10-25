@@ -29,61 +29,22 @@ import {
   type VideoSnapshot,
 } from '@/lib/platforms/types';
 import { isEmptyString } from '@/lib/string';
-import { parseUrlLoose } from '@/lib/urls/parseLoose';
 
 import { UNKNOWN_CHANNEL_NAME } from './constants';
 import { fetchVideoViaDataApi, isDataApiConfigured } from './dataApi';
 import { parseIsoDurationSeconds } from './isoDuration';
 import { resolveChannelId } from './transcriptApi';
-import { YOUTUBE_VIDEO_ID_PATTERN, buildThumbnailUrl } from './urls';
+import { buildThumbnailUrl, extractVideoId } from './urls';
 
 const YT_USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 export type { VideoSnapshot };
 
-/**
- * Extracts a YouTube video id from several common URL shapes. Also
- * accepts a bare 11-char id.
- */
-export function extractVideoId(input: string): string | null {
-  if (input == null || typeof input !== 'string') {
-    return null;
-  }
-  const trimmed = input.trim();
-  if (trimmed.length === 0) {
-    return null;
-  }
-
-  // Bare video id (11 chars, A-Za-z0-9_-)
-  if (YOUTUBE_VIDEO_ID_PATTERN.test(trimmed)) {
-    return trimmed;
-  }
-
-  const url = parseUrlLoose(trimmed);
-  if (url == null) {
-    return null;
-  }
-  const host = url.hostname.toLowerCase();
-  if (host === 'youtu.be') {
-    const id = url.pathname.replace(/^\/+/, '').split('/')[0];
-    return YOUTUBE_VIDEO_ID_PATTERN.test(id) ? id : null;
-  }
-  if (!host.includes('youtube.com')) {
-    return null;
-  }
-  // /watch?v=<id>
-  const v = url.searchParams.get('v');
-  if (v != null && YOUTUBE_VIDEO_ID_PATTERN.test(v)) {
-    return v;
-  }
-  // /shorts/<id> or /embed/<id> or /live/<id>
-  const m = url.pathname.match(/^\/(?:shorts|embed|live)\/([\w-]{11})/);
-  if (m != null) {
-    return m[1];
-  }
-  return null;
-}
+// Moved to ./urls so client code (the unified Add dialog) can classify
+// pasted links without pulling in this module's server-only imports;
+// re-exported to keep existing import sites working.
+export { extractVideoId };
 
 // Moved to ./isoDuration so dataApi.ts can share it without importing
 // this module; re-exported to keep existing import sites working.

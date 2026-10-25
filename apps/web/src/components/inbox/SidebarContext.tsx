@@ -29,7 +29,9 @@ interface SidebarState {
 const SidebarCtx = createContext<SidebarState | null>(null);
 
 const DEFAULT_WIDTH = 288; // w-72
-const MIN_WIDTH = 200;
+// Wide enough for the header row (app name, Add, search with its ⌘K
+// chip, collapse) to fit without truncating the name.
+const MIN_WIDTH = 260;
 const MAX_WIDTH = 480;
 /** Below this width the sidebar auto-collapses to icon-only mode. */
 const COLLAPSE_THRESHOLD = 180;

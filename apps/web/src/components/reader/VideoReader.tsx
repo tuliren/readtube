@@ -516,10 +516,11 @@ export default function VideoReader({
         deliberately bypasses the article's `mx-auto max-w-3xl` indent
         and uses px-3 directly, matching the Channels-section header on
         the sidebar — both category headers should hug the pane edge
-        with the same 12px-from-the-edge action rail.
+        with the same 12px-from-the-edge action rail. On desktop it is
+        h-14, the sidebar header's height, and draws no bottom line.
       */}
         {!publicMode && (
-          <div className="sticky top-0 z-10 flex h-10 shrink-0 items-center gap-0 border-b border-border bg-background px-3 sidebar:h-auto sidebar:gap-1 sidebar:py-3">
+          <div className="sticky top-0 z-10 flex h-10 shrink-0 items-center gap-0 border-b border-border bg-background px-3 sidebar:h-14 sidebar:gap-1 sidebar:border-b-0">
             {/* On small screens this header replaces the dashboard
                 MobileTopBar entirely, so the burger that opens the
                 sidebar drawer lives here. Hidden once the desktop
