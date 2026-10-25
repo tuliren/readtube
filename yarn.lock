@@ -1896,18 +1896,17 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@chromatic-com/storybook@npm:^5.1.2":
-  version: 5.1.2
-  resolution: "@chromatic-com/storybook@npm:5.1.2"
+"@chromatic-com/storybook@npm:^5.6.0":
+  version: 5.6.0
+  resolution: "@chromatic-com/storybook@npm:5.6.0"
   dependencies:
     "@neoconfetti/react": "npm:^1.0.0"
-    chromatic: "npm:^13.3.4"
-    filesize: "npm:^10.0.12"
+    chromatic: "npm:^18.12.1"
     jsonfile: "npm:^6.1.0"
     strip-ansi: "npm:^7.1.0"
   peerDependencies:
-    storybook: ^0.0.0-0 || ^10.1.0 || ^10.1.0-0 || ^10.2.0-0 || ^10.3.0-0 || ^10.4.0-0
-  checksum: 10c0/0d21aab34eef8dea756d7a510fd78227379751e23d9cedac127161442eb96622f302e0b8f71a78f1254b31a26ee5350e328e4c994909d28553dbe74174d606e1
+    storybook: ^0.0.0-0 || ^10.1.0 || ^10.1.0-0 || ^10.2.0-0 || ^10.3.0-0 || ^10.4.0-0 || ^10.5.0-0 || ^10.6.0-0 || ^11.0.0-0
+  checksum: 10c0/abeb82b552aad64dba4cf915c3b3f2404e8e0246e14f74075193a35aa669e88fd96658fab39baca68d103952a3a6409e378986715a336a24f62084c75041b085
   languageName: node
   linkType: hard
 
@@ -5760,7 +5759,7 @@ __metadata:
   resolution: "@readtube/web@workspace:apps/web"
   dependencies:
     "@babel/core": "npm:^8.0.7"
-    "@chromatic-com/storybook": "npm:^5.1.2"
+    "@chromatic-com/storybook": "npm:^5.6.0"
     "@clerk/nextjs": "npm:^7.5.9"
     "@dnd-kit/core": "npm:^6.3.1"
     "@headlessui/react": "npm:^2.2.10"
@@ -5786,7 +5785,7 @@ __metadata:
     "@storybook/addon-links": "npm:^10.6.3"
     "@storybook/nextjs": "npm:^10.6.3"
     "@storybook/react": "npm:^10.6.3"
-    "@storybook/test-runner": "npm:^0.24.3"
+    "@storybook/test-runner": "npm:^0.26.0"
     "@swc/core": "npm:^1.16.18"
     "@tailwindcss/postcss": "npm:^4.3.0"
     "@tailwindcss/typography": "npm:^0.5.19"
@@ -6220,9 +6219,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@storybook/test-runner@npm:^0.24.3":
-  version: 0.24.3
-  resolution: "@storybook/test-runner@npm:0.24.3"
+"@storybook/test-runner@npm:^0.26.0":
+  version: 0.26.0
+  resolution: "@storybook/test-runner@npm:0.26.0"
   dependencies:
     "@babel/core": "npm:^7.22.5"
     "@babel/generator": "npm:^7.22.5"
@@ -6246,10 +6245,10 @@ __metadata:
     rimraf: "npm:^3.0.2"
     uuid: "npm:^8.3.2"
   peerDependencies:
-    storybook: ^0.0.0-0 || ^10.0.0 || ^10.0.0-0 || ^10.1.0-0 || ^10.2.0-0 || ^10.3.0-0 || ^10.4.0-0
+    storybook: ^0.0.0-0 || ^10.0.0 || ^10.0.0-0 || ^10.1.0-0 || ^10.2.0-0 || ^10.3.0-0 || ^10.4.0-0 || ^10.5.0-0 || ^10.6.0-0 || ^11.0.0-0 || >=11
   bin:
     test-storybook: dist/test-storybook.js
-  checksum: 10c0/581cc520e1baa4ea86103a2ca2fba00330906a817733927059d08655cf2d85af3c5cca10ed7e159b7c37f19d7575da38d499a955c46d40654b9fc296969871b0
+  checksum: 10c0/6e95019eaa28af54b3cb723831077185d89cb218a9a3cb20e9eaaaf264014ad00544b11f0da3439c642bce52e1b7c6373863bb6c632bbaf691dd8b037c5429d1
   languageName: node
   linkType: hard
 
@@ -10221,22 +10220,32 @@ __metadata:
   languageName: node
   linkType: hard
 
-"chromatic@npm:^13.3.4":
-  version: 13.3.5
-  resolution: "chromatic@npm:13.3.5"
+"chromatic@npm:^18.12.1":
+  version: 18.13.3
+  resolution: "chromatic@npm:18.13.3"
+  dependencies:
+    semver: "npm:^7.3.5"
   peerDependencies:
     "@chromatic-com/cypress": ^0.*.* || ^1.0.0
     "@chromatic-com/playwright": ^0.*.* || ^1.0.0
+    "@chromatic-com/vitest": ^0.*.* || ^1.0.0
+  dependenciesMeta:
+    "@sentry/cli":
+      built: true
+    esbuild:
+      built: true
   peerDependenciesMeta:
     "@chromatic-com/cypress":
       optional: true
     "@chromatic-com/playwright":
       optional: true
+    "@chromatic-com/vitest":
+      optional: true
   bin:
-    chroma: dist/bin.js
-    chromatic: dist/bin.js
-    chromatic-cli: dist/bin.js
-  checksum: 10c0/58b3d7984db000f8c7b605788569a24c3f3cd41bb6b2d3a94f18acc9ff11ce6c6881f795c8390a94ff721ccfcf8a2d7942e78a54a1f70294a7b3d35ccc382154
+    chroma: dist/bin.cjs
+    chromatic: dist/bin.cjs
+    chromatic-cli: dist/bin.cjs
+  checksum: 10c0/f46349bf1ca00f00590f26b05ddd464623276dfd3dd4cf87973bb15008e69e7e62d6209e2a7cc88fb1013af43140641d341bf5a28dcd86255d3bb30f21654bbd
   languageName: node
   linkType: hard
 
@@ -13232,13 +13241,6 @@ __metadata:
   dependencies:
     minimatch: "npm:^5.0.1"
   checksum: 10c0/6ee725bec3e1936d680a45f14439b224d9f7c71658c145addcf551dd82f03d608522eb6b191aa086b392bc3e52ed4ce0ed8d78e24b203e6c5e867560a05d1121
-  languageName: node
-  linkType: hard
-
-"filesize@npm:^10.0.12":
-  version: 10.1.6
-  resolution: "filesize@npm:10.1.6"
-  checksum: 10c0/9a196d64da4e947b8c0d294be09a3dfa7a634434a1fc5fb3465f1c9acc1237ea0363f245ba6e24477ea612754d942bc964d86e0e500905a72e9e0e17ae1bbdbc
   languageName: node
   linkType: hard
 
