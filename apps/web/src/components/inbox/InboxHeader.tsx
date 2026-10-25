@@ -120,10 +120,12 @@ export default function InboxHeader({
 
   return (
     <div className="flex h-auto shrink-0 flex-col border-b border-border bg-background">
-      {/* Title row — action buttons sit next to the title/badge,
-          search stays on the right edge. This keeps the actions
-          contextually close to the thing they act on. */}
-      <div className="hidden h-12 items-center justify-start gap-2 overflow-hidden px-4 sidebar:flex">
+      {/* Title row — action buttons sit next to the title/badge so
+          they stay contextually close to the thing they act on. It is
+          h-14 with its own bottom border so the line lines up with the
+          sidebar header's line (DashboardShell) across the whole
+          window. */}
+      <div className="hidden h-14 shrink-0 items-center justify-start gap-2 overflow-hidden border-b border-border px-4 sidebar:flex">
         <div className="flex min-w-0 items-center gap-2">
           {channelLogoUrl != null && (
             <div className="hidden sidebar:block">
@@ -193,12 +195,13 @@ export default function InboxHeader({
           </div>
         </div>
       </div>
-      {/* Video count + pagination on the left, search on the right.
-          The header itself sits above the scrolling video list and
-          never scrolls away, so the pagination control is always
-          reachable while the user is reading rows. Library views
-          render pagination but hide the search box. */}
-      <div className="flex items-center justify-between gap-2 px-4 py-2 sidebar:pt-0">
+      {/* Video count + pagination on the left, search on the right,
+          below the title row's line. The header itself sits above the
+          scrolling video list and never scrolls away, so the
+          pagination control is always reachable while the user is
+          reading rows. Library views render pagination but hide the
+          search box. */}
+      <div className="flex items-center justify-between gap-2 px-4 py-2">
         <Pagination total={totalVideos} />
         {!hideSearch && <SearchInput />}
       </div>
