@@ -1,0 +1,23 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    # Yarn workspaces: the root manifest and lockfile cover every workspace.
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      # Storybook packages are released in lockstep and must stay on the same version.
+      storybook:
+        applies-to: version-updates
+        patterns:
+          - '*storybook*'
+      storybook-security:
+        applies-to: security-updates
+        patterns:
+          - '*storybook*'
+    ignore:
+      # Stay on the current Prisma major; upgrade across majors manually.
+      - dependency-name: prisma
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@prisma/client'
+        update-types: ['version-update:semver-major']
