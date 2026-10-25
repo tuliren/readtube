@@ -128,7 +128,7 @@ export const WideSingleRow: Story = {
     docs: {
       description: {
         story:
-          'When the header is at least 56rem wide, pagination and search move up to the right end of the title row.',
+          'When the header is at least 60rem wide, pagination and search move up to the right end of the title row.',
       },
     },
   },
@@ -139,7 +139,7 @@ export const WideSingleRow: Story = {
 
 export const WideSingleRowLongTitle: Story = {
   args: { ...LongTitle.args, totalVideos: 66 },
-  decorators: atWidth(900),
+  decorators: atWidth(1000),
   play: WideSingleRow.play,
 };
 
@@ -163,7 +163,7 @@ export const NarrowTwoRows: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'Below 56rem, pagination and search stay on their own row under the title.',
+        story: 'Below 60rem, pagination and search stay on their own row under the title.',
       },
     },
   },
