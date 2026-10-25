@@ -73,7 +73,7 @@
   },
   "devDependencies": {
     "@babel/core": "^8.0.6",
-    "@chromatic-com/storybook": "^5.1.2",
+    "@chromatic-com/storybook": "^5.6.0",
     "@next/eslint-plugin-next": "^16.2.6",
     "@readtube/database": "*",
     "@readtube/eslint-config": "*",
@@ -83,7 +83,7 @@
     "@storybook/addon-links": "^10.6.3",
     "@storybook/nextjs": "^10.6.3",
     "@storybook/react": "^10.6.3",
-    "@storybook/test-runner": "^0.24.3",
+    "@storybook/test-runner": "^0.26.0",
     "@swc/core": "^1.15.33",
     "@tailwindcss/typography": "^0.5.19",
     "@testcontainers/postgresql": "^11.14.0",
