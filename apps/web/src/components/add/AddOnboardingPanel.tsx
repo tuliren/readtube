@@ -10,7 +10,7 @@ import type { AddRequest } from './AddDialog';
 import AddKindCard from './AddKindCard';
 import { ADD_KIND_ORDER } from './addKinds';
 
-interface Props {
+export interface AddOnboardingPanelProps {
   /** Opens the shared Add dialog (`useDashboard().openAdd`). */
   onAdd: (request?: AddRequest) => void;
   /**
@@ -38,14 +38,14 @@ export default function AddOnboardingPanel({
   variant = 'welcome',
   title,
   description,
-}: Props) {
+}: AddOnboardingPanelProps) {
   const welcome = variant === 'welcome';
   usePasteToAdd(welcome, onAdd);
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center overflow-y-auto p-6 sm:p-8">
+    <div className="flex flex-1 flex-col overflow-y-auto p-6 sm:p-8">
       <div
-        className={`flex w-full flex-col items-center text-center ${welcome ? 'max-w-2xl gap-6' : 'max-w-md gap-4'}`}
+        className={`m-auto flex w-full flex-col items-center text-center ${welcome ? 'max-w-2xl gap-6' : 'max-w-md gap-4'}`}
       >
         <div>
           <h2 className={`font-semibold text-foreground ${welcome ? 'text-2xl' : 'text-lg'}`}>

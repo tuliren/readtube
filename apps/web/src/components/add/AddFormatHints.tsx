@@ -18,8 +18,10 @@ export default function AddFormatHints({ kind = null }: Props) {
         return (
           <li key={k} className="flex items-start gap-2">
             <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-            <span className="flex flex-wrap gap-1.5">
-              {kind == null && <span className="font-medium text-foreground">{info.title}</span>}
+            {kind == null && (
+              <span className="w-16 shrink-0 font-medium text-foreground">{info.title}</span>
+            )}
+            <span className="flex min-w-0 flex-wrap gap-1.5">
               {info.formats.map((format) => (
                 <code key={format} className="rounded bg-muted px-1">
                   {format}

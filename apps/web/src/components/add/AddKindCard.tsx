@@ -34,7 +34,7 @@ export default function AddKindCard({ kind, onClick }: Props) {
         {info.formats.map((format) => (
           <code
             key={format}
-            className="rounded bg-muted px-1 text-xs text-muted-foreground group-hover:text-foreground"
+            className="break-all rounded bg-muted px-1 text-xs text-muted-foreground group-hover:text-foreground"
           >
             {format}
           </code>
