@@ -25,18 +25,18 @@ export default function UsageOverview({ usage, lifetime }: UsageOverviewProps) {
       <h1 className="mb-6 text-2xl font-semibold text-foreground">Usage</h1>
       <div className="space-y-6">
         <UsageMeter
-          title="YouTube transcripts"
-          description="Fetching a video’s YouTube captions counts toward this quota. Summaries and articles built from a transcript you already have don’t."
+          title="Fetched transcripts"
+          description="Fetching a video’s existing captions from video platforms counts toward this quota. Summaries and articles built from a transcript you already have don’t."
           used={captions.used}
           quota={captions.quota}
           format={formatCount}
-          ariaLabel="Monthly YouTube transcripts used"
+          ariaLabel="Monthly fetched transcripts used"
           periodStart={periodStart}
           periodEnd={periodEnd}
         />
         <UsageMeter
           title="Gemini transcripts"
-          description="When a video has no captions, Gemini transcribes it from the video itself. This quota is metered by video length, and failed attempts don’t count."
+          description="When a YouTube video has no captions, Gemini transcribes it from the video itself. This quota is metered by video length, and failed attempts don’t count."
           used={generated.minutes}
           quota={generated.quotaMinutes}
           format={formatMinutesAsHours}

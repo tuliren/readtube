@@ -16,7 +16,7 @@ interface Props {
  */
 export default function LifetimeUsage({ transcript, summary, article }: Props) {
   const items = [
-    { label: 'YouTube transcripts', value: transcript.captions },
+    { label: 'Fetched transcripts', value: transcript.captions },
     { label: 'Gemini transcripts', value: transcript.generated },
     { label: 'Summaries', value: summary },
     { label: 'Articles', value: article },

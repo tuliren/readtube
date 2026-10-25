@@ -23,7 +23,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'The /usage page body. YouTube caption fetches are metered by count; Gemini transcription is metered in video hours. Lifetime usage splits transcripts by the same two sources.',
+          'The /usage page body. Caption fetches from video platforms are metered by count; Gemini transcription is metered in video hours. Lifetime usage splits transcripts by the same two sources.',
       },
     },
   },
@@ -38,7 +38,7 @@ const meta = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     await expect(
-      canvas.getByRole('progressbar', { name: 'Monthly YouTube transcripts used' })
+      canvas.getByRole('progressbar', { name: 'Monthly fetched transcripts used' })
     ).toHaveAttribute('aria-valuenow', String(args.usage.captions.used));
     await expect(
       canvas.getByRole('progressbar', { name: 'Monthly Gemini transcription minutes used' })

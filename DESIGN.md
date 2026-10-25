@@ -106,7 +106,7 @@ Rule of thumb for budgeting: **generation cost ≈ clicks × ~$0.10–0.35** dep
 
 Metered off the `UserRequest` audit log (no counter table); `lib/usage/quota.ts` derives it per UTC calendar month (`getGenerationUsage`). TRANSCRIPT rows split by source on `model`: captions rows have none, Gemini rows always do. Two monthly quotas, both surfaced read-only on `/usage` with no enforcement yet (there are no plans or billing):
 
-- **YouTube captions** count toward `MONTHLY_GENERATION_QUOTA` (500). Every captions row counts regardless of `outcome`, since rows are only written when an upstream fetch actually happened.
+- **Fetched captions** (YouTube or Bilibili) count toward `MONTHLY_GENERATION_QUOTA` (500). Every captions row counts regardless of `outcome`, since rows are only written when an upstream fetch actually happened.
 - **Gemini transcription** is metered in video minutes against `MONTHLY_GENERATED_TRANSCRIPT_MINUTES_QUOTA`, because its cost scales with length (see "Cost" above). Planned allowances: Free 0 h, Curator 5 h, Scholar 15 h; the page shows the Curator figure until plans exist. Only completed GENERATED rows count, each at its video's `duration_seconds` capped at `TRANSCRIPT_GENERATION_MAX_VIDEO_SECONDS`, so failed and in-flight runs never charge the allowance.
 
 Summary and article generations count toward neither. `getLifetimeUsage` groups all-time counts by type, with transcripts split by source. The page body lives in `components/usage/UsageOverview.tsx` so Storybook (`Usage/Usage page`) can render it from fixtures.
