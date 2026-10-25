@@ -42,7 +42,9 @@ export default function GlobalSearchButton({ showShortcut = true }: Props) {
     >
       <Search className="h-4 w-4" />
       {shortcut != null && (
-        <kbd className="rounded border border-border bg-muted px-1 py-0.5 font-sans text-[10px] font-medium leading-none">
+        // Hidden unless the nearest `@container` (the sidebar header) is
+        // wide enough to fit it beside the app name.
+        <kbd className="hidden rounded border border-border bg-muted px-1 py-0.5 font-sans text-[10px] font-medium leading-none @min-[12rem]:inline-block">
           {shortcut}
         </kbd>
       )}
