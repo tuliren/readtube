@@ -36,6 +36,7 @@ import {
   renderComparisonHtml,
   sectionContent,
 } from '@/lib/ai/modelComparison';
+import { normalizeLlmJsonEscapes } from '@/lib/ai/normalizeJsonEscapes';
 import { detectLanguage } from '@/lib/language/detect';
 import { TARGET_LANGUAGES } from '@/lib/language/names';
 import type { TranscriptSegment } from '@/lib/platforms/types';
@@ -57,6 +58,18 @@ function extractGatewayCost(providerMetadata: unknown): number | null {
   return typeof parsed === 'number' && Number.isFinite(parsed) ? parsed : null;
 }
 
+/** Mirrors the production summary step, which un-escapes literal
+ *  `\n` sequences some models emit in JSON-mode output. */
+function normalizeSummary(summary: SummaryObject): SummaryObject {
+  const normalizeField = (field: SummaryObject['full']) =>
+    field == null ? field : { ...field, content: normalizeLlmJsonEscapes(field.content) };
+  return {
+    headline: summary.headline == null ? undefined : normalizeLlmJsonEscapes(summary.headline),
+    full: normalizeField(summary.full),
+    short: normalizeField(summary.short),
+  };
+}
+
 async function runModel(model: string, prompt: string): Promise<ModelRun> {
   const startedAt = Date.now();
   try {
@@ -69,7 +82,7 @@ async function runModel(model: string, prompt: string): Promise<ModelRun> {
     return {
       model,
       ok: true,
-      summary: result.object as SummaryObject,
+      summary: normalizeSummary(result.object as SummaryObject),
       stats: {
         latencyMs: Date.now() - startedAt,
         inputTokens: result.usage.inputTokens ?? null,
