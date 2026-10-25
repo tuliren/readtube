@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { countWords } from '@/lib/format/wordCount';
 import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { consumeNdjsonStream } from '@/lib/reader/consumeNdjsonStream';
+import { panguSpaceText } from '@/lib/reader/remarkPanguSpacing';
 import { buildScheduledMessage, parseScheduledResponse } from '@/lib/reader/scheduledVideoToast';
 import { useFollowBottom } from '@/lib/reader/useFollowBottom';
 import { isDevelopment } from '@/lib/vercelEnv';
@@ -651,7 +652,7 @@ export default function SummaryReader({
         <div className="flex items-start justify-between gap-4">
           {summary.headline ? (
             <h2 className="flex-1 text-xl leading-snug font-semibold text-foreground">
-              {summary.headline}
+              {panguSpaceText(summary.headline)}
             </h2>
           ) : isRegenerating('headline') ? (
             <div className="h-6 flex-1 animate-pulse rounded bg-muted" />

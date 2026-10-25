@@ -8,6 +8,8 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import type { PluggableList } from 'unified';
 
+import remarkPanguSpacing from '@/lib/reader/remarkPanguSpacing';
+
 const EXTERNAL_LINKS_PLUGIN: PluggableList[number] = [
   rehypeExternalLinks,
   { target: '_blank', rel: ['noopener', 'noreferrer'] },
@@ -26,6 +28,11 @@ const EXTERNAL_LINKS_PLUGIN: PluggableList[number] = [
  * literally and an unrelated span gets emphasized instead. This is
  * common in Chinese/Japanese/Korean summaries.
  *
+ * `remarkPanguSpacing` adds a space between CJK and Latin text
+ * (`使用OpenAI` → `使用 OpenAI`) at render time, so existing rows get it
+ * without regeneration. It runs last so math and GFM nodes already
+ * exist and are left alone.
+ *
  * LaTeX delimiter behaviour is gated by `hasLatex`:
  *   - true  — both `$…$` and `$$…$$` render as math.
  *   - false — only `$$…$$` renders; single-`$` is disabled so prose
@@ -39,7 +46,7 @@ export function buildMarkdownPlugins(hasLatex: boolean): {
     ? remarkMath
     : [remarkMath, { singleDollarTextMath: false }];
   return {
-    remarkPlugins: [remarkGfm, remarkCjkFriendly, mathPlugin],
+    remarkPlugins: [remarkGfm, remarkCjkFriendly, mathPlugin, remarkPanguSpacing],
     rehypePlugins: [rehypeKatex, EXTERNAL_LINKS_PLUGIN],
   };
 }
