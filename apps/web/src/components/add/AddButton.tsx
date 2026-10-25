@@ -10,8 +10,9 @@ export const ADD_BUTTON_HINT = 'Add a channel, video, or playlist';
 interface Props {
   onClick: () => void;
   /**
-   * - `icon`: compact square button, sized to match the other sidebar
-   *   toolbar icons, for the sidebar header and the collapsed rail.
+   * - `icon`: ghost icon button with the same box as the neighboring
+   *   sidebar toolbar icons (search, collapse), set apart only by its
+   *   blue glyph. For the sidebar header and the collapsed rail.
    * - `hero`: large call to action for empty-state panels.
    */
   variant?: 'icon' | 'hero';
@@ -46,7 +47,7 @@ export default function AddButton({
               onClick={onClick}
               aria-label={ADD_BUTTON_HINT}
               className={cn(
-                'shrink-0 rounded-md bg-blue-600 p-1.5 text-white shadow-sm hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2',
+                'shrink-0 rounded-md p-1.5 text-blue-600 hover:bg-accent hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-blue-400 dark:hover:text-blue-300',
                 className
               )}
             >

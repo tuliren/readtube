@@ -10,7 +10,7 @@ import { INBOX_VIEWS, type InboxViewDef, inboxViewHref } from '@/lib/inbox/views
 import type { InboxQuery } from '@/lib/types';
 
 import { useSidebar } from './SidebarContext';
-import { SidebarBadge, SidebarRowContent, sidebarRowClass } from './SidebarRow';
+import { SidebarBadge, SidebarRowContent, railItemClass, sidebarRowClass } from './SidebarRow';
 import { useInboxQuery } from './useInboxQuery';
 
 interface Props {
@@ -85,14 +85,7 @@ export default function ViewsSection({ inboxUnread }: Props) {
                 <li key={view.key}>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Link
-                        href={href}
-                        className={`flex items-center justify-center rounded-md p-2 ${
-                          active
-                            ? 'bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300'
-                            : 'text-foreground hover:bg-accent'
-                        }`}
-                      >
+                      <Link href={href} className={railItemClass(active)}>
                         <Icon className="h-4 w-4" />
                       </Link>
                     </TooltipTrigger>

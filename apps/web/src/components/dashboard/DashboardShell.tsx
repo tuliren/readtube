@@ -230,7 +230,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
 
             {collapsed && (
               <div className="flex shrink-0 justify-center pt-3">
-                <AddButton tooltipSide="right" onClick={() => setAddRequest({})} />
+                <AddButton tooltipSide="right" className="p-2" onClick={() => setAddRequest({})} />
               </div>
             )}
             {renderSidebarContent(collapsed)}

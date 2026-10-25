@@ -35,15 +35,25 @@ function SidebarHeader({ width, onClick }: { width: number; onClick: () => void 
           <span className="truncate text-base font-bold text-foreground">ReadTube</span>
           <div className="flex shrink-0 items-center gap-1">
             <AddButton onClick={onClick} />
-            <span className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-muted-foreground">
+            {/* Same markup as GlobalSearchButton, which needs the Clerk-backed
+                command palette that Storybook can't mount. */}
+            <button
+              type="button"
+              className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+              aria-label="Search videos and channels"
+            >
               <Search className="h-4 w-4" />
               <kbd className="rounded border border-border bg-muted px-1 py-0.5 font-sans text-[10px] font-medium leading-none">
                 ⌘K
               </kbd>
-            </span>
-            <span className="rounded p-1.5 text-muted-foreground">
+            </button>
+            <button
+              type="button"
+              className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+              aria-label="Collapse sidebar"
+            >
               <PanelLeft className="h-4 w-4" />
-            </span>
+            </button>
           </div>
         </div>
       </div>

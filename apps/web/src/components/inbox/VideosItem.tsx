@@ -8,7 +8,7 @@ import { useSidebarData } from '@/components/dashboard/SidebarDataContext';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 import { useSidebar } from './SidebarContext';
-import { SidebarBadge } from './SidebarRow';
+import { SidebarBadge, railItemClass } from './SidebarRow';
 
 interface Props {
   /** Open the AddVideoModal (no playlist pre-selected). */
@@ -37,14 +37,7 @@ export default function VideosItem({ onAddVideo }: Props) {
       <div className="px-1 pt-4">
         <Tooltip>
           <TooltipTrigger asChild>
-            <Link
-              href="/videos/standalone"
-              className={`flex items-center justify-center rounded-md p-2 ${
-                active
-                  ? 'bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300'
-                  : 'text-foreground hover:bg-accent'
-              }`}
-            >
+            <Link href="/videos/standalone" className={railItemClass(active)}>
               <Video className="h-4 w-4" />
             </Link>
           </TooltipTrigger>

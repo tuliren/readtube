@@ -34,6 +34,7 @@ import DeleteFolderDialog from './DeleteFolderDialog';
 import DraggableChannelLink from './DraggableChannelLink';
 import FolderGroup from './FolderGroup';
 import NewFolderDialog from './NewFolderDialog';
+import RailChannelsMenu from './RailChannelsMenu';
 import RemoveChannelDialog from './RemoveChannelDialog';
 import RenameFolderDialog from './RenameFolderDialog';
 import { useSidebar } from './SidebarContext';
@@ -124,65 +125,17 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
 
   const { rootChannels, byFolder } = partitionChannelsByFolder(channels, folders);
 
-  // Collapsed mode: show channel avatars (or initials) with tooltips, no
-  // drag-drop or folder structure. A simple "+ Add" button at the top.
+  // Collapsed rail: one Channels icon whose menu lists folders (each a
+  // submenu of its channels) and then root-level channels, instead of
+  // one avatar per channel down the whole rail.
   if (sidebarCollapsed) {
     return (
-      <div className="mt-4 flex flex-col items-center gap-1 px-1">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={() => onAddChannel(null)}
-              className="flex items-center justify-center rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-foreground"
-              aria-label="Add channel"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="right">Add channel</TooltipContent>
-        </Tooltip>
-        <div className="my-1 h-px w-6 bg-border" />
-        {channels.map((channel) => {
-          const active = selectedChannelId === channel.id;
-          // The 56px rail has no room for the consumption ring, so the
-          // tooltip is the only place the rating can surface there.
-          const consumption = consumptionTooltip(channel.consumption);
-          return (
-            <Tooltip key={channel.id}>
-              <TooltipTrigger asChild>
-                <Link
-                  href={channelHref(channel)}
-                  className={`flex items-center justify-center rounded-md p-1.5 ${
-                    active
-                      ? 'bg-blue-50 ring-2 ring-blue-200 dark:bg-blue-500/15 dark:ring-blue-500/30'
-                      : 'hover:bg-accent'
-                  }`}
-                >
-                  {channel.logoUrl != null ? (
-                    <ChannelAvatar url={channel.logoUrl} size={40} cssSize="h-6 w-6" />
-                  ) : (
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">
-                      {channel.name.charAt(0).toUpperCase()}
-                    </span>
-                  )}
-                </Link>
-              </TooltipTrigger>
-              <TooltipContent side="right" className="max-w-56 leading-snug">
-                <span className="block font-medium">
-                  {channel.name}
-                  {channel.unreadCount > 0 ? ` (${channel.unreadCount})` : ''}
-                </span>
-                <span className="mt-1 block">{consumption.headline}</span>
-                <span className="block opacity-80">{consumption.detail}</span>
-              </TooltipContent>
-            </Tooltip>
-          );
-        })}
-        <RemoveChannelDialog
-          target={pendingRemoveChannel}
-          currentChannelId={selectedChannelId}
-          onClose={() => setPendingRemoveChannel(null)}
+      <div className="px-1 pt-0.5">
+        <RailChannelsMenu
+          channels={channels}
+          folders={folders}
+          selectedChannelId={selectedChannelId}
+          onAddChannel={() => onAddChannel(null)}
         />
       </div>
     );
