@@ -1,6 +1,8 @@
+import type { TranscriptBreakdown } from '@/lib/usage/quota';
+
 interface Props {
-  /** Total transcript generations ever. */
-  transcript: number;
+  /** Total transcript generations ever, by source. */
+  transcript: TranscriptBreakdown;
   /** Total summary generations ever. */
   summary: number;
   /** Total article generations ever. */
@@ -14,7 +16,8 @@ interface Props {
  */
 export default function LifetimeUsage({ transcript, summary, article }: Props) {
   const items = [
-    { label: 'Transcripts', value: transcript },
+    { label: 'YouTube transcripts', value: transcript.captions },
+    { label: 'Gemini transcripts', value: transcript.generated },
     { label: 'Summaries', value: summary },
     { label: 'Articles', value: article },
   ];
@@ -25,7 +28,7 @@ export default function LifetimeUsage({ transcript, summary, article }: Props) {
       <p className="mb-4 max-w-prose text-sm text-muted-foreground">
         Everything you&rsquo;ve generated since you joined.
       </p>
-      <dl className="grid grid-cols-3 gap-4">
+      <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         {items.map((item) => (
           <div key={item.label}>
             <dt className="text-sm text-muted-foreground">{item.label}</dt>
