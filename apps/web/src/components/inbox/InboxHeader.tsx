@@ -119,14 +119,19 @@ export default function InboxHeader({
   }
 
   return (
-    <div className="flex h-auto shrink-0 flex-col border-b border-border bg-background sidebar:border-b-0">
+    // A `@container/header` so the two rows below can merge into one
+    // when the main pane (not the viewport) is wide enough; the
+    // sidebar's width varies, so a screen breakpoint would misfire.
+    <div className="@container/header flex h-auto shrink-0 flex-col border-b border-border bg-background sidebar:border-b-0 @min-[56rem]/header:flex-row @min-[56rem]/header:items-center">
       {/* Title row — action buttons sit next to the title/badge so
           they stay contextually close to the thing they act on. It is
           h-14, the sidebar header's height (DashboardShell), so the
           title lines up with the app name. On desktop the main pane
           draws no header lines; the mobile layout keeps the outer one
-          to separate the header from the list. */}
-      <div className="hidden h-14 shrink-0 items-center justify-start gap-2 overflow-hidden px-4 sidebar:flex">
+          to separate the header from the list. In the merged layout
+          it keeps its content width and gives way (truncating the
+          title) only when the pagination row needs the room. */}
+      <div className="hidden h-14 shrink-0 items-center justify-start gap-2 overflow-hidden px-4 sidebar:flex @min-[56rem]/header:shrink">
         <div className="flex min-w-0 items-center gap-2">
           {channelLogoUrl != null && (
             <div className="hidden sidebar:block">
@@ -205,8 +210,11 @@ export default function InboxHeader({
           whatever width is left, and Pagination shortens its page label
           when this row (an `@container`) is narrow. On desktop it is
           pulled up into the bottom of the h-14 title row, which has to
-          keep its height to line up with the sidebar header. */}
-      <div className="@container flex items-center justify-between gap-3 px-4 py-2 sidebar:-mt-2 sidebar:pt-0">
+          keep its height to line up with the sidebar header. When the
+          header is wide enough, it moves up to the right end of the
+          title row instead, sized at least wide enough for the full
+          "Page X of Y" label. */}
+      <div className="@container flex items-center justify-between gap-3 px-4 py-2 sidebar:-mt-2 sidebar:pt-0 @min-[56rem]/header:mt-0 @min-[56rem]/header:min-w-[30rem] @min-[56rem]/header:flex-1 @min-[56rem]/header:justify-end @min-[56rem]/header:py-0">
         <Pagination total={totalVideos} />
         {!hideSearch && <SearchInput />}
       </div>
