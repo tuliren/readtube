@@ -26,7 +26,8 @@ export const MONTHLY_GENERATION_QUOTA = 500;
  * cost scales with length (~$0.35 per video hour; see DESIGN.md
  * "Cost"). Planned per plan: Free 0 h, Curator 5 h, Scholar 15 h.
  * There are no plans yet, so this is the Curator figure, shown on
- * /usage like {@link MONTHLY_GENERATION_QUOTA} and not enforced.
+ * /usage like {@link MONTHLY_GENERATION_QUOTA} and not enforced. Keep
+ * in sync with the tier features in `components/Pricing.tsx`.
  */
 export const MONTHLY_GENERATED_TRANSCRIPT_MINUTES_QUOTA = 5 * 60;
 
