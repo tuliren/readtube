@@ -119,13 +119,14 @@ export default function InboxHeader({
   }
 
   return (
-    <div className="flex h-auto shrink-0 flex-col border-b border-border bg-background">
+    <div className="flex h-auto shrink-0 flex-col border-b border-border bg-background sidebar:border-b-0">
       {/* Title row — action buttons sit next to the title/badge so
           they stay contextually close to the thing they act on. It is
-          h-14 with its own bottom border so the line lines up with the
-          sidebar header's line (DashboardShell) across the whole
-          window. */}
-      <div className="hidden h-14 shrink-0 items-center justify-start gap-2 overflow-hidden border-b border-border px-4 sidebar:flex">
+          h-14, the sidebar header's height (DashboardShell), so the
+          title lines up with the app name. On desktop the main pane
+          draws no header lines; the mobile layout keeps the outer one
+          to separate the header from the list. */}
+      <div className="hidden h-14 shrink-0 items-center justify-start gap-2 overflow-hidden px-4 sidebar:flex">
         <div className="flex min-w-0 items-center gap-2">
           {channelLogoUrl != null && (
             <div className="hidden sidebar:block">
@@ -196,12 +197,16 @@ export default function InboxHeader({
         </div>
       </div>
       {/* Video count + pagination on the left, search on the right,
-          below the title row's line. The header itself sits above the
+          below the title row. The header itself sits above the
           scrolling video list and never scrolls away, so the
           pagination control is always reachable while the user is
           reading rows. Library views render pagination but hide the
-          search box. */}
-      <div className="flex items-center justify-between gap-2 px-4 py-2">
+          search box. The pagination never wraps; the search box takes
+          whatever width is left, and Pagination shortens its page label
+          when this row (an `@container`) is narrow. On desktop it is
+          pulled up into the bottom of the h-14 title row, which has to
+          keep its height to line up with the sidebar header. */}
+      <div className="@container flex items-center justify-between gap-3 px-4 py-2 sidebar:-mt-2 sidebar:pt-0">
         <Pagination total={totalVideos} />
         {!hideSearch && <SearchInput />}
       </div>

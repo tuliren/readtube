@@ -67,7 +67,10 @@ export default function SearchInput() {
   const isDirty = local.trim() !== (query.q ?? '');
 
   return (
-    <form onSubmit={handleSubmit} className="relative flex items-center">
+    <form
+      onSubmit={handleSubmit}
+      className="relative flex w-full min-w-0 max-w-32 items-center sidebar:max-w-72"
+    >
       <Search className="absolute left-2 h-3.5 w-3.5 text-muted-foreground" />
       <Input
         ref={inputRef}
@@ -85,7 +88,7 @@ export default function SearchInput() {
         // shadow-none clobbers the shared Input primitive's `shadow-sm`,
         // which read as too heavy at this size on the inbox header rail.
         // Other Inputs (folder dialog, add-channel modal) keep theirs.
-        className={`h-7 w-32 rounded-full pl-7 pr-14 text-xs shadow-none sidebar:w-72 ${
+        className={`h-7 w-full rounded-full pl-7 pr-14 text-xs shadow-none ${
           isDirty ? 'border-blue-400 ring-1 ring-blue-200' : ''
         }`}
       />
