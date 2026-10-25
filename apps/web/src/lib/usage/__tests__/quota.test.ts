@@ -1,13 +1,25 @@
-import { type PrismaClient, UserRequestType } from '@readtube/database';
+import { type PrismaClient, UserRequestOutcome, UserRequestType } from '@readtube/database';
 
+import { TRANSCRIPT_GENERATION_MAX_VIDEO_SECONDS } from '@/constants';
 import {
+  MONTHLY_GENERATED_TRANSCRIPT_MINUTES_QUOTA,
   MONTHLY_GENERATION_QUOTA,
-  countMonthlyTranscriptGenerations,
+  countMonthlyCaptionFetches,
   getGenerationUsage,
   getLifetimeUsage,
+  getMonthlyGeneratedTranscriptUsage,
   getMonthlyQuotaPeriod,
+  toGeneratedMinutes,
   toTranscriptBreakdown,
 } from '@/lib/usage/quota';
+
+const JUNE_WINDOW = {
+  gte: new Date('2026-06-01T00:00:00.000Z'),
+  lt: new Date('2026-07-01T00:00:00.000Z'),
+};
+
+const withDurations = (durations: (number | null)[]) =>
+  durations.map((duration_seconds) => ({ video: { duration_seconds } }));
 
 describe('getMonthlyQuotaPeriod', () => {
   it.each([
@@ -70,43 +82,76 @@ describe('toTranscriptBreakdown', () => {
   });
 });
 
-describe('countMonthlyTranscriptGenerations', () => {
-  it("counts only this user's transcript requests within the current month, by source", async () => {
-    const groupBy = jest.fn().mockResolvedValue([
-      { model: null, _count: { _all: 5 } },
-      { model: 'model-a', _count: { _all: 2 } },
-    ]);
-    const prisma = { userRequest: { groupBy } } as unknown as PrismaClient;
+describe('countMonthlyCaptionFetches', () => {
+  it("counts only this user's captions-path transcript requests within the current month", async () => {
+    const count = jest.fn().mockResolvedValue(7);
+    const prisma = { userRequest: { count } } as unknown as PrismaClient;
 
-    const result = await countMonthlyTranscriptGenerations(
+    const result = await countMonthlyCaptionFetches(
       prisma,
       'user_abc',
       new Date('2026-06-15T12:00:00.000Z')
     );
 
-    expect(result).toEqual({ captions: 5, generated: 2 });
-    expect(groupBy).toHaveBeenCalledWith({
-      by: ['model'],
+    expect(result).toBe(7);
+    expect(count).toHaveBeenCalledWith({
       where: {
         user_id: 'user_abc',
         type: UserRequestType.TRANSCRIPT,
-        created_at: {
-          gte: new Date('2026-06-01T00:00:00.000Z'),
-          lt: new Date('2026-07-01T00:00:00.000Z'),
-        },
+        model: null,
+        created_at: JUNE_WINDOW,
       },
-      _count: { _all: true },
+    });
+  });
+});
+
+describe('toGeneratedMinutes', () => {
+  it.each([
+    { name: 'no generations', durations: [], expected: 0 },
+    { name: 'a single video', durations: [20 * 60], expected: 20 },
+    { name: 'several videos', durations: [20 * 60, 45 * 60 + 30], expected: 66 },
+    { name: 'a missing duration as zero', durations: [null, 10 * 60], expected: 10 },
+    {
+      name: 'a video longer than the generation cap at the cap',
+      durations: [TRANSCRIPT_GENERATION_MAX_VIDEO_SECONDS + 60 * 60],
+      expected: TRANSCRIPT_GENERATION_MAX_VIDEO_SECONDS / 60,
+    },
+  ])('counts $name', ({ durations, expected }) => {
+    expect(toGeneratedMinutes(durations)).toBe(expected);
+  });
+});
+
+describe('getMonthlyGeneratedTranscriptUsage', () => {
+  it('sums video minutes of completed Gemini generations within the current month', async () => {
+    const findMany = jest.fn().mockResolvedValue(withDurations([30 * 60, 15 * 60]));
+    const prisma = { userRequest: { findMany } } as unknown as PrismaClient;
+
+    const result = await getMonthlyGeneratedTranscriptUsage(
+      prisma,
+      'user_abc',
+      new Date('2026-06-15T12:00:00.000Z')
+    );
+
+    expect(result).toEqual({ videos: 2, minutes: 45 });
+    expect(findMany).toHaveBeenCalledWith({
+      where: {
+        user_id: 'user_abc',
+        type: UserRequestType.TRANSCRIPT,
+        model: { not: null },
+        outcome: UserRequestOutcome.GENERATED,
+        completed_at: { not: null },
+        created_at: JUNE_WINDOW,
+      },
+      select: { video: { select: { duration_seconds: true } } },
     });
   });
 });
 
 describe('getGenerationUsage', () => {
-  it('assembles used count, breakdown, quota, and period bounds', async () => {
-    const groupBy = jest.fn().mockResolvedValue([
-      { model: null, _count: { _all: 40 } },
-      { model: 'model-a', _count: { _all: 2 } },
-    ]);
-    const prisma = { userRequest: { groupBy } } as unknown as PrismaClient;
+  it('assembles caption and Gemini usage, quotas, and period bounds', async () => {
+    const count = jest.fn().mockResolvedValue(40);
+    const findMany = jest.fn().mockResolvedValue(withDurations([50 * 60, 40 * 60]));
+    const prisma = { userRequest: { count, findMany } } as unknown as PrismaClient;
 
     const usage = await getGenerationUsage(
       prisma,
@@ -115,9 +160,12 @@ describe('getGenerationUsage', () => {
     );
 
     expect(usage).toEqual({
-      used: 42,
-      breakdown: { captions: 40, generated: 2 },
-      quota: MONTHLY_GENERATION_QUOTA,
+      captions: { used: 40, quota: MONTHLY_GENERATION_QUOTA },
+      generated: {
+        videos: 2,
+        minutes: 90,
+        quotaMinutes: MONTHLY_GENERATED_TRANSCRIPT_MINUTES_QUOTA,
+      },
       periodStart: new Date('2026-06-01T00:00:00.000Z'),
       periodEnd: new Date('2026-07-01T00:00:00.000Z'),
     });

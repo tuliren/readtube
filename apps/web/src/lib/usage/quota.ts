@@ -1,10 +1,14 @@
-import { type PrismaClient, UserRequestType } from '@readtube/database';
+import { type PrismaClient, UserRequestOutcome, UserRequestType } from '@readtube/database';
+
+import { TRANSCRIPT_GENERATION_MAX_VIDEO_SECONDS } from '@/constants';
 
 /**
- * Per-user monthly generation quota.
+ * Per-user monthly quota of YouTube caption fetches.
  *
- * Only TRANSCRIPT requests count against the quota — summary and
- * article generations are excluded (see T-483). A transcript fetch hits
+ * Only captions-path TRANSCRIPT requests count against the quota —
+ * Gemini-generated transcripts have their own hour-based allowance
+ * ({@link MONTHLY_GENERATED_TRANSCRIPT_MINUTES_QUOTA}), and summary and
+ * article generations are excluded (see T-483). A caption fetch hits
  * the upstream TranscriptAPI and is the unit of cost we meter; the LLM
  * summary/article steps are layered on top and tracked separately in
  * the `UserRequest` audit log but don't draw down this allowance.
@@ -15,6 +19,16 @@ import { type PrismaClient, UserRequestType } from '@readtube/database';
  * freely — no code below or above this number changes behavior yet.
  */
 export const MONTHLY_GENERATION_QUOTA = 500;
+
+/**
+ * Per-user monthly allowance of Gemini transcript generation, in video
+ * minutes. Metered by duration rather than by video because generation
+ * cost scales with length (~$0.35 per video hour; see DESIGN.md
+ * "Cost"). Planned per plan: Free 0 h, Curator 5 h, Scholar 15 h.
+ * There are no plans yet, so this is the Curator figure, shown on
+ * /usage like {@link MONTHLY_GENERATION_QUOTA} and not enforced.
+ */
+export const MONTHLY_GENERATED_TRANSCRIPT_MINUTES_QUOTA = 5 * 60;
 
 /**
  * Transcript generations split by where the transcript came from:
@@ -30,17 +44,27 @@ export interface TranscriptBreakdown {
 }
 
 export interface GenerationUsage {
-  /** Transcript generations the user has spent in the current month. */
-  used: number;
-  /** `used`, split by transcript source. */
-  breakdown: TranscriptBreakdown;
-  /** The monthly allotment ({@link MONTHLY_GENERATION_QUOTA}). */
-  quota: number;
+  /** YouTube caption fetches this month. */
+  captions: {
+    used: number;
+    /** {@link MONTHLY_GENERATION_QUOTA} */
+    quota: number;
+  };
+  /** Gemini transcript generations this month. */
+  generated: {
+    /** Completed generations. */
+    videos: number;
+    /** Video minutes those generations covered. */
+    minutes: number;
+    /** {@link MONTHLY_GENERATED_TRANSCRIPT_MINUTES_QUOTA} */
+    quotaMinutes: number;
+  };
   /** First instant of the current month (UTC), inclusive. */
   periodStart: Date;
   /** First instant of next month (UTC), exclusive — i.e. the reset. */
   periodEnd: Date;
 }
+
 /**
  * Calendar-month window (UTC) containing `now`. `start` is the first
  * millisecond of the month (inclusive); `end` is the first millisecond
@@ -80,33 +104,75 @@ export function toTranscriptBreakdown(rows: ModelCountRow[]): TranscriptBreakdow
 }
 
 /**
- * Count the transcript generations a user has made in the calendar
- * month containing `now`, split by source. Every TRANSCRIPT-type
- * `UserRequest` counts regardless of outcome: both GENERATED and
+ * Count the YouTube caption fetches a user has made in the calendar
+ * month containing `now`. Every captions-path TRANSCRIPT `UserRequest`
+ * (no `model`) counts regardless of outcome: both GENERATED and
  * UNAVAILABLE represent a real upstream fetch that bore cost.
  */
-export async function countMonthlyTranscriptGenerations(
+export async function countMonthlyCaptionFetches(
   prisma: PrismaClient,
   userId: string,
   now: Date
-): Promise<TranscriptBreakdown> {
+): Promise<number> {
   const { start, end } = getMonthlyQuotaPeriod(now);
-  const rows = await prisma.userRequest.groupBy({
-    by: ['model'],
+  return prisma.userRequest.count({
     where: {
       user_id: userId,
       type: UserRequestType.TRANSCRIPT,
+      model: null,
       created_at: { gte: start, lt: end },
     },
-    _count: { _all: true },
   });
-  return toTranscriptBreakdown(rows);
 }
 
 /**
- * Assemble the usage snapshot for the /usage page: transcript
- * generations spent this month against the monthly quota, plus the
- * period bounds for display.
+ * Total video minutes covered by a set of generations. Each duration is
+ * capped at {@link TRANSCRIPT_GENERATION_MAX_VIDEO_SECONDS}, since only
+ * that much of a longer video is transcribed. A missing duration counts
+ * as zero; the generation route backfills it before starting, so this
+ * is only a guard.
+ */
+export function toGeneratedMinutes(durationsSeconds: (number | null)[]): number {
+  const seconds = durationsSeconds.reduce<number>(
+    (sum, duration) => sum + Math.min(duration ?? 0, TRANSCRIPT_GENERATION_MAX_VIDEO_SECONDS),
+    0
+  );
+  return Math.round(seconds / 60);
+}
+
+/**
+ * Gemini transcript generations a user completed in the calendar month
+ * containing `now`, with the video minutes they covered. Only completed
+ * GENERATED rows count: failed and in-flight runs never charge the
+ * user's allowance.
+ */
+export async function getMonthlyGeneratedTranscriptUsage(
+  prisma: PrismaClient,
+  userId: string,
+  now: Date
+): Promise<{ videos: number; minutes: number }> {
+  const { start, end } = getMonthlyQuotaPeriod(now);
+  const rows = await prisma.userRequest.findMany({
+    where: {
+      user_id: userId,
+      type: UserRequestType.TRANSCRIPT,
+      model: { not: null },
+      outcome: UserRequestOutcome.GENERATED,
+      completed_at: { not: null },
+      created_at: { gte: start, lt: end },
+    },
+    select: { video: { select: { duration_seconds: true } } },
+  });
+  return {
+    videos: rows.length,
+    minutes: toGeneratedMinutes(rows.map((row) => row.video.duration_seconds)),
+  };
+}
+
+/**
+ * Assemble the usage snapshot for the /usage page: caption fetches and
+ * Gemini generation minutes spent this month against their quotas,
+ * plus the period bounds for display.
  */
 export async function getGenerationUsage(
   prisma: PrismaClient,
@@ -114,18 +180,20 @@ export async function getGenerationUsage(
   now: Date
 ): Promise<GenerationUsage> {
   const { start, end } = getMonthlyQuotaPeriod(now);
-  const breakdown = await countMonthlyTranscriptGenerations(prisma, userId, now);
+  const [captions, generated] = await Promise.all([
+    countMonthlyCaptionFetches(prisma, userId, now),
+    getMonthlyGeneratedTranscriptUsage(prisma, userId, now),
+  ]);
   return {
-    used: breakdown.captions + breakdown.generated,
-    breakdown,
-    quota: MONTHLY_GENERATION_QUOTA,
+    captions: { used: captions, quota: MONTHLY_GENERATION_QUOTA },
+    generated: { ...generated, quotaMinutes: MONTHLY_GENERATED_TRANSCRIPT_MINUTES_QUOTA },
     periodStart: start,
     periodEnd: end,
   };
 }
 
 export interface LifetimeUsage {
-  /** Total transcript generations ever — the metered unit — by source. */
+  /** Total transcript generations ever, by source. */
   transcript: TranscriptBreakdown;
   /** Total summary generations ever. */
   summary: number;
@@ -135,9 +203,8 @@ export interface LifetimeUsage {
 
 /**
  * All-time generation counts for a user, broken down by request type
- * (and, for transcripts, by source).
- * Counts every `UserRequest` row regardless of outcome, mirroring the
- * monthly metric: a row exists only for a request that actually did
+ * (and, for transcripts, by source). Counts every `UserRequest` row
+ * regardless of outcome: a row exists only for a request that actually did
  * work (cache hits and zero-cost short-circuits are never written), so
  * each row is a genuine generation. A single grouped query keeps this
  * to one round trip.
