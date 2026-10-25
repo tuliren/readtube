@@ -27,6 +27,7 @@
     ]
   },
   "resolutions": {
+    "katex": "^0.19.1",
     "postcss": "^8.5.14"
   },
   "devDependencies": {
