@@ -3,24 +3,23 @@
 import { createContext, useContext } from 'react';
 import type { KeyedMutator } from 'swr';
 
+import type { AddRequest } from '@/components/add/AddDialog';
 import type { ChannelData } from '@/lib/types';
 
 /**
  * Shared state exposed by `DashboardShell` to any authenticated page
  * rendered beneath the `(dashboard)` layout. Keeps the channels SWR
- * and the "Add channel" modal owned by the shell (so every page gets
- * the same data and the same add-channel entry point) while still
+ * and the Add dialog owned by the shell (so every page gets the same
+ * data and the same add entry point) while still
  * letting pages read channels without wiring another SWR subscription.
  */
 export interface DashboardState {
   channels: ChannelData[];
   totalUnread: number;
-  openAddChannel: () => void;
-  /** Open the "Add video" modal with no playlist pre-selected. The
-   *  first-run inbox empty state offers this as the second path
-   *  (paste one video URL) for visitors who arrived with a single
-   *  video in mind rather than a channel to follow. */
-  openAddVideo: () => void;
+  /** Open the shared Add dialog. With no request it opens the unified
+   *  dialog, which detects channel / video / playlist from the pasted
+   *  link; a request can lock the kind and pre-select a destination. */
+  openAdd: (request?: AddRequest) => void;
   mutateChannels: KeyedMutator<ChannelData[]>;
 }
 

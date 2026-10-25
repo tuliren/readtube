@@ -14,6 +14,7 @@ import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 
 import { useCollapseState } from '@/components/dashboard/CollapseStateContext';
+import { useDashboard } from '@/components/dashboard/DashboardContext';
 import { type PlaylistRow, useSidebarData } from '@/components/dashboard/SidebarDataContext';
 import {
   DropdownMenu,
@@ -25,7 +26,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { playlistDisplayName } from '@/lib/inbox/playlistName';
 
 import DeletePlaylistDialog from './DeletePlaylistDialog';
-import NewPlaylistDialog from './NewPlaylistDialog';
 import RefreshSourceMenuItem from './RefreshSourceMenuItem';
 import RenamePlaylistDialog from './RenamePlaylistDialog';
 import { useSidebar } from './SidebarContext';
@@ -48,8 +48,8 @@ export default function PlaylistsSection({ onAddVideo }: Props) {
   const pathname = usePathname();
   const { collapsed } = useSidebar();
   const { playlistsCollapsed, togglePlaylists } = useCollapseState();
-  const { playlists, mutatePlaylists } = useSidebarData();
-  const [addPlaylistOpen, setAddPlaylistOpen] = useState(false);
+  const { playlists } = useSidebarData();
+  const { openAdd } = useDashboard();
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [renameTarget, setRenameTarget] = useState<{
     id: string;
@@ -93,7 +93,7 @@ export default function PlaylistsSection({ onAddVideo }: Props) {
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuItem onSelect={() => setAddPlaylistOpen(true)}>
+              <DropdownMenuItem onSelect={() => openAdd({ kind: 'playlist' })}>
                 <ListMusic className="mr-2 h-4 w-4 text-muted-foreground" />
                 Add playlist
               </DropdownMenuItem>
@@ -119,11 +119,6 @@ export default function PlaylistsSection({ onAddVideo }: Props) {
         </ul>
       )}
 
-      <NewPlaylistDialog
-        open={addPlaylistOpen}
-        onOpenChange={setAddPlaylistOpen}
-        onCreated={() => void mutatePlaylists()}
-      />
       <RenamePlaylistDialog target={renameTarget} onClose={() => setRenameTarget(null)} />
       <DeletePlaylistDialog
         target={deleteTarget}

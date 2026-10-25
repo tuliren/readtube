@@ -1,3 +1,4 @@
+import { ADD_DEMO_SAMPLES } from '../demoSamples';
 import {
   type AddKind,
   type AddPlatform,
@@ -84,5 +85,13 @@ describe('describeAddTarget', () => {
     ['playlist', 'youtube', 'YouTube playlist'],
   ])('labels a %s on %s', (kind, platform, expected) => {
     expect(describeAddTarget({ kind, platform })).toBe(expected);
+  });
+});
+
+describe('ADD_DEMO_SAMPLES', () => {
+  it('only shows links the classifier recognizes, covering every kind', () => {
+    const kinds = ADD_DEMO_SAMPLES.map((sample) => detectAddTarget(sample)?.primary.kind);
+    expect(kinds).not.toContain(undefined);
+    expect(new Set(kinds)).toEqual(new Set<AddKind>(['channel', 'video', 'playlist']));
   });
 });

@@ -8,8 +8,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import useSWR, { useSWRConfig } from 'swr';
 
-import AddChannelModal from '@/components/inbox/AddChannelModal';
-import AddVideoModal from '@/components/inbox/AddVideoModal';
+import AddButton from '@/components/add/AddButton';
+import AddDialog, { type AddRequest } from '@/components/add/AddDialog';
 import ChannelAvatar from '@/components/inbox/ChannelAvatar';
 import ChannelSection from '@/components/inbox/ChannelSection';
 import { CommandPaletteProvider } from '@/components/inbox/CommandPalette';
@@ -68,19 +68,12 @@ export default function DashboardShell({ initialChannels, initialFolders, childr
 
 function DashboardShellInner({ children }: { children: React.ReactNode }) {
   const { channels, mutateChannels, revalidateUnreadCounts } = useSidebarData();
-  // Pre-select a folder/playlist when the modal is opened from a
-  // folder's "Add channel" item or a playlist's "Add video" item, so
+  // One Add dialog for every entry point. A folder's "Add channel" or
+  // a playlist's "Add video" passes a locked kind plus destination so
   // the new entity lands in the right bucket without an extra step.
-  const [addChannelTarget, setAddChannelTarget] = useState<{ folderId: string | null } | null>(
-    null
-  );
-  const [addVideoTarget, setAddVideoTarget] = useState<{ playlistId: string | null } | null>(null);
+  const [addRequest, setAddRequest] = useState<AddRequest | null>(null);
 
   const totalUnread = channels.reduce((sum, c) => sum + c.unreadCount, 0);
-
-  function handleChannelAdded(channel: ChannelData) {
-    void mutateChannels([...channels, channel].sort((a, b) => a.name.localeCompare(b.name)));
-  }
 
   // The reader page server-renders a UserVideoConsumption upsert, so
   // the channel/playlist/library unread caches are stale by the time
@@ -93,8 +86,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
     () => ({
       channels,
       totalUnread,
-      openAddChannel: () => setAddChannelTarget({ folderId: null }),
-      openAddVideo: () => setAddVideoTarget({ playlistId: null }),
+      openAdd: (request = {}) => setAddRequest(request),
       mutateChannels,
     }),
     [channels, totalUnread, mutateChannels]
@@ -143,8 +135,8 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
         channels={channels}
         selectedChannelId={selectedChannelId}
         totalUnread={totalUnread}
-        onAddChannel={(folderId) => setAddChannelTarget({ folderId: folderId ?? null })}
-        onAddVideo={(playlistId) => setAddVideoTarget({ playlistId: playlistId ?? null })}
+        onAddChannel={(folderId) => setAddRequest({ kind: 'channel', folderId })}
+        onAddVideo={(playlistId) => setAddRequest({ kind: 'video', playlistId })}
       />
     </div>
   );
@@ -169,6 +161,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
                     underneath the X glyph. */}
                 <div className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-5">
                   <SheetTitle className="text-base font-bold text-foreground">ReadTube</SheetTitle>
+                  <AddButton onClick={() => setAddRequest({})} />
                   {/* No keyboard chip in the drawer — touch devices
                       have no ⌘K, the button itself is the affordance. */}
                   <GlobalSearchButton showShortcut={false} />
@@ -216,9 +209,10 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
                   <PanelLeft className="h-4 w-4" />
                 </button>
               ) : (
-                <div className="flex flex-1 items-center justify-between px-2">
-                  <span className="text-base font-bold text-foreground">ReadTube</span>
-                  <div className="flex items-center gap-0.5">
+                <div className="flex min-w-0 flex-1 items-center justify-between gap-2 px-2">
+                  <span className="truncate text-base font-bold text-foreground">ReadTube</span>
+                  <div className="flex shrink-0 items-center gap-0.5">
+                    <AddButton onClick={() => setAddRequest({})} className="mr-1" />
                     <GlobalSearchButton />
                     <button
                       type="button"
@@ -234,6 +228,13 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
               )}
             </div>
 
+            {collapsed && (
+              <TooltipProvider delayDuration={300}>
+                <div className="flex shrink-0 justify-center pt-3">
+                  <AddButton variant="icon" onClick={() => setAddRequest({})} />
+                </div>
+              </TooltipProvider>
+            )}
             {renderSidebarContent(collapsed)}
 
             {/* Pinned bottom row: user profile on the left, theme selector on
@@ -280,21 +281,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
           {children}
         </div>
 
-        <AddChannelModal
-          isOpen={addChannelTarget != null}
-          targetFolderId={addChannelTarget?.folderId ?? null}
-          onClose={() => setAddChannelTarget(null)}
-          onChannelAdded={handleChannelAdded}
-        />
-        <AddVideoModal
-          open={addVideoTarget != null}
-          targetPlaylistId={addVideoTarget?.playlistId ?? null}
-          onOpenChange={(open) => {
-            if (!open) {
-              setAddVideoTarget(null);
-            }
-          }}
-        />
+        <AddDialog request={addRequest} onClose={() => setAddRequest(null)} />
         <Toaster />
       </div>
     </DashboardCtx.Provider>

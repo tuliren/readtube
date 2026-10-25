@@ -133,12 +133,6 @@ export function detectAddTarget(input: string): AddDetection | null {
   return null;
 }
 
-const KIND_LABELS: Record<AddKind, string> = {
-  channel: 'Channel',
-  video: 'Video',
-  playlist: 'Playlist',
-};
-
 const PLATFORM_LABELS: Record<AddPlatform, string> = {
   youtube: 'YouTube',
   bilibili: 'Bilibili',
@@ -146,10 +140,5 @@ const PLATFORM_LABELS: Record<AddPlatform, string> = {
 
 /** Human label for a detected target, e.g. "YouTube channel". */
 export function describeAddTarget(target: Pick<AddTarget, 'kind' | 'platform'>): string {
-  return `${PLATFORM_LABELS[target.platform]} ${KIND_LABELS[target.kind].toLowerCase()}`;
-}
-
-/** Capitalized entity name for buttons, e.g. "Channel". */
-export function addKindLabel(kind: AddKind): string {
-  return KIND_LABELS[kind];
+  return `${PLATFORM_LABELS[target.platform]} ${target.kind}`;
 }
