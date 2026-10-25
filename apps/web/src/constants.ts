@@ -15,9 +15,9 @@ export const CONTACT_EMAIL = `contact@${DOMAIN}`;
 // openai/gpt-5.4-mini: $0.74 / $4.5
 // openai/gpt-5.4: $2.5 / $15 - too expensive
 // anthropic/claude-haiku-4.5: $1 / $5 - slow
-// openai/gpt-6-luna: $0.10 / $0.50
+// openai/gpt-6-luna: $0.10 / $0.50 - terser summaries, drops specifics
 // Evaluate a candidate before switching: scripts/compareModels.ts
-export const DEFAULT_AI_MODEL = 'openai/gpt-6-luna';
+export const DEFAULT_AI_MODEL = 'openai/gpt-5.6-luna';
 
 /**
  * Model for semantic embeddings. 1536 native dims matches the pgvector
