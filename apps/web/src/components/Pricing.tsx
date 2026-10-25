@@ -55,6 +55,7 @@ const PRICING_TIERS: Tier[] = [
       'Personal RSS-style inbox',
       'Summary and article generation',
       '500 video transcription per month',
+      '5 hours of Gemini transcription per month',
       'Track 30 channels & playlists',
       'Save 1,000 standalone videos',
       'Export as markdown',
@@ -72,6 +73,7 @@ const PRICING_TIERS: Tier[] = [
     features: [
       'All features included in Curator',
       '2,000 video transcription per month',
+      '15 hours of Gemini transcription per month',
       'Track 100 channels and playlists',
       'Save 10,000 standalone videos',
     ],
