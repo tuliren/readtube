@@ -28,7 +28,6 @@
 import { ArticleStyle } from '@readtube/database';
 import { generateObject, generateText } from 'ai';
 import { program } from 'commander';
-import { z } from 'zod';
 
 import {
   DEFAULT_AI_MODEL,
@@ -49,7 +48,8 @@ import {
 } from '@/lib/transcripts/transcriptWindows';
 import { buildSinglePassPrompt } from '@/lib/workflows/article/strategies/prompts';
 import { buildSummaryPrompt } from '@/lib/workflows/summary/buildPrompt';
-import { SECTION_BODIES, SUMMARY_FIELDS } from '@/lib/workflows/summary/promptSections';
+import { SUMMARY_FIELDS } from '@/lib/workflows/summary/promptSections';
+import { type SummaryObject, buildSummarySchema } from '@/lib/workflows/summary/schema';
 import { buildTranscriptGenerationPrompt } from '@/lib/workflows/transcript-generation/prompt';
 
 if (process.env.SCRIPT_ENV !== 'development') {
@@ -57,11 +57,7 @@ if (process.env.SCRIPT_ENV !== 'development') {
   process.exit(1);
 }
 
-const summarySchema = z.object({
-  headline: z.string().describe(SECTION_BODIES.headline),
-  full: z.object({ content: z.string().describe(SECTION_BODIES.full), hasLatex: z.boolean() }),
-  short: z.object({ content: z.string().describe(SECTION_BODIES.short), hasLatex: z.boolean() }),
-});
+const summarySchema = buildSummarySchema(SUMMARY_FIELDS);
 
 function divider(label: string): void {
   console.log(`\n${'='.repeat(72)}\n${label}\n${'='.repeat(72)}`);
@@ -162,9 +158,10 @@ async function main(): Promise<void> {
     maxOutputTokens: 16_384,
     abortSignal: AbortSignal.timeout(TRANSCRIPT_GENERATION_TIMEOUT_MS),
   });
-  console.log(`\nTITLE (headline):\n${summary.object.headline}`);
-  console.log(`\nSHORT SUMMARY:\n${summary.object.short.content}`);
-  console.log(`\nFULL SUMMARY:\n${summary.object.full.content}`);
+  const summaryObject = summary.object as SummaryObject;
+  console.log(`\nTITLE (headline):\n${summaryObject.headline}`);
+  console.log(`\nSHORT SUMMARY:\n${summaryObject.short?.content}`);
+  console.log(`\nFULL SUMMARY:\n${summaryObject.full?.content}`);
 
   // --- Article (from the transcript) ---
   divider('ARTICLE (single-pass)');

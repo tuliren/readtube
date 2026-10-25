@@ -49,6 +49,20 @@ describe('buildLanguageRule', () => {
     expect(rule).toMatch(/regardless of the transcript's source language/);
   });
 
+  it.each([
+    { label: 'translation', target: 'zh-Hans', source: null, expectedName: 'Simplified Chinese' },
+    { label: 'Original', target: null, source: 'ja', expectedName: 'Japanese' },
+  ])(
+    'keeps proper names in their original spelling by default for $label requests',
+    ({ target, source, expectedName }) => {
+      const rule = buildLanguageRule(target, source);
+      expect(rule).toMatch(/Keep each name in its original spelling by default/);
+      expect(rule).toContain(`only when ${expectedName} readers already know the entity`);
+      expect(rule).toMatch(/original spelling in parentheses right after its first mention/);
+      expect(rule).toMatch(/Apart from such names, do not mix languages/);
+    }
+  );
+
   it('falls back to the raw code for unknown target languages', () => {
     expect(buildLanguageRule('fr-CA')).toContain('MUST be written in fr-CA');
   });

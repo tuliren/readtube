@@ -113,6 +113,46 @@ export const ChineseEmphasis: Story = {
   },
 };
 
+export const ChineseMixedWithEnglish: Story = {
+  args: {
+    hasLatex: true,
+    // Chinese prose with unspaced English, numbers, and inline markdown
+    // around them. remarkPanguSpacing inserts the space between CJK and
+    // half-width text, including across bold, inline code, links, and
+    // math, while leaving the code block's contents untouched. See
+    // articleMarkdownPlugins.
+    children: [
+      '## 2026年AI行业观察',
+      '',
+      '多家公司开始使用OpenAI的GPT-6模型，营收同比增长了35%。',
+      '',
+      '其中一家初创公司与**Anthropic**达成合作，并用`npm install`部署了新版SDK。',
+      '',
+      '详情参见[Docs](https://example.com/docs)页面，核心公式是$E=mc^2$而非猜测。',
+      '',
+      '```',
+      'const label = "中文English";',
+      '```',
+    ].join('\n'),
+  },
+  play: async ({ canvasElement }) => {
+    await expect(canvasElement.querySelector('h2')?.textContent).toBe('2026 年 AI 行业观察');
+    const paragraphs = canvasElement.querySelectorAll('p');
+    await expect(paragraphs[0]?.textContent).toBe(
+      '多家公司开始使用 OpenAI 的 GPT-6 模型，营收同比增长了 35%。'
+    );
+    await expect(paragraphs[1]?.textContent).toBe(
+      '其中一家初创公司与 Anthropic 达成合作，并用 npm install 部署了新版 SDK。'
+    );
+    // The spaces land outside the formatting, not inside it.
+    await expect(canvasElement.querySelector('strong')?.textContent).toBe('Anthropic');
+    await expect(canvasElement.querySelector('a')?.textContent).toBe('Docs');
+    await expect(paragraphs[2]?.textContent).toMatch(/^详情参见 Docs 页面，核心公式是 /);
+    await expect(paragraphs[2]?.textContent).toMatch(/ 而非猜测。$/);
+    await expect(canvasElement.querySelector('pre')?.textContent).toContain('"中文English"');
+  },
+};
+
 export const ScriptInjectionStripped: Story = {
   args: {
     hasLatex: true,

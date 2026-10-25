@@ -15,15 +15,18 @@ export const CONTACT_EMAIL = `contact@${DOMAIN}`;
 // openai/gpt-5.4-mini: $0.74 / $4.5
 // openai/gpt-5.4: $2.5 / $15 - too expensive
 // anthropic/claude-haiku-4.5: $1 / $5 - slow
+// openai/gpt-6-luna: $0.10 / $0.50 - terser summaries, drops specifics
+// Evaluate a candidate before switching: scripts/compareModels.ts
 export const DEFAULT_AI_MODEL = 'openai/gpt-5.6-luna';
 
 /**
  * Model for semantic embeddings. 1536 native dims matches the pgvector
- * column in the schema. We use OpenAI for embeddings even though
- * generation (summaries, articles, Ask-my-inbox answers) uses Google
- * Gemini — the Vercel AI Gateway routes them independently by provider
- * prefix, and no 1536-dim Google embedding model is available through
- * the gateway as a plain string identifier today. If you swap to a
+ * column in the schema. Embeddings and generation (summaries,
+ * articles, Ask-my-inbox answers) can use different providers — the
+ * Vercel AI Gateway routes them independently by provider prefix. We
+ * use OpenAI here because no 1536-dim Google embedding model is
+ * available through the gateway as a plain string identifier today.
+ * If you swap to a
  * model with a different output size, bump EMBEDDING_PROMPT_VERSION
  * AND alter the pgvector column + HNSW index together.
  *
@@ -51,7 +54,7 @@ export const DEFAULT_EMBEDDING_MODEL = 'openai/text-embedding-3-small';
  * Pricing ≈ $0.75/M input, $3.75/M output ≈ $0.30 per video hour at
  * MEDIA_RESOLUTION_LOW. Requires `GEMINI_API_KEY`.
  */
-export const TRANSCRIPT_GENERATION_MODEL = 'gemini-3.7-flash';
+export const TRANSCRIPT_GENERATION_MODEL = 'gemini-3.8-flash';
 
 /** Base URL for the native Google Generative Language REST API. */
 export const TRANSCRIPT_GENERATION_NATIVE_ENDPOINT =

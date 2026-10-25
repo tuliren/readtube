@@ -5243,6 +5243,7 @@ __metadata:
     minimatch: "npm:^10.2.5"
     next: "npm:^16.3.6"
     next-themes: "npm:^0.4.6"
+    pangu: "npm:^10.4.1"
     postcss: "npm:^8.5.23"
     react: "npm:^18.3.1"
     react-dom: "npm:^18.3.1"
@@ -17142,6 +17143,16 @@ __metadata:
   version: 1.0.11
   resolution: "pako@npm:1.0.11"
   checksum: 10c0/86dd99d8b34c3930345b8bbeb5e1cd8a05f608eeb40967b293f72fe469d0e9c88b783a8777e4cc7dc7c91ce54c5e93d88ff4b4f060e6ff18408fd21030d9ffbe
+  languageName: node
+  linkType: hard
+
+"pangu@npm:^10.4.1":
+  version: 10.4.1
+  resolution: "pangu@npm:10.4.1"
+  bin:
+    pangu: dist/node/cli.js
+    pangu-js: dist/node/cli.js
+  checksum: 10c0/85741147101e721507153bb5a3153ab5909c91a722d21d7cd58a67f913342d3fc20bf02509d7de14ae5a59238c0580057fe02f998db9ca54965ed6638f8fe7cd
   languageName: node
   linkType: hard
 
