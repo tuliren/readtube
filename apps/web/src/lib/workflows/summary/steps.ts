@@ -13,7 +13,7 @@ import { buildSummarySchema } from '@/lib/workflows/summary/schema';
 
 export { SUMMARY_FIELDS, type SummaryField };
 
-export const SUMMARY_PROMPT_VERSION = 'v10';
+export const SUMMARY_PROMPT_VERSION = 'v11';
 
 export const FIELDS_WITH_FRONTMATTER: ReadonlySet<SummaryField> = new Set<SummaryField>([
   'short',

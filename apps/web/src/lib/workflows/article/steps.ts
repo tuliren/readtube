@@ -14,7 +14,7 @@ import type {
   GeneratedArticle,
 } from './strategies/types';
 
-export const ARTICLE_PROMPT_VERSION = 'v9';
+export const ARTICLE_PROMPT_VERSION = 'v10';
 
 // Re-export so existing imports (`@/lib/workflows/article` and
 // `@/lib/workflows/article/steps`) continue to work after the
