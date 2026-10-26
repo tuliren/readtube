@@ -80,11 +80,11 @@ export default function PlaylistsSection({ onAddVideo }: Props) {
 
   return (
     <div className="px-3 pt-4">
-      <div className="mb-1 flex items-center justify-between pl-2">
+      <div className="mb-1 flex items-center justify-between">
         <button
           type="button"
           onClick={togglePlaylists}
-          className="flex items-center gap-1 text-left"
+          className="flex flex-1 items-center gap-1 pl-2 text-left"
           aria-expanded={!sectionCollapsed}
           aria-label={sectionCollapsed ? 'Expand playlists' : 'Collapse playlists'}
         >
