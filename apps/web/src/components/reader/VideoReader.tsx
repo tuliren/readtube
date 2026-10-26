@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { formatDurationSeconds } from '@/lib/format/duration';
 import { armListScrollRestore, normalizeListKey } from '@/lib/inbox/scrollMemory';
 import { findTargetLanguage } from '@/lib/language/names';
+import { buildMaxResThumbnailUrl } from '@/lib/platforms/youtube/urls';
 import type { TranscriptGap } from '@/lib/transcripts/transcriptGaps';
 import type { VideoData } from '@/lib/types';
 import { channelHref } from '@/lib/urls/channelHref';
@@ -964,7 +965,12 @@ export default function VideoReader({
         <NotesPanel videoId={video.id} open={notesOpen} onOpenChange={handleNotesOpenChange} />
       )}
       {thumbnailEnlarged && video.thumbnailUrl != null && (
-        <ThumbnailLightbox src={video.thumbnailUrl} alt={video.title} onClose={closeThumbnail} />
+        <ThumbnailLightbox
+          src={video.thumbnailUrl}
+          hiResSrc={video.platform === 'YOUTUBE' ? buildMaxResThumbnailUrl(video.sourceId) : null}
+          alt={video.title}
+          onClose={closeThumbnail}
+        />
       )}
     </div>
   );
