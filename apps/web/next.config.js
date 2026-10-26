@@ -3,8 +3,8 @@ const { withWorkflow } = require('workflow/next');
 /** @type {import('next').NextConfig} */
 module.exports = withWorkflow({
   transpilePackages: ['@readtube/lib'],
-  // Vercel's workflow runtime auto-generates a step-handler route at
-  // /.well-known/workflow/v1/step that pulls in @workflow/world-vercel
+  // Vercel's workflow runtime auto-generates a handler route at
+  // /.well-known/workflow/v1/flow that pulls in @workflow/world-vercel
   // → @vercel/queue → @vercel/oidc → @vercel/cli-auth → @napi-rs/keyring.
   // The last one ships a native .node binary that Turbopack can't
   // include in ESM chunks ("non-ecmascript placeable asset"), so we

@@ -68,7 +68,7 @@
     "tailwind-merge": "^3.6.0",
     "tailwindcss": "^4.3.0",
     "tailwindcss-animate": "^1.0.7",
-    "workflow": "^4.6.0",
+    "workflow": "^5.2.3",
     "zod": "^4.6.7"
   },
   "devDependencies": {

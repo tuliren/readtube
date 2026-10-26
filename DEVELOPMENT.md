@@ -137,3 +137,4 @@ The script environment (`development` or `production`) is exposed as `SCRIPT_ENV
 
 - Web app deploys to [Vercel](https://vercel.com). The `production` branch is auto-deployed to production.
 - Fast-forward `production` to `main` via the `deploy-main.yaml` GitHub Action.
+- Functions run in `pdx1` (`regions` in `apps/web/vercel.json`), next to the Neon database in AWS `us-west-2`. Workflow SDK 5.x pins each run's data, queue, and streams to the region that started it, so workflow streaming stays in `pdx1` too. Workflow 4.x kept all of that in `iad1`, and a function in another region could leave LLM streams stalled, so don't downgrade below 5.x while functions are outside `iad1`.

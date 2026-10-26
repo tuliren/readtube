@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": ["pdx1"],
   "buildCommand": "turbo run build --filter=@readtube/web && turbo run db:migrate --filter=@readtube/database",
   "crons": [
     {
