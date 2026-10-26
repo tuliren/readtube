@@ -55,10 +55,6 @@ export interface InboxHeaderProps {
    *  Defaults to `{ channelId }` or `{}` for the inbox. Library views
    *  pass `{ standaloneOnly: true }` or `{ playlistId }`. */
   markAllReadBody?: Record<string, unknown>;
-  /** Hide the search input in the bottom row. Library views paginate
-   *  but don't (yet) support free-text search, so the box is hidden
-   *  there while Prev / X–Y of N / Next still renders. */
-  hideSearch?: boolean;
 }
 
 export default function InboxHeader({
@@ -74,7 +70,6 @@ export default function InboxHeader({
   videos,
   trailing,
   markAllReadBody,
-  hideSearch,
 }: InboxHeaderProps) {
   const { mutate } = useSWRConfig();
   const router = useRouter();
@@ -211,8 +206,7 @@ export default function InboxHeader({
           below the title row. The header itself sits above the
           scrolling video list and never scrolls away, so the
           pagination control is always reachable while the user is
-          reading rows. Library views render pagination but hide the
-          search box. The pagination never wraps; the search box takes
+          reading rows. The pagination never wraps; the search box takes
           whatever width is left, and Pagination shortens its page label
           when this row (an `@container`) is narrow. On desktop it is
           pulled up into the bottom of the h-14 title row, which has to
@@ -222,7 +216,7 @@ export default function InboxHeader({
           "Page X of Y" label and the full-width search box. */}
         <div className="@container flex items-center justify-between gap-3 px-4 py-2 sidebar:-mt-2 sidebar:pt-0 @min-[60rem]/header:mt-0 @min-[60rem]/header:min-w-[34rem] @min-[60rem]/header:flex-1 @min-[60rem]/header:justify-end @min-[60rem]/header:py-0">
           <Pagination total={totalVideos} />
-          {!hideSearch && <SearchInput />}
+          <SearchInput />
         </div>
       </div>
     </div>

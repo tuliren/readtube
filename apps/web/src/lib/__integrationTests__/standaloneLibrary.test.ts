@@ -123,3 +123,86 @@ describe('loadInboxVideos (library: standalone)', () => {
     expect(result.videos[0].readAt).not.toBeNull();
   });
 });
+
+describe('loadInboxVideos (library search)', () => {
+  async function seedTitled(titles: string[]) {
+    const channel = await global.testPrisma.channel.create({
+      data: { source_id: 'ls_ch', name: 'Channel ls', rss_url: 'https://example.com/ls.xml' },
+    });
+    const ids: string[] = [];
+    for (let i = 0; i < titles.length; i++) {
+      const v = await global.testPrisma.video.create({
+        data: { channel_id: channel.id, source_id: `ls_v${i}`, title: titles[i] },
+        select: { id: true },
+      });
+      ids.push(v.id);
+    }
+    return ids;
+  }
+
+  const TITLES = [
+    'Alpha gardening tips',
+    'Beta cooking basics',
+    'Gamma gardening tools',
+    '园艺入门',
+  ];
+
+  it.each([
+    { q: 'gardening', expected: [2, 0] },
+    { q: '园艺', expected: [3] },
+    { q: 'nomatchhere', expected: [] },
+  ])('narrows the standalone list by q=$q and keeps insertion order', async ({ q, expected }) => {
+    await createUser(USER_ID);
+    const ids = await seedTitled(TITLES);
+    // Insert one at a time so created_at (newest first) is deterministic.
+    for (const videoId of ids) {
+      await global.testPrisma.standaloneVideo.create({
+        data: { user_id: USER_ID, video_id: videoId },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+
+    const result = await loadInboxVideos(global.testPrisma, USER_ID, { library: 'standalone', q });
+
+    const expectedIds = expected.map((i) => ids[i]);
+    expect(result.videos.map((v) => v.id)).toEqual(expectedIds);
+    expect(result.total).toBe(expectedIds.length);
+  });
+
+  it.each([
+    { q: 'gardening', expected: [2, 0] },
+    { q: 'cooking', expected: [] },
+  ])('narrows the playlist by q=$q and keeps sort_order', async ({ q, expected }) => {
+    await createUser(USER_ID);
+    const ids = await seedTitled(TITLES);
+    // Beta is a standalone video, not in the playlist, so it never
+    // leaks into the playlist's results.
+    const playlist = await global.testPrisma.playlist.create({
+      data: {
+        user_id: USER_ID,
+        source_id: 'pl_search',
+        name: 'Search',
+        items: {
+          create: [
+            { video_id: ids[2], sort_order: 0 },
+            { video_id: ids[3], sort_order: 1 },
+            { video_id: ids[0], sort_order: 2 },
+          ],
+        },
+      },
+    });
+    await global.testPrisma.standaloneVideo.create({
+      data: { user_id: USER_ID, video_id: ids[1] },
+    });
+
+    const result = await loadInboxVideos(global.testPrisma, USER_ID, {
+      library: 'playlist',
+      playlistId: playlist.id,
+      q,
+    });
+
+    const expectedIds = expected.map((i) => ids[i]);
+    expect(result.videos.map((v) => v.id)).toEqual(expectedIds);
+    expect(result.total).toBe(expectedIds.length);
+  });
+});
