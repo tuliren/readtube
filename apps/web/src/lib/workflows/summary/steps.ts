@@ -28,6 +28,10 @@ type SummaryPartial = {
 };
 
 export type SummaryStreamEvent =
+  // Emitted once when the generation step begins, before the first
+  // model token. Lets the client tell "workflow still queued" apart
+  // from "model is reading the transcript" in its progress box.
+  | { phase: 'generating' }
   | { field: SummaryField; delta: string }
   | { field: SummaryField; hasLatex: boolean }
   | { type: 'done' }
@@ -68,14 +72,15 @@ export async function generateSummaryStep(input: SummaryWorkflowInput): Promise<
 
   const fields = input.fieldsToGenerate;
   const schema = buildSummarySchema(fields);
+  const writable = getWritable<SummaryStreamEvent>();
+  const writer = writable.getWriter();
+  await writer.write({ phase: 'generating' });
+
   const result = streamText({
     model: DEFAULT_AI_MODEL,
     output: Output.object({ schema }),
     prompt: input.prompt,
   });
-
-  const writable = getWritable<SummaryStreamEvent>();
-  const writer = writable.getWriter();
 
   const accumulated: Record<SummaryField, string> = {
     headline: '',

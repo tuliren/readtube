@@ -37,6 +37,10 @@ export interface GeneratedArticle {
 }
 
 export type ArticleStreamEvent =
+  // Emitted once when the generation step begins, before any strategy
+  // work. Lets the client tell "workflow still queued" apart from
+  // "model is reading the transcript" in its progress box.
+  | { phase: 'generating' }
   // Single-pass + cache replay:
   | { delta: string }
   | { hasLatex: boolean }
