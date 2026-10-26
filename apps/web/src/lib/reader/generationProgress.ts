@@ -43,7 +43,10 @@ interface CreepParams {
 
 const CREEP: Record<Exclude<GenerationStage['kind'], 'writing'>, CreepParams> = {
   transcript: { share: 0.35, tauMs: 4_000 },
-  transcribing: { share: 0.6, tauMs: 90_000 },
+  // AI transcription takes 4–9 minutes; a long time constant keeps
+  // the bar visibly moving through the whole run instead of going
+  // flat after the first couple of minutes.
+  transcribing: { share: 0.8, tauMs: 240_000 },
   starting: { share: 0.3, tauMs: 3_000 },
   queued: { share: 0.3, tauMs: 5_000 },
   resuming: { share: 0.5, tauMs: 3_000 },

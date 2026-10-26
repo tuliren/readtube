@@ -108,7 +108,7 @@ Until a Summary / Article generation has readable text, the tab shows `Generatio
 
 1. **Fetching the transcript**: when the shared transcript status isn't `present`, the reader POSTs `/transcript` first as its own step (the generate routes still run `ensureTranscript`, now a cache hit), so the slow upstream caption lookup is visible instead of folded into one silent wait.
 2. **Starting** (generate POST in flight) → **queued** (stream open, workflow not yet reporting) → **reading the transcript** once the workflow's generation step emits `{ phase: 'generating' }` (summary and article both emit it before the first model call; cache replays skip it). A GET tap-in starts at **reconnecting**.
-3. Map-reduce articles add **mapping topics** (`phase: 'embedding'`), **writing N sections** with real `ready / total` progress, and **polishing the outline** (`phase: 'reducing'`). For map-reduce the box stays above the sections as they land; single-pass and summary hand over to the live text on the first delta.
+3. Map-reduce articles add **mapping topics** (`phase: 'embedding'`), **writing N sections** with real `ready / total` progress, and **polishing the outline** (`phase: 'reducing'`). For map-reduce the box stays below the sections as they land (so auto-follow keeps it in view); single-pass and summary hand over to the live text on the first delta.
 
 The bar has no real signal for most stages, so `stageProgress` eases each stage toward a stage-specific share of the remaining distance to 95% (exponential approach, slowing the longer it runs) and re-bases from the displayed value on every stage change, so it never moves backwards.
 

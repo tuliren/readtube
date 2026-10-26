@@ -502,7 +502,7 @@ export default function ArticleReader({
   const isMapReduce = sectionsTotal != null;
   // The progress box covers the wait before any text. Single-pass
   // hands over to the live markdown on the first delta; map-reduce
-  // keeps it (with real section counts) above the sections as they
+  // keeps it (with real section counts) below the sections as they
   // land, since those arrive in whole-section jumps.
   const showProgressBox = isStreaming && (isMapReduce || trimmedContent.length === 0);
   const progressStage: GenerationStage = reducing
@@ -534,11 +534,6 @@ export default function ArticleReader({
           disabled={!hasExportableContent || isStreaming}
         />
       </div>
-      {showProgressBox && (
-        <div className="mb-6">
-          <GenerationProgressBox stage={progressStage} subject="article" />
-        </div>
-      )}
       {isStreaming && sectionsTotal != null ? (
         // Skeletons for every planned section would just repeat the
         // box's message; wait for the first real one.
@@ -553,6 +548,14 @@ export default function ArticleReader({
         <ArticleMarkdown hasLatex={hasLatex} enableHeadingIds>
           {content}
         </ArticleMarkdown>
+      )}
+      {/* Below the body so auto-follow keeps it in view as map-reduce
+          sections land above it; before any text the body is empty
+          and it sits right under the toolbar. */}
+      {showProgressBox && (
+        <div className={sectionsReady > 0 ? 'mt-6' : undefined}>
+          <GenerationProgressBox stage={progressStage} subject="article" />
+        </div>
       )}
       {isStreaming && !showProgressBox && (
         <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">

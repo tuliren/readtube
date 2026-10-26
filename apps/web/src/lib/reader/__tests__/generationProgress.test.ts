@@ -30,6 +30,14 @@ describe('stageProgress', () => {
     }
   );
 
+  it('keeps transcription moving through a long run', () => {
+    const stage: GenerationStage = { kind: 'transcribing' };
+    const atFive = stageProgress(0, stage, 5 * 60_000);
+    const atNine = stageProgress(0, stage, 9 * 60_000);
+    expect(atNine - atFive).toBeGreaterThan(5);
+    expect(stageProgress(0, stage, 60 * 60_000)).toBeLessThan(PROGRESS_CAP);
+  });
+
   it.each([
     ['negative base', -10, 0, 0],
     ['base above cap', 120, 0, PROGRESS_CAP],
