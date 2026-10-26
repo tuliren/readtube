@@ -102,6 +102,18 @@ Rule of thumb for budgeting: **generation cost ≈ clicks × ~$0.10–0.35** dep
 
 **Quota:** generated-transcript content is ~50–100x more expensive per video than a captions fetch, so it has its own hour-based quota; see "Generation usage & quota" below.
 
+## Generation progress box
+
+Until a Summary / Article generation has readable text, the tab shows `GenerationProgressBox` (what is happening above a progress bar, plus elapsed time) instead of skeleton bars. Stages (`lib/reader/generationProgress.ts`):
+
+1. **Fetching the transcript**: when the shared transcript status isn't `present`, the reader POSTs `/transcript` first as its own step (the generate routes still run `ensureTranscript`, now a cache hit), so the slow upstream caption lookup is visible instead of folded into one silent wait.
+2. **Starting** (generate POST in flight) → **queued** (stream open, workflow not yet reporting) → **reading the transcript** once the workflow's generation step emits `{ phase: 'generating' }` (summary and article both emit it before the first model call; cache replays skip it). A GET tap-in starts at **reconnecting**.
+3. Map-reduce articles add **mapping topics** (`phase: 'embedding'`), **writing N sections** with real `ready / total` progress, and **polishing the outline** (`phase: 'reducing'`). For map-reduce the box stays above the sections as they land; single-pass and summary hand over to the live text on the first delta.
+
+The bar has no real signal for most stages, so `stageProgress` eases each stage toward a stage-specific share of the remaining distance to 95% (exponential approach, slowing the longer it runs) and re-bases from the displayed value on every stage change, so it never moves backwards.
+
+**No captions mid-click.** A 410 from the transcript step no longer broadcasts `unavailable` (which would swap the whole tab area for `TranscriptGenerationPanel`). The tab enters `needs-transcript` and `TranscriptFallbackStep` asks whether to transcribe with AI, sharing `useTranscriptGeneration` (seed + lifetime polling + start) with the full-page panel. On ready, the reader resumes its generation; a summary POST taps into the transcription workflow's auto-summary run. "Not now" returns the tab to its Generate button. The full-page panel still covers videos already flagged at page load.
+
 ## Generation usage & quota
 
 Metered off the `UserRequest` audit log (no counter table); `lib/usage/quota.ts` derives it per UTC calendar month (`getGenerationUsage`). TRANSCRIPT rows split by source on `model`: captions rows have none, Gemini rows always do. Two monthly quotas, both surfaced read-only on `/usage` with no enforcement yet (there are no plans or billing):
