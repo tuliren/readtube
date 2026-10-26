@@ -5810,7 +5810,7 @@ __metadata:
     jest: "npm:^30.4.2"
     jest-environment-jsdom: "npm:^30.4.1"
     katex: "npm:^0.19.1"
-    lucide-react: "npm:^1.15.0"
+    lucide-react: "npm:^1.61.0"
     minimatch: "npm:^10.2.5"
     next: "npm:^16.4.3"
     next-themes: "npm:^0.4.6"
@@ -16294,12 +16294,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"lucide-react@npm:^1.15.0":
-  version: 1.15.0
-  resolution: "lucide-react@npm:1.15.0"
+"lucide-react@npm:^1.61.0":
+  version: 1.61.0
+  resolution: "lucide-react@npm:1.61.0"
   peerDependencies:
+    "@types/react": "*"
     react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
-  checksum: 10c0/3fde04ae58914cfd9ca249b0519e4e3a643e2be2fef7b6977b496ec7da3fc3a1a7660ce4492e2186272fe41ce8e83586d17fa2b5faefa2550e2ec94757ae5193
+  peerDependenciesMeta:
+    "@types/react":
+      optional: true
+  checksum: 10c0/85576d32aef43d5dccf5a1fac06b67c2ccbb70eb33b996123f49aab108111fffa6bdd517c7d406db67a14432c45924279c2ec7212a166864d3355ce68b361494
   languageName: node
   linkType: hard
 
