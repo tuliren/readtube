@@ -1,5 +1,7 @@
 'use client';
 
+import { useRef } from 'react';
+
 import { TRANSCRIPT_GENERATION_MAX_VIDEO_SECONDS } from '@/constants';
 import type { GenerationSubject } from '@/lib/reader/generationProgress';
 import { useTranscriptGeneration } from '@/lib/reader/useTranscriptGeneration';
@@ -25,7 +27,16 @@ interface Props {
  * and `onReady` hands control back to the reader.
  */
 export default function TranscriptFallbackStep({ videoDbId, subject, onReady, onCancel }: Props) {
-  const { status, starting, start } = useTranscriptGeneration(videoDbId, onReady);
+  // The mount fetch and a poll can both see the landed transcript
+  // before this step unmounts; resume the reader's generation once.
+  const readyFiredRef = useRef(false);
+  const { status, starting, start } = useTranscriptGeneration(videoDbId, () => {
+    if (readyFiredRef.current) {
+      return;
+    }
+    readyFiredRef.current = true;
+    onReady();
+  });
 
   if (status.kind === 'checking') {
     return <GenerationProgressBox stage={{ kind: 'transcript' }} subject={subject} />;
