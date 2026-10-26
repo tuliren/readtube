@@ -100,6 +100,78 @@ export const LongTitle: Story = {
   },
 };
 
+/** Pins the header to a fixed width, standing in for the main pane
+ *  beside the sidebar. */
+function atWidth(width: number): Story['decorators'] {
+  return [
+    (Story) => (
+      <div style={{ width }}>
+        <Story />
+      </div>
+    ),
+  ];
+}
+
+async function expectSearchRow(canvasElement: HTMLElement, sameRow: boolean) {
+  const canvas = within(canvasElement);
+  const title = canvas.getByRole('heading', { level: 1 }).getBoundingClientRect();
+  const search = canvas.getByPlaceholderText('Search videos…').getBoundingClientRect();
+  const titleMiddle = title.top + title.height / 2;
+  const searchMiddle = search.top + search.height / 2;
+  await expect(Math.abs(titleMiddle - searchMiddle) < 4).toBe(sameRow);
+}
+
+export const WideSingleRow: Story = {
+  args: { totalVideos: 66 },
+  decorators: atWidth(1100),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'When the header is at least 60rem wide, pagination and search move up to the right end of the title row.',
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    await expectSearchRow(canvasElement, true);
+  },
+};
+
+export const WideSingleRowLongTitle: Story = {
+  args: { ...LongTitle.args, totalVideos: 66 },
+  decorators: atWidth(1000),
+  play: WideSingleRow.play,
+};
+
+export const WideSingleRowAggregate: Story = {
+  args: {
+    channelId: null,
+    channelSourceId: null,
+    channelPlatform: null,
+    channelName: 'Read Later',
+    consumption: null,
+    unreadCount: 0,
+    totalVideos: 29,
+  },
+  decorators: atWidth(1100),
+  play: WideSingleRow.play,
+};
+
+export const NarrowTwoRows: Story = {
+  args: { totalVideos: 66 },
+  decorators: atWidth(800),
+  parameters: {
+    docs: {
+      description: {
+        story: 'Below 60rem, pagination and search stay on their own row under the title.',
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    await expectSearchRow(canvasElement, false);
+  },
+};
+
 export const Playlist: Story = {
   args: {
     channelId: null,

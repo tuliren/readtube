@@ -119,84 +119,95 @@ export default function InboxHeader({
   }
 
   return (
-    <div className="flex h-auto shrink-0 flex-col border-b border-border bg-background sidebar:border-b-0">
-      {/* Title row — action buttons sit next to the title/badge so
+    <div className="@container/header shrink-0 border-b border-border bg-background sidebar:border-b-0">
+      {/* The two rows below merge into one when the header (the main
+          pane, not the viewport) is wide enough; the sidebar's width
+          varies, so a screen breakpoint would misfire. A container
+          query only styles descendants, hence this inner wrapper. */}
+      <div className="flex flex-col @min-[60rem]/header:flex-row @min-[60rem]/header:items-center">
+        {/* Title row — action buttons sit next to the title/badge so
           they stay contextually close to the thing they act on. It is
           h-14, the sidebar header's height (DashboardShell), so the
           title lines up with the app name. On desktop the main pane
           draws no header lines; the mobile layout keeps the outer one
-          to separate the header from the list. */}
-      <div className="hidden h-14 shrink-0 items-center justify-start gap-2 overflow-hidden px-4 sidebar:flex">
-        <div className="flex min-w-0 items-center gap-2">
-          {channelLogoUrl != null && (
-            <div className="hidden sidebar:block">
-              <ChannelAvatar url={channelLogoUrl} size={40} cssSize="h-6 w-6" />
-            </div>
-          )}
-          <h1 className="hidden min-w-0 truncate text-sm font-semibold text-foreground sidebar:block">
-            {channelName}
-          </h1>
-          {consumption != null && (
-            <ConsumptionMeter consumption={consumption} tooltipSide="bottom" tooltipAlign="start" />
-          )}
-          <TooltipProvider delayDuration={200}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span
-                  tabIndex={0}
-                  aria-label={`Unread video(s): ${unreadCount}`}
-                  className="shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-700"
-                >
-                  {unreadCount}
-                </span>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Unread video(s): {unreadCount}</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          <div className="flex shrink-0 items-center gap-1">
-            {channelSourceId != null && channelPlatform != null && (
-              <ExternalLinkActions
-                url={buildChannelLink(channelPlatform, channelSourceId).url}
-                label={`Open channel on ${buildChannelLink(channelPlatform, channelSourceId).platformName}`}
+          to separate the header from the list. In the merged layout
+          it keeps its content width and gives way (truncating the
+          title) only when the pagination row needs the room. */}
+        <div className="hidden h-14 shrink-0 items-center justify-start gap-2 overflow-hidden px-4 sidebar:flex @min-[60rem]/header:shrink">
+          <div className="flex min-w-0 items-center gap-2">
+            {channelLogoUrl != null && (
+              <div className="hidden sidebar:block">
+                <ChannelAvatar url={channelLogoUrl} size={40} cssSize="h-6 w-6" />
+              </div>
+            )}
+            <h1 className="hidden min-w-0 truncate text-sm font-semibold text-foreground sidebar:block">
+              {channelName}
+            </h1>
+            {consumption != null && (
+              <ConsumptionMeter
+                consumption={consumption}
+                tooltipSide="bottom"
+                tooltipAlign="start"
               />
             )}
-            {trailing}
-            {showRefresh && (
-              <TooltipProvider delayDuration={200}>
-                <Tooltip>
-                  {/* The disabled state strips pointer events from the
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    tabIndex={0}
+                    aria-label={`Unread video(s): ${unreadCount}`}
+                    className="shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-700"
+                  >
+                    {unreadCount}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Unread video(s): {unreadCount}</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <div className="flex shrink-0 items-center gap-1">
+              {channelSourceId != null && channelPlatform != null && (
+                <ExternalLinkActions
+                  url={buildChannelLink(channelPlatform, channelSourceId).url}
+                  label={`Open channel on ${buildChannelLink(channelPlatform, channelSourceId).platformName}`}
+                />
+              )}
+              {trailing}
+              {showRefresh && (
+                <TooltipProvider delayDuration={200}>
+                  <Tooltip>
+                    {/* The disabled state strips pointer events from the
                     button, which would also strip the Radix tooltip's
                     hover detection. Wrap in a span so the trigger still
                     receives mouseenter while the inner button stays
                     semantically disabled. */}
-                  <TooltipTrigger asChild>
-                    <span className="hidden sidebar:inline-flex">
-                      <button
-                        type="button"
-                        onClick={handleRefreshChannel}
-                        disabled={refreshDisabled}
-                        aria-label="Refresh channel"
-                        aria-busy={refreshing}
-                        className={iconActionClassName}
-                      >
-                        <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-                      </button>
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">{refreshTooltip}</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
-            <HeaderReadActions
-              videos={videos}
-              unreadCount={unreadCount}
-              body={markAllReadBody ?? (channelId != null ? { channelId } : {})}
-              scopeName={channelName}
-            />
+                    <TooltipTrigger asChild>
+                      <span className="hidden sidebar:inline-flex">
+                        <button
+                          type="button"
+                          onClick={handleRefreshChannel}
+                          disabled={refreshDisabled}
+                          aria-label="Refresh channel"
+                          aria-busy={refreshing}
+                          className={iconActionClassName}
+                        >
+                          <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                        </button>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">{refreshTooltip}</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+              <HeaderReadActions
+                videos={videos}
+                unreadCount={unreadCount}
+                body={markAllReadBody ?? (channelId != null ? { channelId } : {})}
+                scopeName={channelName}
+              />
+            </div>
           </div>
         </div>
-      </div>
-      {/* Video count + pagination on the left, search on the right,
+        {/* Video count + pagination on the left, search on the right,
           below the title row. The header itself sits above the
           scrolling video list and never scrolls away, so the
           pagination control is always reachable while the user is
@@ -205,10 +216,14 @@ export default function InboxHeader({
           whatever width is left, and Pagination shortens its page label
           when this row (an `@container`) is narrow. On desktop it is
           pulled up into the bottom of the h-14 title row, which has to
-          keep its height to line up with the sidebar header. */}
-      <div className="@container flex items-center justify-between gap-3 px-4 py-2 sidebar:-mt-2 sidebar:pt-0">
-        <Pagination total={totalVideos} />
-        {!hideSearch && <SearchInput />}
+          keep its height to line up with the sidebar header. When the
+          header is wide enough, it moves up to the right end of the
+          title row instead, at least wide enough for the full
+          "Page X of Y" label and the full-width search box. */}
+        <div className="@container flex items-center justify-between gap-3 px-4 py-2 sidebar:-mt-2 sidebar:pt-0 @min-[60rem]/header:mt-0 @min-[60rem]/header:min-w-[34rem] @min-[60rem]/header:flex-1 @min-[60rem]/header:justify-end @min-[60rem]/header:py-0">
+          <Pagination total={totalVideos} />
+          {!hideSearch && <SearchInput />}
+        </div>
       </div>
     </div>
   );
