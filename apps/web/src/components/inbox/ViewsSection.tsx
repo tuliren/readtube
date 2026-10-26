@@ -2,10 +2,11 @@
 
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
+import { usePathname, useSearchParams } from 'next/navigation';
 
 import { useCollapseState } from '@/components/dashboard/CollapseStateContext';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { isDefaultQuery } from '@/lib/inbox/filter';
+import { inboxListPathname, isDefaultQuery } from '@/lib/inbox/filter';
 import { INBOX_VIEWS, type InboxViewDef, inboxViewHref } from '@/lib/inbox/views';
 import type { InboxQuery } from '@/lib/types';
 
@@ -38,6 +39,8 @@ interface Props {
  */
 export default function ViewsSection({ inboxUnread }: Props) {
   const { query } = useInboxQuery();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { collapsed } = useSidebar();
   const { viewsCollapsed, toggleViews } = useCollapseState();
 
@@ -46,7 +49,15 @@ export default function ViewsSection({ inboxUnread }: Props) {
   // hiding them behind a second collapse would leave the rail empty.
   const sectionCollapsed = !collapsed && viewsCollapsed;
 
+  // Views only describe the /inbox list. Other pages (Standalone
+  // videos, playlists, channels, settings) carry an empty query too,
+  // which would otherwise light up Inbox.
+  const onInboxList = pathname != null && inboxListPathname(pathname, searchParams) === '/inbox';
+
   function isActive(view: InboxViewDef): boolean {
+    if (!onInboxList) {
+      return false;
+    }
     // The Inbox view is the "default" view — active iff no filter keys
     // are set. We can't rely on subset-match (every key absent matches
     // subset-of-anything) because an empty query is also a subset of
