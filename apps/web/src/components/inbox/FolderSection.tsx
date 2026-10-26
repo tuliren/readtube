@@ -38,6 +38,7 @@ import RailChannelsMenu from './RailChannelsMenu';
 import RemoveChannelDialog from './RemoveChannelDialog';
 import RenameFolderDialog from './RenameFolderDialog';
 import { useSidebar } from './SidebarContext';
+import { sectionHeaderClass } from './SidebarRow';
 import { useFolders } from './useFolders';
 
 interface Props {
@@ -180,7 +181,7 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
         <button
           type="button"
           onClick={toggleChannels}
-          className="flex flex-1 items-center gap-1 pl-2 text-left"
+          className={sectionHeaderClass()}
           aria-expanded={!channelsCollapsed}
           aria-label={channelsCollapsed ? 'Expand channels' : 'Collapse channels'}
         >
@@ -195,7 +196,7 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground data-[state=open]:bg-accent data-[state=open]:text-foreground"
+              className="rounded p-1 text-muted-foreground hover:bg-sidebar-accent hover:text-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-foreground"
               aria-label="Add channel or folder"
               title="Add channel or folder"
             >

@@ -82,7 +82,7 @@ export default function DraggableChannelLink({
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="ml-0.5 rounded p-1 text-muted-foreground opacity-0 hover:bg-accent hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
+              className="ml-0.5 rounded p-1 text-muted-foreground opacity-0 hover:bg-sidebar-accent hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
               aria-label="Channel actions"
               title="Channel actions"
             >

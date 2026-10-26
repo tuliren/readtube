@@ -10,7 +10,13 @@ import { INBOX_VIEWS, type InboxViewDef, inboxViewHref } from '@/lib/inbox/views
 import type { InboxQuery } from '@/lib/types';
 
 import { useSidebar } from './SidebarContext';
-import { SidebarBadge, SidebarRowContent, railItemClass, sidebarRowClass } from './SidebarRow';
+import {
+  SidebarBadge,
+  SidebarRowContent,
+  railItemClass,
+  sectionHeaderClass,
+  sidebarRowClass,
+} from './SidebarRow';
 import { useInboxQuery } from './useInboxQuery';
 
 interface Props {
@@ -58,7 +64,7 @@ export default function ViewsSection({ inboxUnread }: Props) {
         <button
           type="button"
           onClick={toggleViews}
-          className="mb-1 flex w-full items-center gap-1 px-2 text-left"
+          className={`${sectionHeaderClass()} mb-1 w-full pr-2`}
           aria-expanded={!sectionCollapsed}
           aria-label={sectionCollapsed ? 'Expand views' : 'Collapse views'}
         >
