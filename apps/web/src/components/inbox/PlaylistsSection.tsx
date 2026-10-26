@@ -30,7 +30,7 @@ import RailPlaylistsMenu from './RailPlaylistsMenu';
 import RefreshSourceMenuItem from './RefreshSourceMenuItem';
 import RenamePlaylistDialog from './RenamePlaylistDialog';
 import { useSidebar } from './SidebarContext';
-import { SidebarBadge, SidebarRowContent, sidebarRowClass } from './SidebarRow';
+import { SidebarBadge, SidebarRowContent, sectionHeaderClass, sidebarRowClass } from './SidebarRow';
 
 interface Props {
   /** Open the AddVideoModal pre-targeted at a playlist, used by the
@@ -80,11 +80,11 @@ export default function PlaylistsSection({ onAddVideo }: Props) {
 
   return (
     <div className="px-3 pt-4">
-      <div className="mb-1 flex items-center justify-between pl-2">
+      <div className="mb-1 flex items-center justify-between">
         <button
           type="button"
           onClick={togglePlaylists}
-          className="flex items-center gap-1 text-left"
+          className={sectionHeaderClass()}
           aria-expanded={!sectionCollapsed}
           aria-label={sectionCollapsed ? 'Expand playlists' : 'Collapse playlists'}
         >
@@ -99,7 +99,7 @@ export default function PlaylistsSection({ onAddVideo }: Props) {
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground data-[state=open]:bg-accent data-[state=open]:text-foreground"
+              className="rounded p-1 text-muted-foreground hover:bg-sidebar-accent hover:text-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-foreground"
               aria-label="Add playlist"
               title="Add playlist"
             >
@@ -189,7 +189,7 @@ function PlaylistEntry({
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="ml-0.5 rounded p-1 text-muted-foreground opacity-0 hover:bg-accent hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
+            className="ml-0.5 rounded p-1 text-muted-foreground opacity-0 hover:bg-sidebar-accent hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
             aria-label="Playlist actions"
             title="Playlist actions"
           >

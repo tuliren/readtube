@@ -3,6 +3,7 @@ import type { InboxQuery } from '@/lib/types';
 import {
   encodeInboxQuery,
   extractInboxSearchParams,
+  inboxListPathname,
   isDefaultQuery,
   parseInboxQuery,
 } from '../filter';
@@ -102,6 +103,44 @@ describe('isDefaultQuery', () => {
     { query: { starred: true, page: 3 }, expected: false },
   ])('returns $expected for $query', ({ query, expected }) => {
     expect(isDefaultQuery(query)).toBe(expected);
+  });
+});
+
+describe('inboxListPathname', () => {
+  it.each<{ pathname: string; search: string; expected: string; desc: string }>([
+    { pathname: '/inbox', search: '', expected: '/inbox', desc: 'the inbox itself' },
+    {
+      pathname: '/inbox',
+      search: 'starred=1',
+      expected: '/inbox',
+      desc: 'a filtered inbox view',
+    },
+    {
+      pathname: '/videos/standalone',
+      search: '',
+      expected: '/videos/standalone',
+      desc: 'a non-inbox page keeps its own path',
+    },
+    {
+      pathname: '/videos/vid-1',
+      search: `returnTo=${encodeURIComponent('/inbox?saved=1')}`,
+      expected: '/inbox',
+      desc: 'the reader opened from an inbox view',
+    },
+    {
+      pathname: '/videos/vid-1',
+      search: `returnTo=${encodeURIComponent('/videos/playlists/pl-1')}`,
+      expected: '/videos/playlists/pl-1',
+      desc: 'the reader opened from a playlist',
+    },
+    {
+      pathname: '/videos/vid-1',
+      search: 'returnTo=',
+      expected: '/videos/vid-1',
+      desc: 'an empty returnTo falls back to the page path',
+    },
+  ])('$desc', ({ pathname, search, expected }) => {
+    expect(inboxListPathname(pathname, new URLSearchParams(search))).toBe(expected);
   });
 });
 

@@ -27,7 +27,13 @@ import type { LucideIcon } from 'lucide-react';
 const BASE_ROW_CLASS = 'flex min-w-0 items-center gap-2 rounded-md px-3 py-1.5 text-sm';
 const ACTIVE_ROW_CLASS =
   'bg-blue-50 font-medium text-blue-700 dark:bg-blue-500/15 dark:text-blue-300';
-const INACTIVE_ROW_CLASS = 'text-foreground hover:bg-accent';
+
+/** Hover background for sidebar rows and headers (the sidebar's icon
+ *  buttons use the same `sidebar-accent` token). It is a step darker
+ *  than the generic `accent` so the hover reads clearly against
+ *  `bg-sidebar`. */
+const SIDEBAR_HOVER_CLASS = 'hover:bg-sidebar-accent';
+const INACTIVE_ROW_CLASS = `text-foreground ${SIDEBAR_HOVER_CLASS}`;
 
 export function sidebarRowClass(active: boolean): string {
   return `${BASE_ROW_CLASS} ${active ? ACTIVE_ROW_CLASS : INACTIVE_ROW_CLASS}`;
@@ -37,9 +43,16 @@ export function sidebarRowClass(active: boolean): string {
  *  and the Playlists / Channels menu triggers). */
 export function railItemClass(active: boolean): string {
   return `flex items-center justify-center rounded-md p-2 ${
-    active
-      ? 'bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300'
-      : 'text-foreground hover:bg-accent'
+    active ? 'bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300' : INACTIVE_ROW_CLASS
+  }`;
+}
+
+/** Section header row (Views / Playlists / Channels, and the Standalone
+ *  videos entry that sits among them): chevron + bold label, with the
+ *  same hover background as the rows below it. */
+export function sectionHeaderClass(active = false): string {
+  return `flex min-w-0 flex-1 items-center gap-1 rounded-md py-0.5 pl-2 text-left ${
+    active ? 'bg-blue-50 dark:bg-blue-500/15' : SIDEBAR_HOVER_CLASS
   }`;
 }
 

@@ -166,6 +166,22 @@ export function extractInboxSearchParams(raw: URLSearchParams): URLSearchParams 
 }
 
 /**
+ * Pathname of the list the current page belongs to: the path portion
+ * of `returnTo` in the reader (`/videos/<id>?returnTo=/inbox?starred=1`
+ * belongs to `/inbox`), otherwise the page's own pathname. The sidebar
+ * uses this to tell an inbox list apart from other pages whose query
+ * string also looks like the default inbox query.
+ */
+export function inboxListPathname(pathname: string, raw: URLSearchParams): string {
+  const returnToValue = raw.get(RETURN_TO_PARAM);
+  if (returnToValue != null && returnToValue.length > 0) {
+    const queryIndex = returnToValue.indexOf('?');
+    return queryIndex >= 0 ? returnToValue.slice(0, queryIndex) : returnToValue;
+  }
+  return pathname;
+}
+
+/**
  * Build the `returnTo` value for links out of a list into the
  * reader: the full path + query of the list the user is leaving, so
  * the Back link can restore the exact view.

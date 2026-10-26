@@ -8,7 +8,7 @@ import { useSidebarData } from '@/components/dashboard/SidebarDataContext';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 import { useSidebar } from './SidebarContext';
-import { SidebarBadge, railItemClass } from './SidebarRow';
+import { SidebarBadge, railItemClass, sectionHeaderClass } from './SidebarRow';
 
 interface Props {
   /** Open the AddVideoModal (no playlist pre-selected). */
@@ -52,12 +52,7 @@ export default function VideosItem({ onAddVideo }: Props) {
 
   return (
     <div className="flex items-center justify-between px-3 pt-4">
-      <Link
-        href="/videos/standalone"
-        className={`flex min-w-0 flex-1 items-center gap-1 rounded-md py-0.5 pl-2 ${
-          active ? 'bg-blue-50 dark:bg-blue-500/15' : 'hover:bg-accent'
-        }`}
-      >
+      <Link href="/videos/standalone" className={sectionHeaderClass(active)}>
         {/* Chevron-width spacer: the sibling section headers
             (Playlists / Channels) lead with a h-3.5 w-3.5 chevron,
             so this keeps the label text on the same column even
@@ -75,7 +70,7 @@ export default function VideosItem({ onAddVideo }: Props) {
       <button
         type="button"
         onClick={onAddVideo}
-        className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+        className="rounded p-1 text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
         aria-label="Add video"
         title="Add video"
       >
