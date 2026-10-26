@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { formatDurationSeconds } from '@/lib/format/duration';
 import { armListScrollRestore, normalizeListKey } from '@/lib/inbox/scrollMemory';
 import { findTargetLanguage } from '@/lib/language/names';
+import { buildMaxResThumbnailUrl } from '@/lib/platforms/youtube/urls';
 import type { TranscriptGap } from '@/lib/transcripts/transcriptGaps';
 import type { VideoData } from '@/lib/types';
 import { channelHref } from '@/lib/urls/channelHref';
@@ -28,6 +29,7 @@ import NotesPanel from './NotesPanel';
 import PublicSignupCta from './PublicSignupCta';
 import ReadingTimeBadge from './ReadingTimeBadge';
 import SummaryReader from './SummaryReader';
+import ThumbnailLightbox from './ThumbnailLightbox';
 import TranscriptGenerationPanel from './TranscriptGenerationPanel';
 import TranscriptReader from './TranscriptReader';
 import VideoReaderActions from './VideoReaderActions';
@@ -453,12 +455,16 @@ export default function VideoReader({
   // descriptions render no "Show more" toggle because there is nothing
   // to reveal.
   const [isDescriptionClampable, setIsDescriptionClampable] = useState(false);
+  const [thumbnailEnlarged, setThumbnailEnlarged] = useState(false);
+  const closeThumbnail = useCallback(() => setThumbnailEnlarged(false), []);
   const descriptionRef = useRef<HTMLQuoteElement>(null);
 
-  // Reset description collapse when navigating to a different video.
+  // Reset description collapse and the enlarged thumbnail when
+  // navigating to a different video.
   useEffect(() => {
     setDescriptionExpanded(false);
     setIsDescriptionClampable(false);
+    setThumbnailEnlarged(false);
   }, [video.id]);
 
   // Measure whether the description overflows its 4-line clamp so the
@@ -509,7 +515,8 @@ export default function VideoReader({
   const noteCount = Array.isArray(notesData) ? notesData.length : video.noteCount;
 
   return (
-    <div className="flex flex-1 overflow-hidden">
+    // `relative` anchors the thumbnail lightbox to this pane.
+    <div className="relative flex flex-1 overflow-hidden">
       <div className="flex min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
         {/*
         Back nav + triage actions + notes toggle. The header bar
@@ -554,13 +561,19 @@ export default function VideoReader({
                 lives on the title side instead. */}
             <div className="flex min-w-0 max-w-[50%] items-center gap-2 pl-1 sidebar:pl-0">
               {video.thumbnailUrl != null && (
-                <img
-                  src={video.thumbnailUrl}
-                  alt=""
-                  aria-hidden
-                  referrerPolicy="no-referrer"
-                  className="block h-6 w-10 shrink-0 rounded object-cover sidebar:h-7 sidebar:w-12"
-                />
+                <button
+                  type="button"
+                  onClick={() => setThumbnailEnlarged(true)}
+                  aria-label="Enlarge thumbnail"
+                  className="shrink-0 cursor-zoom-in rounded"
+                >
+                  <img
+                    src={video.thumbnailUrl}
+                    alt=""
+                    referrerPolicy="no-referrer"
+                    className="block h-6 w-10 rounded object-cover sidebar:h-7 sidebar:w-12"
+                  />
+                </button>
               )}
               <span className="truncate text-sm font-medium text-foreground" title={video.title}>
                 {video.title}
@@ -709,22 +722,29 @@ export default function VideoReader({
           {(video.thumbnailUrl != null || video.description != null) && (
             <div className="mt-5 hidden items-start gap-4 sidebar:flex">
               {video.thumbnailUrl != null && (
-                <img
-                  // Bilibili's hdslb CDN 403s when the Referer points
-                  // at a non-bilibili origin, AND 403s on HTTPS for
-                  // some paths (observed on `/bfs/face/`, seen rarely
-                  // on `/bfs/archive/`). Use the URL verbatim —
-                  // stored with the correct protocol by the server
-                  // scrapers — and drop the Referer so either
-                  // protocol works.
-                  src={video.thumbnailUrl}
-                  alt={video.title}
+                <button
+                  type="button"
+                  onClick={() => setThumbnailEnlarged(true)}
+                  aria-label="Enlarge thumbnail"
                   // Hidden below the sidebar breakpoint so the
                   // description gets full width on narrow screens.
-                  className="hidden w-40 shrink-0 rounded-lg object-cover sidebar:block"
-                  loading="eager"
-                  referrerPolicy="no-referrer"
-                />
+                  className="hidden w-40 shrink-0 cursor-zoom-in rounded-lg sidebar:block"
+                >
+                  <img
+                    // Bilibili's hdslb CDN 403s when the Referer points
+                    // at a non-bilibili origin, AND 403s on HTTPS for
+                    // some paths (observed on `/bfs/face/`, seen rarely
+                    // on `/bfs/archive/`). Use the URL verbatim —
+                    // stored with the correct protocol by the server
+                    // scrapers — and drop the Referer so either
+                    // protocol works.
+                    src={video.thumbnailUrl}
+                    alt={video.title}
+                    className="block w-full rounded-lg object-cover"
+                    loading="eager"
+                    referrerPolicy="no-referrer"
+                  />
+                </button>
               )}
               {video.description != null && (
                 <div className="min-w-0 flex-1">
@@ -943,6 +963,14 @@ export default function VideoReader({
       </div>
       {!publicMode && (
         <NotesPanel videoId={video.id} open={notesOpen} onOpenChange={handleNotesOpenChange} />
+      )}
+      {thumbnailEnlarged && video.thumbnailUrl != null && (
+        <ThumbnailLightbox
+          src={video.thumbnailUrl}
+          hiResSrc={video.platform === 'YOUTUBE' ? buildMaxResThumbnailUrl(video.sourceId) : null}
+          alt={video.title}
+          onClose={closeThumbnail}
+        />
       )}
     </div>
   );

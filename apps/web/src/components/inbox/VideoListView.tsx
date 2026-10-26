@@ -75,8 +75,8 @@ interface Props {
   selectedChannelId: string | null;
   selectedVideoId: string | null;
   /** Opt into the library variant. When set, the component uses the
-   *  override title / empty message / mark-all-read body, merges the
-   *  scope into the SWR URL, and hides the search input. */
+   *  override title / empty message / mark-all-read body and merges
+   *  the scope into the SWR URL. */
   library?: LibraryOverrides;
   /** Surface library-specific actions (Remove from library) in per-row
    *  icons and the bulk action bar. Enabled from library pages. */
@@ -218,7 +218,12 @@ export default function VideoListView({
     headerName = library.title;
     headerLogoUrl = null;
     headerUnread = libraryUnread;
-    emptyMessage = library.emptyMessage;
+    // A search with no hits isn't an empty library; say so instead of
+    // the library's "nothing here" copy.
+    emptyMessage =
+      inboxQuery.q != null && inboxQuery.q.length > 0
+        ? 'No videos match your search.'
+        : library.emptyMessage;
     headerChannelId = null;
     headerChannelSourceId = null;
     headerChannelPlatform = null;
@@ -319,7 +324,6 @@ export default function VideoListView({
           videos={videoList}
           trailing={headerTrailing}
           markAllReadBody={headerMarkAllReadBody}
-          hideSearch={library != null}
         />
         <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
           <VideoList

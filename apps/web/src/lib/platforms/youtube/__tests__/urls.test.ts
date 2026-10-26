@@ -1,4 +1,5 @@
 import {
+  buildMaxResThumbnailUrl,
   buildPlaylistRssUrl,
   buildRssUrl,
   buildThumbnailUrl,
@@ -148,6 +149,15 @@ describe('buildThumbnailUrl', () => {
     ['abc123', 'https://i.ytimg.com/vi/abc123/hqdefault.jpg'],
   ])('builds thumbnail URL for %s', (videoId, expected) => {
     expect(buildThumbnailUrl(videoId)).toBe(expected);
+  });
+});
+
+describe('buildMaxResThumbnailUrl', () => {
+  it.each([
+    ['video_id_1', 'https://i.ytimg.com/vi/video_id_1/maxresdefault.jpg'],
+    ['abc123', 'https://i.ytimg.com/vi/abc123/maxresdefault.jpg'],
+  ])('builds the 1280x720 thumbnail URL for %s', (videoId, expected) => {
+    expect(buildMaxResThumbnailUrl(videoId)).toBe(expected);
   });
 });
 

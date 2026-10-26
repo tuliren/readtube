@@ -73,25 +73,13 @@ export async function loadInboxVideos(
     userSubs.map((s) => [s.channel_id, s.read_at])
   );
 
-  // Free-text q goes through Postgres `search_tsv @@ plainto_tsquery`,
-  // or — when the query contains CJK, which the english tsvector
-  // config can't tokenize — ILIKE substring matching backed by the
-  // pg_trgm indexes (same rule as /api/search, see lib/search/cjk.ts).
-  // Prisma can't express @@ via the generated client, so we resolve a
-  // restricted id set via $queryRaw and AND it into the main findMany.
-  // Mirrors what /api/videos does — kept here verbatim so SSR and API
-  // can never diverge on search semantics.
+  // Free-text q is resolved to a restricted id set via $queryRaw (see
+  // `searchMatchSql`) and ANDed into the main findMany. Mirrors what
+  // /api/videos does — kept here verbatim so SSR and API can never
+  // diverge on search semantics.
   let restrictIds: string[] | null = null;
   if (query.q != null && query.q.length > 0) {
-    const matchCondition = containsCjk(query.q)
-      ? Prisma.join(
-          searchTerms(query.q).map(
-            (term) =>
-              Prisma.sql`("title" ILIKE ${likePattern(term)} OR "description" ILIKE ${likePattern(term)})`
-          ),
-          ' AND '
-        )
-      : Prisma.sql`"search_tsv" @@ plainto_tsquery('english', ${query.q})`;
+    const matchCondition = searchMatchSql(query.q);
     // The id set only narrows the main findMany (which already carries
     // the scope), so it's safe to widen it here to everything the user
     // can see in any inbox view: subscribed channels plus videos they
@@ -266,13 +254,34 @@ export async function loadInboxVideos(
 }
 
 /**
+ * Free-text match predicate over a `Video` row: Postgres
+ * `search_tsv @@ plainto_tsquery`, or — when the query contains CJK,
+ * which the english tsvector config can't tokenize — ILIKE substring
+ * matching backed by the pg_trgm indexes (same rule as /api/search,
+ * see lib/search/cjk.ts). Prisma can't express @@ via the generated
+ * client, so callers embed this in a $queryRaw.
+ */
+function searchMatchSql(q: string): Prisma.Sql {
+  if (containsCjk(q)) {
+    return Prisma.join(
+      searchTerms(q).map(
+        (term) =>
+          Prisma.sql`("title" ILIKE ${likePattern(term)} OR "description" ILIKE ${likePattern(term)})`
+      ),
+      ' AND '
+    );
+  }
+  return Prisma.sql`"search_tsv" @@ plainto_tsquery('english', ${q})`;
+}
+
+/**
  * Library path. Scopes by StandaloneVideo / PlaylistVideo membership
  * and paginates an ordered id list in JS so we preserve playlist
  * sort_order and standalone insertion order — neither of which maps
- * onto `ORDER BY published_at`. Filter chips (archived / starred /
- * saved / unread / date range) are intentionally ignored
- * here; the library header doesn't render them, and wiring them
- * would require re-counting against a filtered subset.
+ * onto `ORDER BY published_at`. Free-text `q` narrows the list; filter
+ * chips (archived / starred / saved / unread / date range) are
+ * intentionally ignored here; the library header doesn't render them,
+ * and wiring them would require re-counting against a filtered subset.
  */
 async function loadLibraryScope(
   prisma: PrismaClient,
@@ -313,6 +322,23 @@ async function loadLibraryScope(
       orderBy: { created_at: 'desc' },
     });
     orderedVideoIds = rows.map((r) => r.video_id);
+  }
+
+  // Free-text q narrows the membership list while keeping its order.
+  // The match runs against the same membership table the list came
+  // from, so the id set never needs to travel back as query params.
+  if (query.q != null && query.q.length > 0 && orderedVideoIds.length > 0) {
+    const membership =
+      query.library === 'playlist'
+        ? Prisma.sql`SELECT "video_id" FROM "PlaylistVideo" WHERE "playlist_id" = ${query.playlistId}`
+        : Prisma.sql`SELECT "video_id" FROM "StandaloneVideo" WHERE "user_id" = ${userId}`;
+    const rows = await prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT v."id" FROM "Video" v
+      WHERE (${searchMatchSql(query.q)})
+        AND v."id" IN (${membership})
+    `;
+    const matchIds = new Set(rows.map((r) => r.id));
+    orderedVideoIds = orderedVideoIds.filter((id) => matchIds.has(id));
   }
 
   const total = orderedVideoIds.length;

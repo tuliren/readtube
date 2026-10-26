@@ -187,6 +187,16 @@ export function buildThumbnailUrl(videoId: string): string {
   return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
 }
 
+/**
+ * 1280x720 YouTube thumbnail, for the reader's enlarged view. Not
+ * every video has one: YouTube answers a missing `maxresdefault.jpg`
+ * with a 120x90 placeholder, so callers must check the loaded size
+ * and fall back to `buildThumbnailUrl`.
+ */
+export function buildMaxResThumbnailUrl(videoId: string): string {
+  return `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`;
+}
+
 // ─── Avatar URL rewrite ──────────────────────────────────────────
 
 /**

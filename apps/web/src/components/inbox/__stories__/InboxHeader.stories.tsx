@@ -180,7 +180,6 @@ export const Playlist: Story = {
     channelName: 'Example playlist',
     consumption: null,
     unreadCount: 1,
-    hideSearch: true,
     markAllReadBody: { playlistId: 'example-playlist' },
   },
   render: (args) => (

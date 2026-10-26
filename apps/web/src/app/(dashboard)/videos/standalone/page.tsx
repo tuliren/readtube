@@ -30,7 +30,10 @@ export default async function VideosStandalonePage({ searchParams }: Props) {
 
   const initial = await loadInboxVideos(prisma, userId, query);
 
-  if (initial.total === 0) {
+  // The onboarding empty state is for an empty library, not a search
+  // with no hits: that keeps the list view so the search box stays.
+  const isSearching = query.q != null && query.q.length > 0;
+  if (initial.total === 0 && !isSearching) {
     return (
       <div className="flex flex-1 flex-col">
         <LibraryEmptyState emptyMessage="Paste a video or playlist link to start reading. Standalone videos and playlists you add show up here." />
