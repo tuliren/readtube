@@ -2,10 +2,14 @@
  * Event handler for the NDJSON wire protocol that carries article
  * generation. Handles BOTH:
  *
+ *   - `{ phase: 'generating' }` once the workflow's generation step
+ *     starts (both modes; absent on cache replays)
+ *
  *   - single-pass / cache-replay events: `{ delta }`, `{ hasLatex }`,
  *     `{ type: 'done' }`, `{ error }`
  *
- *   - map-reduce events: `{ phase: 'planning', sectionsTotal }`,
+ *   - map-reduce events: `{ phase: 'embedding' }`,
+ *     `{ phase: 'planning', sectionsTotal }`,
  *     `{ section, topic, body, hasLatex }`, `{ phase: 'reducing' }`,
  *     `{ reduce: { articleTitle, headings } }`, then a single final
  *     `{ delta: fullAssembledMarkdown }` + `{ hasLatex }` so any
@@ -46,6 +50,12 @@ export interface ArticleStreamSetters {
    * Empty string entries mean "render this section without its own heading".
    */
   setConsolidatedHeadings: (headings: string[] | null) => void;
+  /**
+   * Progress markers that carry no content: the generation step began
+   * (`generating`), or map-reduce started finding topic boundaries
+   * (`embedding`). Drives the progress box shown before any text.
+   */
+  onPhase: (phase: 'generating' | 'embedding') => void;
 }
 
 export interface ArticleStreamHandler {
@@ -100,6 +110,9 @@ export function createArticleStreamHandler(setters: ArticleStreamSetters): Artic
     }
     const e = raw as Record<string, unknown>;
 
+    if (e.phase === 'generating' || e.phase === 'embedding') {
+      setters.onPhase(e.phase);
+    }
     // Phase markers — map-reduce only.
     if (e.phase === 'planning' && typeof e.sectionsTotal === 'number') {
       mode = 'map-reduce';

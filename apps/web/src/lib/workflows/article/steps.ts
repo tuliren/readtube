@@ -31,6 +31,7 @@ export async function generateArticleStep(input: ArticleWorkflowInput): Promise<
   const writer = writable.getWriter();
 
   try {
+    await writer.write({ phase: 'generating' });
     const strategy = selectStrategy(input);
     return await strategy.generate(input, { writer });
   } finally {

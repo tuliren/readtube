@@ -7,16 +7,23 @@ import { countWords } from '@/lib/format/wordCount';
 import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { consumeNdjsonStream } from '@/lib/reader/consumeNdjsonStream';
 import { extractArticleHeadings } from '@/lib/reader/extractArticleHeadings';
-import { buildScheduledMessage, parseScheduledResponse } from '@/lib/reader/scheduledVideoToast';
+import type { GenerationStage } from '@/lib/reader/generationProgress';
+import {
+  type TranscriptOutcome,
+  prepareTranscript,
+  transcriptOutcomeFromResponse,
+} from '@/lib/reader/prepareTranscript';
 import { useFollowBottom } from '@/lib/reader/useFollowBottom';
 import { isDevelopment } from '@/lib/vercelEnv';
 
 import ArticleMarkdown from './ArticleMarkdown';
 import ExportMarkdownButtons from './ExportMarkdownButtons';
 import FloatingToc from './FloatingToc';
+import GenerationProgressBox from './GenerationProgressBox';
 import LanguagePicker, { languageQueryFragment } from './LanguagePicker';
 import RegenerateButton from './RegenerateButton';
 import StreamingArticleBody from './StreamingArticleBody';
+import TranscriptFallbackStep from './TranscriptFallbackStep';
 import type { TranscriptStatus } from './VideoReader';
 import { type SectionState, createArticleStreamHandler } from './articleStreamHandler';
 
@@ -56,7 +63,9 @@ interface Props {
   onLanguageChange: (next: string | null) => void;
 }
 
-type Status = 'checking' | 'idle' | 'streaming' | 'done' | 'error';
+// 'needs-transcript': a Generate click found no captions; the tab
+// shows the AI-transcription choice until the user decides.
+type Status = 'checking' | 'idle' | 'streaming' | 'needs-transcript' | 'done' | 'error';
 
 const STYLE = 'NARRATIVE';
 
@@ -88,6 +97,10 @@ export default function ArticleReader({
   // handler's `onSection` callback. Empty in single-pass mode.
   const [sectionStates, setSectionStates] = useState<Record<number, SectionState>>({});
   const [consolidatedHeadings, setConsolidatedHeadings] = useState<string[] | null>(null);
+  // What the progress box says before sections are planned. Once
+  // map-reduce reports its plan, the box derives writing / reducing
+  // from the section counters instead.
+  const [stage, setStage] = useState<GenerationStage>({ kind: 'starting' });
 
   // Auto-scroll the reader to the bottom while content streams in,
   // unless the user has scrolled away — the hook tracks that on its
@@ -147,6 +160,7 @@ export default function ArticleReader({
         // Single-pass and map-reduce are auto-detected by the shared
         // handler.
         setStatus('streaming');
+        setStage({ kind: 'resuming' });
         setContent('');
         setHasLatex(false);
         setSectionsTotal(null);
@@ -164,6 +178,7 @@ export default function ArticleReader({
           setArticleTitle,
           onSection: (i, state) => setSectionStates((prev) => ({ ...prev, [i]: state })),
           setConsolidatedHeadings,
+          onPhase: (phase) => setStage({ kind: phase === 'embedding' ? 'embedding' : 'drafting' }),
         });
         await consumeNdjsonStream(res.body, handler.onEvent);
 
@@ -241,7 +256,28 @@ export default function ArticleReader({
   // early returns below; moving it lower would trip rules-of-hooks.
   const tocItems = useMemo(() => extractArticleHeadings(content), [content]);
 
-  async function handleGenerate(opts: { force?: boolean } = {}) {
+  // Route a transcript-related outcome into the tab's state. Returns
+  // true only when the transcript is ready and generation can go on.
+  // See SummaryReader for the per-outcome rationale.
+  function applyTranscriptOutcome(outcome: TranscriptOutcome): boolean {
+    if (outcome.kind === 'ready') {
+      return true;
+    }
+    if (outcome.kind === 'no-captions') {
+      setStatus('needs-transcript');
+      return false;
+    }
+    if (outcome.kind === 'scheduled') {
+      toast.warning(outcome.message);
+      setStatus('idle');
+      return false;
+    }
+    setErrorMessage(outcome.message);
+    setStatus('error');
+    return false;
+  }
+
+  async function handleGenerate(opts: { force?: boolean; transcriptReady?: boolean } = {}) {
     setStatus('streaming');
     setContent('');
     setHasLatex(false);
@@ -254,6 +290,20 @@ export default function ArticleReader({
     setConsolidatedHeadings(null);
 
     try {
+      // Fetch the transcript as its own step so the progress box can
+      // say so; the generate POST would otherwise fold the upstream
+      // caption lookup into one long silent wait.
+      if (transcriptStatus !== 'present' && opts.transcriptReady !== true) {
+        setStage({ kind: 'transcript' });
+        if (!applyTranscriptOutcome(await prepareTranscript(videoDbId))) {
+          return;
+        }
+        // Broadcast 'present' so the Transcript tab loads it the
+        // moment the user switches over.
+        onTranscriptStatusChange('present');
+      }
+
+      setStage({ kind: 'starting' });
       const langFragment = languageQueryFragment(selectedLanguage);
       const res = await fetch(
         `/api/videos/${videoDbId}/article${langFragment ? `?${langFragment}` : ''}`,
@@ -265,36 +315,11 @@ export default function ArticleReader({
       );
 
       if (!res.ok) {
-        // 410 from the server means ensureTranscript flagged this
-        // video as transcript-unavailable. Flip the shared status so
-        // Summary and Transcript tabs immediately render their
-        // unavailable state too.
-        if (res.status === 410) {
-          onTranscriptStatusChange('unavailable');
-          setErrorMessage('Transcript unavailable for this video.');
-          setStatus('error');
-          return;
-        }
-        // 425 Too Early — scheduled premiere that hasn't aired yet.
-        // Toast a warning and reset to idle so the user can retry
-        // after the air time. Don't broadcast unavailable.
-        if (res.status === 425) {
-          const body = await parseScheduledResponse(res);
-          const message = buildScheduledMessage(body?.scheduledStartTime ?? null);
-          toast.warning(message);
-          setStatus('idle');
-          setContent('');
-          return;
-        }
-        // 503 means the upstream transcript provider blipped
-        // (network error / 429 / 5xx). Surface a retry-friendly
-        // error in THIS tab only — do NOT broadcast unavailable.
-        if (res.status === 503) {
-          const body = await res
-            .json()
-            .catch(() => ({ error: 'Transcript fetch failed temporarily — please try again.' }));
-          setErrorMessage(body.error ?? 'Transcript fetch failed temporarily — please try again.');
-          setStatus('error');
+        // The route runs ensureTranscript too; it only fails here if
+        // the transcript vanished between the two calls.
+        const outcome = await transcriptOutcomeFromResponse(res);
+        if (outcome != null) {
+          applyTranscriptOutcome(outcome);
           return;
         }
         const body = await res.json().catch(() => ({ error: 'Failed to generate article.' }));
@@ -309,13 +334,10 @@ export default function ArticleReader({
         return;
       }
 
-      // Reaching this point means the server's ensureTranscript call
-      // already succeeded (otherwise it would have returned 410
-      // before any stream body) — the transcript is now cached.
-      // Broadcast 'present' so the Transcript tab loads it
-      // automatically the moment the user switches over, instead of
-      // still showing the Fetch button.
-      onTranscriptStatusChange('present');
+      // Stream is open; the workflow may still be queued until it
+      // emits `phase: 'generating'`. Cache replays skip straight to
+      // deltas.
+      setStage({ kind: 'queued' });
 
       // Parse NDJSON. Single-pass and map-reduce are auto-detected by
       // the shared handler — see articleStreamHandler.ts for the full
@@ -329,6 +351,7 @@ export default function ArticleReader({
         setArticleTitle,
         onSection: (i, state) => setSectionStates((prev) => ({ ...prev, [i]: state })),
         setConsolidatedHeadings,
+        onPhase: (phase) => setStage({ kind: phase === 'embedding' ? 'embedding' : 'drafting' }),
       });
       await consumeNdjsonStream(res.body, handler.onEvent);
       const finalState = handler.getState();
@@ -426,6 +449,23 @@ export default function ArticleReader({
     );
   }
 
+  if (status === 'needs-transcript') {
+    return (
+      <div>
+        {pickerBar}
+        <TranscriptFallbackStep
+          videoDbId={videoDbId}
+          subject="article"
+          onReady={() => {
+            onTranscriptStatusChange('present');
+            void handleGenerate({ transcriptReady: true });
+          }}
+          onCancel={() => setStatus('idle')}
+        />
+      </div>
+    );
+  }
+
   if (status === 'error') {
     if (publicMode) {
       return (
@@ -459,6 +499,17 @@ export default function ArticleReader({
   const trimmedContent = content.trim();
   const hasExportableContent = trimmedContent.length > 0;
   const isStreaming = status === 'streaming';
+  const isMapReduce = sectionsTotal != null;
+  // The progress box covers the wait before any text. Single-pass
+  // hands over to the live markdown on the first delta; map-reduce
+  // keeps it (with real section counts) below the sections as they
+  // land, since those arrive in whole-section jumps.
+  const showProgressBox = isStreaming && (isMapReduce || trimmedContent.length === 0);
+  const progressStage: GenerationStage = reducing
+    ? { kind: 'reducing' }
+    : sectionsTotal != null
+      ? { kind: 'writing', sectionsReady, sectionsTotal }
+      : stage;
 
   return (
     <div ref={followBottomRef}>
@@ -484,24 +535,32 @@ export default function ArticleReader({
         />
       </div>
       {isStreaming && sectionsTotal != null ? (
-        <StreamingArticleBody
-          sectionsTotal={sectionsTotal}
-          sections={sectionStates}
-          consolidatedHeadings={consolidatedHeadings}
-        />
+        // Skeletons for every planned section would just repeat the
+        // box's message; wait for the first real one.
+        sectionsReady > 0 && (
+          <StreamingArticleBody
+            sectionsTotal={sectionsTotal}
+            sections={sectionStates}
+            consolidatedHeadings={consolidatedHeadings}
+          />
+        )
       ) : (
         <ArticleMarkdown hasLatex={hasLatex} enableHeadingIds>
           {content}
         </ArticleMarkdown>
       )}
-      {status === 'streaming' && (
+      {/* Below the body so auto-follow keeps it in view as map-reduce
+          sections land above it; before any text the body is empty
+          and it sits right under the toolbar. */}
+      {showProgressBox && (
+        <div className={sectionsReady > 0 ? 'mt-6' : undefined}>
+          <GenerationProgressBox stage={progressStage} subject="article" />
+        </div>
+      )}
+      {isStreaming && !showProgressBox && (
         <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
           <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-blue-500" />
-          {sectionsTotal != null
-            ? reducing
-              ? `Polishing outline (${sectionsReady} of ${sectionsTotal} sections ready)…`
-              : `Generating long article — ${sectionsReady} of ${sectionsTotal} sections ready…`
-            : 'Generating…'}
+          Generating…
         </div>
       )}
       <FloatingToc items={tocItems} variant="headings" />

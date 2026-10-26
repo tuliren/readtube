@@ -1,21 +1,34 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { type Dispatch, type SetStateAction, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 import { countWords } from '@/lib/format/wordCount';
 import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { consumeNdjsonStream } from '@/lib/reader/consumeNdjsonStream';
+import type { GenerationStage } from '@/lib/reader/generationProgress';
+import {
+  type TranscriptOutcome,
+  prepareTranscript,
+  transcriptOutcomeFromResponse,
+} from '@/lib/reader/prepareTranscript';
 import { panguSpaceText } from '@/lib/reader/remarkPanguSpacing';
-import { buildScheduledMessage, parseScheduledResponse } from '@/lib/reader/scheduledVideoToast';
 import { useFollowBottom } from '@/lib/reader/useFollowBottom';
 import { isDevelopment } from '@/lib/vercelEnv';
 
 import ArticleMarkdown from './ArticleMarkdown';
 import ExportMarkdownButtons from './ExportMarkdownButtons';
+import GenerationProgressBox from './GenerationProgressBox';
 import LanguagePicker, { languageQueryFragment } from './LanguagePicker';
 import RegenerateButton from './RegenerateButton';
+import TranscriptFallbackStep from './TranscriptFallbackStep';
 import type { TranscriptStatus } from './VideoReader';
+import {
+  type SummaryField,
+  type SummaryStreamHandler,
+  createSummaryStreamHandler,
+  summaryStreamFailure,
+} from './summaryStreamHandler';
 
 type HasLatexByField = Partial<Record<'short' | 'full', boolean>>;
 
@@ -60,8 +73,6 @@ interface Props {
   onLanguageChange: (next: string | null) => void;
 }
 
-type SummaryField = 'headline' | 'short' | 'full';
-
 const ALL_FIELDS: readonly SummaryField[] = ['headline', 'short', 'full'] as const;
 
 interface SummaryData {
@@ -70,7 +81,9 @@ interface SummaryData {
   full: string | null;
 }
 
-type Status = 'checking' | 'idle' | 'generating' | 'done' | 'error';
+// 'needs-transcript': a Generate click found no captions; the tab
+// shows the AI-transcription choice until the user decides.
+type Status = 'checking' | 'idle' | 'generating' | 'needs-transcript' | 'done' | 'error';
 
 function SummarySkeleton() {
   return (
@@ -80,6 +93,29 @@ function SummarySkeleton() {
       ))}
     </div>
   );
+}
+
+/**
+ * Route summary stream events into the reader's state: field deltas
+ * into `summary`, LaTeX flags into `hasLatexByField`, and the
+ * workflow's start signal into the progress box stage.
+ */
+function bindSummaryStream(
+  setSummary: Dispatch<SetStateAction<SummaryData | null>>,
+  setHasLatexByField: Dispatch<SetStateAction<HasLatexByField>>,
+  setStage: Dispatch<SetStateAction<GenerationStage>>
+): SummaryStreamHandler {
+  return createSummaryStreamHandler({
+    onFieldContent: (field, content) =>
+      setSummary((prev) => ({
+        headline: prev?.headline ?? null,
+        short: prev?.short ?? null,
+        full: prev?.full ?? null,
+        [field]: content,
+      })),
+    onHasLatex: (field, hasLatex) => setHasLatexByField((prev) => ({ ...prev, [field]: hasLatex })),
+    onGenerating: () => setStage({ kind: 'drafting' }),
+  });
 }
 
 function WordCountLabel({ count }: { count: number }) {
@@ -111,6 +147,8 @@ export default function SummaryReader({
   const [hasLatexByField, setHasLatexByField] = useState<HasLatexByField>({});
   const [regeneratingFields, setRegeneratingFields] = useState<SummaryField[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // What the progress box says while a generation has no content yet.
+  const [stage, setStage] = useState<GenerationStage>({ kind: 'starting' });
 
   // Auto-scroll the reader to the bottom while summary fields stream
   // in, unless the user has scrolled away. See ArticleReader for the
@@ -165,79 +203,24 @@ export default function SummaryReader({
           return;
         }
 
-        // Switch into the same streaming UX that handleGenerate uses
-        // — empty fields with skeletons until deltas arrive. All three
-        // fields are considered "regenerating" since the active run
-        // is a full-generate (per-field regenerates aren't registered
-        // in the run registry).
+        // Switch into the same streaming UX that handleGenerate uses.
+        // All three fields are considered "regenerating" since the
+        // active run is a full-generate (per-field regenerates aren't
+        // registered in the run registry).
         setStatus('generating');
+        setStage({ kind: 'resuming' });
         setRegeneratingFields([...ALL_FIELDS]);
         setSummary({ headline: '', short: '', full: '' });
 
-        const accumulated: Record<SummaryField, string> = {
-          headline: '',
-          short: '',
-          full: '',
-        };
-        let sawDone = false;
-        let streamError: string | null = null;
-
-        await consumeNdjsonStream(res.body, (event) => {
-          if (typeof event !== 'object' || event === null) {
-            return;
-          }
-          const e = event as {
-            field?: SummaryField;
-            delta?: string;
-            hasLatex?: boolean;
-            error?: string;
-            type?: string;
-          };
-          if (e.type === 'done') {
-            sawDone = true;
-            return;
-          }
-          if (e.field != null && typeof e.delta === 'string') {
-            accumulated[e.field] += e.delta;
-            const fieldName = e.field;
-            const fieldValue = accumulated[fieldName];
-            setSummary((prev) => ({
-              headline: prev?.headline ?? null,
-              short: prev?.short ?? null,
-              full: prev?.full ?? null,
-              [fieldName]: fieldValue,
-            }));
-          } else if (e.field != null && typeof e.hasLatex === 'boolean') {
-            const fieldName = e.field;
-            if (fieldName === 'short' || fieldName === 'full') {
-              const flag = e.hasLatex;
-              setHasLatexByField((prev) => ({ ...prev, [fieldName]: flag }));
-            }
-          } else if (typeof e.error === 'string') {
-            streamError = e.error;
-          }
-        });
+        const handler = bindSummaryStream(setSummary, setHasLatexByField, setStage);
+        await consumeNdjsonStream(res.body, handler.onEvent);
 
         if (cancelled) {
           return;
         }
-        if (streamError != null) {
-          setErrorMessage(streamError);
-          setStatus('error');
-          setRegeneratingFields([]);
-          return;
-        }
-        if (!sawDone) {
-          setErrorMessage(
-            'Generation ended unexpectedly. Please refresh in a moment, or try again.'
-          );
-          setStatus('error');
-          setRegeneratingFields([]);
-          return;
-        }
-        const anyContent = ALL_FIELDS.some((f) => accumulated[f].trim().length > 0);
-        if (!anyContent) {
-          setErrorMessage('No content was generated. Please try again.');
+        const failure = summaryStreamFailure(handler.getState(), ALL_FIELDS);
+        if (failure != null) {
+          setErrorMessage(failure);
           setStatus('error');
           setRegeneratingFields([]);
           return;
@@ -303,7 +286,41 @@ export default function SummaryReader({
     onSummaryGeneratingChange(status === 'generating');
   }, [status, onSummaryGeneratingChange]);
 
-  async function handleGenerate(targetFields?: SummaryField[]) {
+  // Route a transcript-related outcome into the tab's state. Returns
+  // true only when the transcript is ready and generation can go on.
+  function applyTranscriptOutcome(outcome: TranscriptOutcome): boolean {
+    if (outcome.kind === 'ready') {
+      return true;
+    }
+    setRegeneratingFields([]);
+    if (outcome.kind === 'no-captions') {
+      // Offer AI transcription inline instead of broadcasting
+      // 'unavailable', which would swap the whole tab area for the
+      // full-page fallback panel mid-click.
+      setSummary(null);
+      setStatus('needs-transcript');
+      return false;
+    }
+    if (outcome.kind === 'scheduled') {
+      // Premiere that hasn't aired: the transcript will exist later,
+      // so reset to idle rather than showing a sticky error.
+      toast.warning(outcome.message);
+      setSummary(null);
+      setStatus('idle');
+      return false;
+    }
+    // Transient upstream blips stay local to this tab; broadcasting
+    // unavailable would lock the other tabs for the session even
+    // though the next click would probably succeed.
+    setErrorMessage(outcome.message);
+    setStatus('error');
+    return false;
+  }
+
+  async function handleGenerate(
+    targetFields?: SummaryField[],
+    opts: { transcriptReady?: boolean } = {}
+  ) {
     const fields = targetFields ?? [...ALL_FIELDS];
     setStatus('generating');
     setRegeneratingFields(fields);
@@ -333,6 +350,20 @@ export default function SummaryReader({
     });
 
     try {
+      // Fetch the transcript as its own step so the progress box can
+      // say so; the generate POST would otherwise fold the upstream
+      // caption lookup into one long silent wait.
+      if (transcriptStatus !== 'present' && opts.transcriptReady !== true) {
+        setStage({ kind: 'transcript' });
+        if (!applyTranscriptOutcome(await prepareTranscript(videoDbId))) {
+          return;
+        }
+        // Broadcast 'present' so the Transcript tab loads it the
+        // moment the user switches over.
+        onTranscriptStatusChange('present');
+      }
+
+      setStage({ kind: 'starting' });
       const fragment = languageQueryFragment(selectedLanguage);
       const res = await fetch(`/api/videos/${videoDbId}/summary${fragment ? `?${fragment}` : ''}`, {
         method: 'POST',
@@ -341,43 +372,11 @@ export default function SummaryReader({
       });
 
       if (!res.ok) {
-        // 410 from the server means ensureTranscript flagged this
-        // video as transcript-unavailable. Flip the shared status so
-        // Article and Transcript tabs immediately render their
-        // unavailable state too — no extra fetches needed.
-        if (res.status === 410) {
-          onTranscriptStatusChange('unavailable');
-          setErrorMessage('Transcript unavailable for this video.');
-          setStatus('error');
-          setRegeneratingFields([]);
-          return;
-        }
-        // 425 Too Early — scheduled premiere that hasn't aired yet.
-        // Toast a warning and reset to idle so the user can retry
-        // after the air time. Don't broadcast unavailable: the
-        // transcript will exist once the video airs.
-        if (res.status === 425) {
-          const body = await parseScheduledResponse(res);
-          const message = buildScheduledMessage(body?.scheduledStartTime ?? null);
-          toast.warning(message);
-          setStatus('idle');
-          setRegeneratingFields([]);
-          setSummary(null);
-          return;
-        }
-        // 503 means the upstream transcript provider blipped
-        // (network error / 429 / 5xx). Surface a retry-friendly
-        // error in THIS tab only — do NOT broadcast unavailable,
-        // because doing so would lock Article and Transcript out
-        // for the rest of the session even though the next click
-        // would probably succeed.
-        if (res.status === 503) {
-          const body = await res
-            .json()
-            .catch(() => ({ error: 'Transcript fetch failed temporarily — please try again.' }));
-          setErrorMessage(body.error ?? 'Transcript fetch failed temporarily — please try again.');
-          setStatus('error');
-          setRegeneratingFields([]);
+        // The route runs ensureTranscript too; it only fails here if
+        // the transcript vanished between the two calls.
+        const outcome = await transcriptOutcomeFromResponse(res);
+        if (outcome != null) {
+          applyTranscriptOutcome(outcome);
           return;
         }
         const body = await res.json().catch(() => ({ error: 'Failed to generate summary.' }));
@@ -394,98 +393,16 @@ export default function SummaryReader({
         return;
       }
 
-      // Reaching this point means the server's ensureTranscript call
-      // already succeeded (otherwise it would have returned 410
-      // before any stream body) — the transcript is now cached.
-      // Broadcast 'present' so the Transcript tab loads it
-      // automatically the moment the user switches over, instead of
-      // still showing the Fetch button.
-      onTranscriptStatusChange('present');
+      // Stream is open; the workflow may still be queued until it
+      // emits `phase: 'generating'`. Cache replays skip straight to
+      // deltas.
+      setStage({ kind: 'queued' });
+      const handler = bindSummaryStream(setSummary, setHasLatexByField, setStage);
+      await consumeNdjsonStream(res.body, handler.onEvent);
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      const accumulated: Record<SummaryField, string> = { headline: '', short: '', full: '' };
-      let buffer = '';
-      let streamError: string | null = null;
-      let sawDone = false;
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-          break;
-        }
-        buffer += decoder.decode(value, { stream: true });
-
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed) {
-            continue;
-          }
-          let event: {
-            field?: SummaryField;
-            delta?: string;
-            hasLatex?: boolean;
-            error?: string;
-            type?: string;
-          };
-          try {
-            event = JSON.parse(trimmed);
-          } catch {
-            continue;
-          }
-
-          if (event.type === 'done') {
-            sawDone = true;
-            continue;
-          }
-          if (event.field && typeof event.delta === 'string') {
-            accumulated[event.field] += event.delta;
-            const fieldName = event.field;
-            const fieldValue = accumulated[event.field];
-            setSummary((prev) => ({
-              headline: prev?.headline ?? null,
-              short: prev?.short ?? null,
-              full: prev?.full ?? null,
-              [fieldName]: fieldValue,
-            }));
-          } else if (event.field && typeof event.hasLatex === 'boolean') {
-            const fieldName = event.field;
-            const flag = event.hasLatex;
-            if (fieldName === 'short' || fieldName === 'full') {
-              setHasLatexByField((prev) => ({ ...prev, [fieldName]: flag }));
-            }
-          } else if (typeof event.error === 'string') {
-            // Both per-field errors (`{field, error}`) and top-level
-            // errors (`{error}` from a workflow generation/persist
-            // failure) abort the stream with the same UX. Catch both
-            // here so a top-level error never silently falls through
-            // to the "no content generated" branch.
-            streamError = event.error;
-          }
-        }
-      }
-
-      if (streamError) {
-        setErrorMessage(streamError);
-        setStatus('error');
-        setRegeneratingFields([]);
-        return;
-      }
-      if (!sawDone) {
-        // See ArticleReader for the rationale — stream closed without
-        // an explicit terminator, don't trust accumulated content.
-        setErrorMessage('Generation ended unexpectedly. Please refresh in a moment, or try again.');
-        setStatus('error');
-        setRegeneratingFields([]);
-        return;
-      }
-
-      const anyContent = fields.some((f) => accumulated[f].trim().length > 0);
-      if (!anyContent) {
-        setErrorMessage('No content was generated. Please try again.');
+      const failure = summaryStreamFailure(handler.getState(), fields);
+      if (failure != null) {
+        setErrorMessage(failure);
         setStatus('error');
         setRegeneratingFields([]);
         return;
@@ -560,6 +477,25 @@ export default function SummaryReader({
     );
   }
 
+  if (status === 'needs-transcript') {
+    return (
+      <div>
+        {pickerBar}
+        <TranscriptFallbackStep
+          videoDbId={videoDbId}
+          subject="summary"
+          onReady={() => {
+            onTranscriptStatusChange('present');
+            // Transcription hands off to an automatic summary run;
+            // the POST taps into it rather than starting another.
+            void handleGenerate(undefined, { transcriptReady: true });
+          }}
+          onCancel={() => setStatus('idle')}
+        />
+      </div>
+    );
+  }
+
   if (status === 'error') {
     if (publicMode) {
       return (
@@ -630,6 +566,19 @@ export default function SummaryReader({
     (summary.headline != null && summary.headline.trim().length > 0) ||
     shortContent.length > 0 ||
     fullContent.length > 0;
+
+  // Nothing readable yet: say what's happening instead of showing a
+  // wall of skeleton bars. Per-field regenerates keep the other
+  // fields on screen, so they skip the box.
+  const hasAnyContent = ALL_FIELDS.some((f) => (summary[f]?.trim() ?? '').length > 0);
+  if (isStreaming && !hasAnyContent) {
+    return (
+      <div>
+        {pickerBar}
+        <GenerationProgressBox stage={stage} subject="summary" />
+      </div>
+    );
+  }
 
   return (
     <div ref={followBottomRef}>
