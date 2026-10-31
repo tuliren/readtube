@@ -34,7 +34,7 @@ interface CommandDialogProps extends DialogProps {
 const CommandDialog = ({ children, commandProps, ...props }: CommandDialogProps) => {
   return (
     <Dialog {...props}>
-      <DialogContent className="overflow-hidden p-0">
+      <DialogContent className="max-w-3xl overflow-hidden p-0">
         {/*
           Radix Dialog requires a DialogTitle for screen-reader users
           (it throws a console warning otherwise). The command palette

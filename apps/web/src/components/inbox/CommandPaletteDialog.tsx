@@ -167,7 +167,7 @@ export default function CommandPaletteDialog({ items, open, setOpen }: Props) {
         value={query}
         onValueChange={setQuery}
       />
-      <CommandList>
+      <CommandList className="max-h-[60vh]">
         {/* cmdk's CommandEmpty keys off its internal filter, which is
             disabled here — render empty/hint states manually instead. */}
         {!hasResults && (
