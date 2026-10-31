@@ -128,3 +128,31 @@
   }
 }
 
+
+/*
+ * The sidebar's scrollbar: a rounded thumb with no track or border
+ * behind it, a little wider than the native one so it is easy to grab.
+ * The transparent border insets the thumb from both edges.
+ */
+@utility scrollbar-sidebar {
+  &::-webkit-scrollbar {
+    width: 14px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  &::-webkit-scrollbar-thumb {
+    border: 3px solid transparent;
+    border-radius: 9999px;
+    background-clip: padding-box;
+    background-color: color-mix(in oklab, var(--muted-foreground) 50%, transparent);
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background-color: color-mix(in oklab, var(--muted-foreground) 75%, transparent);
+  }
+  /* Firefox has no ::-webkit-scrollbar; Chromium ignores the pseudo
+     elements above once scrollbar-color is set, so keep it out of their way. */
+  @supports not selector(::-webkit-scrollbar) {
+    scrollbar-color: color-mix(in oklab, var(--muted-foreground) 50%, transparent) transparent;
+  }
+}
