@@ -118,6 +118,23 @@ describe('GET /api/search', () => {
     expect(body.videos[0].descriptionSnippet).toBeNull();
   });
 
+  it.each([
+    { path: 'tsquery', title: 'Rust ownership explained', q: 'rust' },
+    { path: 'CJK substring', title: '诺兰访谈', q: '诺兰' },
+  ])('returns the video thumbnail URL on the $path path', async ({ title, q }) => {
+    const channel = await seedChannel('c1', 'Channel One');
+    const video = await seedVideo(channel.id, 'v1', title);
+    await global.testPrisma.video.update({
+      where: { id: video.id },
+      data: { thumbnail_url: 'https://example.com/thumb.jpg' },
+    });
+    await seedVideo(channel.id, 'v2', `${title} 2`);
+
+    const body = await search(q);
+    const bySourceId = Object.fromEntries(body.videos.map((v) => [v.sourceId, v.thumbnailUrl]));
+    expect(bySourceId).toEqual({ v1: 'https://example.com/thumb.jpg', v2: null });
+  });
+
   it('matches videos by description with English stemming and returns a delimited snippet', async () => {
     const channel = await seedChannel('c1', 'Channel One');
     await seedVideo(channel.id, 'v1', 'Weekly recap', 'Deep dive into running marathons');

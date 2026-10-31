@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 
 import {
@@ -13,10 +13,11 @@ import {
 } from '@/components/ui/command';
 import { buildReturnTo } from '@/lib/inbox/filter';
 import { bestMatchScore } from '@/lib/search/matchScore';
-import type { SearchResponse, VideoSearchHit } from '@/lib/search/types';
+import type { SearchResponse } from '@/lib/search/types';
 import { channelHref } from '@/lib/urls/channelHref';
 
 import ChannelAvatar from './ChannelAvatar';
+import CommandPaletteVideoHit from './CommandPaletteVideoHit';
 
 /**
  * A palette entry registered by a feature component via `useCommand`.
@@ -166,7 +167,7 @@ export default function CommandPaletteDialog({ items, open, setOpen }: Props) {
         value={query}
         onValueChange={setQuery}
       />
-      <CommandList>
+      <CommandList className="max-h-[60vh]">
         {/* cmdk's CommandEmpty keys off its internal filter, which is
             disabled here — render empty/hint states manually instead. */}
         {!hasResults && (
@@ -186,17 +187,21 @@ export default function CommandPaletteDialog({ items, open, setOpen }: Props) {
                 value={`channel-${hit.id}`}
                 onSelect={() => navigate(channelHref(hit))}
               >
+                {/* h-9 avatar spans the name + handle lines, matching
+                    the video thumbnails' height. */}
                 {hit.logoUrl != null ? (
-                  <ChannelAvatar url={hit.logoUrl} size={40} cssSize="h-5 w-5" />
+                  <ChannelAvatar url={hit.logoUrl} size={72} cssSize="h-9 w-9" />
                 ) : (
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-semibold text-muted-foreground">
                     {hit.name.charAt(0).toUpperCase()}
                   </span>
                 )}
-                <span className="truncate">{hit.name}</span>
-                {hit.handle != null && (
-                  <span className="truncate text-xs text-muted-foreground">{hit.handle}</span>
-                )}
+                <div className="flex min-w-0 flex-col">
+                  <span className="truncate">{hit.name}</span>
+                  {hit.handle != null && (
+                    <span className="truncate text-xs text-muted-foreground">{hit.handle}</span>
+                  )}
+                </div>
               </CommandItem>
             ))}
           </CommandGroup>
@@ -204,7 +209,7 @@ export default function CommandPaletteDialog({ items, open, setOpen }: Props) {
         {titleHits.length > 0 && (
           <CommandGroup heading="Videos (by title)">
             {titleHits.map((hit) => (
-              <VideoHitItem
+              <CommandPaletteVideoHit
                 key={hit.id}
                 hit={hit}
                 onSelect={() =>
@@ -219,7 +224,7 @@ export default function CommandPaletteDialog({ items, open, setOpen }: Props) {
         {descriptionHits.length > 0 && (
           <CommandGroup heading="Videos (by description)">
             {descriptionHits.map((hit) => (
-              <VideoHitItem
+              <CommandPaletteVideoHit
                 key={hit.id}
                 hit={hit}
                 onSelect={() =>
@@ -252,58 +257,5 @@ export default function CommandPaletteDialog({ items, open, setOpen }: Props) {
         ))}
       </CommandList>
     </CommandDialog>
-  );
-}
-
-/**
- * One video hit row: title, then channel and date, and for
- * description matches a snippet of the matched description fragment
- * so the user can see why a video whose title lacks the query terms
- * is in the list.
- */
-function VideoHitItem({ hit, onSelect }: { hit: VideoSearchHit; onSelect: () => void }) {
-  return (
-    <CommandItem value={`video-${hit.id}`} onSelect={onSelect}>
-      <div className="flex min-w-0 flex-col">
-        <span className="truncate">{renderHighlighted(hit.titleHighlight)}</span>
-        <span className="truncate text-xs text-muted-foreground">
-          {hit.channelName}
-          {hit.publishedAt != null &&
-            ` · ${new Date(hit.publishedAt).toLocaleDateString(undefined, {
-              year: 'numeric',
-              month: 'short',
-              day: 'numeric',
-            })}`}
-        </span>
-        {hit.descriptionSnippet != null && (
-          <span className="truncate text-xs italic text-muted-foreground">
-            {renderHighlighted(hit.descriptionSnippet)}
-          </span>
-        )}
-      </div>
-    </CommandItem>
-  );
-}
-
-/**
- * Render text whose query-term hits are wrapped in `[[` `]]`
- * delimiters (ts_headline output) as bold, highlighted <mark>
- * elements. Splitting on the delimiters keeps the underlying content
- * plain text — markup inside a video title or description can never
- * reach the DOM as HTML.
- */
-function renderHighlighted(text: string): React.ReactNode {
-  const parts = text.split(/\[\[(.*?)\]\]/g);
-  return parts.map((part, index) =>
-    index % 2 === 1 ? (
-      <mark
-        key={index}
-        className="rounded-sm bg-yellow-100 px-0.5 font-semibold text-foreground dark:bg-yellow-500/25"
-      >
-        {part}
-      </mark>
-    ) : (
-      <Fragment key={index}>{part}</Fragment>
-    )
   );
 }
