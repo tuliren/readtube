@@ -8,6 +8,8 @@ module.exports = {
     '^@vercel/analytics/server$': '<rootDir>/tests/mocks/vercelAnalyticsServer.ts',
     // ESM-only since v5; strategy modules import it for `FatalError`.
     '^workflow$': '<rootDir>/tests/mocks/workflow.ts',
+    // ESM-only since v7; strategy modules import it for `streamText`.
+    '^ai$': '<rootDir>/tests/mocks/ai.ts',
   },
   testMatch: ['<rootDir>/**/__integrationTests__/*.test.ts'],
   testTimeout: 60000,

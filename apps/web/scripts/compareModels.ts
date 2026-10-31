@@ -87,7 +87,7 @@ async function runModel(model: string, prompt: string): Promise<ModelRun> {
         latencyMs: Date.now() - startedAt,
         inputTokens: result.usage.inputTokens ?? null,
         outputTokens: result.usage.outputTokens ?? null,
-        reasoningTokens: result.usage.reasoningTokens ?? null,
+        reasoningTokens: result.usage.outputTokenDetails.reasoningTokens ?? null,
         costUsd: extractGatewayCost(result.providerMetadata),
       },
     };
