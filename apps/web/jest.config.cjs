@@ -9,6 +9,8 @@ module.exports = {
     '^@vercel/analytics/server$': '<rootDir>/tests/mocks/vercelAnalyticsServer.ts',
     // ESM-only since v5; strategy modules import it for `FatalError`.
     '^workflow$': '<rootDir>/tests/mocks/workflow.ts',
+    // ESM-only since v7; strategy modules import it for `streamText`.
+    '^ai$': '<rootDir>/tests/mocks/ai.ts',
     // `pangu/shared` (the browser-safe entry the app imports) is
     // ESM-only; the package's CJS node build exposes the same `pangu`.
     '^pangu/shared$': require.resolve('pangu'),
