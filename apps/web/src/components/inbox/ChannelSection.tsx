@@ -65,7 +65,7 @@ export default function ChannelSection({
           hides its scrollbar. A second scroller here would show one and
           push the rail icons off center. */}
       <nav
-        className={`flex min-w-0 flex-col overflow-x-hidden ${collapsed ? '' : 'overflow-y-auto'}`}
+        className={`flex min-w-0 flex-col overflow-x-hidden pb-2 ${collapsed ? '' : 'scrollbar-sidebar overflow-y-auto'}`}
       >
         {!collapsed && <SidebarFilterInput value={filter} onChange={setFilter} />}
         {filtering ? (

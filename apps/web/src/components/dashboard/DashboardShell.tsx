@@ -124,10 +124,12 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
 
   // Collapsed desktop sidebar keeps scrolling but hides the bar —
   // a visible scrollbar inside a 56px rail looks noisy. The sheet
-  // and expanded sidebar keep their default scrollbars.
+  // and expanded sidebar scroll in ChannelSection's nav instead. No
+  // bottom padding here: outside that nav it would sit as a fixed
+  // empty strip above the footer.
   const renderSidebarContent = (hideScrollbar: boolean) => (
     <div
-      className={`flex flex-1 flex-col overflow-x-hidden overflow-y-auto pb-6 ${
+      className={`flex flex-1 flex-col overflow-x-hidden overflow-y-auto ${
         hideScrollbar ? '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden' : ''
       }`}
     >
