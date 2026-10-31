@@ -187,17 +187,21 @@ export default function CommandPaletteDialog({ items, open, setOpen }: Props) {
                 value={`channel-${hit.id}`}
                 onSelect={() => navigate(channelHref(hit))}
               >
+                {/* h-9 avatar spans the name + handle lines, matching
+                    the video thumbnails' height. */}
                 {hit.logoUrl != null ? (
-                  <ChannelAvatar url={hit.logoUrl} size={40} cssSize="h-5 w-5" />
+                  <ChannelAvatar url={hit.logoUrl} size={72} cssSize="h-9 w-9" />
                 ) : (
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-semibold text-muted-foreground">
                     {hit.name.charAt(0).toUpperCase()}
                   </span>
                 )}
-                <span className="truncate">{hit.name}</span>
-                {hit.handle != null && (
-                  <span className="truncate text-xs text-muted-foreground">{hit.handle}</span>
-                )}
+                <div className="flex min-w-0 flex-col">
+                  <span className="truncate">{hit.name}</span>
+                  {hit.handle != null && (
+                    <span className="truncate text-xs text-muted-foreground">{hit.handle}</span>
+                  )}
+                </div>
               </CommandItem>
             ))}
           </CommandGroup>
