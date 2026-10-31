@@ -45,6 +45,7 @@ export interface VideoSearchHit {
    */
   titleHighlight: string;
   channelName: string;
+  thumbnailUrl: string | null;
   publishedAt: string | null;
   matchedBy: VideoMatchField;
   /**

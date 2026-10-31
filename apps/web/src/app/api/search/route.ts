@@ -139,6 +139,7 @@ async function searchVideosByTsquery(userId: string, q: string): Promise<VideoSe
       source_id: string;
       title: string;
       title_highlight: string;
+      thumbnail_url: string | null;
       published_at: Date | null;
       channel_name: string;
       title_match: boolean;
@@ -155,6 +156,7 @@ async function searchVideosByTsquery(userId: string, q: string): Promise<VideoSe
         plainto_tsquery('english', ${q}),
         'StartSel=[[, StopSel=]], HighlightAll=TRUE'
       ) AS title_highlight,
+      ranked.thumbnail_url,
       ranked.published_at,
       ranked.channel_name,
       ranked.title_match,
@@ -172,6 +174,7 @@ async function searchVideosByTsquery(userId: string, q: string): Promise<VideoSe
         v."source_id"    AS source_id,
         v."title"        AS title,
         v."description"  AS description,
+        v."thumbnail_url" AS thumbnail_url,
         v."published_at" AS published_at,
         c."name"         AS channel_name,
         to_tsvector('english', v."title") @@ plainto_tsquery('english', ${q}) AS title_match,
@@ -200,6 +203,7 @@ async function searchVideosByTsquery(userId: string, q: string): Promise<VideoSe
     title: row.title,
     titleHighlight: row.title_highlight,
     channelName: row.channel_name,
+    thumbnailUrl: row.thumbnail_url,
     publishedAt: row.published_at?.toISOString() ?? null,
     matchedBy: row.title_match ? 'title' : 'description',
     descriptionSnippet: row.description_snippet,
@@ -238,6 +242,7 @@ async function searchVideosBySubstring(userId: string, q: string): Promise<Video
       source_id: string;
       title: string;
       description: string | null;
+      thumbnail_url: string | null;
       published_at: Date | null;
       channel_name: string;
       title_match: boolean;
@@ -248,6 +253,7 @@ async function searchVideosBySubstring(userId: string, q: string): Promise<Video
       ranked.source_id,
       ranked.title,
       ranked.description,
+      ranked.thumbnail_url,
       ranked.published_at,
       ranked.channel_name,
       ranked.title_match
@@ -257,6 +263,7 @@ async function searchVideosBySubstring(userId: string, q: string): Promise<Video
         v."source_id"    AS source_id,
         v."title"        AS title,
         v."description"  AS description,
+        v."thumbnail_url" AS thumbnail_url,
         v."published_at" AS published_at,
         c."name"         AS channel_name,
         (${titleMatch}) AS title_match,
@@ -281,6 +288,7 @@ async function searchVideosBySubstring(userId: string, q: string): Promise<Video
     title: row.title,
     titleHighlight: markMatches(row.title, terms),
     channelName: row.channel_name,
+    thumbnailUrl: row.thumbnail_url,
     publishedAt: row.published_at?.toISOString() ?? null,
     matchedBy: row.title_match ? 'title' : 'description',
     descriptionSnippet:
