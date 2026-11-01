@@ -59,7 +59,6 @@ jobs:
           cache: yarn
       - name: Cache node_modules
         uses: actions/cache@v6
-        id: node-modules-cache
         with:
           path: |
             node_modules
@@ -67,8 +66,9 @@ jobs:
             packages/*/node_modules
             .yarn/install-state.gz
           key: node-modules-${{ runner.os }}-node24-${{ hashFiles('yarn.lock') }}
+      # Always run, even on a cache hit: the cache is keyed on yarn.lock only, so
+      # skipping install would miss a package.json change that the lockfile lacks.
       - name: Install dependencies
-        if: steps.node-modules-cache.outputs.cache-hit != 'true'
         run: yarn install --immutable
       - name: Cache turbo
         uses: actions/cache@v6
