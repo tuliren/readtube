@@ -5954,7 +5954,7 @@ __metadata:
     eslint-plugin-only-warn: "npm:^1.2.1"
     eslint-plugin-react: "npm:^7.37.5"
     eslint-plugin-react-hooks: "npm:^7.1.1"
-    eslint-plugin-turbo: "npm:^2.9.12"
+    eslint-plugin-turbo: "npm:^2.11.10"
     globals: "npm:^17.6.0"
     typescript: "npm:^5.9.3"
   languageName: unknown
@@ -12891,7 +12891,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"eslint-plugin-turbo@npm:2.9.12, eslint-plugin-turbo@npm:^2.9.12":
+"eslint-plugin-turbo@npm:2.9.12":
   version: 2.9.12
   resolution: "eslint-plugin-turbo@npm:2.9.12"
   dependencies:
@@ -12900,6 +12900,18 @@ __metadata:
     eslint: ">6.6.0"
     turbo: ">2.0.0"
   checksum: 10c0/507ffb5e6146e81efc0697445a46401ed94e6666b5cbae8c1a9d4b88a10dfee2d95c5e60bc4619cf3d9e89d5322fd240953fffb171a0addb459f7dee46ebffd0
+  languageName: node
+  linkType: hard
+
+"eslint-plugin-turbo@npm:^2.11.10":
+  version: 2.11.10
+  resolution: "eslint-plugin-turbo@npm:2.11.10"
+  dependencies:
+    dotenv: "npm:16.0.3"
+  peerDependencies:
+    eslint: ">6.6.0"
+    turbo: ">2.0.0"
+  checksum: 10c0/695ef46f75a4ba4334552a7394534b8368ef32dc59c17c1df7258295066b47f46770a14219052a1c562cf2be232dee586dda5b3e3b50644a2e2b9694b6667cf3
   languageName: node
   linkType: hard
 
