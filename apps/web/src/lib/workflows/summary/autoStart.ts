@@ -3,6 +3,8 @@ import { start } from 'workflow/api';
 
 import { DEFAULT_AI_MODEL } from '@/constants';
 import { resolveTranscriptLanguage } from '@/lib/language/cache';
+import { needsEnglishFollowUp } from '@/lib/language/englishFollowUp';
+import { ENGLISH_LANGUAGE_CODE } from '@/lib/language/names';
 import { resolveTargetLanguage } from '@/lib/language/resolve';
 import { recordSummaryRequest } from '@/lib/usage/userRequest';
 import { claimSummaryRun, findActiveSummaryRun } from '@/lib/workflows/runRegistry';
@@ -20,8 +22,8 @@ interface TranscriptSegmentShape {
  * request in flight. Two callers: the automatic follow-up after the
  * transcript-generation workflow lands a transcript (so the user who
  * clicked "Generate transcript" comes back to a summary, not another
- * button), and the English follow-up queued after a non-English
- * summary lands (see `queueEnglishSummaryStep`).
+ * button), and the English sibling queued next to a non-English
+ * summary (see {@link startEnglishSummaryFollowUp}).
  *
  * A trimmed-down mirror of the summary POST route's full-generate
  * path with the same registry semantics (dedup via
@@ -116,7 +118,6 @@ export async function startAutoSummary(
           transcriptId,
           language: target,
           userRequestId: userRequest?.id ?? null,
-          englishFollowUp: { userId, videoDbId },
         },
       ]),
     claim: (newRunId) =>
@@ -135,4 +136,61 @@ export async function startAutoSummary(
   console.info(
     `[startAutoSummary] Started summary run ${runId} (language ${target ?? 'original'}) for transcript ${transcriptId}`
   );
+
+  await startEnglishSummaryFollowUp(prisma, {
+    userId,
+    videoDbId,
+    transcriptId,
+    language: target,
+    sourceLanguage,
+  });
+}
+
+/**
+ * Queue an English summary alongside a just-started non-English one so
+ * the public share page (English by default) has English content for
+ * search engines to index. Runs in parallel with the original run.
+ *
+ * Skipped when the started run is already English (an explicit `en`
+ * target, or an Original whose source language is English or unknown
+ * — see {@link needsEnglishFollowUp}), and, via `startAutoSummary`'s
+ * guards, when an English row is READY or already generating. The
+ * English run never chains further since its target is English.
+ *
+ * Best-effort: errors are logged, never thrown, because the content
+ * the user asked for is unaffected by a missing English sibling.
+ */
+export async function startEnglishSummaryFollowUp(
+  prisma: PrismaClient,
+  params: {
+    userId: string;
+    videoDbId: string;
+    transcriptId: string;
+    /** Target of the run just started; null = Original. */
+    language: string | null;
+    /** Detected source language when already known (Original runs). */
+    sourceLanguage?: string | null;
+  }
+): Promise<void> {
+  const { userId, videoDbId, transcriptId, language } = params;
+  try {
+    const sourceLanguage =
+      language == null
+        ? (params.sourceLanguage ?? (await resolveTranscriptLanguage(prisma, transcriptId)))
+        : null;
+    if (!needsEnglishFollowUp(language, sourceLanguage)) {
+      return;
+    }
+    await startAutoSummary(prisma, {
+      userId,
+      videoDbId,
+      transcriptId,
+      language: ENGLISH_LANGUAGE_CODE,
+    });
+  } catch (err) {
+    console.error(
+      `[startEnglishSummaryFollowUp] English follow-up failed for transcript ${transcriptId}:`,
+      err
+    );
+  }
 }

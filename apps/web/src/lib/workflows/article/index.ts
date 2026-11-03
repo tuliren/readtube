@@ -1,6 +1,5 @@
 import { extractErrorMessage } from '@/lib/workflows/errorMessage';
 
-import { queueEnglishArticleStep } from './englishFollowUp';
 import type { ArticleWorkflowInput, GeneratedArticle } from './steps';
 import {
   emitTerminalEventStep,
@@ -39,9 +38,4 @@ export async function articleWorkflow(input: ArticleWorkflowInput): Promise<void
   }
 
   await emitTerminalEventStep({ type: 'done' });
-
-  // Non-English content gets an English sibling for the public share
-  // page's default. Queued after `done` so the requester's stream
-  // closes first; the step swallows its own errors.
-  await queueEnglishArticleStep(input);
 }

@@ -1,17 +1,6 @@
 import { ENGLISH_LANGUAGE_CODE, languageTagsMatch } from './names';
 
 /**
- * Who to attribute an automatic English follow-up generation to.
- * Threaded through the summary / article workflow input by the
- * full-generate entry points; the workflow's last step reads it to
- * queue the English run once the non-English row has landed.
- */
-export interface EnglishFollowUp {
-  userId: string;
-  videoDbId: string;
-}
-
-/**
  * Whether a just-generated row is non-English and therefore needs an
  * English sibling, so public share pages (which default to English)
  * have English content for search engines to index.

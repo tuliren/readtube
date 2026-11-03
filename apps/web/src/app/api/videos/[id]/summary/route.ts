@@ -14,6 +14,7 @@ import { videoReachableByUser } from '@/lib/videos/marks';
 import { claimSummaryRun, findActiveSummaryRun } from '@/lib/workflows/runRegistry';
 import { NDJSON_HEADERS, ndjsonResponseFromRun } from '@/lib/workflows/streamResponse';
 import { type SummaryStreamEvent, summaryWorkflow } from '@/lib/workflows/summary';
+import { startEnglishSummaryFollowUp } from '@/lib/workflows/summary/autoStart';
 import {
   type ExistingSummaryFields,
   buildSummaryPrompt,
@@ -377,9 +378,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       transcriptId: transcript.id,
       language: target,
       userRequestId: userRequest?.id ?? null,
-      // Full generates queue an English sibling when this row isn't
-      // English (see summaryWorkflow). Per-field regen doesn't.
-      englishFollowUp: isFullGenerate ? { userId, videoDbId: video.id } : null,
     },
   ]);
 
@@ -431,6 +429,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         console.error('[summary/POST] failed to stamp workflow_id on UserRequest:', err);
       }
     }
+
+    // Non-English content gets an English sibling so the public share
+    // page's English default has something to show. Best-effort and
+    // never throws; per-field regen skips it.
+    await startEnglishSummaryFollowUp(prisma, {
+      userId,
+      videoDbId: video.id,
+      transcriptId: transcript.id,
+      language: target,
+      sourceLanguage,
+    });
   }
 
   return ndjsonResponseFromRun<SummaryStreamEvent>(run.runId);

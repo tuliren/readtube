@@ -18,26 +18,43 @@ import { claimArticleRun, findActiveArticleRun } from '@/lib/workflows/runRegist
 import { startBackgroundRun } from '@/lib/workflows/startBackgroundRun';
 
 /**
- * After a non-English article lands, start an English article in the
- * same style for the same transcript so the public share page
- * (English by default) has English content to index. Reuses the
- * finished run's input (segments, title, duration) so no transcript
- * re-read is needed. Skipped when the input carries no follow-up
- * attribution (force regen), when the row just written is already
- * English, or when an English row for the style is READY or already
- * generating. The English run itself never chains further: its target
- * is English.
+ * Queue an English article in the same style alongside a just-started
+ * non-English one so the public share page (English by default) has
+ * English content for search engines to index. Runs in parallel with
+ * the original run and reuses its input (segments, title, duration),
+ * so no transcript re-read is needed.
+ *
+ * Skipped when the started run is already English (an explicit `en`
+ * target, or an Original whose source language is English or unknown
+ * — see {@link needsEnglishFollowUp}), or when an English row for the
+ * style is READY or already generating.
+ *
+ * Best-effort: errors are logged, never thrown, because the content
+ * the user asked for is unaffected by a missing English sibling.
  */
 export async function startEnglishArticleFollowUp(
   prisma: PrismaClient,
-  input: ArticleWorkflowInput
+  params: { userId: string; videoDbId: string; input: ArticleWorkflowInput }
 ): Promise<void> {
-  const followUp = input.englishFollowUp;
-  if (followUp == null) {
-    return;
+  try {
+    await startEnglishArticle(prisma, params);
+  } catch (err) {
+    console.error(
+      `[startEnglishArticleFollowUp] English follow-up failed for transcript ${params.input.transcriptId}:`,
+      err
+    );
   }
+}
+
+async function startEnglishArticle(
+  prisma: PrismaClient,
+  params: { userId: string; videoDbId: string; input: ArticleWorkflowInput }
+): Promise<void> {
+  const { userId, videoDbId, input } = params;
   const sourceLanguage =
-    input.language == null ? await resolveTranscriptLanguage(prisma, input.transcriptId) : null;
+    input.language == null
+      ? (input.sourceLanguage ?? (await resolveTranscriptLanguage(prisma, input.transcriptId)))
+      : null;
   if (!needsEnglishFollowUp(input.language, sourceLanguage)) {
     return;
   }
@@ -62,8 +79,8 @@ export async function startEnglishArticleFollowUp(
   let userRequest: { id: string } | null = null;
   try {
     userRequest = await recordArticleRequest(prisma, {
-      userId: followUp.userId,
-      videoId: followUp.videoDbId,
+      userId,
+      videoId: videoDbId,
       outcome: UserRequestOutcome.GENERATED,
       language: target,
       style,
@@ -86,7 +103,6 @@ export async function startEnglishArticleFollowUp(
           // the source language (see ArticleWorkflowInput).
           sourceLanguage: null,
           userRequestId: userRequest?.id ?? null,
-          englishFollowUp: followUp,
         },
       ]),
     claim: (newRunId) =>
@@ -103,25 +119,6 @@ export async function startEnglishArticleFollowUp(
   if (runId != null) {
     console.info(
       `[startEnglishArticleFollowUp] Started article run ${runId} for transcript ${transcriptId} (style=${style})`
-    );
-  }
-}
-
-/**
- * Workflow-step wrapper for {@link startEnglishArticleFollowUp}. Runs
- * after the terminal `done` event, so the requesting client's stream
- * is already closed. Errors are swallowed: the article the user asked
- * for is persisted, and a missing English sibling only costs SEO.
- */
-export async function queueEnglishArticleStep(input: ArticleWorkflowInput): Promise<void> {
-  'use step';
-
-  try {
-    await startEnglishArticleFollowUp(prisma, input);
-  } catch (err) {
-    console.error(
-      `[queueEnglishArticleStep] English follow-up failed for transcript ${input.transcriptId}:`,
-      err
     );
   }
 }

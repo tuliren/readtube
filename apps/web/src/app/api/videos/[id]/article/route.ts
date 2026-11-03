@@ -11,7 +11,12 @@ import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
 import { recordArticleRequest } from '@/lib/usage/userRequest';
 import { VercelEnv, getVercelEnv } from '@/lib/vercelEnv';
 import { videoReachableByUser } from '@/lib/videos/marks';
-import { type ArticleStreamEvent, articleWorkflow } from '@/lib/workflows/article';
+import {
+  type ArticleStreamEvent,
+  type ArticleWorkflowInput,
+  articleWorkflow,
+} from '@/lib/workflows/article';
+import { startEnglishArticleFollowUp } from '@/lib/workflows/article/englishFollowUp';
 import { ARTICLE_PROMPT_VERSION } from '@/lib/workflows/article/steps';
 import { claimArticleRun, findActiveArticleRun } from '@/lib/workflows/runRegistry';
 import { NDJSON_HEADERS, ndjsonResponseFromRun } from '@/lib/workflows/streamResponse';
@@ -333,22 +338,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // touches the DB, so a half-streamed article never lands. The
   // workflow's strategy selector reads `durationSeconds` to choose
   // single-pass vs map-reduce.
-  const run = await start(articleWorkflow, [
-    {
-      transcriptId: transcript.id,
-      style,
-      language: target,
-      segments: transcript.segments,
-      videoTitle: video.title,
-      channelName: video.channel.name,
-      sourceLanguage,
-      durationSeconds: video.duration_seconds,
-      userRequestId: userRequest?.id ?? null,
-      // Queue an English sibling when this row isn't English (see
-      // articleWorkflow). The dev-only force regen doesn't.
-      englishFollowUp: force ? null : { userId, videoDbId: video.id },
-    },
-  ]);
+  const articleInput: ArticleWorkflowInput = {
+    transcriptId: transcript.id,
+    style,
+    language: target,
+    segments: transcript.segments,
+    videoTitle: video.title,
+    channelName: video.channel.name,
+    sourceLanguage,
+    durationSeconds: video.duration_seconds,
+    userRequestId: userRequest?.id ?? null,
+  };
+  const run = await start(articleWorkflow, [articleInput]);
 
   // Claim the registry slot so future GETs / regen clicks tap in.
   // Skipped when `force` is set — Regenerate requests intentionally
@@ -398,6 +399,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         console.error('[article/POST] failed to stamp workflow_id on UserRequest:', err);
       }
     }
+
+    // Non-English content gets an English sibling so the public share
+    // page's English default has something to show. Best-effort and
+    // never throws; the dev-only force regen skips it.
+    await startEnglishArticleFollowUp(prisma, {
+      userId,
+      videoDbId: video.id,
+      input: articleInput,
+    });
   }
 
   return ndjsonResponseFromRun<ArticleStreamEvent>(run.runId);
