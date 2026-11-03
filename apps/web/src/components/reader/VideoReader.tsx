@@ -25,6 +25,7 @@ import { buildChannelLink, buildWatchLink } from '@/lib/urls/watchUrl';
 import ArticleReader from './ArticleReader';
 import FollowChannelDialogButton from './FollowChannelDialogButton';
 import IncompleteTranscriptNotice from './IncompleteTranscriptNotice';
+import { languageQueryFragment } from './LanguagePicker';
 import NotesPanel from './NotesPanel';
 import PublicSignupCta from './PublicSignupCta';
 import ReadingTimeBadge from './ReadingTimeBadge';
@@ -113,10 +114,10 @@ export default function VideoReader({
     }
     return preferredLanguage;
   });
-  const shareHref =
-    selectedLanguage == null
-      ? `/p${videoHref(video)}`
-      : `/p${videoHref(video)}?language=${encodeURIComponent(selectedLanguage)}`;
+  // Always name the language: a bare share URL defaults to English
+  // (see /p/videos/[videoId]/page.tsx), so sharing the Original needs
+  // an explicit `?language=original` to land on it.
+  const shareHref = `/p${videoHref(video)}?${languageQueryFragment(selectedLanguage)}`;
   // Sentinel key for the `language=null` (Original) row so per-
   // language records can use a uniform Record<string, boolean>.
   const selectedLanguageKey = selectedLanguage ?? '__original__';

@@ -46,9 +46,13 @@ let seedCounter = 0;
 async function seed({
   summaryStatus = null,
   summaryWorkflowId = null,
+  summaryLanguage = null,
+  transcriptLanguage = 'en',
 }: {
   summaryStatus?: GenerationStatus | null;
   summaryWorkflowId?: string | null;
+  summaryLanguage?: string | null;
+  transcriptLanguage?: string;
 } = {}): Promise<{ videoId: string; transcriptId: string }> {
   seedCounter++;
   const tag = `as${seedCounter}`;
@@ -79,7 +83,7 @@ async function seed({
         { startMs: 0, endMs: 4000, text: 'The quick brown fox jumps over the lazy dog.' },
         { startMs: 4000, endMs: 8000, text: 'This sentence exists to give franc some text.' },
       ]),
-      language: 'en',
+      language: transcriptLanguage,
       source: TranscriptSource.GENERATED,
       fetched_at: new Date(),
     },
@@ -88,7 +92,7 @@ async function seed({
     await global.testPrisma.summary.create({
       data: {
         transcript_id: transcript.id,
-        language: null,
+        language: summaryLanguage,
         status: summaryStatus,
         workflow_id: summaryWorkflowId,
         prompt_version: SUMMARY_PROMPT_VERSION,
@@ -195,5 +199,78 @@ describe('startAutoSummary', () => {
       where: { transcript_id: transcriptId },
     });
     expect(summary.workflow_id).toBe('run_someone_else');
+  });
+});
+
+describe('English follow-up', () => {
+  function startedLanguages(): (string | null)[] {
+    return mockStart.mock.calls.map(
+      ([, [input]]) => (input as { language: string | null }).language
+    );
+  }
+
+  beforeEach(() => {
+    mockStart.mockReset();
+    mockStart
+      .mockResolvedValueOnce({ runId: 'run_main' })
+      .mockResolvedValueOnce({ runId: 'run_english' });
+  });
+
+  it.each([
+    { label: 'a non-English target', language: 'zh-Hans', transcriptLanguage: 'en' },
+    { label: 'an Original of a non-English source', language: null, transcriptLanguage: 'zh' },
+  ])('queues an English run after $label', async ({ language, transcriptLanguage }) => {
+    const { videoId, transcriptId } = await seed({ transcriptLanguage });
+
+    await startAutoSummary(global.testPrisma, {
+      userId: TEST_USER_ID,
+      videoDbId: videoId,
+      transcriptId,
+      language,
+    });
+
+    expect(startedLanguages()).toEqual([language, 'en']);
+    const english = await global.testPrisma.summary.findFirstOrThrow({
+      where: { transcript_id: transcriptId, language: 'en' },
+    });
+    expect(english.status).toBe(GenerationStatus.GENERATING);
+    expect(english.workflow_id).toBe('run_english');
+    const requests = await global.testPrisma.userRequest.findMany({
+      where: { language: 'en' },
+    });
+    expect(requests).toHaveLength(1);
+    expect(requests[0].workflow_id).toBe('run_english');
+  });
+
+  it.each([
+    { label: 'an English target', language: 'en', transcriptLanguage: 'zh' },
+    { label: 'an Original of an English source', language: null, transcriptLanguage: 'en' },
+  ])('does not queue an English run after $label', async ({ language, transcriptLanguage }) => {
+    const { videoId, transcriptId } = await seed({ transcriptLanguage });
+
+    await startAutoSummary(global.testPrisma, {
+      userId: TEST_USER_ID,
+      videoDbId: videoId,
+      transcriptId,
+      language,
+    });
+
+    expect(startedLanguages()).toEqual([language]);
+  });
+
+  it('does not queue an English run when an English summary is already READY', async () => {
+    const { videoId, transcriptId } = await seed({
+      summaryStatus: GenerationStatus.READY,
+      summaryLanguage: 'en',
+    });
+
+    await startAutoSummary(global.testPrisma, {
+      userId: TEST_USER_ID,
+      videoDbId: videoId,
+      transcriptId,
+      language: 'ja',
+    });
+
+    expect(startedLanguages()).toEqual(['ja']);
   });
 });

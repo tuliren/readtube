@@ -1,9 +1,7 @@
 import { ArticleStyle, prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 
-import { findTargetLanguage } from '@/lib/language/names';
-import { parseLanguageQuery } from '@/lib/language/prompt';
-import { resolveDefaultShareRow } from '@/lib/language/publicShare';
+import { parseShareLanguage, resolveShareRow } from '@/lib/language/publicShare';
 
 const DEFAULT_STYLE: ArticleStyle = ArticleStyle.NARRATIVE;
 
@@ -31,14 +29,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     console.error(`[public/article/GET] Invalid style: ${styleParam}`);
     return NextResponse.json({ error: 'Invalid style' }, { status: 400 });
   }
-  const parsed = parseLanguageQuery(request.nextUrl.searchParams.get('language'));
-  // Validate against the curated picker list — see public summary
-  // route for the rationale.
-  const targetLanguage =
-    parsed.kind === 'target' && findTargetLanguage(parsed.code) != null ? parsed.code : null;
+  // See the public summary route for the language semantics.
+  const requested = parseShareLanguage(request.nextUrl.searchParams.get('language'));
 
   console.info(
-    `[public/article/GET] Fetching public article for video ${id} (style=${style}, language=${targetLanguage ?? 'original'})`
+    `[public/article/GET] Fetching public article for video ${id} (style=${style}, language=${requested === undefined ? 'default' : (requested ?? 'original')})`
   );
 
   const video = await prisma.video.findFirst({
@@ -90,7 +85,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   // Require `content != null` on every lookup: a READY-with-null-content
   // row isn't servable (see the private article GET for how those can
   // arise), so it must not shadow a sibling row that does have content
-  // during the default-language fallback below.
+  // during the share-language fallback below.
   const findByLanguage = (language: string | null) =>
     prisma.article.findFirst({
       where: {
@@ -103,27 +98,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       ...fields,
     });
 
-  // When a specific target is requested, look it up directly and fall
-  // back to the Original on miss so a tampered or stale share URL
-  // renders the canonical version instead of 404'ing. With no specific
-  // language (bare share URL / `original` / unknown code), resolve the
-  // default: Original → English → earliest-generated, so the page never
-  // renders empty when the creator only generated translated rows.
-  let article = null;
-  if (targetLanguage != null) {
-    article = await findByLanguage(targetLanguage);
-    if (article == null) {
-      article = await findByLanguage(null);
-    }
-  } else {
-    article = await resolveDefaultShareRow(findByLanguage, () =>
-      prisma.article.findFirst({
-        where: { transcript_id: transcript.id, style, status: 'READY', content: { not: null } },
-        orderBy: { generated_at: 'asc' },
-        ...fields,
-      })
-    );
-  }
+  const article = await resolveShareRow(requested, findByLanguage, () =>
+    prisma.article.findFirst({
+      where: { transcript_id: transcript.id, style, status: 'READY', content: { not: null } },
+      orderBy: { generated_at: 'asc' },
+      ...fields,
+    })
+  );
   // Belt-and-suspenders: the queries above already exclude null content,
   // but keep the guard so `article.content` type-narrows before use.
   if (article == null || article.content == null) {

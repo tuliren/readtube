@@ -1,9 +1,7 @@
 import { prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 
-import { findTargetLanguage } from '@/lib/language/names';
-import { parseLanguageQuery } from '@/lib/language/prompt';
-import { resolveDefaultShareRow } from '@/lib/language/publicShare';
+import { parseShareLanguage, resolveShareRow } from '@/lib/language/publicShare';
 
 /**
  * Sharing-intent gate: the public video page only renders when a
@@ -11,26 +9,20 @@ import { resolveDefaultShareRow } from '@/lib/language/publicShare';
  * the same gate. A video without either artifact is treated as 404
  * even if the internal UUID is guessed correctly.
  *
- * Honors `?language=<bcp47>`. When set and a matching translated
- * Summary row exists, return it; otherwise fall back to the Original
- * (`language IS NULL`) row. Missing / `original` / unknown codes have
- * no specific language, so they resolve via `resolveDefaultShareRow`
- * (Original → English → earliest) — never empty when some version
+ * Honors `?language=<bcp47>` and `?language=original`: the named row
+ * wins when it exists, otherwise `resolveShareRow` falls back to
+ * English → Original → earliest. Missing / unknown codes name no
+ * language and start at English — never empty when some version
  * exists. We intentionally do NOT cross-check against
  * `User.preferred_language` here — public visitors have no signed-in
  * user, and the URL is the only authoritative selection.
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const parsed = parseLanguageQuery(request.nextUrl.searchParams.get('language'));
-  // Validate against the curated picker list. Unknown codes silently
-  // fall back to Original — a tampered URL should still render
-  // something useful instead of leaking the raw code into a query.
-  const targetLanguage =
-    parsed.kind === 'target' && findTargetLanguage(parsed.code) != null ? parsed.code : null;
+  const requested = parseShareLanguage(request.nextUrl.searchParams.get('language'));
 
   console.info(
-    `[public/summary/GET] Fetching public summary for video ${id} (language=${targetLanguage ?? 'original'})`
+    `[public/summary/GET] Fetching public summary for video ${id} (language=${requested === undefined ? 'default' : (requested ?? 'original')})`
   );
 
   const video = await prisma.video.findFirst({
@@ -89,29 +81,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       ...fields,
     });
 
-  // When a specific target is requested, look it up directly and fall
-  // back to the Original on miss so a tampered or stale share URL
-  // renders the canonical version instead of 404'ing. With no specific
-  // language (bare share URL / `original` / unknown code), resolve the
-  // default: Original → English → earliest-generated, so the page never
-  // renders empty when the creator only generated translated rows.
   // Every lookup filters on `status = READY` so an in-flight row never
   // surfaces.
-  let summary = null;
-  if (targetLanguage != null) {
-    summary = await findByLanguage(targetLanguage);
-    if (summary == null) {
-      summary = await findByLanguage(null);
-    }
-  } else {
-    summary = await resolveDefaultShareRow(findByLanguage, () =>
-      prisma.summary.findFirst({
-        where: { transcript_id: transcript.id, status: 'READY' },
-        orderBy: { generated_at: 'asc' },
-        ...fields,
-      })
-    );
-  }
+  const summary = await resolveShareRow(requested, findByLanguage, () =>
+    prisma.summary.findFirst({
+      where: { transcript_id: transcript.id, status: 'READY' },
+      orderBy: { generated_at: 'asc' },
+      ...fields,
+    })
+  );
   if (!summary) {
     console.info(`[public/summary/GET] No cached summary for video ${id}`);
     return NextResponse.json({ error: 'Not cached' }, { status: 404 });

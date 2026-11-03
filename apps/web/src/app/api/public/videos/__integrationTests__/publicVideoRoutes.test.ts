@@ -153,10 +153,11 @@ describe('GET /api/public/videos/[id]/summary', () => {
     expect(body.language).toBe('zh-Hans');
   });
 
-  it('returns the Original when present and language=original is requested', async () => {
+  it('returns the Original over English when language=original is requested', async () => {
     const { videoId, transcriptId } = await seedVideoWithTranscript();
     await seedSummary(transcriptId, null, 'Original headline');
     await seedSummary(transcriptId, 'zh-Hans', 'zh headline');
+    await seedSummary(transcriptId, 'en', 'en headline');
 
     const res = await summaryGet(buildRequest('original'), {
       params: Promise.resolve({ id: videoId }),
@@ -176,18 +177,46 @@ describe('GET /api/public/videos/[id]/summary', () => {
     expect(res.status).toBe(404);
   });
 
-  it('returns 404 when the requested target is missing AND no Original exists', async () => {
+  it('falls back to the share default when the requested target is missing', async () => {
+    const { videoId, transcriptId } = await seedVideoWithTranscript();
+    await seedSummary(transcriptId, null, 'Original headline');
+    await seedSummary(transcriptId, 'en', 'en headline');
+
+    const res = await summaryGet(buildRequest('ja'), { params: Promise.resolve({ id: videoId }) });
+
+    // No `ja` row: English wins over the Original.
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.headline).toBe('en headline');
+  });
+
+  it('falls back to the earliest row when the requested target, English, and Original are missing', async () => {
     const { videoId, transcriptId } = await seedVideoWithTranscript();
     await seedSummary(transcriptId, 'zh-Hans', 'zh headline');
 
     const res = await summaryGet(buildRequest('ja'), { params: Promise.resolve({ id: videoId }) });
 
-    // No `ja` row, no Original to fall back to.
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.headline).toBe('zh headline');
   });
 
-  describe('default language (no param) fallback', () => {
-    it('returns the Original when present, even alongside translations', async () => {
+  describe('default language (no param) resolution', () => {
+    it('returns English over the Original and other translations', async () => {
+      const { videoId, transcriptId } = await seedVideoWithTranscript();
+      await seedSummary(transcriptId, null, 'Original headline');
+      await seedSummary(transcriptId, 'zh-Hans', 'zh headline');
+      await seedSummary(transcriptId, 'en', 'en headline');
+
+      const res = await summaryGet(buildRequest(), { params: Promise.resolve({ id: videoId }) });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.headline).toBe('en headline');
+      expect(body.language).toBe('en');
+    });
+
+    it('returns the Original when no English exists, even alongside translations', async () => {
       const { videoId, transcriptId } = await seedVideoWithTranscript();
       await seedSummary(transcriptId, null, 'Original headline');
       await seedSummary(transcriptId, 'zh-Hans', 'zh headline');
@@ -228,7 +257,7 @@ describe('GET /api/public/videos/[id]/summary', () => {
       expect(body.language).toBe('zh-Hans');
     });
 
-    it('applies the same fallback for an explicit language=original with no Original row', async () => {
+    it('falls back to English for an explicit language=original with no Original row', async () => {
       const { videoId, transcriptId } = await seedVideoWithTranscript();
       await seedSummary(transcriptId, 'en', 'en headline');
 
@@ -286,8 +315,24 @@ describe('GET /api/public/videos/[id]/article', () => {
     expect(res.status).toBe(404);
   });
 
-  describe('default language (no param) fallback', () => {
-    it('returns the Original when present, even alongside translations', async () => {
+  describe('default language (no param) resolution', () => {
+    it('returns English over the Original and other translations', async () => {
+      const { videoId, transcriptId } = await seedVideoWithTranscript();
+      await seedArticle(transcriptId, ArticleStyle.NARRATIVE, null, 'Original content');
+      await seedArticle(transcriptId, ArticleStyle.NARRATIVE, 'zh-Hans', 'zh content');
+      await seedArticle(transcriptId, ArticleStyle.NARRATIVE, 'en', 'en content');
+
+      const res = await articleGet(buildRequest(undefined, ArticleStyle.NARRATIVE), {
+        params: Promise.resolve({ id: videoId }),
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.content).toBe('en content');
+      expect(body.language).toBe('en');
+    });
+
+    it('returns the Original when no English exists, even alongside translations', async () => {
       const { videoId, transcriptId } = await seedVideoWithTranscript();
       await seedArticle(transcriptId, ArticleStyle.NARRATIVE, null, 'Original content');
       await seedArticle(transcriptId, ArticleStyle.NARRATIVE, 'zh-Hans', 'zh content');
