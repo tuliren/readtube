@@ -344,6 +344,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       sourceLanguage,
       durationSeconds: video.duration_seconds,
       userRequestId: userRequest?.id ?? null,
+      // Queue an English sibling when this row isn't English (see
+      // articleWorkflow). The dev-only force regen doesn't.
+      englishFollowUp: force ? null : { userId, videoDbId: video.id },
     },
   ]);
 

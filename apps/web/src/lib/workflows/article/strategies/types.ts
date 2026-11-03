@@ -1,5 +1,6 @@
 import type { ArticleStyle } from '@readtube/database';
 
+import type { EnglishFollowUp } from '@/lib/language/englishFollowUp';
 import type { TranscriptSegment } from '@/lib/platforms/types';
 
 export interface ArticleWorkflowInput {
@@ -27,6 +28,13 @@ export interface ArticleWorkflowInput {
    * keep working.
    */
   userRequestId?: string | null;
+  /**
+   * Set by the route's normal-generate path so the workflow's last
+   * step can queue an English sibling when this row isn't English
+   * (public share pages default to English). Null / absent for
+   * force-regen runs and runs that predate the field.
+   */
+  englishFollowUp?: EnglishFollowUp | null;
 }
 
 export interface GeneratedArticle {

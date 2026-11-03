@@ -377,6 +377,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       transcriptId: transcript.id,
       language: target,
       userRequestId: userRequest?.id ?? null,
+      // Full generates queue an English sibling when this row isn't
+      // English (see summaryWorkflow). Per-field regen doesn't.
+      englishFollowUp: isFullGenerate ? { userId, videoDbId: video.id } : null,
     },
   ]);
 

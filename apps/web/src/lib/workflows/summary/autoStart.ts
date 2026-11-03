@@ -1,11 +1,12 @@
 import { GenerationStatus, type PrismaClient, UserRequestOutcome } from '@readtube/database';
-import { getRun, start } from 'workflow/api';
+import { start } from 'workflow/api';
 
 import { DEFAULT_AI_MODEL } from '@/constants';
 import { resolveTranscriptLanguage } from '@/lib/language/cache';
 import { resolveTargetLanguage } from '@/lib/language/resolve';
 import { recordSummaryRequest } from '@/lib/usage/userRequest';
 import { claimSummaryRun, findActiveSummaryRun } from '@/lib/workflows/runRegistry';
+import { startBackgroundRun } from '@/lib/workflows/startBackgroundRun';
 import { summaryWorkflow } from '@/lib/workflows/summary';
 import { buildSummaryPrompt } from '@/lib/workflows/summary/buildPrompt';
 import { SUMMARY_FIELDS, SUMMARY_PROMPT_VERSION } from '@/lib/workflows/summary/steps';
@@ -16,17 +17,19 @@ interface TranscriptSegmentShape {
 
 /**
  * Start a full summary generation for a transcript without a user
- * request in flight — the automatic follow-up after the transcript-
- * generation workflow lands a transcript, so the user who clicked
- * "Generate transcript" comes back to a summary, not another button.
+ * request in flight. Two callers: the automatic follow-up after the
+ * transcript-generation workflow lands a transcript (so the user who
+ * clicked "Generate transcript" comes back to a summary, not another
+ * button), and the English follow-up queued after a non-English
+ * summary lands (see `queueEnglishSummaryStep`).
  *
  * A trimmed-down mirror of the summary POST route's full-generate
  * path with the same registry semantics (dedup via
  * findActiveSummaryRun, claim with cancel-on-lost-race, pending
  * UserRequest for cost attribution). Skipped silently when a READY
  * summary already exists for the slot or another run owns it. The
- * target language is the user's default, exactly what the Generate
- * button would use.
+ * target language defaults to the user's default, exactly what the
+ * Generate button would use; the English follow-up passes `en`.
  *
  * Never throws for "nothing to do" cases; callers are expected to
  * treat any thrown error as non-fatal (the transcript is already
@@ -34,10 +37,19 @@ interface TranscriptSegmentShape {
  */
 export async function startAutoSummary(
   prisma: PrismaClient,
-  params: { userId: string; videoDbId: string; transcriptId: string }
+  params: {
+    userId: string;
+    videoDbId: string;
+    transcriptId: string;
+    /** Explicit target; omitted → the user's default language. */
+    language?: string | null;
+  }
 ): Promise<void> {
   const { userId, videoDbId, transcriptId } = params;
-  const target = await resolveTargetLanguage(prisma, userId, null);
+  const target =
+    params.language !== undefined
+      ? params.language
+      : await resolveTargetLanguage(prisma, userId, null);
 
   // Dedup and cache guards, mirroring the route's full-generate path.
   const activeRun = await findActiveSummaryRun(prisma, transcriptId, target);
@@ -85,62 +97,42 @@ export async function startAutoSummary(
     console.error('[startAutoSummary] failed to record UserRequest:', err);
   }
 
-  const run = await start(summaryWorkflow, [
-    {
-      fieldsToGenerate: [...SUMMARY_FIELDS],
-      prompt: buildSummaryPrompt(
-        SUMMARY_FIELDS,
+  const runId = await startBackgroundRun(prisma, {
+    logPrefix: `[startAutoSummary] transcript ${transcriptId}:`,
+    userRequest,
+    start: () =>
+      start(summaryWorkflow, [
+        {
+          fieldsToGenerate: [...SUMMARY_FIELDS],
+          prompt: buildSummaryPrompt(
+            SUMMARY_FIELDS,
+            target,
+            sourceLanguage,
+            transcript.video.title,
+            transcript.video.channel.name,
+            transcriptText,
+            undefined
+          ),
+          transcriptId,
+          language: target,
+          userRequestId: userRequest?.id ?? null,
+          englishFollowUp: { userId, videoDbId },
+        },
+      ]),
+    claim: (newRunId) =>
+      claimSummaryRun(
+        prisma,
+        transcriptId,
         target,
-        sourceLanguage,
-        transcript.video.title,
-        transcript.video.channel.name,
-        transcriptText,
-        undefined
+        newRunId,
+        SUMMARY_PROMPT_VERSION,
+        DEFAULT_AI_MODEL
       ),
-      transcriptId,
-      language: target,
-      userRequestId: userRequest?.id ?? null,
-    },
-  ]);
-
-  const claim = await claimSummaryRun(
-    prisma,
-    transcriptId,
-    target,
-    run.runId,
-    SUMMARY_PROMPT_VERSION,
-    DEFAULT_AI_MODEL
-  );
-  if (!claim.weWon) {
-    console.info(
-      `[startAutoSummary] Lost claim race for transcript ${transcriptId}; cancelling ${run.runId}`
-    );
-    try {
-      await getRun(run.runId).cancel();
-    } catch {
-      // ignore — the stray run will expire on its own
-    }
-    if (userRequest != null) {
-      try {
-        await prisma.userRequest.delete({ where: { id: userRequest.id } });
-      } catch (err) {
-        console.error('[startAutoSummary] failed to delete claim-race UserRequest:', err);
-      }
-    }
+  });
+  if (runId == null) {
     return;
   }
-
-  if (userRequest != null) {
-    try {
-      await prisma.userRequest.update({
-        where: { id: userRequest.id },
-        data: { workflow_id: run.runId },
-      });
-    } catch (err) {
-      console.error('[startAutoSummary] failed to stamp workflow_id on UserRequest:', err);
-    }
-  }
   console.info(
-    `[startAutoSummary] Started summary run ${run.runId} for transcript ${transcriptId}`
+    `[startAutoSummary] Started summary run ${runId} (language ${target ?? 'original'}) for transcript ${transcriptId}`
   );
 }

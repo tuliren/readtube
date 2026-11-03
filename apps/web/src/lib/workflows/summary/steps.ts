@@ -4,6 +4,7 @@ import { FatalError, getWorkflowMetadata, getWritable } from 'workflow';
 
 import { DEFAULT_AI_MODEL } from '@/constants';
 import { normalizeLlmJsonEscapes } from '@/lib/ai/normalizeJsonEscapes';
+import type { EnglishFollowUp } from '@/lib/language/englishFollowUp';
 import { CURRENT_FRONTMATTER_VERSION, serializeMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { completeUserRequest } from '@/lib/usage/userRequest';
 import { emitTerminalEvent } from '@/lib/workflows/emitTerminalEvent';
@@ -50,6 +51,11 @@ export interface SummaryWorkflowInput {
   // workflow runs that started before this column existed continue
   // to work.
   userRequestId?: string | null;
+  // Set by full-generate entry points so the workflow's last step can
+  // queue an English sibling when this row isn't English (public share
+  // pages default to English). Null / absent for per-field regen and
+  // runs that predate the field.
+  englishFollowUp?: EnglishFollowUp | null;
 }
 
 interface FieldResult {
