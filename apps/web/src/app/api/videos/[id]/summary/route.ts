@@ -1,5 +1,6 @@
 import { auth } from '@clerk/nextjs/server';
 import { UserRequestOutcome, prisma } from '@readtube/database';
+import { waitUntil } from '@vercel/functions';
 import { NextRequest, NextResponse } from 'next/server';
 import { getRun, start } from 'workflow/api';
 
@@ -432,14 +433,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     // Non-English content gets an English sibling so the public share
     // page's English default has something to show. Best-effort and
-    // never throws; per-field regen skips it.
-    await startEnglishSummaryFollowUp(prisma, {
-      userId,
-      videoDbId: video.id,
-      transcriptId: transcript.id,
-      language: target,
-      sourceLanguage,
-    });
+    // never throws; per-field regen skips it. Not awaited so the
+    // user's stream isn't held behind it; waitUntil keeps the function
+    // alive until it settles.
+    waitUntil(
+      startEnglishSummaryFollowUp(prisma, {
+        userId,
+        videoDbId: video.id,
+        transcriptId: transcript.id,
+        language: target,
+        sourceLanguage,
+      })
+    );
   }
 
   return ndjsonResponseFromRun<SummaryStreamEvent>(run.runId);

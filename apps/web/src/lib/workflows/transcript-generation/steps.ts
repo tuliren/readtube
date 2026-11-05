@@ -41,7 +41,11 @@ import {
   releaseTranscriptGeneration,
   revertTranscriptGeneration,
 } from '@/lib/workflows/runRegistry';
-import { startAutoSummary } from '@/lib/workflows/summary/autoStart';
+import {
+  type StartedAutoSummary,
+  startAutoSummary,
+  startEnglishSummaryFollowUp,
+} from '@/lib/workflows/summary/autoStart';
 import { buildTranscriptGenerationPrompt } from '@/lib/workflows/transcript-generation/prompt';
 
 export interface TranscriptGenerationInput {
@@ -409,8 +413,9 @@ export async function startSummaryGenerationStep(
 ): Promise<void> {
   'use step';
 
+  let started: StartedAutoSummary | null = null;
   try {
-    await startAutoSummary(prisma, {
+    started = await startAutoSummary(prisma, {
       userId: input.userId,
       videoDbId: input.videoDbId,
       transcriptId,
@@ -423,6 +428,17 @@ export async function startSummaryGenerationStep(
   }
   const { workflowRunId } = getWorkflowMetadata();
   await releaseTranscriptGeneration(prisma, input.videoDbId, workflowRunId);
+
+  // Queued after the release so the reader's spinner isn't held while
+  // the English sibling starts. Best-effort and never throws.
+  if (started != null) {
+    await startEnglishSummaryFollowUp(prisma, {
+      userId: input.userId,
+      videoDbId: input.videoDbId,
+      transcriptId,
+      ...started,
+    });
+  }
 }
 
 /**

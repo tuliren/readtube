@@ -28,7 +28,6 @@ jest.mock('iso-639-3', () => ({
   iso6393To1: { eng: 'en' },
 }));
 
-const TEST_USER_ID = 'clerk_english_article_user';
 const STYLE = ArticleStyle.NARRATIVE;
 
 let seedCounter = 0;
@@ -65,7 +64,15 @@ async function seed(
   return { videoId: video.id, transcriptId: transcript.id };
 }
 
-function buildInput(transcriptId: string, language: string | null): ArticleWorkflowInput {
+/**
+ * Input as the article POST builds it: an Original run carries the
+ * detected source language, a target run carries null.
+ */
+function buildInput(
+  transcriptId: string,
+  language: string | null,
+  sourceLanguage: string | null
+): ArticleWorkflowInput {
   return {
     transcriptId,
     style: STYLE,
@@ -73,10 +80,28 @@ function buildInput(transcriptId: string, language: string | null): ArticleWorkf
     segments: [{ startMs: 0, endMs: 4000, text: 'Placeholder transcript text.' }],
     videoTitle: 'Follow-up test video',
     channelName: 'Follow-up channel',
-    sourceLanguage: null,
+    sourceLanguage: language == null ? sourceLanguage : null,
     durationSeconds: 600,
     userRequestId: 'original-request',
   };
+}
+
+async function seedEnglishArticle(
+  transcriptId: string,
+  language: string | null,
+  content: string | null
+): Promise<void> {
+  await global.testPrisma.article.create({
+    data: {
+      transcript_id: transcriptId,
+      style: STYLE,
+      language,
+      status: GenerationStatus.READY,
+      content,
+      prompt_version: 'vtest',
+      model: 'test-model',
+    },
+  });
 }
 
 beforeEach(async () => {
@@ -85,10 +110,6 @@ beforeEach(async () => {
   await global.testPrisma.transcript.deleteMany();
   await global.testPrisma.video.deleteMany();
   await global.testPrisma.channel.deleteMany();
-  await global.testPrisma.user.deleteMany();
-  await global.testPrisma.user.create({
-    data: { source_id: TEST_USER_ID, name: 'Test', email: `${TEST_USER_ID}@example.com` },
-  });
   mockStart.mockReset();
   mockGetRun.mockReset();
   mockStart.mockResolvedValue({ runId: 'run_english' });
@@ -99,68 +120,72 @@ describe('startEnglishArticleFollowUp', () => {
     { label: 'a non-English target', language: 'zh-Hans', transcriptLanguage: 'en' },
     { label: 'an Original of a non-English source', language: null, transcriptLanguage: 'zh' },
   ])('starts an English article after $label', async ({ language, transcriptLanguage }) => {
-    const { videoId, transcriptId } = await seed(transcriptLanguage);
+    const { transcriptId } = await seed(transcriptLanguage);
 
-    await startEnglishArticleFollowUp(global.testPrisma, {
-      userId: TEST_USER_ID,
-      videoDbId: videoId,
-      input: buildInput(transcriptId, language),
-    });
+    await startEnglishArticleFollowUp(
+      global.testPrisma,
+      buildInput(transcriptId, language, transcriptLanguage)
+    );
 
     expect(mockStart).toHaveBeenCalledTimes(1);
     const [, [workflowInput]] = mockStart.mock.calls[0] as [unknown, [ArticleWorkflowInput]];
     expect(workflowInput.language).toBe('en');
     expect(workflowInput.style).toBe(STYLE);
     expect(workflowInput.sourceLanguage).toBeNull();
-    expect(workflowInput.userRequestId).not.toBe('original-request');
+    // No audit row: the user didn't ask for the English sibling.
+    expect(workflowInput.userRequestId).toBeNull();
+    expect(await global.testPrisma.userRequest.count()).toBe(0);
 
     const article = await global.testPrisma.article.findFirstOrThrow({
       where: { transcript_id: transcriptId, style: STYLE, language: 'en' },
     });
     expect(article.status).toBe(GenerationStatus.GENERATING);
     expect(article.workflow_id).toBe('run_english');
-    const request = await global.testPrisma.userRequest.findUniqueOrThrow({
-      where: { id: workflowInput.userRequestId! },
-    });
-    expect(request.language).toBe('en');
-    expect(request.workflow_id).toBe('run_english');
   });
 
   it.each([
     { label: 'an English target', language: 'en', transcriptLanguage: 'zh' },
     { label: 'an Original of an English source', language: null, transcriptLanguage: 'en' },
+    { label: 'an Original of an undetectable source', language: null, transcriptLanguage: null },
   ])('does nothing after $label', async ({ language, transcriptLanguage }) => {
-    const { videoId, transcriptId } = await seed(transcriptLanguage);
+    const { transcriptId } = await seed(transcriptLanguage ?? 'en');
 
-    await startEnglishArticleFollowUp(global.testPrisma, {
-      userId: TEST_USER_ID,
-      videoDbId: videoId,
-      input: buildInput(transcriptId, language),
-    });
+    await startEnglishArticleFollowUp(
+      global.testPrisma,
+      buildInput(transcriptId, language, transcriptLanguage)
+    );
 
     expect(mockStart).not.toHaveBeenCalled();
   });
 
   it('does nothing when an English article in the style is already READY', async () => {
-    const { videoId, transcriptId } = await seed('zh');
-    await global.testPrisma.article.create({
-      data: {
-        transcript_id: transcriptId,
-        style: STYLE,
-        language: 'en',
-        status: GenerationStatus.READY,
-        content: 'Existing English article',
-        prompt_version: 'vtest',
-        model: 'test-model',
-      },
-    });
+    const { transcriptId } = await seed('zh');
+    await seedEnglishArticle(transcriptId, 'en', 'Existing English article');
 
-    await startEnglishArticleFollowUp(global.testPrisma, {
-      userId: TEST_USER_ID,
-      videoDbId: videoId,
-      input: buildInput(transcriptId, null),
-    });
+    await startEnglishArticleFollowUp(global.testPrisma, buildInput(transcriptId, null, 'zh'));
 
     expect(mockStart).not.toHaveBeenCalled();
+  });
+
+  it('clones an English Original instead of starting a run', async () => {
+    const { transcriptId } = await seed('en');
+    await seedEnglishArticle(transcriptId, null, 'Original English article');
+
+    await startEnglishArticleFollowUp(global.testPrisma, buildInput(transcriptId, 'ja', 'en'));
+
+    expect(mockStart).not.toHaveBeenCalled();
+    const english = await global.testPrisma.article.findFirstOrThrow({
+      where: { transcript_id: transcriptId, style: STYLE, language: 'en' },
+    });
+    expect(english.content).toBe('Original English article');
+  });
+
+  it('starts a run when the READY English article has no content', async () => {
+    const { transcriptId } = await seed('zh');
+    await seedEnglishArticle(transcriptId, 'en', null);
+
+    await startEnglishArticleFollowUp(global.testPrisma, buildInput(transcriptId, null, 'zh'));
+
+    expect(mockStart).toHaveBeenCalledTimes(1);
   });
 });

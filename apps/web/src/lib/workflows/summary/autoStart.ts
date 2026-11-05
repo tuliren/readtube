@@ -1,8 +1,8 @@
-import { GenerationStatus, type PrismaClient, UserRequestOutcome } from '@readtube/database';
+import { type PrismaClient, UserRequestOutcome } from '@readtube/database';
 import { start } from 'workflow/api';
 
 import { DEFAULT_AI_MODEL } from '@/constants';
-import { resolveTranscriptLanguage } from '@/lib/language/cache';
+import { findOrCloneSummary, resolveTranscriptLanguage } from '@/lib/language/cache';
 import { needsEnglishFollowUp } from '@/lib/language/englishFollowUp';
 import { ENGLISH_LANGUAGE_CODE } from '@/lib/language/names';
 import { resolveTargetLanguage } from '@/lib/language/resolve';
@@ -17,6 +17,14 @@ interface TranscriptSegmentShape {
   text: string;
 }
 
+/** What `startAutoSummary` started, for chaining the English follow-up. */
+export interface StartedAutoSummary {
+  /** Target of the started run; null = Original. */
+  language: string | null;
+  /** Detected source language for an Original run; null otherwise. */
+  sourceLanguage: string | null;
+}
+
 /**
  * Start a full summary generation for a transcript without a user
  * request in flight. Two callers: the automatic follow-up after the
@@ -27,11 +35,17 @@ interface TranscriptSegmentShape {
  *
  * A trimmed-down mirror of the summary POST route's full-generate
  * path with the same registry semantics (dedup via
- * findActiveSummaryRun, claim with cancel-on-lost-race, pending
- * UserRequest for cost attribution). Skipped silently when a READY
- * summary already exists for the slot or another run owns it. The
- * target language defaults to the user's default, exactly what the
- * Generate button would use; the English follow-up passes `en`.
+ * findActiveSummaryRun, cache via findOrCloneSummary, claim with
+ * cancel-on-lost-race, pending UserRequest for cost attribution).
+ * Skipped silently when a READY summary already exists (or can be
+ * cloned from an Original already in the target language) or another
+ * run owns the slot. The target language defaults to the user's
+ * default, exactly what the Generate button would use; the English
+ * follow-up passes `en`.
+ *
+ * Returns what it started, or null when nothing was started. It does
+ * not queue the English follow-up itself: the caller does, once any
+ * latency-sensitive work is done (see `startSummaryGenerationStep`).
  *
  * Never throws for "nothing to do" cases; callers are expected to
  * treat any thrown error as non-fatal (the transcript is already
@@ -45,9 +59,15 @@ export async function startAutoSummary(
     transcriptId: string;
     /** Explicit target; omitted → the user's default language. */
     language?: string | null;
+    /**
+     * Write a pending UserRequest for the run (default true). The
+     * English follow-up passes false: the user didn't ask for it, so
+     * it must not show up in their usage counts.
+     */
+    recordUserRequest?: boolean;
   }
-): Promise<void> {
-  const { userId, videoDbId, transcriptId } = params;
+): Promise<StartedAutoSummary | null> {
+  const { userId, videoDbId, transcriptId, recordUserRequest = true } = params;
   const target =
     params.language !== undefined
       ? params.language
@@ -56,14 +76,11 @@ export async function startAutoSummary(
   // Dedup and cache guards, mirroring the route's full-generate path.
   const activeRun = await findActiveSummaryRun(prisma, transcriptId, target);
   if (activeRun != null) {
-    return;
+    return null;
   }
-  const existing = await prisma.summary.findFirst({
-    where: { transcript_id: transcriptId, language: target, status: GenerationStatus.READY },
-    select: { id: true },
-  });
-  if (existing != null) {
-    return;
+  const cached = await findOrCloneSummary(prisma, transcriptId, target);
+  if (cached != null && cached.headline != null && cached.short != null && cached.full != null) {
+    return null;
   }
 
   const transcript = await prisma.transcript.findUnique({
@@ -74,7 +91,7 @@ export async function startAutoSummary(
     },
   });
   if (transcript == null) {
-    return;
+    return null;
   }
   const segments = JSON.parse(transcript.text) as TranscriptSegmentShape[];
   const transcriptText = segments.map((s) => s.text).join(' ');
@@ -86,17 +103,19 @@ export async function startAutoSummary(
   // workflow's persist/revert steps. Best-effort like the route's
   // recordSafe — a failed audit write must not block the generation.
   let userRequest: { id: string } | null = null;
-  try {
-    userRequest = await recordSummaryRequest(prisma, {
-      userId,
-      videoId: videoDbId,
-      outcome: UserRequestOutcome.GENERATED,
-      language: target,
-      model: DEFAULT_AI_MODEL,
-      promptVersion: SUMMARY_PROMPT_VERSION,
-    });
-  } catch (err) {
-    console.error('[startAutoSummary] failed to record UserRequest:', err);
+  if (recordUserRequest) {
+    try {
+      userRequest = await recordSummaryRequest(prisma, {
+        userId,
+        videoId: videoDbId,
+        outcome: UserRequestOutcome.GENERATED,
+        language: target,
+        model: DEFAULT_AI_MODEL,
+        promptVersion: SUMMARY_PROMPT_VERSION,
+      });
+    } catch (err) {
+      console.error('[startAutoSummary] failed to record UserRequest:', err);
+    }
   }
 
   const runId = await startBackgroundRun(prisma, {
@@ -131,19 +150,12 @@ export async function startAutoSummary(
       ),
   });
   if (runId == null) {
-    return;
+    return null;
   }
   console.info(
     `[startAutoSummary] Started summary run ${runId} (language ${target ?? 'original'}) for transcript ${transcriptId}`
   );
-
-  await startEnglishSummaryFollowUp(prisma, {
-    userId,
-    videoDbId,
-    transcriptId,
-    language: target,
-    sourceLanguage,
-  });
+  return { language: target, sourceLanguage };
 }
 
 /**
@@ -154,8 +166,12 @@ export async function startAutoSummary(
  * Skipped when the started run is already English (an explicit `en`
  * target, or an Original whose source language is English or unknown
  * — see {@link needsEnglishFollowUp}), and, via `startAutoSummary`'s
- * guards, when an English row is READY or already generating. The
- * English run never chains further since its target is English.
+ * guards, when an English row is READY, can be cloned from an English
+ * Original, or is already generating. The English run never chains
+ * further since its target is English.
+ *
+ * The run writes no UserRequest: the user didn't ask for it, so it
+ * stays out of their usage counts.
  *
  * Best-effort: errors are logged, never thrown, because the content
  * the user asked for is unaffected by a missing English sibling.
@@ -168,24 +184,24 @@ export async function startEnglishSummaryFollowUp(
     transcriptId: string;
     /** Target of the run just started; null = Original. */
     language: string | null;
-    /** Detected source language when already known (Original runs). */
-    sourceLanguage?: string | null;
+    /**
+     * Detected source language of an Original run (null when
+     * undetectable); ignored for target runs.
+     */
+    sourceLanguage: string | null;
   }
 ): Promise<void> {
-  const { userId, videoDbId, transcriptId, language } = params;
+  const { userId, videoDbId, transcriptId, language, sourceLanguage } = params;
+  if (!needsEnglishFollowUp(language, language == null ? sourceLanguage : null)) {
+    return;
+  }
   try {
-    const sourceLanguage =
-      language == null
-        ? (params.sourceLanguage ?? (await resolveTranscriptLanguage(prisma, transcriptId)))
-        : null;
-    if (!needsEnglishFollowUp(language, sourceLanguage)) {
-      return;
-    }
     await startAutoSummary(prisma, {
       userId,
       videoDbId,
       transcriptId,
       language: ENGLISH_LANGUAGE_CODE,
+      recordUserRequest: false,
     });
   } catch (err) {
     console.error(

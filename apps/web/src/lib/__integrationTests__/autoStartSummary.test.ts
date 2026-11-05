@@ -6,7 +6,7 @@ import {
 } from '@readtube/database';
 import '@tests/integration-tests';
 
-import { startAutoSummary } from '@/lib/workflows/summary/autoStart';
+import { startAutoSummary, startEnglishSummaryFollowUp } from '@/lib/workflows/summary/autoStart';
 import { SUMMARY_PROMPT_VERSION } from '@/lib/workflows/summary/steps';
 
 jest.mock('@readtube/database', () => {
@@ -202,60 +202,92 @@ describe('startAutoSummary', () => {
   });
 });
 
-describe('English follow-up', () => {
+describe('startAutoSummary return value', () => {
+  it.each([
+    { label: 'a target run', language: 'zh-Hans', sourceLanguage: null },
+    { label: 'an Original run', language: null, sourceLanguage: 'en' },
+  ])(
+    'describes $label and leaves the English follow-up to the caller',
+    async ({ language, sourceLanguage }) => {
+      const { videoId, transcriptId } = await seed();
+
+      const started = await startAutoSummary(global.testPrisma, {
+        userId: TEST_USER_ID,
+        videoDbId: videoId,
+        transcriptId,
+        language,
+      });
+
+      expect(started).toEqual({ language, sourceLanguage });
+      expect(mockStart).toHaveBeenCalledTimes(1);
+    }
+  );
+
+  it('returns null when nothing was started', async () => {
+    const { videoId, transcriptId } = await seed({ summaryStatus: GenerationStatus.READY });
+
+    const started = await startAutoSummary(global.testPrisma, {
+      userId: TEST_USER_ID,
+      videoDbId: videoId,
+      transcriptId,
+    });
+
+    expect(started).toBeNull();
+  });
+});
+
+describe('startEnglishSummaryFollowUp', () => {
   function startedLanguages(): (string | null)[] {
     return mockStart.mock.calls.map(
       ([, [input]]) => (input as { language: string | null }).language
     );
   }
 
-  beforeEach(() => {
-    mockStart.mockReset();
-    mockStart
-      .mockResolvedValueOnce({ runId: 'run_main' })
-      .mockResolvedValueOnce({ runId: 'run_english' });
-  });
-
   it.each([
-    { label: 'a non-English target', language: 'zh-Hans', transcriptLanguage: 'en' },
-    { label: 'an Original of a non-English source', language: null, transcriptLanguage: 'zh' },
-  ])('queues an English run after $label', async ({ language, transcriptLanguage }) => {
-    const { videoId, transcriptId } = await seed({ transcriptLanguage });
+    { label: 'a non-English target', language: 'zh-Hans', sourceLanguage: null },
+    { label: 'an Original of a non-English source', language: null, sourceLanguage: 'zh' },
+  ])('queues an English run after $label', async ({ language, sourceLanguage }) => {
+    const { videoId, transcriptId } = await seed();
 
-    await startAutoSummary(global.testPrisma, {
+    await startEnglishSummaryFollowUp(global.testPrisma, {
       userId: TEST_USER_ID,
       videoDbId: videoId,
       transcriptId,
       language,
+      sourceLanguage,
     });
 
-    expect(startedLanguages()).toEqual([language, 'en']);
+    expect(startedLanguages()).toEqual(['en']);
     const english = await global.testPrisma.summary.findFirstOrThrow({
       where: { transcript_id: transcriptId, language: 'en' },
     });
     expect(english.status).toBe(GenerationStatus.GENERATING);
-    expect(english.workflow_id).toBe('run_english');
-    const requests = await global.testPrisma.userRequest.findMany({
-      where: { language: 'en' },
-    });
-    expect(requests).toHaveLength(1);
-    expect(requests[0].workflow_id).toBe('run_english');
+    expect(english.workflow_id).toBe(RUN_ID);
+    // No audit row: the user didn't ask for the English sibling.
+    const [, [workflowInput]] = mockStart.mock.calls[0] as [
+      unknown,
+      [{ userRequestId: string | null }],
+    ];
+    expect(workflowInput.userRequestId).toBeNull();
+    expect(await global.testPrisma.userRequest.count()).toBe(0);
   });
 
   it.each([
-    { label: 'an English target', language: 'en', transcriptLanguage: 'zh' },
-    { label: 'an Original of an English source', language: null, transcriptLanguage: 'en' },
-  ])('does not queue an English run after $label', async ({ language, transcriptLanguage }) => {
-    const { videoId, transcriptId } = await seed({ transcriptLanguage });
+    { label: 'an English target', language: 'en', sourceLanguage: null },
+    { label: 'an Original of an English source', language: null, sourceLanguage: 'en' },
+    { label: 'an Original of an undetectable source', language: null, sourceLanguage: null },
+  ])('does not queue an English run after $label', async ({ language, sourceLanguage }) => {
+    const { videoId, transcriptId } = await seed();
 
-    await startAutoSummary(global.testPrisma, {
+    await startEnglishSummaryFollowUp(global.testPrisma, {
       userId: TEST_USER_ID,
       videoDbId: videoId,
       transcriptId,
       language,
+      sourceLanguage,
     });
 
-    expect(startedLanguages()).toEqual([language]);
+    expect(mockStart).not.toHaveBeenCalled();
   });
 
   it('does not queue an English run when an English summary is already READY', async () => {
@@ -264,13 +296,35 @@ describe('English follow-up', () => {
       summaryLanguage: 'en',
     });
 
-    await startAutoSummary(global.testPrisma, {
+    await startEnglishSummaryFollowUp(global.testPrisma, {
       userId: TEST_USER_ID,
       videoDbId: videoId,
       transcriptId,
       language: 'ja',
+      sourceLanguage: null,
     });
 
-    expect(startedLanguages()).toEqual(['ja']);
+    expect(mockStart).not.toHaveBeenCalled();
+  });
+
+  it('clones an English Original instead of starting a run', async () => {
+    const { videoId, transcriptId } = await seed({
+      summaryStatus: GenerationStatus.READY,
+      transcriptLanguage: 'en',
+    });
+
+    await startEnglishSummaryFollowUp(global.testPrisma, {
+      userId: TEST_USER_ID,
+      videoDbId: videoId,
+      transcriptId,
+      language: 'ja',
+      sourceLanguage: null,
+    });
+
+    expect(mockStart).not.toHaveBeenCalled();
+    const english = await global.testPrisma.summary.findFirstOrThrow({
+      where: { transcript_id: transcriptId, language: 'en' },
+    });
+    expect(english.headline).toBe('Existing headline');
   });
 });
