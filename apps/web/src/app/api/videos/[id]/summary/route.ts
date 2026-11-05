@@ -15,11 +15,11 @@ import { videoReachableByUser } from '@/lib/videos/marks';
 import { claimSummaryRun, findActiveSummaryRun } from '@/lib/workflows/runRegistry';
 import { NDJSON_HEADERS, ndjsonResponseFromRun } from '@/lib/workflows/streamResponse';
 import { type SummaryStreamEvent, summaryWorkflow } from '@/lib/workflows/summary';
-import { startEnglishSummaryFollowUp } from '@/lib/workflows/summary/autoStart';
 import {
   type ExistingSummaryFields,
   buildSummaryPrompt,
 } from '@/lib/workflows/summary/buildPrompt';
+import { startEnglishSummaryFollowUp } from '@/lib/workflows/summary/englishFollowUp';
 import {
   SUMMARY_FIELDS,
   SUMMARY_PROMPT_VERSION,
@@ -438,11 +438,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // alive until it settles.
     waitUntil(
       startEnglishSummaryFollowUp(prisma, {
-        userId,
-        videoDbId: video.id,
         transcriptId: transcript.id,
         language: target,
         sourceLanguage,
+        transcriptText,
+        videoTitle: video.title,
+        channelName: video.channel.name,
       })
     );
   }
