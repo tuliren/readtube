@@ -10,6 +10,7 @@ import {
 } from '@/lib/workflows/runRegistry';
 import { summaryWorkflow } from '@/lib/workflows/summary';
 import { buildSummaryPrompt } from '@/lib/workflows/summary/buildPrompt';
+import { isCompleteSummary } from '@/lib/workflows/summary/completeness';
 import { SUMMARY_FIELDS, SUMMARY_PROMPT_VERSION } from '@/lib/workflows/summary/steps';
 
 /**
@@ -84,6 +85,5 @@ export async function isSummarySlotCovered(
   if ((await findActiveSummaryRun(prisma, transcriptId, language)) != null) {
     return true;
   }
-  const cached = await findOrCloneSummary(prisma, transcriptId, language);
-  return cached != null && cached.headline != null && cached.short != null && cached.full != null;
+  return isCompleteSummary(await findOrCloneSummary(prisma, transcriptId, language));
 }

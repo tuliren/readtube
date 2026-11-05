@@ -1,5 +1,6 @@
 import { GenerationStatus, TranscriptSource } from '@readtube/database';
 import '@tests/integration-tests';
+import { franc } from 'franc';
 
 import { startEnglishSummaryFollowUp } from '@/lib/workflows/summary/englishFollowUp';
 import type { FullSummaryRunInput } from '@/lib/workflows/summary/fullRun';
@@ -12,8 +13,8 @@ jest.mock('workflow/api', () => ({
 }));
 
 // franc / iso-639-3 are ESM and ts-jest can't transform them — same
-// stand-in as languageCache.test.ts. Transcripts here carry a cached
-// language, so detection never runs.
+// stand-in as languageCache.test.ts. Detection only runs for a
+// transcript seeded without a language.
 jest.mock('franc', () => ({
   __esModule: true,
   franc: jest.fn(() => 'eng'),
@@ -25,7 +26,7 @@ jest.mock('iso-639-3', () => ({
 
 let seedCounter = 0;
 
-async function seed(transcriptLanguage: string): Promise<string> {
+async function seed(transcriptLanguage: string | null): Promise<string> {
   seedCounter++;
   const tag = `esf${seedCounter}`;
   const channel = await global.testPrisma.channel.create({
@@ -106,9 +107,25 @@ beforeEach(async () => {
 
 describe('startEnglishSummaryFollowUp', () => {
   it.each([
-    { label: 'a non-English target', language: 'zh-Hans', transcriptLanguage: 'en' },
-    { label: 'an Original of a non-English source', language: null, transcriptLanguage: 'zh' },
-  ])('starts an English summary after $label', async ({ language, transcriptLanguage }) => {
+    {
+      label: 'a non-English target over a non-English source',
+      language: 'zh-Hans',
+      transcriptLanguage: 'ja',
+      slot: 'en',
+    },
+    {
+      label: 'a non-English target over an English source',
+      language: 'zh-Hans',
+      transcriptLanguage: 'en',
+      slot: null,
+    },
+    {
+      label: 'an Original of a non-English source',
+      language: null,
+      transcriptLanguage: 'zh',
+      slot: 'en',
+    },
+  ])('starts the English run after $label', async ({ language, transcriptLanguage, slot }) => {
     const transcriptId = await seed(transcriptLanguage);
 
     await startEnglishSummaryFollowUp(
@@ -121,7 +138,7 @@ describe('startEnglishSummaryFollowUp', () => {
       unknown,
       [{ language: string | null; prompt: string; userRequestId: string | null }],
     ];
-    expect(workflowInput.language).toBe('en');
+    expect(workflowInput.language).toBe(slot);
     // Reuses the caller's transcript text instead of re-reading it.
     expect(workflowInput.prompt).toContain('Placeholder transcript text.');
     // No audit row: the user didn't ask for the English sibling.
@@ -129,10 +146,21 @@ describe('startEnglishSummaryFollowUp', () => {
     expect(await global.testPrisma.userRequest.count()).toBe(0);
 
     const english = await global.testPrisma.summary.findFirstOrThrow({
-      where: { transcript_id: transcriptId, language: 'en' },
+      where: { transcript_id: transcriptId, language: slot },
     });
     expect(english.status).toBe(GenerationStatus.GENERATING);
     expect(english.workflow_id).toBe('run_english');
+  });
+
+  it('starts an en run after a non-English target over an undetectable source', async () => {
+    const transcriptId = await seed(null);
+    jest.mocked(franc).mockReturnValueOnce('und');
+
+    await startEnglishSummaryFollowUp(global.testPrisma, buildInput(transcriptId, 'ja', null));
+
+    expect(mockStart).toHaveBeenCalledTimes(1);
+    const [, [workflowInput]] = mockStart.mock.calls[0] as [unknown, [{ language: string | null }]];
+    expect(workflowInput.language).toBe('en');
   });
 
   it.each([
@@ -150,26 +178,35 @@ describe('startEnglishSummaryFollowUp', () => {
     expect(mockStart).not.toHaveBeenCalled();
   });
 
-  it('does nothing when a complete English summary is already READY', async () => {
-    const transcriptId = await seed('zh');
-    await seedSummary(transcriptId, 'en', 'Existing English headline');
+  it.each([
+    {
+      label: 'a complete en summary exists for a non-English source',
+      transcriptLanguage: 'zh',
+      language: null,
+      existing: 'en',
+    },
+    {
+      label: 'a complete English Original exists',
+      transcriptLanguage: 'en',
+      language: 'ja',
+      existing: null,
+    },
+    {
+      label: 'a complete en summary exists for an English source',
+      transcriptLanguage: 'en',
+      language: 'ja',
+      existing: 'en',
+    },
+  ])('does nothing when $label', async ({ transcriptLanguage, language, existing }) => {
+    const transcriptId = await seed(transcriptLanguage);
+    await seedSummary(transcriptId, existing, 'Existing English headline');
 
-    await startEnglishSummaryFollowUp(global.testPrisma, buildInput(transcriptId, null, 'zh'));
+    await startEnglishSummaryFollowUp(
+      global.testPrisma,
+      buildInput(transcriptId, language, transcriptLanguage)
+    );
 
     expect(mockStart).not.toHaveBeenCalled();
-  });
-
-  it('clones an English Original instead of starting a run', async () => {
-    const transcriptId = await seed('en');
-    await seedSummary(transcriptId, null, 'Original English headline');
-
-    await startEnglishSummaryFollowUp(global.testPrisma, buildInput(transcriptId, 'ja', null));
-
-    expect(mockStart).not.toHaveBeenCalled();
-    const english = await global.testPrisma.summary.findFirstOrThrow({
-      where: { transcript_id: transcriptId, language: 'en' },
-    });
-    expect(english.headline).toBe('Original English headline');
   });
 
   it('starts a run when the READY English summary is incomplete', async () => {

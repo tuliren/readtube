@@ -23,15 +23,24 @@ export async function resolveTranscriptLanguage(
   prisma: PrismaClient,
   transcriptId: string
 ): Promise<string | null> {
+  // Read the cached language alone first: it is usually set, and the
+  // transcript text is only needed for detection.
+  const cached = await prisma.transcript.findUnique({
+    where: { id: transcriptId },
+    select: { language: true },
+  });
+  if (cached == null) {
+    return null;
+  }
+  if (cached.language != null) {
+    return cached.language;
+  }
   const transcript = await prisma.transcript.findUnique({
     where: { id: transcriptId },
-    select: { language: true, text: true },
+    select: { text: true },
   });
   if (transcript == null) {
     return null;
-  }
-  if (transcript.language != null) {
-    return transcript.language;
   }
   const detected = detectLanguage(transcript.text);
   if (detected == null) {

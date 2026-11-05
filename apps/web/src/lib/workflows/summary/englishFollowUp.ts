@@ -1,6 +1,6 @@
 import type { PrismaClient } from '@readtube/database';
 
-import { ENGLISH_LANGUAGE_CODE } from '@/lib/language/names';
+import type { EnglishFollowUpSlot } from '@/lib/language/englishFollowUp';
 import { startEnglishFollowUp } from '@/lib/workflows/englishFollowUp';
 import {
   type FullSummaryRunInput,
@@ -11,28 +11,22 @@ import {
 
 /**
  * Queue an English summary next to a just-started non-English one. See
- * {@link startEnglishFollowUp} for when it is skipped. `input` is the
- * started run's input; the English run reuses its transcript text,
- * title, and channel.
+ * {@link startEnglishFollowUp} for the slot and when it is skipped.
+ * `input` is the started run's input; the English run reuses its
+ * transcript text, title, and channel.
  */
 export function startEnglishSummaryFollowUp(
   prisma: PrismaClient,
   input: FullSummaryRunInput
 ): Promise<void> {
-  // Explicit targets force translation and don't use the source
-  // language (see buildSummaryPrompt).
-  const english: FullSummaryRunInput = {
-    ...input,
-    language: ENGLISH_LANGUAGE_CODE,
-    sourceLanguage: null,
-  };
+  const forSlot = (slot: EnglishFollowUpSlot): FullSummaryRunInput => ({ ...input, ...slot });
   return startEnglishFollowUp(prisma, {
     logTag: '[startEnglishSummaryFollowUp]',
     transcriptId: input.transcriptId,
     language: input.language,
     sourceLanguage: input.sourceLanguage,
-    isCovered: () => isSummarySlotCovered(prisma, english.transcriptId, english.language),
-    start: () => startFullSummaryWorkflow(english, null),
-    claim: (runId) => claimFullSummaryRun(prisma, english, runId),
+    isCovered: (language) => isSummarySlotCovered(prisma, input.transcriptId, language),
+    start: (slot) => startFullSummaryWorkflow(forSlot(slot), null),
+    claim: (slot, runId) => claimFullSummaryRun(prisma, forSlot(slot), runId),
   });
 }

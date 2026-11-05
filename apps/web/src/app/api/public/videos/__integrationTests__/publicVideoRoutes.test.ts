@@ -216,6 +216,23 @@ describe('GET /api/public/videos/[id]/summary', () => {
       expect(body.language).toBe('en');
     });
 
+    it('skips an incomplete English summary in favor of a complete Original', async () => {
+      const { videoId, transcriptId } = await seedVideoWithTranscript();
+      await seedSummary(transcriptId, null, 'Original headline');
+      const english = await seedSummary(transcriptId, 'en', 'en headline');
+      await global.testPrisma.summary.update({
+        where: { id: english.id },
+        data: { headline: null },
+      });
+
+      const res = await summaryGet(buildRequest(), { params: Promise.resolve({ id: videoId }) });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.headline).toBe('Original headline');
+      expect(body.language).toBeNull();
+    });
+
     it('returns the Original when no English exists, even alongside translations', async () => {
       const { videoId, transcriptId } = await seedVideoWithTranscript();
       await seedSummary(transcriptId, null, 'Original headline');

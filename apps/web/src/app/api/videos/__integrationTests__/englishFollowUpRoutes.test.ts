@@ -1,4 +1,4 @@
-import { ArticleStyle } from '@readtube/database';
+import { ArticleStyle, GenerationStatus } from '@readtube/database';
 import '@tests/integration-tests';
 import { NextRequest } from 'next/server';
 
@@ -63,7 +63,9 @@ jest.mock('@vercel/functions', () => ({
 jest.mock('franc', () => ({ __esModule: true, franc: () => 'eng' }));
 jest.mock('iso-639-3', () => ({ __esModule: true, iso6393To1: { eng: 'en' } }));
 
-async function seed(transcriptLanguage: string): Promise<string> {
+async function seed(
+  transcriptLanguage: string
+): Promise<{ videoId: string; transcriptId: string }> {
   await global.testPrisma.user.create({
     data: { source_id: USER_ID, name: 'Follow-up', email: 'english_follow_up@example.com' },
   });
@@ -86,7 +88,7 @@ async function seed(transcriptLanguage: string): Promise<string> {
       duration_seconds: 600,
     },
   });
-  await global.testPrisma.transcript.create({
+  const transcript = await global.testPrisma.transcript.create({
     data: {
       video_id: video.id,
       text: JSON.stringify([{ startMs: 0, endMs: 1000, text: 'Placeholder transcript text.' }]),
@@ -94,8 +96,16 @@ async function seed(transcriptLanguage: string): Promise<string> {
       fetched_at: new Date(),
     },
   });
-  return video.id;
+  return { videoId: video.id, transcriptId: transcript.id };
 }
+
+/** Status / workflow id of a seeded row; READY rows get full content. */
+interface SeededRow {
+  status: GenerationStatus;
+  workflowId: string | null;
+}
+
+const ROW_META = { prompt_version: 'vtest', model: 'test-model' };
 
 beforeEach(async () => {
   await global.testPrisma.userRequest.deleteMany();
@@ -115,30 +125,71 @@ beforeEach(async () => {
 const ROUTES = [
   {
     name: 'summary POST',
-    call: (id: string, language: string) =>
-      summaryPost(new NextRequest(`http://test/api/videos/${id}/summary?language=${language}`), {
-        params: Promise.resolve({ id }),
+    call: (id: string, language: string, body?: object) =>
+      summaryPost(
+        new NextRequest(`http://test/api/videos/${id}/summary?language=${language}`, {
+          method: 'POST',
+          ...(body != null ? { body: JSON.stringify(body) } : {}),
+        }),
+        { params: Promise.resolve({ id }) }
+      ),
+    regenBody: { fields: ['short'] },
+    seedRow: (transcriptId: string, language: string, { status, workflowId }: SeededRow) =>
+      global.testPrisma.summary.create({
+        data: {
+          transcript_id: transcriptId,
+          language,
+          status,
+          workflow_id: workflowId,
+          ...(status === GenerationStatus.READY
+            ? { headline: 'Headline', short: 'Short', full: 'Full' }
+            : {}),
+          ...ROW_META,
+        },
       }),
   },
   {
     name: 'article POST',
-    call: (id: string, language: string) =>
+    call: (id: string, language: string, body?: object) =>
       articlePost(
         new NextRequest(`http://test/api/videos/${id}/article?language=${language}`, {
           method: 'POST',
-          body: JSON.stringify({ style: ArticleStyle.NARRATIVE }),
+          body: JSON.stringify({ style: ArticleStyle.NARRATIVE, ...body }),
         }),
         { params: Promise.resolve({ id }) }
       ),
+    regenBody: { force: true },
+    seedRow: (transcriptId: string, language: string, { status, workflowId }: SeededRow) =>
+      global.testPrisma.article.create({
+        data: {
+          transcript_id: transcriptId,
+          style: ArticleStyle.NARRATIVE,
+          language,
+          status,
+          workflow_id: workflowId,
+          ...(status === GenerationStatus.READY ? { content: 'Content' } : {}),
+          ...ROW_META,
+        },
+      }),
   },
 ];
 
+function startedLanguages(): (string | null)[] {
+  return mockStart.mock.calls.map(([, [input]]) => (input as { language: string | null }).language);
+}
+
 const CASES = [
   {
-    label: 'a non-English target',
+    label: 'a non-English target over a non-English source',
+    language: 'zh-Hans',
+    transcriptLanguage: 'ja',
+    started: ['zh-Hans', 'en'],
+  },
+  {
+    label: 'a non-English target over an English source',
     language: 'zh-Hans',
     transcriptLanguage: 'en',
-    started: ['zh-Hans', 'en'],
+    started: ['zh-Hans', null],
   },
   {
     label: 'an Original of a non-English source',
@@ -154,20 +205,74 @@ const CASES = [
   },
 ];
 
-describe.each(ROUTES)('$name', ({ call }) => {
+describe.each(ROUTES)('$name', ({ call, regenBody, seedRow }) => {
   it.each(CASES)(
     'queues the expected runs for $label',
     async ({ language, transcriptLanguage, started }) => {
-      const videoId = await seed(transcriptLanguage);
+      const { videoId } = await seed(transcriptLanguage);
 
       const res = await call(videoId, language);
       expect(res.status).toBe(200);
       await Promise.all(mockPending);
 
-      const languages = mockStart.mock.calls.map(
-        ([, [input]]) => (input as { language: string | null }).language
-      );
-      expect(languages).toEqual(started);
+      expect(startedLanguages()).toEqual(started);
     }
   );
+
+  describe('queues no English run', () => {
+    it('on a cache hit', async () => {
+      const { videoId, transcriptId } = await seed('ja');
+      await seedRow(transcriptId, 'zh-Hans', { status: GenerationStatus.READY, workflowId: null });
+
+      const res = await call(videoId, 'zh-Hans');
+      expect(res.status).toBe(200);
+      await Promise.all(mockPending);
+
+      expect(mockStart).not.toHaveBeenCalled();
+    });
+
+    it('when tapping into an active run', async () => {
+      const { videoId, transcriptId } = await seed('ja');
+      await seedRow(transcriptId, 'zh-Hans', {
+        status: GenerationStatus.GENERATING,
+        workflowId: 'run_active',
+      });
+
+      const res = await call(videoId, 'zh-Hans');
+      expect(res.status).toBe(200);
+      await Promise.all(mockPending);
+
+      expect(mockStart).not.toHaveBeenCalled();
+    });
+
+    it('on a lost claim race', async () => {
+      const { videoId, transcriptId } = await seed('ja');
+      // Another request claims the slot between our start and claim.
+      mockStart.mockImplementationOnce(async () => {
+        await seedRow(transcriptId, 'zh-Hans', {
+          status: GenerationStatus.GENERATING,
+          workflowId: 'run_winner',
+        });
+        return { runId: 'run_loser' };
+      });
+
+      const res = await call(videoId, 'zh-Hans');
+      expect(res.status).toBe(200);
+      await Promise.all(mockPending);
+
+      expect(startedLanguages()).toEqual(['zh-Hans']);
+      // The cancelled run's audit row is removed.
+      expect(await global.testPrisma.userRequest.count()).toBe(0);
+    });
+
+    it('on a dev regenerate', async () => {
+      const { videoId } = await seed('ja');
+
+      const res = await call(videoId, 'zh-Hans', regenBody);
+      expect(res.status).toBe(200);
+      await Promise.all(mockPending);
+
+      expect(startedLanguages()).toEqual(['zh-Hans']);
+    });
+  });
 });

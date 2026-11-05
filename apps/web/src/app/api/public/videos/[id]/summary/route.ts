@@ -2,6 +2,7 @@ import { prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { parseShareLanguage, resolveShareRow } from '@/lib/language/publicShare';
+import { COMPLETE_SUMMARY_WHERE } from '@/lib/workflows/summary/completeness';
 
 /**
  * Sharing-intent gate: the public video page only renders when a
@@ -75,17 +76,18 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     select: { headline: true, short: true, full: true, language: true, generated_at: true },
   } as const;
 
+  // Every lookup filters on `status = READY` so an in-flight row never
+  // surfaces, and on complete fields so an incomplete row can't shadow
+  // a complete sibling during the share-language fallback.
   const findByLanguage = (language: string | null) =>
     prisma.summary.findFirst({
-      where: { transcript_id: transcript.id, language, status: 'READY' },
+      where: { transcript_id: transcript.id, language, status: 'READY', ...COMPLETE_SUMMARY_WHERE },
       ...fields,
     });
 
-  // Every lookup filters on `status = READY` so an in-flight row never
-  // surfaces.
   const summary = await resolveShareRow(requested, findByLanguage, () =>
     prisma.summary.findFirst({
-      where: { transcript_id: transcript.id, status: 'READY' },
+      where: { transcript_id: transcript.id, status: 'READY', ...COMPLETE_SUMMARY_WHERE },
       orderBy: { generated_at: 'asc' },
       ...fields,
     })

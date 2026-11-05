@@ -4,19 +4,17 @@ import { getRun } from 'workflow/api';
 import type { ClaimResult } from '@/lib/workflows/runRegistry';
 
 /**
- * Start a summary / article workflow with no client waiting on its
- * stream (auto-summary after transcript generation, English
- * follow-ups), then claim its registry slot.
+ * Start a summary / article workflow, then claim its registry slot so
+ * later GETs and Generate clicks tap into it. Shared by the summary /
+ * article POST routes, the auto-summary after transcript generation,
+ * and the English follow-ups.
  *
- * Mirrors the routes' start → claim dance without the stream
- * response: on a lost claim race the stray run is cancelled and its
- * pending `UserRequest` deleted (no LLM cost is incurred); on a win
- * the run id is stamped on the `UserRequest`. Audit failures are
- * logged, never thrown.
- *
- * Returns the run id when we own the slot, null on a lost race.
+ * On a lost claim race the stray run is cancelled and its pending
+ * `UserRequest` deleted (no LLM cost is incurred); the caller streams
+ * `winningRunId` instead. On a win the run id is stamped on the
+ * `UserRequest`. Audit failures are logged, never thrown.
  */
-export async function startBackgroundRun(
+export async function startAndClaimRun(
   prisma: PrismaClient,
   params: {
     logPrefix: string;
@@ -24,13 +22,15 @@ export async function startBackgroundRun(
     start: () => Promise<{ runId: string }>;
     claim: (runId: string) => Promise<ClaimResult>;
   }
-): Promise<string | null> {
+): Promise<ClaimResult> {
   const { logPrefix, userRequest } = params;
   const run = await params.start();
   const claim = await params.claim(run.runId);
 
   if (!claim.weWon) {
-    console.info(`${logPrefix} Lost claim race; cancelling ${run.runId}`);
+    console.info(
+      `${logPrefix} Lost claim race; cancelling ${run.runId} in favor of ${claim.winningRunId}`
+    );
     try {
       await getRun(run.runId).cancel();
     } catch {
@@ -43,7 +43,7 @@ export async function startBackgroundRun(
         console.error(`${logPrefix} failed to delete claim-race UserRequest:`, err);
       }
     }
-    return null;
+    return claim;
   }
 
   if (userRequest != null) {
@@ -56,5 +56,5 @@ export async function startBackgroundRun(
       console.error(`${logPrefix} failed to stamp workflow_id on UserRequest:`, err);
     }
   }
-  return run.runId;
+  return claim;
 }

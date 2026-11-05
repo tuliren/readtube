@@ -1,8 +1,14 @@
 import type { PrismaClient } from '@readtube/database';
 
-import { needsEnglishFollowUp } from '@/lib/language/englishFollowUp';
+import { resolveTranscriptLanguage } from '@/lib/language/cache';
+import {
+  type EnglishFollowUpSlot,
+  englishFollowUpSlot,
+  isEnglish,
+} from '@/lib/language/englishFollowUp';
+import { ENGLISH_LANGUAGE_CODE } from '@/lib/language/names';
 import type { ClaimResult } from '@/lib/workflows/runRegistry';
-import { startBackgroundRun } from '@/lib/workflows/startBackgroundRun';
+import { startAndClaimRun } from '@/lib/workflows/startAndClaimRun';
 
 /**
  * Shared skeleton of the English follow-ups (summary in
@@ -12,19 +18,22 @@ import { startBackgroundRun } from '@/lib/workflows/startBackgroundRun';
  * English content for search engines to index.
  *
  * Each caller passes the input of the run it just started, so the
- * follow-up never re-reads the transcript, plus three table-specific
- * hooks:
- *   - `isCovered`: an English run is already generating, or a complete
- *     English row exists or can be cloned from an Original that is
- *     already English (the same cache the POST routes use).
- *   - `start` / `claim`: start the English workflow and claim its slot.
+ * follow-up never re-reads the transcript text, plus three
+ * table-specific hooks:
+ *   - `isCovered(language)`: a run is already generating that slot, or
+ *     a complete row exists or can be cloned (the same cache the POST
+ *     routes use).
+ *   - `start(slot)` / `claim(slot, runId)`: start the workflow for the
+ *     slot and claim it.
  *
- * Skipped when the started run is already English (an explicit `en`
- * target, or an Original whose source language is English or unknown;
- * see {@link needsEnglishFollowUp}). Idempotent: a repeat call finds the
- * English slot covered. The English run writes no UserRequest (the user
- * didn't ask for it, so it stays out of their usage counts) and never
- * chains further since its target is English.
+ * The slot is `en`, or the Original when the source is English (see
+ * {@link englishFollowUpSlot}). An English Original and an `en` row
+ * both serve the share page's English default, so an Original slot is
+ * also covered by a complete `en` row. Skipped when the started run is
+ * already English. Idempotent: a repeat call finds the slot covered.
+ * The run writes no UserRequest (the user didn't ask for it, so it
+ * stays out of their usage counts) and never chains further since its
+ * output is English.
  *
  * Best-effort: errors are logged, never thrown, because the content the
  * user asked for is unaffected by a missing English sibling.
@@ -40,27 +49,44 @@ export async function startEnglishFollowUp(
     /** Detected source language of an Original run (null when
      *  undetectable); ignored for target runs. */
     sourceLanguage: string | null;
-    isCovered: () => Promise<boolean>;
-    start: () => Promise<{ runId: string }>;
-    claim: (runId: string) => Promise<ClaimResult>;
+    isCovered: (language: string | null) => Promise<boolean>;
+    start: (slot: EnglishFollowUpSlot) => Promise<{ runId: string }>;
+    claim: (slot: EnglishFollowUpSlot, runId: string) => Promise<ClaimResult>;
   }
 ): Promise<void> {
-  const { logTag, transcriptId, language, sourceLanguage } = params;
-  if (!needsEnglishFollowUp(language, language == null ? sourceLanguage : null)) {
+  const { logTag, transcriptId, language } = params;
+  // Checked before the try so an English target, the common case,
+  // skips resolving the source language.
+  if (language != null && isEnglish(language)) {
     return;
   }
   try {
-    if (await params.isCovered()) {
+    // A target run's input carries no source language (its prompt
+    // ignores it), but the slot choice needs it.
+    const sourceLanguage =
+      language == null
+        ? params.sourceLanguage
+        : await resolveTranscriptLanguage(prisma, transcriptId);
+    const slot = englishFollowUpSlot(language, sourceLanguage);
+    if (slot == null) {
       return;
     }
-    const runId = await startBackgroundRun(prisma, {
+    const covering = slot.language == null ? [null, ENGLISH_LANGUAGE_CODE] : [slot.language];
+    for (const coveringLanguage of covering) {
+      if (await params.isCovered(coveringLanguage)) {
+        return;
+      }
+    }
+    const claim = await startAndClaimRun(prisma, {
       logPrefix: `${logTag} transcript ${transcriptId}:`,
       userRequest: null,
-      start: params.start,
-      claim: params.claim,
+      start: () => params.start(slot),
+      claim: (runId) => params.claim(slot, runId),
     });
-    if (runId != null) {
-      console.info(`${logTag} Started English run ${runId} for transcript ${transcriptId}`);
+    if (claim.weWon) {
+      console.info(
+        `${logTag} Started English run ${claim.winningRunId} (language ${slot.language ?? 'original'}) for transcript ${transcriptId}`
+      );
     }
   } catch (err) {
     console.error(`${logTag} English follow-up failed for transcript ${transcriptId}:`, err);

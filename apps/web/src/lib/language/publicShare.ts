@@ -36,9 +36,10 @@ export function parseShareLanguage(raw: string | null | undefined): string | nul
  *   2. English (`language = 'en'`) — the default for a bare
  *      `/p/videos/[id]` link, which is also the canonical URL search
  *      engines index. Non-English generations queue an English sibling
- *      (see `needsEnglishFollowUp`), so this row usually exists.
+ *      (see `englishFollowUpSlot`), so this row usually exists.
  *   3. Original (`language IS NULL`) — the source-language version.
- *      For an English-source video this row is already English.
+ *      For an English-source video this row is already English, and
+ *      it is where that video's English sibling goes.
  *   4. First available by content creation date — final fallback so a
  *      video with none of the above still shows its earliest-generated
  *      translation instead of empty content.

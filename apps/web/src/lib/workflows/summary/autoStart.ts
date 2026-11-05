@@ -4,7 +4,7 @@ import { DEFAULT_AI_MODEL } from '@/constants';
 import { resolveTranscriptLanguage } from '@/lib/language/cache';
 import { resolveTargetLanguage } from '@/lib/language/resolve';
 import { recordSummaryRequest } from '@/lib/usage/userRequest';
-import { startBackgroundRun } from '@/lib/workflows/startBackgroundRun';
+import { startAndClaimRun } from '@/lib/workflows/startAndClaimRun';
 import {
   type FullSummaryRunInput,
   claimFullSummaryRun,
@@ -87,15 +87,15 @@ export async function startAutoSummary(
     console.error('[startAutoSummary] failed to record UserRequest:', err);
   }
 
-  const runId = await startBackgroundRun(prisma, {
+  const claim = await startAndClaimRun(prisma, {
     logPrefix: `[startAutoSummary] transcript ${transcriptId}:`,
     userRequest,
     start: () => startFullSummaryWorkflow(input, userRequest?.id ?? null),
     claim: (newRunId) => claimFullSummaryRun(prisma, input, newRunId),
   });
-  if (runId != null) {
+  if (claim.weWon) {
     console.info(
-      `[startAutoSummary] Started summary run ${runId} (language ${target ?? 'original'}) for transcript ${transcriptId}`
+      `[startAutoSummary] Started summary run ${claim.winningRunId} (language ${target ?? 'original'}) for transcript ${transcriptId}`
     );
   }
   return input;

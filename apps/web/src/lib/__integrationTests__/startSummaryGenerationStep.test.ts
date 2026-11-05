@@ -75,7 +75,9 @@ async function seed(): Promise<Seeded> {
     data: {
       video_id: video.id,
       text: JSON.stringify([{ startMs: 0, endMs: 4000, text: 'Placeholder transcript text.' }]),
-      language: 'en',
+      // Non-English source, so the follow-up's slot is `en` (an
+      // English source would send it to the Original instead).
+      language: 'ja',
       source: TranscriptSource.GENERATED,
       fetched_at: new Date(),
     },
