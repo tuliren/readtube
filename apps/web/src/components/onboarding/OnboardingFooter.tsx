@@ -1,6 +1,7 @@
 'use client';
 
 import { Link2, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -68,10 +69,15 @@ export default function OnboardingFooter({
           {empty ? (
             // A disabled button fires no pointer events, so the
             // tooltip hangs off a wrapper that can be hovered and
-            // focused instead.
+            // focused instead. Touch screens never open a hover
+            // tooltip, so a tap on the wrapper shows the same text.
             <Tooltip>
               <TooltipTrigger asChild>
-                <span tabIndex={0} className="inline-flex rounded-md">
+                <span
+                  tabIndex={0}
+                  className="inline-flex rounded-md"
+                  onClick={() => toast.info(EMPTY_HINT)}
+                >
                   {saveButton}
                 </span>
               </TooltipTrigger>

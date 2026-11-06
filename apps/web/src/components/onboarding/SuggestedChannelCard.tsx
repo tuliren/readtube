@@ -43,7 +43,10 @@ export default function SuggestedChannelCard({ channel, selected, onToggle, onPr
       <div className="flex items-center gap-3">
         <OnboardingChannelAvatar name={channel.name} logoUrl={channel.logoUrl} />
         <div className="min-w-0 flex-1">
-          <p className="truncate font-semibold text-foreground" title={channel.name}>
+          {/* Wraps to a second line instead of truncating: the select
+              button covers the card, so a hover tooltip here could
+              never show the rest of the name. */}
+          <p className="line-clamp-2 break-words font-semibold leading-snug text-foreground">
             {channel.name}
           </p>
           <p className="truncate text-xs text-muted-foreground">
@@ -62,7 +65,7 @@ export default function SuggestedChannelCard({ channel, selected, onToggle, onPr
       {channel.recentVideoTitles.length > 0 && (
         <ul className="space-y-0.5">
           {channel.recentVideoTitles.map((title, index) => (
-            <li key={index} className="truncate text-xs text-muted-foreground" title={title}>
+            <li key={index} className="truncate text-xs text-muted-foreground">
               {title}
             </li>
           ))}

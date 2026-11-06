@@ -30,6 +30,13 @@ class PreviewError extends Error {
   }
 }
 
+/**
+ * A preview is a one-off read: no retry loop on a 404 (the row isn't
+ * offerable) or a transient failure, and no refetch on focus while the
+ * user reads it. The error message is the recovery path.
+ */
+const PREVIEW_SWR_OPTIONS = { shouldRetryOnError: false, revalidateOnFocus: false } as const;
+
 async function fetchPreview<T>(url: string): Promise<T> {
   const res = await fetch(url);
   if (!res.ok) {
@@ -131,7 +138,8 @@ function SelectToggle({
 function ChannelBody({ id, onOpenVideo }: { id: string; onOpenVideo: (id: string) => void }) {
   const { data, error } = useSWR<ChannelPreview>(
     `/api/onboarding/preview/channels/${encodeURIComponent(id)}`,
-    fetchPreview
+    fetchPreview,
+    PREVIEW_SWR_OPTIONS
   );
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
@@ -154,7 +162,8 @@ function ChannelBody({ id, onOpenVideo }: { id: string; onOpenVideo: (id: string
 function VideoBody({ id }: { id: string }) {
   const { data, error } = useSWR<VideoData>(
     `/api/onboarding/preview/videos/${encodeURIComponent(id)}`,
-    fetchPreview
+    fetchPreview,
+    PREVIEW_SWR_OPTIONS
   );
   if (error != null) {
     return <PreviewMessage error={error} />;
