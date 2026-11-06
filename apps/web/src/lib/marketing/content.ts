@@ -135,9 +135,8 @@ export interface FaqEntry {
   question: string;
   /**
    * Markdown. Stick to paragraphs, `-` bullet lists, and `**bold**`:
-   * the homepage styles exactly those elements, and
-   * {@link markdownToPlainText} (used for the FAQPage JSON-LD) only
-   * understands those.
+   * the homepage styles exactly those elements. The FAQPage JSON-LD
+   * flattens it with `markdownToPlainText` (`lib/markdown/plainText.ts`).
    */
   answer: string;
 }
@@ -206,18 +205,3 @@ ReadTube is built the other way around. Every video you add becomes a durable en
 The cloud version at read.tube is also free during the beta. Quotas on the paid tiers will start being enforced later, but anything you read, highlight, or annotate during the beta stays in your library.`,
   },
 ];
-
-/**
- * Flatten the small markdown subset FAQ answers use (paragraphs, `-`
- * bullets, `**bold**`) into plain text for structured data, where
- * markup would show up literally. Paragraphs and list items each
- * become their own line.
- */
-export function markdownToPlainText(markdown: string): string {
-  return markdown
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .map((line) => line.replace(/^[-*]\s+/, '').replace(/\*\*(.+?)\*\*/g, '$1'))
-    .join('\n');
-}

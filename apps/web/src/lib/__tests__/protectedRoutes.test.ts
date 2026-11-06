@@ -14,8 +14,10 @@ const DASHBOARD_DIR = path.join(APP_DIR, '(dashboard)');
  * instead of defaulting to public.
  */
 const PUBLIC_ROUTE_SEGMENTS = [
+  'about',
   // Handlers self-enforce auth so they can return 401 JSON.
   'api',
+  'contact',
   // Agent-readable surfaces.
   'index.md',
   'llms-full.txt',

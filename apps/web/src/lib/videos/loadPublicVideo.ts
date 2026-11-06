@@ -18,15 +18,16 @@ export async function loadPublicVideo(
 }
 
 /**
- * {@link loadPublicVideo}, plus the id of the latest transcript that
- * passed the gate, for callers that go on to load that transcript's
- * summary and article (the markdown rendition). One query, so the gate
+ * {@link loadPublicVideo}, plus the id and language of the latest
+ * transcript that passed the gate, for callers that go on to load that
+ * transcript's summary and article (the markdown rendition, the public
+ * page's structured data). One query, so the gate
  * and the transcript id can't disagree.
  */
 export async function loadPublicVideoWithTranscript(
   prisma: PrismaClient,
   videoId: string
-): Promise<{ video: VideoData; transcriptId: string } | null> {
+): Promise<{ video: VideoData; transcriptId: string; transcriptLanguage: string | null } | null> {
   const video = await prisma.video.findUnique({
     where: { id: videoId },
     select: {
@@ -46,6 +47,7 @@ export async function loadPublicVideoWithTranscript(
         take: 1,
         select: {
           id: true,
+          language: true,
           // Only READY rows count: a slot that only has an in-flight
           // workflow row has nothing to read yet.
           summaries: {
@@ -87,5 +89,5 @@ export async function loadPublicVideoWithTranscript(
     },
     null
   );
-  return { video: decorated, transcriptId: latest.id };
+  return { video: decorated, transcriptId: latest.id, transcriptLanguage: latest.language };
 }

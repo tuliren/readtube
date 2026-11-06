@@ -69,3 +69,18 @@ export function buildChannelLink(platform: VideoPlatform, channelSourceId: strin
       return assertNeverPlatform(platform);
   }
 }
+
+/**
+ * Build the embeddable player URL for a video on its source platform.
+ * Used for the `embedUrl` of the public page's VideoObject JSON-LD.
+ */
+export function buildEmbedUrl(platform: VideoPlatform, sourceId: string): string {
+  switch (platform) {
+    case 'YOUTUBE':
+      return `https://www.youtube.com/embed/${sourceId}`;
+    case 'BILIBILI':
+      return `https://player.bilibili.com/player.html?bvid=${sourceId}`;
+    default:
+      return assertNeverPlatform(platform);
+  }
+}

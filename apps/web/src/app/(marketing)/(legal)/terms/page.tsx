@@ -2,10 +2,16 @@ import type { Metadata } from 'next';
 import { use } from 'react';
 
 import CustomMarkdown from '@/components/CustomMarkdown';
+import { TITLE } from '@/constants';
 import { getFileContent } from '@/lib/file';
+import { pageSocialMetadata } from '@/lib/seo/openGraph';
+
+const DESCRIPTION = `The terms for using ${TITLE}.`;
 
 export const metadata: Metadata = {
   title: 'Terms of Service',
+  description: DESCRIPTION,
+  ...pageSocialMetadata({ path: '/terms', title: 'Terms of Service', description: DESCRIPTION }),
   alternates: {
     canonical: '/terms',
   },
