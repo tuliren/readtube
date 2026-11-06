@@ -4,9 +4,11 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 
 import VideoListView from '@/components/inbox/VideoListView';
+import NewUserOnboarding from '@/components/onboarding/NewUserOnboarding';
 import { parseInboxQuery } from '@/lib/inbox/filter';
 import { loadInboxVideos, searchParamsToInboxQuery } from '@/lib/inbox/loadVideos';
 import { resolveInboxView } from '@/lib/inbox/views';
+import { isNewUser, loadOnboardingSuggestions } from '@/lib/onboarding/suggestions';
 
 interface Props {
   // Wide Next.js shape — we forward the whole bag through
@@ -37,6 +39,17 @@ export default async function InboxPage({ searchParams }: Props) {
   // this guard narrows `userId` for the DB calls below.
   if (userId == null) {
     redirect('/');
+  }
+
+  // A user who hasn't added anything yet gets the onboarding page in
+  // place of an empty inbox: recent channels and videos already on
+  // ReadTube, picked with a click instead of hunting for links. Falls
+  // through to the regular empty state if there is nothing to suggest.
+  if (await isNewUser(prisma, userId)) {
+    const suggestions = await loadOnboardingSuggestions(prisma);
+    if (suggestions.channels.length > 0 || suggestions.videos.length > 0) {
+      return <NewUserOnboarding suggestions={suggestions} />;
+    }
   }
 
   const query = searchParamsToInboxQuery(await searchParams);
