@@ -1,4 +1,4 @@
-import type { Prisma, PrismaClient } from '@readtube/database';
+import type { Prisma, PrismaClient, VideoPlatformType } from '@readtube/database';
 
 import { primaryLanguage } from './language';
 import { resolveContentLanguage } from './resolveLanguage';
@@ -25,22 +25,33 @@ const CHANNEL_PREVIEW_TITLES = 2;
 const VIDEO_CANDIDATE_LIMIT = VIDEO_SUGGESTION_LIMIT * 4;
 
 /**
+ * The only platform offered during onboarding, for now. Bilibili rows
+ * exist, but a new user is shown one platform so the page reads as one
+ * coherent feed. Applied to the suggestions and to what
+ * `POST /api/onboarding` and the channel preview accept.
+ */
+export const ONBOARDING_PLATFORM = 'YOUTUBE' satisfies VideoPlatformType;
+
+/**
  * Channels whose feed is loaded and refreshing fine: the only ones the
  * onboarding page can follow (or preview) straight from the database,
+ * on the onboarding platform,
  * since a shadow or failing channel would give the user an empty feed.
  */
 export const FOLLOWABLE_CHANNEL = {
+  source_type: ONBOARDING_PLATFORM,
   checked_at: { not: null },
   refresh_failed_at: null,
 } satisfies Prisma.ChannelWhereInput;
 
 /**
- * Videos with a READY summary or article on some transcript: the ones
- * with a public share page. Only these are offered (and accepted back
- * by `POST /api/onboarding`), so a new user always lands on something
- * readable.
+ * Videos on the onboarding platform with a READY summary or article on
+ * some transcript: the ones with a public share page. Only these are
+ * offered (and accepted back by `POST /api/onboarding`), so a new user
+ * always lands on something readable.
  */
-export const HAS_GENERATED_CONTENT = {
+export const OFFERABLE_VIDEO = {
+  source_type: ONBOARDING_PLATFORM,
   transcripts: {
     some: {
       OR: [
@@ -130,7 +141,8 @@ async function loadSuggestedChannels(prisma: PrismaClient): Promise<SuggestedCha
       FROM "Video" v
       WHERE v."channel_id" = c."id"
     ) latest ON latest."at" IS NOT NULL
-    WHERE c."checked_at" IS NOT NULL
+    WHERE c."source_type" = ${ONBOARDING_PLATFORM}::"VideoPlatformType"
+      AND c."checked_at" IS NOT NULL
       AND c."refresh_failed_at" IS NULL
     GROUP BY c."id", latest."at"
     ORDER BY latest."at" DESC, c."id" DESC
@@ -196,7 +208,7 @@ async function loadSuggestedChannels(prisma: PrismaClient): Promise<SuggestedCha
  */
 async function loadSuggestedVideos(prisma: PrismaClient): Promise<SuggestedVideo[]> {
   const rows = await prisma.video.findMany({
-    where: { thumbnail_url: { not: null }, ...HAS_GENERATED_CONTENT },
+    where: { thumbnail_url: { not: null }, ...OFFERABLE_VIDEO },
     orderBy: [{ published_at: { sort: 'desc', nulls: 'last' } }, { id: 'desc' }],
     take: VIDEO_CANDIDATE_LIMIT,
     select: {

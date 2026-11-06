@@ -32,11 +32,12 @@ async function createUser(sourceId: string) {
 
 async function createChannel(
   sourceId: string,
-  opts: { followed?: boolean; checked?: boolean; failed?: boolean } = {}
+  opts: { followed?: boolean; checked?: boolean; failed?: boolean; bilibili?: boolean } = {}
 ) {
   const channel = await global.testPrisma.channel.create({
     data: {
       source_id: sourceId,
+      source_type: opts.bilibili === true ? 'BILIBILI' : 'YOUTUBE',
       name: `Channel ${sourceId}`,
       rss_url: `https://example.com/${sourceId}.xml`,
       checked_at: opts.checked === false ? null : NOW,
@@ -59,12 +60,14 @@ async function createVideo(
     transcriptLanguage?: string | null;
     summary?: GenerationStatus | null;
     thumbnail?: boolean;
+    bilibili?: boolean;
   }
 ) {
   const video = await global.testPrisma.video.create({
     data: {
       channel_id: channelId,
       source_id: sourceId,
+      source_type: opts.bilibili === true ? 'BILIBILI' : 'YOUTUBE',
       title: `Video ${sourceId}`,
       published_at: hoursAgo(opts.publishedHoursAgo),
       thumbnail_url: opts.thumbnail === false ? null : `https://example.com/${sourceId}.jpg`,
@@ -166,6 +169,8 @@ describe('loadOnboardingSuggestions', () => {
     const failing = await createChannel('ch_failing', { failed: true });
     await createVideo(failing, 'failing_v', { publishedHoursAgo: 0 });
     await createChannel('ch_empty');
+    const bilibili = await createChannel('ch_bilibili', { bilibili: true });
+    await createVideo(bilibili, 'bilibili_v', { publishedHoursAgo: 0, bilibili: true });
 
     const { channels } = await loadOnboardingSuggestions(global.testPrisma);
 
@@ -214,6 +219,12 @@ describe('loadOnboardingSuggestions', () => {
       publishedHoursAgo: 0,
       summary: GenerationStatus.READY,
       thumbnail: false,
+    });
+    const bilibili = await createChannel('ch_bilibili', { bilibili: true });
+    await createVideo(bilibili, 'bilibili_ready', {
+      publishedHoursAgo: 0,
+      summary: GenerationStatus.READY,
+      bilibili: true,
     });
 
     const { videos } = await loadOnboardingSuggestions(global.testPrisma);
@@ -344,6 +355,7 @@ describe('loadChannelPreview', () => {
   it.each([
     { name: 'a channel that was never hydrated', opts: { checked: false } },
     { name: 'a channel failing to refresh', opts: { failed: true } },
+    { name: 'a Bilibili channel', opts: { bilibili: true } },
   ])('returns null for $name', async ({ opts }) => {
     const channelId = await createChannel('preview_bad', opts);
     expect(await loadChannelPreview(global.testPrisma, channelId)).toBeNull();
