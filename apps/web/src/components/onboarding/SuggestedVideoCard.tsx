@@ -1,13 +1,12 @@
 'use client';
 
-import { Check } from 'lucide-react';
-
 import { formatDurationSeconds } from '@/lib/format/duration';
 import { relativeTime } from '@/lib/format/relativeTime';
 import type { SuggestedVideo } from '@/lib/onboarding/types';
 import { cn } from '@/lib/utils';
 
 import PreviewButton from './PreviewButton';
+import SelectionCheck from './SelectionCheck';
 import { thumbnailSrc } from './thumbnailSrc';
 
 interface Props {
@@ -43,7 +42,7 @@ export default function SuggestedVideoCard({ video, selected, onToggle, onPrevie
         aria-pressed={selected}
         aria-label={`Select ${video.title}`}
         onClick={() => onToggle(video.id)}
-        className="absolute inset-0 z-[1] rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
+        className="absolute inset-0 z-[1] cursor-pointer rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
       />
       <div className="relative aspect-video w-full overflow-hidden bg-muted">
         {video.thumbnailUrl != null && (
@@ -66,17 +65,7 @@ export default function SuggestedVideoCard({ video, selected, onToggle, onPrevie
             {duration}
           </span>
         )}
-        <span
-          aria-hidden
-          className={cn(
-            'absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full border-2 transition-colors',
-            selected
-              ? 'border-blue-600 bg-blue-600 text-white'
-              : 'border-white bg-black/30 text-transparent group-hover:bg-black/50'
-          )}
-        >
-          <Check className="h-3.5 w-3.5" />
-        </span>
+        <SelectionCheck selected={selected} variant="overlay" className="absolute right-2 top-2" />
       </div>
       <div className="flex flex-1 flex-col gap-1 p-3">
         <p className="line-clamp-2 text-sm font-semibold text-foreground">{video.title}</p>
