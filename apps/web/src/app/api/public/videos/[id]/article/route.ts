@@ -2,8 +2,9 @@ import { ArticleStyle, prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { parseShareLanguage, resolveShareRow } from '@/lib/language/publicShare';
+import { PUBLIC_DEFAULT_ARTICLE_STYLE, publicArticleWhere } from '@/lib/videos/publicShareRows';
 
-const DEFAULT_STYLE: ArticleStyle = ArticleStyle.NARRATIVE;
+const DEFAULT_STYLE: ArticleStyle = PUBLIC_DEFAULT_ARTICLE_STYLE;
 
 function parseStyle(raw: string | null | undefined): ArticleStyle | null {
   if (raw == null) {
@@ -82,25 +83,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     select: { content: true, style: true, language: true, generated_at: true },
   } as const;
 
-  // Require `content != null` on every lookup: a READY-with-null-content
-  // row isn't servable (see the private article GET for how those can
-  // arise), so it must not shadow a sibling row that does have content
-  // during the share-language fallback below.
+  // `publicArticleWhere` requires `content != null` on every lookup so a
+  // READY-with-null-content row can't shadow a sibling that has content.
   const findByLanguage = (language: string | null) =>
     prisma.article.findFirst({
-      where: {
-        transcript_id: transcript.id,
-        style,
-        language,
-        status: 'READY',
-        content: { not: null },
-      },
+      where: publicArticleWhere(transcript.id, style, language),
       ...fields,
     });
 
   const article = await resolveShareRow(requested, findByLanguage, () =>
     prisma.article.findFirst({
-      where: { transcript_id: transcript.id, style, status: 'READY', content: { not: null } },
+      where: publicArticleWhere(transcript.id, style),
       orderBy: { generated_at: 'asc' },
       ...fields,
     })

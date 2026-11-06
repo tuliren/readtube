@@ -6,6 +6,8 @@ import Features from '@/components/Features';
 import Hero from '@/components/Hero';
 import Pricing from '@/components/Pricing';
 import { DESCRIPTION, FULL_WEBSITE_URL, TITLE } from '@/constants';
+import { serializeJsonLd } from '@/lib/seo/jsonLd';
+import { ORGANIZATION_ID, organizationJsonLd } from '@/lib/seo/organization';
 
 // Canonical must be set per page, never in a shared layout: layout
 // metadata is inherited by every child page that doesn't override it,
@@ -34,20 +36,14 @@ const structuredData = {
         priceCurrency: 'USD',
       },
     },
-    {
-      '@type': 'Organization',
-      '@id': `${FULL_WEBSITE_URL}/#organization`,
-      name: TITLE,
-      url: FULL_WEBSITE_URL,
-      logo: `${FULL_WEBSITE_URL}/android-chrome-512x512.png`,
-    },
+    organizationJsonLd,
     {
       '@type': 'WebSite',
       '@id': `${FULL_WEBSITE_URL}/#website`,
       url: FULL_WEBSITE_URL,
       name: TITLE,
       description: DESCRIPTION,
-      publisher: { '@id': `${FULL_WEBSITE_URL}/#organization` },
+      publisher: { '@id': ORGANIZATION_ID },
       inLanguage: 'en-US',
     },
   ],
@@ -58,7 +54,7 @@ export default function Home() {
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(structuredData) }}
       />
       <Hero />
       <Features />

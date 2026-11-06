@@ -12,7 +12,7 @@ import { buildVideoSitemapEntries, querySitemapVideos } from '@/lib/sitemap/publ
 export const dynamic = 'force-static';
 
 /**
- * Static marketing/legal pages plus the public video reader pages
+ * Static marketing/legal/info pages plus the public video reader pages
  * (/p/videos/[videoId]) that actually resolve — i.e. videos whose
  * latest transcript has READY AI content. Video entries are
  * newest-first and capped; see lib/sitemap/publicVideoSitemap.ts.
@@ -36,6 +36,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   );
   return [
     { url: FULL_WEBSITE_URL },
+    { url: `${FULL_WEBSITE_URL}/about` },
+    { url: `${FULL_WEBSITE_URL}/contact` },
     { url: `${FULL_WEBSITE_URL}/terms` },
     { url: `${FULL_WEBSITE_URL}/privacy` },
     ...videoEntries,

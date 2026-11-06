@@ -5,6 +5,25 @@ import { Container } from '@/components/Container';
 export const ARTICLE_LINK =
   'https://www.humanities.mcmaster.ca/~bertrand/misc.html#:~:text=Three%20passions%2C%20simple%20but%20overwhelmingly%20strong%2C%20have%20governed%20my%20life';
 
+const FOOTER_LINKS: { href: string; label: string }[] = [
+  { href: '/about', label: 'About' },
+  { href: '/contact', label: 'Contact' },
+  { href: '/terms', label: 'Terms of Service' },
+  { href: '/privacy', label: 'Privacy Policy' },
+];
+
+function FooterLinks({ className }: { className: string }) {
+  return (
+    <nav aria-label="Footer" className={className}>
+      {FOOTER_LINKS.map(({ href, label }) => (
+        <Link key={href} href={href} className="underline">
+          {label}
+        </Link>
+      ))}
+    </nav>
+  );
+}
+
 interface Props {
   /** Tighter top/bottom padding for non-marketing pages. The marketing
    *  layout keeps the roomy default; everywhere else the footer is just
@@ -26,14 +45,7 @@ export default function Footer({ compact = false }: Props) {
               Copyright &copy; {new Date().getFullYear()} Starfish Software LLC. All rights
               reserved.
             </p>
-            <div className="flex gap-x-6">
-              <Link href="/terms" className="group underline" aria-label="terms of service">
-                Terms of Service
-              </Link>
-              <Link href="/privacy" className="group underline" aria-label="privacy policy">
-                Privacy Policy
-              </Link>
-            </div>
+            <FooterLinks className="flex flex-wrap gap-x-6 gap-y-1" />
           </div>
         </div>
       </footer>
@@ -46,14 +58,7 @@ export default function Footer({ compact = false }: Props) {
           <p className="mt-6 break-words sm:mt-0">
             Copyright &copy; {new Date().getFullYear()} Starfish Software LLC. All rights reserved.
           </p>
-          <div className="mt-6 flex gap-x-6 sm:mt-0">
-            <Link href="/terms" className="group underline" aria-label="terms of service">
-              Terms of Service
-            </Link>
-            <Link href="/privacy" className="group underline" aria-label="privacy policy">
-              Privacy Policy
-            </Link>
-          </div>
+          <FooterLinks className="mt-6 flex flex-wrap gap-x-6 gap-y-2 sm:mt-0" />
         </div>
       </Container>
     </footer>

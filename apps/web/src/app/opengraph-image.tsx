@@ -2,11 +2,12 @@ import { ImageResponse } from 'next/og';
 
 import { Logo } from '@/components/Logo';
 import { FULL_WEBSITE_URL, TITLE } from '@/constants';
+import { DEFAULT_OG_IMAGE } from '@/lib/seo/openGraph';
 
 export const runtime = 'edge';
-export const alt = `${TITLE} — Turn YouTube subscriptions into a personal newsletter`;
-export const size = { width: 1200, height: 630 };
-export const contentType = 'image/png';
+export const alt = DEFAULT_OG_IMAGE.alt;
+export const size = { width: DEFAULT_OG_IMAGE.width, height: DEFAULT_OG_IMAGE.height };
+export const contentType = DEFAULT_OG_IMAGE.type;
 
 const HEADLINE = 'Read YouTube videos';
 const SUBTITLE =
