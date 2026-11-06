@@ -30,8 +30,8 @@ describe('buildRobotsTxt', () => {
     }
   );
 
-  it.each(['search=yes', 'ai-input=yes', 'ai-train=yes'])('signals %s', (signal) => {
-    expect(CONTENT_SIGNAL).toContain(signal);
+  it('declares the owner-approved content signals, including AI training', () => {
+    expect(CONTENT_SIGNAL).toBe('search=yes, ai-input=yes, ai-train=yes');
   });
 
   it('points crawlers at the sitemap', () => {
