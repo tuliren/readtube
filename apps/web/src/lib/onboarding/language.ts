@@ -53,12 +53,16 @@ export interface LanguageOption {
 
 /**
  * The language chips to offer for a set of suggestions: one per language
- * present, most common first, with ties broken by code so the order is
- * stable. (Not by label: labels are in many scripts, and collating
- * across scripts can differ between the server and the browser.) Suggestions whose language is unknown, or has no name to show,
- * only appear under "All".
+ * present that has a name in `names`, most common first, with ties
+ * broken by code so the order is stable. (Not by label: labels are in
+ * many scripts, and collating across scripts can differ between the
+ * server and the browser.) Suggestions whose language is unknown, or has
+ * no name to show, only appear under "All".
  */
-export function languageOptions(items: { language: string | null }[]): LanguageOption[] {
+export function languageOptions(
+  items: { language: string | null }[],
+  names: Record<string, string>
+): LanguageOption[] {
   const counts = new Map<string, number>();
   for (const item of items) {
     if (item.language == null) {
@@ -68,7 +72,7 @@ export function languageOptions(items: { language: string | null }[]): LanguageO
   }
   const options: LanguageOption[] = [];
   counts.forEach((count, code) => {
-    const label = languageDisplayName(code);
+    const label = names[code];
     if (label != null) {
       options.push({ code, label, count });
     }

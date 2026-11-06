@@ -19,25 +19,35 @@ export const MIN_DETECTION_TEXT_LENGTH = 20;
 const DETECTION_CONFUSIONS: Record<string, string> = { sco: 'en' };
 
 /**
- * Values seen in `Transcript.language` that are shaped like language
- * codes but describe the caption track instead: YouTube's `asr`
- * (auto-generated) caption kind, an `ai` marker, and the "no / mixed /
- * undetermined language" codes. Counting these as languages would give
- * the page an "asr" chip.
+ * Codes shaped like languages that describe no language: YouTube's
+ * `asr` (auto-generated) caption kind, an `ai` marker, and the "no /
+ * mixed / undetermined language" codes. Counting these as languages
+ * would give the page an "asr" chip.
  */
 const NON_LANGUAGE_CODES = new Set(['asr', 'ai', 'auto', 'und', 'mul', 'zxx']);
+
+/**
+ * A caption-kind prefix on a stored tag (`asr-en`, `ai-zh`): the track
+ * kind joined to the real language, which follows it.
+ */
+const TRACK_KIND_PREFIX = /^(asr|ai|auto)[-_]/i;
 
 /** BCP-47-shaped: a 2-3 letter primary subtag plus optional subtags. */
 const LANGUAGE_TAG_PATTERN = /^[a-z]{2,3}([-_][a-z0-9]{2,8})*$/i;
 
 /**
- * True when a stored transcript language is a usable language code.
- * Free-form values (a native name like "中文") and track-kind markers
- * are rejected so the caller falls back to text detection.
+ * The primary language of a stored `Transcript.language`, or null when
+ * it names none. A caption-kind prefix is stripped (`asr-en` → `en`);
+ * free-form values (a native name like "中文") and bare track markers
+ * give null, so the caller falls back to text detection.
  */
-export function isUsableLanguageTag(raw: string): boolean {
-  const tag = raw.trim();
-  return LANGUAGE_TAG_PATTERN.test(tag) && !NON_LANGUAGE_CODES.has(primaryLanguage(tag));
+export function transcriptTagLanguage(raw: string): string | null {
+  const tag = raw.trim().replace(TRACK_KIND_PREFIX, '');
+  if (!LANGUAGE_TAG_PATTERN.test(tag)) {
+    return null;
+  }
+  const code = primaryLanguage(tag);
+  return NON_LANGUAGE_CODES.has(code) ? null : code;
 }
 
 /**
@@ -45,7 +55,7 @@ export function isUsableLanguageTag(raw: string): boolean {
  * primary subtag (`en`, `zh`, `ja`, …), or null when we can't tell.
  *
  * Transcript languages win (unusable values skipped, see
- * {@link isUsableLanguageTag}): they come from the platform's caption
+ * {@link transcriptTagLanguage}): they come from the platform's caption
  * track or from detection over the whole transcript, both far more
  * reliable than a title. The most common one is used, so one
  * translated-caption outlier doesn't flip a channel. Ties go to the
@@ -61,10 +71,10 @@ export function resolveContentLanguage(
 ): string | null {
   const counts = new Map<string, number>();
   for (const raw of transcriptLanguages) {
-    if (raw == null || !isUsableLanguageTag(raw)) {
+    const code = raw == null ? null : transcriptTagLanguage(raw);
+    if (code == null) {
       continue;
     }
-    const code = primaryLanguage(raw.trim());
     counts.set(code, (counts.get(code) ?? 0) + 1);
   }
   let best: string | null = null;

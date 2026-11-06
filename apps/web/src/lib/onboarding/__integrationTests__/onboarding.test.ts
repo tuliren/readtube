@@ -284,9 +284,10 @@ describe('applyOnboardingSelection', () => {
       summary: GenerationStatus.READY,
     });
     const bareVideo = await createVideo(shadowId, 'apply_bare', { publishedHoursAgo: 1 });
+    const unfollowedId = await createChannel('apply_unfollowed', { followed: false });
 
     const result = await applyOnboardingSelection(global.testPrisma, NEW_USER, {
-      channelIds: [channelId, shadowId, 'missing'],
+      channelIds: [channelId, shadowId, unfollowedId, 'missing'],
       videoIds: [readyVideo, bareVideo],
     });
 
@@ -356,6 +357,7 @@ describe('loadChannelPreview', () => {
     { name: 'a channel that was never hydrated', opts: { checked: false } },
     { name: 'a channel failing to refresh', opts: { failed: true } },
     { name: 'a Bilibili channel', opts: { bilibili: true } },
+    { name: 'a channel nobody follows', opts: { followed: false } },
   ])('returns null for $name', async ({ opts }) => {
     const channelId = await createChannel('preview_bad', opts);
     expect(await loadChannelPreview(global.testPrisma, channelId)).toBeNull();

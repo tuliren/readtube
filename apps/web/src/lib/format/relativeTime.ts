@@ -1,13 +1,15 @@
 /**
- * Locale-locked absolute date used for the SSR + first-client-render
- * pass. Server and browser both format through the same `en-US`
- * template so the rendered string is byte-identical.
+ * Short absolute date ("Nov 6, 2026"), always in `en-US`. Pass
+ * `timeZone: 'UTC'` for the SSR + first-client-render pass: without a
+ * fixed zone the server (UTC) and the browser (local) can land on
+ * different days near midnight, and the markup would not match.
  */
-export function absoluteDate(dateStr: string): string {
+export function absoluteDate(dateStr: string, timeZone?: string): string {
   return new Date(dateStr).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
+    timeZone,
   });
 }
 
@@ -15,11 +17,12 @@ export function absoluteDate(dateStr: string): string {
  * Compact "3h ago" / "5d ago" label, falling back to an absolute date
  * past 30 days. Pass `now = null` during SSR and the first client
  * render (capture `Date.now()` in an effect after mount) so the server
- * and client markup match.
+ * and client markup match; that pass shows a UTC date, and the re-render
+ * after mount switches to the relative label (or a local date).
  */
 export function relativeTime(dateStr: string, now: number | null): string {
   if (now == null) {
-    return absoluteDate(dateStr);
+    return absoluteDate(dateStr, 'UTC');
   }
   const then = new Date(dateStr).getTime();
   const diffMs = now - then;

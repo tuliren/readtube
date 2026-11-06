@@ -1,6 +1,6 @@
 import type { Prisma, PrismaClient, VideoPlatformType } from '@readtube/database';
 
-import { primaryLanguage } from './language';
+import { languageDisplayName, primaryLanguage } from './language';
 import { resolveContentLanguage } from './resolveLanguage';
 import type { OnboardingSuggestions, SuggestedChannel, SuggestedVideo } from './types';
 
@@ -33,13 +33,16 @@ const VIDEO_CANDIDATE_LIMIT = VIDEO_SUGGESTION_LIMIT * 4;
 export const ONBOARDING_PLATFORM = 'YOUTUBE' satisfies VideoPlatformType;
 
 /**
- * Channels whose feed is loaded and refreshing fine: the only ones the
- * onboarding page can follow (or preview) straight from the database,
- * on the onboarding platform,
- * since a shadow or failing channel would give the user an empty feed.
+ * The channels the onboarding page offers, and so the only ones it can
+ * preview or follow: on the onboarding platform, followed by at least
+ * one user (follower-less rows are mostly shadows of single-video adds),
+ * and with a feed that is loaded and refreshing fine, since following a
+ * shadow or failing channel straight from the database would give the
+ * user an empty feed. The suggestion query applies the same rules in SQL.
  */
 export const FOLLOWABLE_CHANNEL = {
   source_type: ONBOARDING_PLATFORM,
+  subscriptions: { some: {} },
   checked_at: { not: null },
   refresh_failed_at: null,
 } satisfies Prisma.ChannelWhereInput;
@@ -68,12 +71,16 @@ export const OFFERABLE_VIDEO = {
  * onboarding page in place of their (empty) inbox.
  */
 export async function isNewUser(prisma: PrismaClient, userId: string): Promise<boolean> {
-  const [subscription, standalone, playlist] = await Promise.all([
-    prisma.userSubscription.findFirst({ where: { user_id: userId }, select: { id: true } }),
-    prisma.standaloneVideo.findFirst({ where: { user_id: userId }, select: { id: true } }),
-    prisma.playlist.findFirst({ where: { user_id: userId }, select: { id: true } }),
-  ]);
-  return subscription == null && standalone == null && playlist == null;
+  // One round trip: this runs on every inbox and library render, for
+  // established users too.
+  const [row] = await prisma.$queryRaw<[{ has_any: boolean }]>`
+    SELECT
+      EXISTS (SELECT 1 FROM "UserSubscription" WHERE "user_id" = ${userId})
+      OR EXISTS (SELECT 1 FROM "StandaloneVideo" WHERE "user_id" = ${userId})
+      OR EXISTS (SELECT 1 FROM "Playlist" WHERE "user_id" = ${userId})
+      AS has_any
+  `;
+  return !row.has_any;
 }
 
 /**
@@ -89,7 +96,17 @@ export async function loadOnboardingSuggestions(
     loadSuggestedChannels(prisma),
     loadSuggestedVideos(prisma),
   ]);
-  return { channels, videos };
+  const languageNames: Record<string, string> = {};
+  for (const item of [...channels, ...videos]) {
+    if (item.language == null || item.language in languageNames) {
+      continue;
+    }
+    const name = languageDisplayName(item.language);
+    if (name != null) {
+      languageNames[item.language] = name;
+    }
+  }
+  return { channels, videos, languageNames };
 }
 
 /**
@@ -97,16 +114,19 @@ export async function loadOnboardingSuggestions(
  * null when the regular page should render instead: the user has added
  * something, or there is nothing to suggest. Every top-level page a new
  * user can land on (the inbox, Standalone videos) shows the same
- * onboarding page through this.
+ * onboarding page through this. Pages pass the cached loader
+ * (`loadCachedOnboardingSuggestions`); the default is uncached so tests
+ * run outside Next's cache.
  */
 export async function loadNewUserSuggestions(
   prisma: PrismaClient,
-  userId: string
+  userId: string,
+  loadSuggestions: () => Promise<OnboardingSuggestions> = () => loadOnboardingSuggestions(prisma)
 ): Promise<OnboardingSuggestions | null> {
   if (!(await isNewUser(prisma, userId))) {
     return null;
   }
-  const suggestions = await loadOnboardingSuggestions(prisma);
+  const suggestions = await loadSuggestions();
   if (suggestions.channels.length === 0 && suggestions.videos.length === 0) {
     return null;
   }

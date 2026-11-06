@@ -55,7 +55,7 @@ function parseIdList(value: unknown): string[] | null {
  * fetch, unlike the Add dialog's paths).
  *
  * Ids that don't name an eligible row are skipped rather than failing
- * the whole request: only hydrated, healthy channels (the same set the
+ * the whole request: only `FOLLOWABLE_CHANNEL` channels (the same set the
  * page offers) can be followed this way, since a shadow channel would
  * subscribe the user to an empty feed; and only videos with generated
  * content can be added. Re-applying the same selection is a no-op.
@@ -96,18 +96,22 @@ export async function applyOnboardingSelection(
   ]);
 
   const newChannels = channels.filter((c) => c.subscriptions.length === 0);
-  for (const channel of newChannels) {
-    const readAt = await computeInitialReadAt(prisma, channel.id);
-    // Same initial watermark as the Add dialog. Upsert so a concurrent
-    // follow from another tab is a no-op instead of a unique violation.
-    await prisma.userSubscription.upsert({
-      where: {
-        subscription_unique_user_channel: { user_id: userId, channel_id: channel.id },
-      },
-      create: { user_id: userId, channel_id: channel.id, read_at: readAt },
-      update: {},
-    });
-  }
+  // Channels are independent, so follow them in parallel rather than
+  // two round trips per channel in series.
+  await Promise.all(
+    newChannels.map(async (channel) => {
+      const readAt = await computeInitialReadAt(prisma, channel.id);
+      // Same initial watermark as the Add dialog. Upsert so a concurrent
+      // follow from another tab is a no-op instead of a unique violation.
+      await prisma.userSubscription.upsert({
+        where: {
+          subscription_unique_user_channel: { user_id: userId, channel_id: channel.id },
+        },
+        create: { user_id: userId, channel_id: channel.id, read_at: readAt },
+        update: {},
+      });
+    })
+  );
 
   const newVideos = videos.filter((v) => v.standalone.length === 0);
   if (newVideos.length > 0) {

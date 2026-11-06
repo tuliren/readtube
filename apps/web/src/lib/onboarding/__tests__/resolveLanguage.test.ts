@@ -1,8 +1,8 @@
 import { detectLanguage } from '@/lib/language/detect';
 import {
   MIN_DETECTION_TEXT_LENGTH,
-  isUsableLanguageTag,
   resolveContentLanguage,
+  transcriptTagLanguage,
 } from '@/lib/onboarding/resolveLanguage';
 
 // The real detector pulls in ESM-only franc; these tests cover the
@@ -32,6 +32,11 @@ describe('resolveContentLanguage', () => {
     {
       name: 'track markers and free-form names skipped',
       languages: ['asr', 'asr', 'ai', '中文', 'en'],
+      expected: 'en',
+    },
+    {
+      name: 'the language behind a caption-kind prefix',
+      languages: ['asr-en', 'ai-zh', 'asr-en'],
       expected: 'en',
     },
   ])('uses $name', ({ languages, expected }) => {
@@ -66,19 +71,21 @@ describe('resolveContentLanguage', () => {
   });
 });
 
-describe('isUsableLanguageTag', () => {
+describe('transcriptTagLanguage', () => {
   it.each([
-    { tag: 'en', expected: true },
-    { tag: 'zh-Hans', expected: true },
-    { tag: 'pt_BR', expected: true },
-    { tag: ' fr ', expected: true },
-    { tag: 'asr', expected: false },
-    { tag: 'ai', expected: false },
-    { tag: 'und', expected: false },
-    { tag: '中文', expected: false },
-    { tag: 'english', expected: false },
-    { tag: '', expected: false },
-  ])('returns $expected for "$tag"', ({ tag, expected }) => {
-    expect(isUsableLanguageTag(tag)).toBe(expected);
+    { tag: 'en', expected: 'en' },
+    { tag: 'zh-Hans', expected: 'zh' },
+    { tag: 'pt_BR', expected: 'pt' },
+    { tag: ' fr ', expected: 'fr' },
+    { tag: 'asr-en', expected: 'en' },
+    { tag: 'ai-zh', expected: 'zh' },
+    { tag: 'asr', expected: null },
+    { tag: 'ai', expected: null },
+    { tag: 'und', expected: null },
+    { tag: '中文', expected: null },
+    { tag: 'english', expected: null },
+    { tag: '', expected: null },
+  ])('reads "$tag" as $expected', ({ tag, expected }) => {
+    expect(transcriptTagLanguage(tag)).toBe(expected);
   });
 });

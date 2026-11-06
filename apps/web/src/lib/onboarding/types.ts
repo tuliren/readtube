@@ -39,6 +39,12 @@ export interface SuggestedVideo {
 export interface OnboardingSuggestions {
   channels: SuggestedChannel[];
   videos: SuggestedVideo[];
+  /**
+   * Chip label per language code present above, named in that language
+   * (`zh` → "中文"). Resolved on the server so the server and browser
+   * render the same text; a code with no name is left out.
+   */
+  languageNames: Record<string, string>;
 }
 
 /** Body of `POST /api/onboarding`. */

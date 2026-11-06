@@ -37,14 +37,19 @@ describe('languageDisplayName', () => {
 });
 
 describe('languageOptions', () => {
+  const NAMES = { en: 'English', ja: '日本語', zh: '中文' };
+
   it('counts each language, most common first then by code, skipping unknowns', () => {
-    const options = languageOptions([
-      { language: 'zh' },
-      { language: 'en' },
-      { language: null },
-      { language: 'en' },
-      { language: 'ja' },
-    ]);
+    const options = languageOptions(
+      [
+        { language: 'zh' },
+        { language: 'en' },
+        { language: null },
+        { language: 'en' },
+        { language: 'ja' },
+      ],
+      NAMES
+    );
     expect(options).toEqual([
       { code: 'en', label: 'English', count: 2 },
       { code: 'ja', label: '日本語', count: 1 },
@@ -56,7 +61,7 @@ describe('languageOptions', () => {
     { name: 'unknown', language: null },
     { name: 'a code with no name', language: 'xx' },
   ])('offers no chip for $name', ({ language }) => {
-    expect(languageOptions([{ language }])).toEqual([]);
+    expect(languageOptions([{ language }], NAMES)).toEqual([]);
   });
 });
 

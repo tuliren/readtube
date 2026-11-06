@@ -56,6 +56,9 @@ const videos: SuggestedVideo[] = Array.from({ length: 10 }, (_, i) => ({
   language: i === 9 ? 'zh' : 'en',
 }));
 
+/** What the server resolves for the fixture languages. */
+const LANGUAGE_NAMES = { en: 'English', ja: '日本語', zh: '中文' };
+
 const meta = {
   title: 'Onboarding/New user page',
   component: NewUserOnboardingView,
@@ -71,7 +74,7 @@ const meta = {
     },
   },
   args: {
-    suggestions: { channels, videos },
+    suggestions: { channels, videos, languageNames: LANGUAGE_NAMES },
     onAdd: fn(),
     onSubmit: fn(),
     submitting: false,
@@ -99,10 +102,11 @@ export const NoEnglish: Story = {
     suggestions: {
       channels: channels.filter((c) => c.language !== 'en'),
       videos: videos.filter((v) => v.language !== 'en'),
+      languageNames: LANGUAGE_NAMES,
     },
   },
 };
 
 export const ChannelsOnly: Story = {
-  args: { suggestions: { channels, videos: [] } },
+  args: { suggestions: { channels, videos: [], languageNames: LANGUAGE_NAMES } },
 };

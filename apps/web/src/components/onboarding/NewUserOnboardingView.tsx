@@ -47,7 +47,8 @@ export default function NewUserOnboardingView({
   submitting,
 }: NewUserOnboardingViewProps) {
   const options = useMemo(
-    () => languageOptions([...suggestions.channels, ...suggestions.videos]),
+    () =>
+      languageOptions([...suggestions.channels, ...suggestions.videos], suggestions.languageNames),
     [suggestions]
   );
   const [language, setLanguage] = useState(() =>
