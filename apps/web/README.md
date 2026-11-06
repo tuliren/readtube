@@ -15,6 +15,18 @@ The `production` branch is automatically deployed to the `production` environmen
 
 The `production` branch can be fast-forwarded to the `main` branch by running the `deploy-main.yaml` GitHub action.
 
+## Public routes for crawlers and agents
+
+These are unauthenticated and listed in `src/proxy.ts`'s public routes. See "Agent-readable surfaces" in `DESIGN.md`.
+
+| Route                         | Serves                                                                                                                                                         |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/sitemap.xml`, `/robots.txt` | Sitemap of marketing, legal, and public video pages; robots rules                                                                                              |
+| `/index.md`                   | Homepage as markdown (also `/` with `Accept: text/markdown`)                                                                                                   |
+| `/p/videos/:videoId.md`       | Public video summary and article as markdown, honors `?language=` (also `/p/videos/:videoId` with `Accept: text/markdown`); rewritten to `/md/videos/:videoId` |
+| `/llms.txt`                   | llmstxt.org index: product, legal, and recent public videos                                                                                                    |
+| `/llms-full.txt`              | Homepage markdown plus terms and privacy policy                                                                                                                |
+
 ## Testing
 
 ### Unit tests

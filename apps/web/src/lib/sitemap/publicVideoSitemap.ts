@@ -2,6 +2,7 @@ import type { PrismaClient } from '@readtube/database';
 import type { MetadataRoute } from 'next';
 
 import { FULL_WEBSITE_URL } from '@/constants';
+import { publicVideoPath } from '@/lib/urls/publicVideoHref';
 
 /**
  * Cap on public video entries in the sitemap, applied both as the
@@ -17,6 +18,8 @@ export const PUBLIC_VIDEO_SITEMAP_CAP = 10_000;
 /** Row shape produced by {@link querySitemapVideos}. */
 export interface SitemapVideoRow {
   source_id: string;
+  title: string;
+  channel: { name: string };
   transcripts: {
     summaries: { generated_at: Date }[];
     articles: { generated_at: Date }[];
@@ -48,7 +51,10 @@ export interface SitemapVideoRow {
  * ORDER BY + LIMIT from the PK index with early termination if the
  * cap ever binds on a much larger table.
  */
-export async function querySitemapVideos(prisma: PrismaClient): Promise<SitemapVideoRow[]> {
+export async function querySitemapVideos(
+  prisma: PrismaClient,
+  { take = PUBLIC_VIDEO_SITEMAP_CAP }: { take?: number } = {}
+): Promise<SitemapVideoRow[]> {
   return prisma.video.findMany({
     where: {
       transcripts: {
@@ -61,9 +67,11 @@ export async function querySitemapVideos(prisma: PrismaClient): Promise<SitemapV
       },
     },
     orderBy: { id: 'desc' },
-    take: PUBLIC_VIDEO_SITEMAP_CAP,
+    take,
     select: {
       source_id: true,
+      title: true,
+      channel: { select: { name: true } },
       transcripts: {
         orderBy: { created_at: 'desc' },
         take: 1,
@@ -74,6 +82,25 @@ export async function querySitemapVideos(prisma: PrismaClient): Promise<SitemapV
       },
     },
   });
+}
+
+/**
+ * Newest READY generation timestamp on a row's latest transcript, or
+ * null when that transcript has no READY summary or article. Null
+ * mirrors the public page's 404 rule, so callers skip those rows.
+ */
+export function latestPublicGenerationAt(video: SitemapVideoRow): Date | null {
+  const latest = video.transcripts[0];
+  if (latest == null) {
+    return null;
+  }
+  const generatedAts = [...latest.summaries, ...latest.articles].map((row) =>
+    row.generated_at.getTime()
+  );
+  if (generatedAts.length === 0) {
+    return null;
+  }
+  return new Date(Math.max(...generatedAts));
 }
 
 /**
@@ -90,19 +117,13 @@ export function buildVideoSitemapEntries(videos: SitemapVideoRow[]): MetadataRou
     if (entries.length >= PUBLIC_VIDEO_SITEMAP_CAP) {
       break;
     }
-    const latest = video.transcripts[0];
-    if (latest == null) {
-      continue;
-    }
-    const generatedAts = [...latest.summaries, ...latest.articles].map((row) =>
-      row.generated_at.getTime()
-    );
-    if (generatedAts.length === 0) {
+    const lastModified = latestPublicGenerationAt(video);
+    if (lastModified == null) {
       continue;
     }
     entries.push({
-      url: `${FULL_WEBSITE_URL}/p/videos/${encodeURIComponent(video.source_id)}`,
-      lastModified: new Date(Math.max(...generatedAts)),
+      url: `${FULL_WEBSITE_URL}${publicVideoPath(video.source_id)}`,
+      lastModified,
     });
   }
   return entries;

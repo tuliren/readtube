@@ -21,7 +21,12 @@ function row(
   if (older != null) {
     transcripts.push(toTranscript(older));
   }
-  return { source_id: sourceId, transcripts };
+  return {
+    source_id: sourceId,
+    title: `Video ${sourceId}`,
+    channel: { name: 'Chan' },
+    transcripts,
+  };
 }
 
 const T1 = new Date('2026-01-01T00:00:00Z');

@@ -26,6 +26,13 @@ const isPublicRoute = createRouteMatcher([
   // sign-in redirect instead of the sitemap.
   '/sitemap.xml',
   '/robots.txt',
+  // Agent-readable surfaces. Same reason: .md/.txt aren't excluded by
+  // the matcher. /md(.*) is the rewrite target for video markdown
+  // (/p/videos/:id.md is already public via /p/(.*)).
+  '/index.md',
+  '/md(.*)',
+  '/llms.txt',
+  '/llms-full.txt',
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
