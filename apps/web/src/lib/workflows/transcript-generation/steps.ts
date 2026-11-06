@@ -42,6 +42,8 @@ import {
   revertTranscriptGeneration,
 } from '@/lib/workflows/runRegistry';
 import { startAutoSummary } from '@/lib/workflows/summary/autoStart';
+import { startEnglishSummaryFollowUp } from '@/lib/workflows/summary/englishFollowUp';
+import type { FullSummaryRunInput } from '@/lib/workflows/summary/fullRun';
 import { buildTranscriptGenerationPrompt } from '@/lib/workflows/transcript-generation/prompt';
 
 export interface TranscriptGenerationInput {
@@ -409,8 +411,9 @@ export async function startSummaryGenerationStep(
 ): Promise<void> {
   'use step';
 
+  let summaryInput: FullSummaryRunInput | null = null;
   try {
-    await startAutoSummary(prisma, {
+    summaryInput = await startAutoSummary(prisma, {
       userId: input.userId,
       videoDbId: input.videoDbId,
       transcriptId,
@@ -423,6 +426,14 @@ export async function startSummaryGenerationStep(
   }
   const { workflowRunId } = getWorkflowMetadata();
   await releaseTranscriptGeneration(prisma, input.videoDbId, workflowRunId);
+
+  // Queued after the release so the reader's spinner isn't held while
+  // the English sibling starts. `startAutoSummary` returns the input
+  // even when it found the slot already covered, so a step retry that
+  // died after the release still queues it. Idempotent, never throws.
+  if (summaryInput != null) {
+    await startEnglishSummaryFollowUp(prisma, summaryInput);
+  }
 }
 
 /**

@@ -6039,6 +6039,7 @@ __metadata:
     "@types/react": "npm:^18.3.28"
     "@types/react-dom": "npm:^18.3.7"
     "@vercel/analytics": "npm:^2.0.1"
+    "@vercel/functions": "npm:^3.8.0"
     ai: "npm:^7.0.150"
     class-variance-authority: "npm:^0.7.1"
     clsx: "npm:^2.1.1"

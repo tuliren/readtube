@@ -1,7 +1,8 @@
 import { auth } from '@clerk/nextjs/server';
 import { UserRequestOutcome, prisma } from '@readtube/database';
+import { waitUntil } from '@vercel/functions';
 import { NextRequest, NextResponse } from 'next/server';
-import { getRun, start } from 'workflow/api';
+import { start } from 'workflow/api';
 
 import { DEFAULT_AI_MODEL } from '@/constants';
 import { findOrCloneSummary, resolveTranscriptLanguage } from '@/lib/language/cache';
@@ -11,13 +12,21 @@ import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
 import { recordSummaryRequest } from '@/lib/usage/userRequest';
 import { VercelEnv, getVercelEnv } from '@/lib/vercelEnv';
 import { videoReachableByUser } from '@/lib/videos/marks';
-import { claimSummaryRun, findActiveSummaryRun } from '@/lib/workflows/runRegistry';
+import { findActiveSummaryRun } from '@/lib/workflows/runRegistry';
+import { startAndClaimRun } from '@/lib/workflows/startAndClaimRun';
 import { NDJSON_HEADERS, ndjsonResponseFromRun } from '@/lib/workflows/streamResponse';
 import { type SummaryStreamEvent, summaryWorkflow } from '@/lib/workflows/summary';
 import {
   type ExistingSummaryFields,
   buildSummaryPrompt,
 } from '@/lib/workflows/summary/buildPrompt';
+import { isCompleteSummary } from '@/lib/workflows/summary/completeness';
+import { startEnglishSummaryFollowUp } from '@/lib/workflows/summary/englishFollowUp';
+import {
+  type FullSummaryRunInput,
+  claimFullSummaryRun,
+  startFullSummaryWorkflow,
+} from '@/lib/workflows/summary/fullRun';
 import {
   SUMMARY_FIELDS,
   SUMMARY_PROMPT_VERSION,
@@ -290,7 +299,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   //
   // Cache hits don't write a UserRequest — no LLM cost is incurred.
   const cached = isFullGenerate ? await findOrCloneSummary(prisma, transcript.id, target) : null;
-  if (cached != null && cached.headline != null && cached.short != null && cached.full != null) {
+  if (isCompleteSummary(cached)) {
     const shortDoc = parseMarkdownDocument(cached.short);
     const fullDoc = parseMarkdownDocument(cached.full);
     const cachedEncoder = new TextEncoder();
@@ -329,39 +338,66 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const sourceLanguage =
     target == null ? await resolveTranscriptLanguage(prisma, transcript.id) : null;
 
-  // Insert the SUMMARY UserRequest *before* starting the workflow so
-  // its id can be threaded into the workflow input. The persist step
-  // backfills `usage` and `completed_at`; the revert step on failure
-  // flips outcome=FAILED. We pass userRequestId only for full-generate
-  // runs because per-field regen is a fire-and-forget click that
-  // doesn't need its tokens attributed back to a synchronous request
-  // row (and the workflow currently writes only one row's worth of
-  // usage; mixing them across regen runs would clobber prior data).
-  const userRequest = isFullGenerate ? await recordSafe(UserRequestOutcome.GENERATED) : null;
-
-  // Per-field regenerate: feed the stored fields that are NOT being
-  // regenerated into the prompt as context. The FULL SUMMARY rules
-  // calibrate length against the short summary, so a full-only regen
-  // must see the existing short — without it the model has no anchor
-  // and collapses to digest length.
-  let existingFields: ExistingSummaryFields | undefined;
-  if (!isFullGenerate) {
-    const existingRow = await prisma.summary.findFirst({
-      where: { transcript_id: transcript.id, language: target },
-      select: { short: true, full: true },
+  if (isFullGenerate) {
+    const fullInput: FullSummaryRunInput = {
+      transcriptId: transcript.id,
+      language: target,
+      sourceLanguage,
+      transcriptText,
+      videoTitle: video.title,
+      channelName: video.channel.name,
+    };
+    // Insert the SUMMARY UserRequest *before* starting the workflow so
+    // its id can be threaded into the workflow input. The persist step
+    // backfills `usage` and `completed_at`; the revert step on failure
+    // flips outcome=FAILED.
+    const userRequest = await recordSafe(UserRequestOutcome.GENERATED);
+    // Run generation as a Vercel Workflow so it survives the request
+    // lifecycle (see the article route for the full rationale), and
+    // claim the slot so future GETs / Generate clicks tap in. On a
+    // lost claim race our run is cancelled, its audit row deleted (no
+    // LLM cost is incurred; the winner's row owns attribution), and we
+    // stream the winner instead.
+    const claim = await startAndClaimRun(prisma, {
+      logPrefix: `[summary/POST] video ${id}:`,
+      userRequest,
+      start: () => startFullSummaryWorkflow(fullInput, userRequest?.id ?? null),
+      claim: (runId) => claimFullSummaryRun(prisma, fullInput, runId),
     });
-    if (existingRow != null) {
-      existingFields = {
-        short:
-          existingRow.short != null ? parseMarkdownDocument(existingRow.short).content : undefined,
-        full:
-          existingRow.full != null ? parseMarkdownDocument(existingRow.full).content : undefined,
-      };
+    if (claim.weWon) {
+      // Non-English content gets an English sibling so the public
+      // share page's English default has something to show.
+      // Best-effort and never throws. Not awaited so the user's stream
+      // isn't held behind it; waitUntil keeps the function alive until
+      // it settles.
+      waitUntil(startEnglishSummaryFollowUp(prisma, fullInput));
     }
+    return ndjsonResponseFromRun<SummaryStreamEvent>(claim.winningRunId);
   }
 
-  // Run generation as a Vercel Workflow so it survives the request
-  // lifecycle — see the article route for the full rationale.
+  // Per-field regenerate: a fire-and-forget click that doesn't claim
+  // the slot (it writes specific fields, not a fresh generation a
+  // reader would want to subscribe to), records no UserRequest (the
+  // workflow writes only one row's worth of usage, so mixing regen
+  // runs in would clobber prior data), and starts no English sibling.
+  //
+  // Feed the stored fields that are NOT being regenerated into the
+  // prompt as context. The FULL SUMMARY rules calibrate length against
+  // the short summary, so a full-only regen must see the existing
+  // short — without it the model has no anchor and collapses to
+  // digest length.
+  let existingFields: ExistingSummaryFields | undefined;
+  const existingRow = await prisma.summary.findFirst({
+    where: { transcript_id: transcript.id, language: target },
+    select: { short: true, full: true },
+  });
+  if (existingRow != null) {
+    existingFields = {
+      short:
+        existingRow.short != null ? parseMarkdownDocument(existingRow.short).content : undefined,
+      full: existingRow.full != null ? parseMarkdownDocument(existingRow.full).content : undefined,
+    };
+  }
   const run = await start(summaryWorkflow, [
     {
       fieldsToGenerate,
@@ -376,59 +412,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       ),
       transcriptId: transcript.id,
       language: target,
-      userRequestId: userRequest?.id ?? null,
+      userRequestId: null,
     },
   ]);
-
-  // Claim the row for this slot so future GETs / regen clicks tap
-  // in. Only claim for full-generate runs — per-field regenerate
-  // writes to specific fields and doesn't represent a "fresh
-  // generation in progress" the user would want to subscribe to
-  // (the click is a fire-and-forget action). On a concurrent claim
-  // race we cancel our own start and stream the winner instead.
-  if (isFullGenerate) {
-    const claim = await claimSummaryRun(
-      prisma,
-      transcript.id,
-      target,
-      run.runId,
-      SUMMARY_PROMPT_VERSION,
-      DEFAULT_AI_MODEL
-    );
-    if (!claim.weWon) {
-      console.info(
-        `[summary/POST] Lost claim race; cancelling ${run.runId} and tapping into ${claim.winningRunId}`
-      );
-      try {
-        await getRun(run.runId).cancel();
-      } catch {
-        // ignore — the stray run will expire on its own
-      }
-      // Delete the GENERATED row we just inserted — the workflow we
-      // started is being canceled, so no LLM cost is incurred against
-      // this user. Tap-ins don't get an audit row (the original
-      // generator's row owns attribution).
-      if (userRequest != null) {
-        try {
-          await prisma.userRequest.delete({ where: { id: userRequest.id } });
-        } catch (err) {
-          console.error('[summary/POST] failed to delete claim-race UserRequest:', err);
-        }
-      }
-      return ndjsonResponseFromRun<SummaryStreamEvent>(claim.winningRunId);
-    }
-    // We won — stamp our own runId on the audit row for trace.
-    if (userRequest != null) {
-      try {
-        await prisma.userRequest.update({
-          where: { id: userRequest.id },
-          data: { workflow_id: run.runId },
-        });
-      } catch (err) {
-        console.error('[summary/POST] failed to stamp workflow_id on UserRequest:', err);
-      }
-    }
-  }
-
   return ndjsonResponseFromRun<SummaryStreamEvent>(run.runId);
 }

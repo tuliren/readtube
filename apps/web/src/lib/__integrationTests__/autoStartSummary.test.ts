@@ -197,3 +197,49 @@ describe('startAutoSummary', () => {
     expect(summary.workflow_id).toBe('run_someone_else');
   });
 });
+
+describe('startAutoSummary return value', () => {
+  const TRANSCRIPT_TEXT =
+    'The quick brown fox jumps over the lazy dog. This sentence exists to give franc some text.';
+
+  it.each([
+    { label: 'a target run', preferred: 'zh-Hans', language: 'zh-Hans', sourceLanguage: null },
+    { label: 'an Original run', preferred: null, language: null, sourceLanguage: 'en' },
+  ])('returns the run input for $label', async ({ preferred, language, sourceLanguage }) => {
+    await global.testPrisma.user.update({
+      where: { source_id: TEST_USER_ID },
+      data: { preferred_language: preferred },
+    });
+    const { videoId, transcriptId } = await seed();
+
+    const input = await startAutoSummary(global.testPrisma, {
+      userId: TEST_USER_ID,
+      videoDbId: videoId,
+      transcriptId,
+    });
+
+    expect(input).toEqual({
+      transcriptId,
+      language,
+      sourceLanguage,
+      transcriptText: TRANSCRIPT_TEXT,
+      videoTitle: 'Auto summary test video',
+      channelName: 'Auto summary channel',
+    });
+    expect(mockStart).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns the run input when the slot is already covered', async () => {
+    const { videoId, transcriptId } = await seed({ summaryStatus: GenerationStatus.READY });
+
+    const input = await startAutoSummary(global.testPrisma, {
+      userId: TEST_USER_ID,
+      videoDbId: videoId,
+      transcriptId,
+    });
+
+    // The English follow-up still needs it on a retried step.
+    expect(input?.transcriptId).toBe(transcriptId);
+    expect(mockStart).not.toHaveBeenCalled();
+  });
+});

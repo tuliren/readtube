@@ -1,14 +1,17 @@
-import { GenerationStatus, type PrismaClient, UserRequestOutcome } from '@readtube/database';
-import { getRun, start } from 'workflow/api';
+import { type PrismaClient, UserRequestOutcome } from '@readtube/database';
 
 import { DEFAULT_AI_MODEL } from '@/constants';
 import { resolveTranscriptLanguage } from '@/lib/language/cache';
 import { resolveTargetLanguage } from '@/lib/language/resolve';
 import { recordSummaryRequest } from '@/lib/usage/userRequest';
-import { claimSummaryRun, findActiveSummaryRun } from '@/lib/workflows/runRegistry';
-import { summaryWorkflow } from '@/lib/workflows/summary';
-import { buildSummaryPrompt } from '@/lib/workflows/summary/buildPrompt';
-import { SUMMARY_FIELDS, SUMMARY_PROMPT_VERSION } from '@/lib/workflows/summary/steps';
+import { startAndClaimRun } from '@/lib/workflows/startAndClaimRun';
+import {
+  type FullSummaryRunInput,
+  claimFullSummaryRun,
+  isSummarySlotCovered,
+  startFullSummaryWorkflow,
+} from '@/lib/workflows/summary/fullRun';
+import { SUMMARY_PROMPT_VERSION } from '@/lib/workflows/summary/steps';
 
 interface TranscriptSegmentShape {
   text: string;
@@ -21,12 +24,16 @@ interface TranscriptSegmentShape {
  * "Generate transcript" comes back to a summary, not another button.
  *
  * A trimmed-down mirror of the summary POST route's full-generate
- * path with the same registry semantics (dedup via
- * findActiveSummaryRun, claim with cancel-on-lost-race, pending
- * UserRequest for cost attribution). Skipped silently when a READY
- * summary already exists for the slot or another run owns it. The
- * target language is the user's default, exactly what the Generate
- * button would use.
+ * path with the same registry semantics (dedup and cache via
+ * isSummarySlotCovered, claim with cancel-on-lost-race, pending
+ * UserRequest for cost attribution). Skipped silently when the slot
+ * is already covered. The target language is the user's default,
+ * exactly what the Generate button would use.
+ *
+ * Returns the slot's run input whether or not this call started the
+ * run (null only when the transcript is gone), so the caller can queue
+ * the English follow-up even on a retry that finds its own earlier run
+ * active. The follow-up is idempotent, so a repeat queue is harmless.
  *
  * Never throws for "nothing to do" cases; callers are expected to
  * treat any thrown error as non-fatal (the transcript is already
@@ -35,22 +42,9 @@ interface TranscriptSegmentShape {
 export async function startAutoSummary(
   prisma: PrismaClient,
   params: { userId: string; videoDbId: string; transcriptId: string }
-): Promise<void> {
+): Promise<FullSummaryRunInput | null> {
   const { userId, videoDbId, transcriptId } = params;
   const target = await resolveTargetLanguage(prisma, userId, null);
-
-  // Dedup and cache guards, mirroring the route's full-generate path.
-  const activeRun = await findActiveSummaryRun(prisma, transcriptId, target);
-  if (activeRun != null) {
-    return;
-  }
-  const existing = await prisma.summary.findFirst({
-    where: { transcript_id: transcriptId, language: target, status: GenerationStatus.READY },
-    select: { id: true },
-  });
-  if (existing != null) {
-    return;
-  }
 
   const transcript = await prisma.transcript.findUnique({
     where: { id: transcriptId },
@@ -60,13 +54,21 @@ export async function startAutoSummary(
     },
   });
   if (transcript == null) {
-    return;
+    return null;
   }
   const segments = JSON.parse(transcript.text) as TranscriptSegmentShape[];
-  const transcriptText = segments.map((s) => s.text).join(' ');
+  const input: FullSummaryRunInput = {
+    transcriptId,
+    language: target,
+    sourceLanguage: target == null ? await resolveTranscriptLanguage(prisma, transcriptId) : null,
+    transcriptText: segments.map((s) => s.text).join(' '),
+    videoTitle: transcript.video.title,
+    channelName: transcript.video.channel.name,
+  };
 
-  const sourceLanguage =
-    target == null ? await resolveTranscriptLanguage(prisma, transcriptId) : null;
+  if (await isSummarySlotCovered(prisma, transcriptId, target)) {
+    return input;
+  }
 
   // Pending audit row for cost attribution, backfilled by the summary
   // workflow's persist/revert steps. Best-effort like the route's
@@ -85,62 +87,16 @@ export async function startAutoSummary(
     console.error('[startAutoSummary] failed to record UserRequest:', err);
   }
 
-  const run = await start(summaryWorkflow, [
-    {
-      fieldsToGenerate: [...SUMMARY_FIELDS],
-      prompt: buildSummaryPrompt(
-        SUMMARY_FIELDS,
-        target,
-        sourceLanguage,
-        transcript.video.title,
-        transcript.video.channel.name,
-        transcriptText,
-        undefined
-      ),
-      transcriptId,
-      language: target,
-      userRequestId: userRequest?.id ?? null,
-    },
-  ]);
-
-  const claim = await claimSummaryRun(
-    prisma,
-    transcriptId,
-    target,
-    run.runId,
-    SUMMARY_PROMPT_VERSION,
-    DEFAULT_AI_MODEL
-  );
-  if (!claim.weWon) {
+  const claim = await startAndClaimRun(prisma, {
+    logPrefix: `[startAutoSummary] transcript ${transcriptId}:`,
+    userRequest,
+    start: () => startFullSummaryWorkflow(input, userRequest?.id ?? null),
+    claim: (newRunId) => claimFullSummaryRun(prisma, input, newRunId),
+  });
+  if (claim.weWon) {
     console.info(
-      `[startAutoSummary] Lost claim race for transcript ${transcriptId}; cancelling ${run.runId}`
+      `[startAutoSummary] Started summary run ${claim.winningRunId} (language ${target ?? 'original'}) for transcript ${transcriptId}`
     );
-    try {
-      await getRun(run.runId).cancel();
-    } catch {
-      // ignore — the stray run will expire on its own
-    }
-    if (userRequest != null) {
-      try {
-        await prisma.userRequest.delete({ where: { id: userRequest.id } });
-      } catch (err) {
-        console.error('[startAutoSummary] failed to delete claim-race UserRequest:', err);
-      }
-    }
-    return;
   }
-
-  if (userRequest != null) {
-    try {
-      await prisma.userRequest.update({
-        where: { id: userRequest.id },
-        data: { workflow_id: run.runId },
-      });
-    } catch (err) {
-      console.error('[startAutoSummary] failed to stamp workflow_id on UserRequest:', err);
-    }
-  }
-  console.info(
-    `[startAutoSummary] Started summary run ${run.runId} for transcript ${transcriptId}`
-  );
+  return input;
 }

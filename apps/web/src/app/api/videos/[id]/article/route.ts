@@ -1,7 +1,8 @@
 import { auth } from '@clerk/nextjs/server';
 import { ArticleStyle, UserRequestOutcome, prisma } from '@readtube/database';
+import { waitUntil } from '@vercel/functions';
 import { NextRequest, NextResponse } from 'next/server';
-import { getRun, start } from 'workflow/api';
+import { start } from 'workflow/api';
 
 import { DEFAULT_AI_MODEL } from '@/constants';
 import { findOrCloneArticle, resolveTranscriptLanguage } from '@/lib/language/cache';
@@ -11,9 +12,16 @@ import { ensureTranscript } from '@/lib/transcripts/ensureTranscript';
 import { recordArticleRequest } from '@/lib/usage/userRequest';
 import { VercelEnv, getVercelEnv } from '@/lib/vercelEnv';
 import { videoReachableByUser } from '@/lib/videos/marks';
-import { type ArticleStreamEvent, articleWorkflow } from '@/lib/workflows/article';
+import {
+  type ArticleStreamEvent,
+  type ArticleWorkflowInput,
+  articleWorkflow,
+} from '@/lib/workflows/article';
+import { startEnglishArticleFollowUp } from '@/lib/workflows/article/englishFollowUp';
+import { claimArticleSlot } from '@/lib/workflows/article/slot';
 import { ARTICLE_PROMPT_VERSION } from '@/lib/workflows/article/steps';
-import { claimArticleRun, findActiveArticleRun } from '@/lib/workflows/runRegistry';
+import { findActiveArticleRun } from '@/lib/workflows/runRegistry';
+import { startAndClaimRun } from '@/lib/workflows/startAndClaimRun';
 import { NDJSON_HEADERS, ndjsonResponseFromRun } from '@/lib/workflows/streamResponse';
 
 // Must be a literal — Next.js's route-segment-config analyzer can't
@@ -333,69 +341,42 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // touches the DB, so a half-streamed article never lands. The
   // workflow's strategy selector reads `durationSeconds` to choose
   // single-pass vs map-reduce.
-  const run = await start(articleWorkflow, [
-    {
-      transcriptId: transcript.id,
-      style,
-      language: target,
-      segments: transcript.segments,
-      videoTitle: video.title,
-      channelName: video.channel.name,
-      sourceLanguage,
-      durationSeconds: video.duration_seconds,
-      userRequestId: userRequest?.id ?? null,
-    },
-  ]);
-
-  // Claim the registry slot so future GETs / regen clicks tap in.
-  // Skipped when `force` is set — Regenerate requests intentionally
-  // run a fresh workflow without registering, so a third party
-  // glancing at the article tab doesn't yank itself off the cached
-  // stable copy onto the in-flight regen. On a concurrent claim
-  // race we cancel our own start and stream the winner.
-  if (!force) {
-    const claim = await claimArticleRun(
-      prisma,
-      transcript.id,
-      style,
-      target,
-      run.runId,
-      ARTICLE_PROMPT_VERSION,
-      DEFAULT_AI_MODEL
-    );
-    if (!claim.weWon) {
-      console.info(
-        `[article/POST] Lost claim race; cancelling ${run.runId} and tapping into ${claim.winningRunId}`
-      );
-      try {
-        await getRun(run.runId).cancel();
-      } catch {
-        // ignore — the stray run will expire on its own
-      }
-      // Delete the GENERATED row we just inserted — the workflow we
-      // started is being canceled, so no LLM cost is incurred against
-      // this user. Tap-ins don't get an audit row (the original
-      // generator's row owns attribution).
-      if (userRequest != null) {
-        try {
-          await prisma.userRequest.delete({ where: { id: userRequest.id } });
-        } catch (err) {
-          console.error('[article/POST] failed to delete claim-race UserRequest:', err);
-        }
-      }
-      return ndjsonResponseFromRun<ArticleStreamEvent>(claim.winningRunId);
-    }
-    if (userRequest != null) {
-      try {
-        await prisma.userRequest.update({
-          where: { id: userRequest.id },
-          data: { workflow_id: run.runId },
-        });
-      } catch (err) {
-        console.error('[article/POST] failed to stamp workflow_id on UserRequest:', err);
-      }
-    }
+  const articleInput: ArticleWorkflowInput = {
+    transcriptId: transcript.id,
+    style,
+    language: target,
+    segments: transcript.segments,
+    videoTitle: video.title,
+    channelName: video.channel.name,
+    sourceLanguage,
+    durationSeconds: video.duration_seconds,
+    userRequestId: userRequest?.id ?? null,
+  };
+  // The dev-only Regenerate (`force`) runs a fresh workflow without
+  // claiming the registry slot, so a third party glancing at the
+  // article tab doesn't yank itself off the cached stable copy onto
+  // the in-flight regen. It starts no English sibling either.
+  if (force) {
+    const run = await start(articleWorkflow, [articleInput]);
+    return ndjsonResponseFromRun<ArticleStreamEvent>(run.runId);
   }
 
-  return ndjsonResponseFromRun<ArticleStreamEvent>(run.runId);
+  // Claim the registry slot so future GETs / regen clicks tap in. On a
+  // lost claim race our run is cancelled, its audit row deleted (no
+  // LLM cost is incurred; the winner's row owns attribution), and we
+  // stream the winner instead.
+  const claim = await startAndClaimRun(prisma, {
+    logPrefix: `[article/POST] video ${id}:`,
+    userRequest,
+    start: () => start(articleWorkflow, [articleInput]),
+    claim: (runId) => claimArticleSlot(prisma, articleInput, runId),
+  });
+  if (claim.weWon) {
+    // Non-English content gets an English sibling so the public share
+    // page's English default has something to show. Best-effort and
+    // never throws. Not awaited so the user's stream isn't held behind
+    // it; waitUntil keeps the function alive until it settles.
+    waitUntil(startEnglishArticleFollowUp(prisma, articleInput));
+  }
+  return ndjsonResponseFromRun<ArticleStreamEvent>(claim.winningRunId);
 }

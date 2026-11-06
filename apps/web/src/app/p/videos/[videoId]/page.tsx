@@ -7,7 +7,8 @@ import Header from '@/components/Header';
 import VideoReader from '@/components/reader/VideoReader';
 import { capTitle } from '@/lib/format/title';
 import { decorateVideo } from '@/lib/inbox/triage';
-import { findTargetLanguage } from '@/lib/language/names';
+import { ENGLISH_LANGUAGE_CODE } from '@/lib/language/names';
+import { parseShareLanguage } from '@/lib/language/publicShare';
 import type { VideoData } from '@/lib/types';
 import { resolveVideoSourceId } from '@/lib/videos/resolveVideoSourceId';
 
@@ -53,14 +54,18 @@ export default async function PublicVideoPage({ params, searchParams }: Props) {
   const { videoId } = await params;
   const sp = await searchParams;
 
-  // ?language=<bcp47> selects which translated row to render. Unknown
-  // codes are ignored so a tampered URL falls back to Original
-  // instead of 404'ing the public share. Empty / missing means
-  // Original. Arrays (Next.js allows ?language=a&language=b) take the
-  // first value.
+  // ?language=<bcp47> selects which translated row to render and
+  // ?language=original the Original. Empty / missing / unknown codes
+  // mean English: the bare URL is the canonical one search engines
+  // index, so it defaults to the most broadly readable version. The
+  // public API falls back (English → Original → earliest) when the
+  // named row doesn't exist, so a tampered URL still renders instead
+  // of 404'ing. Arrays (Next.js allows ?language=a&language=b) take
+  // the first value.
   const rawLang = Array.isArray(sp.language) ? sp.language[0] : sp.language;
-  const requestedLanguage =
-    rawLang != null && rawLang.length > 0 && findTargetLanguage(rawLang) != null ? rawLang : null;
+  const requestedLanguage = parseShareLanguage(rawLang);
+  const readerLanguage =
+    requestedLanguage === undefined ? ENGLISH_LANGUAGE_CODE : requestedLanguage;
 
   const stub = await resolveVideoSourceId(prisma, videoId);
   if (stub == null) {
@@ -158,7 +163,7 @@ export default async function PublicVideoPage({ params, searchParams }: Props) {
         <VideoReader
           video={videoData}
           publicMode
-          preferredLanguage={requestedLanguage}
+          preferredLanguage={readerLanguage}
           footerSlot={<Footer compact />}
         />
       </main>
