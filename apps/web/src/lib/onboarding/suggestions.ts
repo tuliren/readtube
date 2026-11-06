@@ -71,6 +71,27 @@ export async function loadOnboardingSuggestions(
 }
 
 /**
+ * The onboarding suggestions for a user who hasn't added anything, or
+ * null when the regular page should render instead: the user has added
+ * something, or there is nothing to suggest. Every top-level page a new
+ * user can land on (the inbox, Standalone videos) shows the same
+ * onboarding page through this.
+ */
+export async function loadNewUserSuggestions(
+  prisma: PrismaClient,
+  userId: string
+): Promise<OnboardingSuggestions | null> {
+  if (!(await isNewUser(prisma, userId))) {
+    return null;
+  }
+  const suggestions = await loadOnboardingSuggestions(prisma);
+  if (suggestions.channels.length === 0 && suggestions.videos.length === 0) {
+    return null;
+  }
+  return suggestions;
+}
+
+/**
  * Channels someone on ReadTube follows, ordered by their newest video.
  *
  * - Followed: a follower is the signal that a channel was added on

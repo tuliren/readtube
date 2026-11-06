@@ -114,7 +114,9 @@ export default function PlaylistsSection({ onAddVideo }: Props) {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      {sectionCollapsed ? null : (
+      {sectionCollapsed ? null : playlists.length === 0 ? (
+        <p className="px-3 py-1 text-xs text-muted-foreground">Playlists you add show up here.</p>
+      ) : (
         <ul className="space-y-0.5">
           {playlists.map((p) => (
             <PlaylistEntry

@@ -30,3 +30,21 @@ export function onboardingSuccessMessage({
   }
   return parts.length === 0 ? 'Already in your library' : parts.join(', ');
 }
+
+/**
+ * Where to send the user once their picks are saved: the inbox when
+ * they followed a channel, the Standalone videos library when they only
+ * added videos, or null to stay put when nothing new was added.
+ */
+export function onboardingDestination({
+  followedChannels,
+  addedVideos,
+}: OnboardingResult): string | null {
+  if (followedChannels > 0) {
+    return '/inbox';
+  }
+  if (addedVideos > 0) {
+    return '/videos/standalone';
+  }
+  return null;
+}

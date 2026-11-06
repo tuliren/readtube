@@ -5,6 +5,7 @@ import { applyOnboardingSelection } from '@/lib/onboarding/apply';
 import {
   MAX_VIDEOS_PER_CHANNEL,
   isNewUser,
+  loadNewUserSuggestions,
   loadOnboardingSuggestions,
 } from '@/lib/onboarding/suggestions';
 
@@ -221,6 +222,40 @@ describe('loadOnboardingSuggestions', () => {
       headline: 'Headline quiet_v',
       channelName: 'Channel ch_quiet',
     });
+  });
+});
+
+describe('loadNewUserSuggestions', () => {
+  it('returns suggestions for a new user', async () => {
+    const channelId = await createChannel('nus_ch');
+    await createVideo(channelId, 'nus_v', { publishedHoursAgo: 1 });
+
+    const suggestions = await loadNewUserSuggestions(global.testPrisma, NEW_USER);
+
+    expect(suggestions?.channels.map((c) => c.id)).toEqual([channelId]);
+  });
+
+  it.each([
+    {
+      name: 'the user has added something',
+      setup: async () => {
+        const channelId = await createChannel('nus_ch');
+        await createVideo(channelId, 'nus_v', { publishedHoursAgo: 1 });
+        await global.testPrisma.userSubscription.create({
+          data: { user_id: NEW_USER, channel_id: channelId },
+        });
+      },
+    },
+    {
+      name: 'there is nothing to suggest',
+      setup: async () => {
+        // Never hydrated, so it is not offered.
+        await createChannel('nus_ch', { checked: false });
+      },
+    },
+  ])('returns null when $name', async ({ setup }) => {
+    await setup();
+    expect(await loadNewUserSuggestions(global.testPrisma, NEW_USER)).toBeNull();
   });
 });
 

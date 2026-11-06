@@ -1,4 +1,8 @@
-import { onboardingSuccessMessage, selectionLabel } from '@/lib/onboarding/copy';
+import {
+  onboardingDestination,
+  onboardingSuccessMessage,
+  selectionLabel,
+} from '@/lib/onboarding/copy';
 
 describe('selectionLabel', () => {
   it.each([
@@ -21,6 +25,20 @@ describe('onboardingSuccessMessage', () => {
     'describes $followedChannels channels and $addedVideos videos',
     ({ followedChannels, addedVideos, expected }) => {
       expect(onboardingSuccessMessage({ followedChannels, addedVideos })).toBe(expected);
+    }
+  );
+});
+
+describe('onboardingDestination', () => {
+  it.each([
+    { followedChannels: 2, addedVideos: 0, expected: '/inbox' },
+    { followedChannels: 1, addedVideos: 3, expected: '/inbox' },
+    { followedChannels: 0, addedVideos: 1, expected: '/videos/standalone' },
+    { followedChannels: 0, addedVideos: 0, expected: null },
+  ])(
+    'sends $followedChannels channels and $addedVideos videos to $expected',
+    ({ followedChannels, addedVideos, expected }) => {
+      expect(onboardingDestination({ followedChannels, addedVideos })).toBe(expected);
     }
   );
 });

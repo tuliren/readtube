@@ -220,7 +220,13 @@ export default function FolderSection({ channels, selectedChannelId, onAddChanne
         <>
           {/* Root (unfoldered) channels */}
           <RootDropZone>
-            {rootChannels.length === 0 ? (
+            {channels.length === 0 ? (
+              // No channels at all: the drag hint below would mean
+              // nothing to a new user.
+              <p className="px-3 py-1 text-xs text-muted-foreground">
+                Channels you follow show up here.
+              </p>
+            ) : rootChannels.length === 0 ? (
               <p className="px-3 py-1 text-xs text-muted-foreground">
                 Drop channels here to move channels out of folders
               </p>
