@@ -56,7 +56,6 @@ export default function SuggestedVideoCard({ video, selected, onToggle, onPrevie
         )}
         <PreviewButton
           label={video.title}
-          variant="overlay"
           className="absolute bottom-1.5 left-1.5"
           onClick={() => onPreview(video.id)}
         />

@@ -54,7 +54,6 @@ export default function SuggestedChannelCard({ channel, selected, onToggle, onPr
         </div>
         <PreviewButton
           label={channel.name}
-          variant="plain"
           className="relative"
           onClick={() => onPreview(channel.id)}
         />
