@@ -55,6 +55,10 @@ interface Props {
    *  Public-share pages pass a compact footer here so the legal links
    *  flow with the article instead of pinning to the viewport bottom. */
   footerSlot?: ReactNode;
+  /** Rendered inside a modal over another page (the onboarding
+   *  preview): leaves that page's URL alone (no `?tab=` read or
+   *  write) and drops the signup nudge, since the viewer is signed in. */
+  embedded?: boolean;
 }
 
 type Tab = 'summary' | 'article' | 'transcript';
@@ -83,6 +87,7 @@ export default function VideoReader({
   channelFollowed = false,
   preferredLanguage = null,
   footerSlot = null,
+  embedded = false,
 }: Props) {
   const searchParams = useSearchParams();
   // Sidebar context is only available inside the dashboard tree.
@@ -172,7 +177,7 @@ export default function VideoReader({
   // since deleted, or a manually crafted URL). Falls through to the
   // mode-aware default below in that case.
   const [activeTab, setActiveTab] = useState<Tab>(() => {
-    const fromUrl = searchParams.get('tab');
+    const fromUrl = embedded ? null : searchParams.get('tab');
     if (isValidTab(fromUrl)) {
       if (!publicMode) {
         return fromUrl;
@@ -333,6 +338,9 @@ export default function VideoReader({
   // window.history.replaceState avoids the re-render / data-refetch
   // overhead of router.replace — we're just decorating the URL bar.
   useEffect(() => {
+    if (embedded) {
+      return;
+    }
     const params = new URLSearchParams(window.location.search);
     let changed = false;
     const defaultTab: Tab =
@@ -373,7 +381,15 @@ export default function VideoReader({
     // the effect when the active tab and language match across the
     // two videos — the in-session language override would silently
     // disappear from the URL and be lost on the next refresh.
-  }, [activeTab, selectedLanguage, publicMode, video.id, video.hasSummary, video.hasArticle]);
+  }, [
+    activeTab,
+    selectedLanguage,
+    publicMode,
+    embedded,
+    video.id,
+    video.hasSummary,
+    video.hasArticle,
+  ]);
 
   // Public mode: once a per-language fetch confirms the active tab is
   // empty for the selected language, redirect to the other tab if it
@@ -945,7 +961,7 @@ export default function VideoReader({
                   content they just finished reading and before the AI
                   disclaimer so it reads as the natural "what next"
                   beat of the page. */}
-              {publicMode && <PublicSignupCta />}
+              {publicMode && !embedded && <PublicSignupCta />}
 
               {/* AI disclaimer — only meaningful for AI-generated tabs
                   (Summary, Article). Hidden on the Transcript tab,

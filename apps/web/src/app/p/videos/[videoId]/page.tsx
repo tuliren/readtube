@@ -6,10 +6,9 @@ import Footer from '@/components/Footer';
 import Header from '@/components/Header';
 import VideoReader from '@/components/reader/VideoReader';
 import { capTitle } from '@/lib/format/title';
-import { decorateVideo } from '@/lib/inbox/triage';
 import { ENGLISH_LANGUAGE_CODE } from '@/lib/language/names';
 import { parseShareLanguage } from '@/lib/language/publicShare';
-import type { VideoData } from '@/lib/types';
+import { loadPublicVideo } from '@/lib/videos/loadPublicVideo';
 import { resolveVideoSourceId } from '@/lib/videos/resolveVideoSourceId';
 
 interface Props {
@@ -72,62 +71,10 @@ export default async function PublicVideoPage({ params, searchParams }: Props) {
     notFound();
   }
 
-  const video = await prisma.video.findUnique({
-    where: { id: stub.id },
-    select: {
-      id: true,
-      source_id: true,
-      source_type: true,
-      title: true,
-      description: true,
-      published_at: true,
-      duration_seconds: true,
-      thumbnail_url: true,
-      transcript_unavailable: true,
-      channel_id: true,
-      channel: { select: { name: true, source_id: true, handle: true } },
-      transcripts: {
-        orderBy: { created_at: 'desc' },
-        take: 1,
-        select: {
-          // Filter on `status = READY`; the public share page must
-          // 404 on a slot that only has an in-flight workflow row.
-          summaries: {
-            where: { status: 'READY' },
-            take: 1,
-            select: { transcript_id: true },
-          },
-          articles: {
-            where: { status: 'READY' },
-            take: 1,
-            select: { id: true },
-          },
-        },
-      },
-    },
-  });
-  if (video == null) {
+  const videoData = await loadPublicVideo(prisma, stub.id);
+  if (videoData == null) {
     notFound();
   }
-
-  const latest = video.transcripts[0];
-  const hasSummary = (latest?.summaries.length ?? 0) > 0;
-  const hasArticle = (latest?.articles.length ?? 0) > 0;
-  if (!hasSummary && !hasArticle) {
-    notFound();
-  }
-
-  const videoData: VideoData = decorateVideo(
-    video,
-    {
-      starredIds: new Set(),
-      savedIds: new Set(),
-      archivedIds: new Set(),
-      standaloneIds: new Set(),
-      noteCountsByVideoId: new Map(),
-    },
-    null
-  );
 
   // Fixed-viewport layout (matches the dashboard's `h-screen
   // overflow-hidden` shell) so VideoReader's internal `overflow-y-auto`

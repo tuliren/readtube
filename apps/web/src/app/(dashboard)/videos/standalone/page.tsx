@@ -5,7 +5,10 @@ import { redirect } from 'next/navigation';
 
 import VideoListView from '@/components/inbox/VideoListView';
 import LibraryEmptyState from '@/components/library/LibraryVideoList';
+import NewUserOnboarding from '@/components/onboarding/NewUserOnboarding';
 import { loadInboxVideos, searchParamsToInboxQuery } from '@/lib/inbox/loadVideos';
+import { loadCachedOnboardingSuggestions } from '@/lib/onboarding/cachedSuggestions';
+import { loadNewUserSuggestions } from '@/lib/onboarding/suggestions';
 
 export const metadata: Metadata = { title: 'Standalone videos' };
 
@@ -28,7 +31,16 @@ export default async function VideosStandalonePage({ searchParams }: Props) {
   const baseQuery = searchParamsToInboxQuery(await searchParams);
   const query = { ...baseQuery, library: 'standalone' as const };
 
-  const initial = await loadInboxVideos(prisma, userId, query);
+  // Same onboarding page as the inbox: a new user's library is empty
+  // too, and the sidebar entry shouldn't lead to a dead end. Checked in
+  // parallel with the list so other users pay no extra latency.
+  const [suggestions, initial] = await Promise.all([
+    loadNewUserSuggestions(prisma, userId, loadCachedOnboardingSuggestions),
+    loadInboxVideos(prisma, userId, query),
+  ]);
+  if (suggestions != null) {
+    return <NewUserOnboarding suggestions={suggestions} />;
+  }
 
   // The onboarding empty state is for an empty library, not a search
   // with no hits: that keeps the list view so the search box stays.

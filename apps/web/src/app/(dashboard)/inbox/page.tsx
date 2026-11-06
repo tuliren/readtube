@@ -4,9 +4,12 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 
 import VideoListView from '@/components/inbox/VideoListView';
+import NewUserOnboarding from '@/components/onboarding/NewUserOnboarding';
 import { parseInboxQuery } from '@/lib/inbox/filter';
 import { loadInboxVideos, searchParamsToInboxQuery } from '@/lib/inbox/loadVideos';
 import { resolveInboxView } from '@/lib/inbox/views';
+import { loadCachedOnboardingSuggestions } from '@/lib/onboarding/cachedSuggestions';
+import { loadNewUserSuggestions } from '@/lib/onboarding/suggestions';
 
 interface Props {
   // Wide Next.js shape — we forward the whole bag through
@@ -47,7 +50,21 @@ export default async function InboxPage({ searchParams }: Props) {
   // land on directly (bookmark, shared link, sidebar nav). Returns
   // one page of videos plus the unpaginated total so the header can
   // render Page X of N controls.
-  const initial = await loadInboxVideos(prisma, userId, query);
+  //
+  // Runs alongside the new-user check rather than after it, so an
+  // established user's inbox pays no extra latency for onboarding; for a
+  // new user the inbox query is empty and cheap.
+  const [suggestions, initial] = await Promise.all([
+    loadNewUserSuggestions(prisma, userId, loadCachedOnboardingSuggestions),
+    loadInboxVideos(prisma, userId, query),
+  ]);
+  // A user who hasn't added anything yet gets the onboarding page in
+  // place of an empty inbox: recent channels and videos already on
+  // ReadTube, picked with a click instead of hunting for links. Falls
+  // through to the regular empty state if there is nothing to suggest.
+  if (suggestions != null) {
+    return <NewUserOnboarding suggestions={suggestions} />;
+  }
 
   return (
     <VideoListView
