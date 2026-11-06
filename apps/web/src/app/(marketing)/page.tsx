@@ -6,6 +6,8 @@ import Features from '@/components/Features';
 import Hero from '@/components/Hero';
 import Pricing from '@/components/Pricing';
 import { DESCRIPTION, FULL_WEBSITE_URL, TITLE } from '@/constants';
+import { HOME_MARKDOWN_PATH } from '@/lib/markdown/home';
+import { FAQS, markdownToPlainText } from '@/lib/marketing/content';
 
 // Canonical must be set per page, never in a shared layout: layout
 // metadata is inherited by every child page that doesn't override it,
@@ -14,6 +16,9 @@ import { DESCRIPTION, FULL_WEBSITE_URL, TITLE } from '@/constants';
 export const metadata: Metadata = {
   alternates: {
     canonical: '/',
+    // Advertises the agent-readable copy of this page; see
+    // "Agent-readable surfaces" in DESIGN.md.
+    types: { 'text/markdown': HOME_MARKDOWN_PATH },
   },
 };
 
@@ -49,6 +54,17 @@ const structuredData = {
       description: DESCRIPTION,
       publisher: { '@id': `${FULL_WEBSITE_URL}/#organization` },
       inLanguage: 'en-US',
+    },
+    {
+      '@type': 'FAQPage',
+      '@id': `${FULL_WEBSITE_URL}/#faq`,
+      url: FULL_WEBSITE_URL,
+      inLanguage: 'en-US',
+      mainEntity: FAQS.map((faq) => ({
+        '@type': 'Question',
+        name: faq.question,
+        acceptedAnswer: { '@type': 'Answer', text: markdownToPlainText(faq.answer) },
+      })),
     },
   ],
 };
