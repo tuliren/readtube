@@ -16,6 +16,12 @@ const DASHBOARD_DIR = path.join(APP_DIR, '(dashboard)');
 const PUBLIC_ROUTE_SEGMENTS = [
   // Handlers self-enforce auth so they can return 401 JSON.
   'api',
+  // Agent-readable surfaces; `md` is the rewrite target for
+  // `/p/videos/:videoId.md`.
+  'index.md',
+  'llms-full.txt',
+  'llms.txt',
+  'md',
   'p',
   'privacy',
   'producthunt',
