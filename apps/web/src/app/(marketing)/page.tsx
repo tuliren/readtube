@@ -56,11 +56,13 @@ export default function Home() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: serializeJsonLd(structuredData) }}
       />
-      <Hero />
-      <Features />
-      <Pricing />
-      <CallToAction theme="light" />
-      <Faq />
+      <main>
+        <Hero />
+        <Features />
+        <Pricing />
+        <CallToAction theme="light" />
+        <Faq />
+      </main>
     </>
   );
 }
