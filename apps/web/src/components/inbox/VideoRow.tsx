@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatDurationSeconds } from '@/lib/format/duration';
+import { relativeTime } from '@/lib/format/relativeTime';
 import type { VideoData } from '@/lib/types';
 
 import { useSidebar } from './SidebarContext';
@@ -178,45 +179,6 @@ interface Props {
    * after hydration.
    */
   now: number | null;
-}
-
-/**
- * Locale-locked absolute date used for the SSR + first-client-render
- * pass. Server and browser both format through the same `en-US`
- * template so the rendered string is byte-identical.
- */
-function absoluteDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
-}
-
-function relativeTime(dateStr: string, now: number | null): string {
-  if (now == null) {
-    return absoluteDate(dateStr);
-  }
-  const then = new Date(dateStr).getTime();
-  const diffMs = now - then;
-  const diffSeconds = Math.floor(diffMs / 1000);
-  const diffMinutes = Math.floor(diffSeconds / 60);
-  const diffHours = Math.floor(diffMinutes / 60);
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffMinutes < 1) {
-    return 'just now';
-  }
-  if (diffHours < 1) {
-    return `${diffMinutes}m ago`;
-  }
-  if (diffDays < 1) {
-    return `${diffHours}h ago`;
-  }
-  if (diffDays < 30) {
-    return `${diffDays}d ago`;
-  }
-  return absoluteDate(dateStr);
 }
 
 /**
