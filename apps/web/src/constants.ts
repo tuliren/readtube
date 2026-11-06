@@ -10,6 +10,8 @@ export const FULL_WEBSITE_URL = `https://www.${DOMAIN}`;
 export const CONTACT_EMAIL = `contact@${DOMAIN}`;
 export const GITHUB_ISSUES_URL = `${GITHUB_REPO_URL}/issues`;
 export const COMPANY_LINKEDIN_URL = 'https://www.linkedin.com/company/readtube';
+export const COMPANY_CRUNCHBASE_URL = 'https://www.crunchbase.com/organization/readtube';
+export const COMPANY_PRODUCT_HUNT_URL = 'https://www.producthunt.com/products/readtube-2';
 
 export const MAKER_NAME = 'Liren Tu';
 export const MAKER_GITHUB_URL = 'https://github.com/tuliren';

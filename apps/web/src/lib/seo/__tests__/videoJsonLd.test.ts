@@ -168,6 +168,12 @@ describe('buildVideoJsonLd', () => {
     ]);
 
     expect(nodeOf(graph, 'Organization')['@id']).toBe(ORGANIZATION_ID);
+    expect(nodeOf(graph, 'Organization').sameAs).toEqual([
+      'https://www.linkedin.com/company/readtube',
+      'https://github.com/tuliren/readtube',
+      'https://www.crunchbase.com/organization/readtube',
+      'https://www.producthunt.com/products/readtube-2',
+    ]);
   });
 
   it.each<{

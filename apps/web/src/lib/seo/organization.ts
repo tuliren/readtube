@@ -1,5 +1,7 @@
 import {
+  COMPANY_CRUNCHBASE_URL,
   COMPANY_LINKEDIN_URL,
+  COMPANY_PRODUCT_HUNT_URL,
   CONTACT_EMAIL,
   DESCRIPTION,
   FULL_WEBSITE_URL,
@@ -30,7 +32,7 @@ export const organizationJsonLd = {
     contactType: 'customer support',
     email: CONTACT_EMAIL,
   },
-  sameAs: [COMPANY_LINKEDIN_URL, GITHUB_REPO_URL],
+  sameAs: [COMPANY_LINKEDIN_URL, GITHUB_REPO_URL, COMPANY_CRUNCHBASE_URL, COMPANY_PRODUCT_HUNT_URL],
   founder: {
     '@type': 'Person',
     name: MAKER_NAME,
