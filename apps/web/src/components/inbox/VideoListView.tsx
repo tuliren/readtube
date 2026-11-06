@@ -300,10 +300,12 @@ export default function VideoListView({
     }
   }
 
-  // First-run onboarding. One unified Add button covers both intents
-  // new signups arrive with: following a channel (the product's thesis)
-  // and reading one specific video they searched for. The panel's demo
-  // shows that a single pasted link of any kind just works.
+  // No channels yet. A brand-new user never gets here: the inbox page
+  // renders `NewUserOnboarding` instead (see DESIGN.md, "New-user
+  // onboarding"). This is for a user with library videos or playlists
+  // but no channels. One unified Add button covers following a channel
+  // and reading one specific video, and the panel's demo shows that a
+  // single pasted link of any kind just works.
   if (showNoChannelsCta) {
     return <AddOnboardingPanel onAdd={openAdd} />;
   }
