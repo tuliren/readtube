@@ -1,42 +1,27 @@
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+import { clerkMiddleware } from '@clerk/nextjs/server';
+
+import { isProtectedPathname } from '@/lib/protectedRoutes';
 
 /**
- * Routes that do not require a signed-in Clerk session. Everything
- * else is protected by default, so new authenticated routes get
- * coverage automatically instead of relying on each page to remember
- * its own `redirect()` guard.
+ * Only the dashboard route prefixes (`PROTECTED_ROUTE_PREFIXES`, one
+ * per top-level segment under `app/(dashboard)`) require a signed-in
+ * Clerk session. Every other path passes through, so marketing pages,
+ * public share pages (`/p/...`), crawler endpoints, and unknown paths
+ * render normally, and a missing page returns a real 404 from
+ * `app/not-found.tsx` instead of a sign-in redirect.
  *
- * `/api(.*)` is public because API handlers self-enforce auth and
- * need to return 401 JSON (not a sign-in HTML redirect) to
+ * New authenticated routes stay protected automatically: the coverage
+ * test in `lib/__tests__/protectedRoutes.test.ts` fails if a segment
+ * under `app/(dashboard)` isn't matched. The dashboard layout's own
+ * `auth()` redirect remains as a second guard.
+ *
+ * `/api(.*)` is not protected here because API handlers self-enforce
+ * auth and need to return 401 JSON (not a sign-in HTML redirect) to
  * unauthenticated callers. Cron and Clerk webhook routes also live
  * under /api and use their own secret-based auth.
  */
-const isPublicRoute = createRouteMatcher([
-  '/',
-  '/sign-in(.*)',
-  '/sign-up(.*)',
-  '/privacy',
-  '/terms',
-  '/p/(.*)',
-  '/api(.*)',
-  '/opengraph-image',
-  '/producthunt(.*)',
-  // Crawler endpoints. The matcher's static-extension exclusion list
-  // doesn't cover .xml/.txt, so without these entries crawlers get a
-  // sign-in redirect instead of the sitemap.
-  '/sitemap.xml',
-  '/robots.txt',
-  // Agent-readable surfaces. Same reason: .md/.txt aren't excluded by
-  // the matcher. /md(.*) is the rewrite target for video markdown
-  // (/p/videos/:id.md is already public via /p/(.*)).
-  '/index.md',
-  '/md(.*)',
-  '/llms.txt',
-  '/llms-full.txt',
-]);
-
 export default clerkMiddleware(async (auth, req) => {
-  if (!isPublicRoute(req)) {
+  if (isProtectedPathname(req.nextUrl.pathname)) {
     await auth.protect();
   }
 });

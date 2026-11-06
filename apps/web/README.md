@@ -17,7 +17,7 @@ The `production` branch can be fast-forwarded to the `main` branch by running th
 
 ## Public routes for crawlers and agents
 
-These are unauthenticated and listed in `src/proxy.ts`'s public routes. See "Agent-readable surfaces" in `DESIGN.md`.
+These are unauthenticated: `src/proxy.ts` only protects the dashboard prefixes in `src/lib/protectedRoutes.ts`. See "Agent-readable surfaces" in `DESIGN.md`.
 
 | Route                         | Serves                                                                                                                                                         |
 | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |

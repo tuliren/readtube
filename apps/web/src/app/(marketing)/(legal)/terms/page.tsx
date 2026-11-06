@@ -19,8 +19,8 @@ export default function TermsOfServicePage() {
   const content = use(getTermsOfServiceContent());
 
   return (
-    <div className="mx-1 py-12 text-slate-800 dark:text-slate-100">
+    <main className="mx-1 py-12 text-slate-800 dark:text-slate-100">
       <CustomMarkdown markdown={content} />
-    </div>
+    </main>
   );
 }
