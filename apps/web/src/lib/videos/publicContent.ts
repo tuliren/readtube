@@ -14,7 +14,7 @@ export const PUBLIC_ARTICLE_STYLE: ArticleStyle = ArticleStyle.NARRATIVE;
  * `language`: a code or null (Original) pins the row's language;
  * undefined matches any language.
  */
-export function publicSummaryWhere(
+function publicSummaryWhere(
   transcriptId: string,
   language?: string | null
 ): Prisma.SummaryWhereInput {
@@ -27,7 +27,7 @@ export function publicSummaryWhere(
  * shadow a sibling that does have content. `language` behaves as in
  * {@link publicSummaryWhere}.
  */
-export function publicArticleWhere(
+function publicArticleWhere(
   transcriptId: string,
   style: ArticleStyle,
   language?: string | null
@@ -39,6 +39,52 @@ export function publicArticleWhere(
     status: 'READY',
     content: { not: null },
   };
+}
+
+/** Where/order arguments for one `findFirst` of a share-row lookup. */
+export interface ShareRowQuery<Where, OrderBy> {
+  where: Where;
+  orderBy?: OrderBy;
+}
+
+/**
+ * Resolve the public summary row for `requested` with the shared
+ * English-first fallback (see `resolveShareRow`), filtered by
+ * {@link publicSummaryWhere}. `find` runs one `findFirst` with the
+ * given where/order plus the caller's own `select`, so every caller
+ * resolves the same row whatever fields it reads.
+ */
+export function resolvePublicSummary<T>(
+  transcriptId: string,
+  requested: string | null | undefined,
+  find: (
+    query: ShareRowQuery<Prisma.SummaryWhereInput, Prisma.SummaryOrderByWithRelationInput>
+  ) => Promise<T | null>
+): Promise<T | null> {
+  return resolveShareRow(
+    requested,
+    (language) => find({ where: publicSummaryWhere(transcriptId, language) }),
+    () => find({ where: publicSummaryWhere(transcriptId), orderBy: { generated_at: 'asc' } })
+  );
+}
+
+/**
+ * {@link resolvePublicSummary} for the article of `style`, filtered by
+ * {@link publicArticleWhere}.
+ */
+export function resolvePublicArticle<T>(
+  transcriptId: string,
+  requested: string | null | undefined,
+  style: ArticleStyle,
+  find: (
+    query: ShareRowQuery<Prisma.ArticleWhereInput, Prisma.ArticleOrderByWithRelationInput>
+  ) => Promise<T | null>
+): Promise<T | null> {
+  return resolveShareRow(
+    requested,
+    (language) => find({ where: publicArticleWhere(transcriptId, style, language) }),
+    () => find({ where: publicArticleWhere(transcriptId, style), orderBy: { generated_at: 'asc' } })
+  );
 }
 
 /**
@@ -83,10 +129,7 @@ export async function findPublicTranscript(
 
 /**
  * The summary a public visitor sees for `requested` (see
- * `parseShareLanguage`), resolved English-first by `resolveShareRow`.
- * Every lookup filters on `status = READY` so an in-flight row never
- * surfaces, and on complete fields so an incomplete row can't shadow a
- * complete sibling during the fallback.
+ * `parseShareLanguage`), resolved by {@link resolvePublicSummary}.
  */
 export async function loadPublicSummary(
   prisma: PrismaClient,
@@ -96,16 +139,8 @@ export async function loadPublicSummary(
   const fields = {
     select: { headline: true, short: true, full: true, language: true, generated_at: true },
   } as const;
-  const summary = await resolveShareRow(
-    requested,
-    (language) =>
-      prisma.summary.findFirst({ where: publicSummaryWhere(transcriptId, language), ...fields }),
-    () =>
-      prisma.summary.findFirst({
-        where: publicSummaryWhere(transcriptId),
-        orderBy: { generated_at: 'asc' },
-        ...fields,
-      })
+  const summary = await resolvePublicSummary(transcriptId, requested, (query) =>
+    prisma.summary.findFirst({ ...query, ...fields })
   );
   // The queries already exclude incomplete rows; this narrows the type.
   return isCompleteSummary(summary) ? summary : null;
@@ -113,9 +148,7 @@ export async function loadPublicSummary(
 
 /**
  * The article a public visitor sees for `requested` and `style`,
- * resolved like {@link loadPublicSummary}. Requires `content != null`
- * on every lookup: a READY-with-null-content row isn't servable, so it
- * must not shadow a sibling that does have content.
+ * resolved by {@link resolvePublicArticle}.
  */
 export async function loadPublicArticle(
   prisma: PrismaClient,
@@ -126,19 +159,8 @@ export async function loadPublicArticle(
   const fields = {
     select: { content: true, style: true, language: true, generated_at: true },
   } as const;
-  const article = await resolveShareRow(
-    requested,
-    (language) =>
-      prisma.article.findFirst({
-        where: publicArticleWhere(transcriptId, style, language),
-        ...fields,
-      }),
-    () =>
-      prisma.article.findFirst({
-        where: publicArticleWhere(transcriptId, style),
-        orderBy: { generated_at: 'asc' },
-        ...fields,
-      })
+  const article = await resolvePublicArticle(transcriptId, requested, style, (query) =>
+    prisma.article.findFirst({ ...query, ...fields })
   );
   // The queries already exclude null content; this narrows the type.
   if (article == null || article.content == null) {

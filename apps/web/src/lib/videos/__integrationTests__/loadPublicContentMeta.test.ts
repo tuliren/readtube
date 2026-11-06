@@ -17,8 +17,7 @@ async function seed(opts: {
   transcriptLanguage?: string | null;
   summaries?: Row[];
   articles?: Row[];
-  withTranscript?: boolean;
-}): Promise<string> {
+}): Promise<{ id: string; language: string | null }> {
   const channel = await global.testPrisma.channel.create({
     data: {
       source_id: 'meta_ch',
@@ -30,9 +29,6 @@ async function seed(opts: {
   const video = await global.testPrisma.video.create({
     data: { channel_id: channel.id, source_id: 'meta_v', source_type: 'YOUTUBE', title: 'Video' },
   });
-  if (opts.withTranscript === false) {
-    return video.id;
-  }
   const transcript = await global.testPrisma.transcript.create({
     data: {
       video_id: video.id,
@@ -70,7 +66,7 @@ async function seed(opts: {
       },
     });
   }
-  return video.id;
+  return { id: transcript.id, language: transcript.language };
 }
 
 beforeEach(async () => {
@@ -162,13 +158,15 @@ describe('loadPublicContentMeta', () => {
       },
     },
     {
-      name: 'a video without a transcript returns null',
+      name: 'only in-flight rows gives empty meta',
       requested: undefined,
-      seed: { withTranscript: false },
-      expected: null,
+      seed: {
+        summaries: [{ language: 'en', generatedAt: T1, status: GenerationStatus.GENERATING }],
+      },
+      expected: { datePublished: null, dateModified: null, language: null, description: null },
     },
   ])('$name', async ({ requested, seed: seedOpts, expected }) => {
-    const videoId = await seed(seedOpts);
-    expect(await loadPublicContentMeta(global.testPrisma, videoId, requested)).toEqual(expected);
+    const transcript = await seed(seedOpts);
+    expect(await loadPublicContentMeta(global.testPrisma, transcript, requested)).toEqual(expected);
   });
 });

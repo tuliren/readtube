@@ -7,7 +7,8 @@ import Hero from '@/components/Hero';
 import Pricing from '@/components/Pricing';
 import { DESCRIPTION, FULL_WEBSITE_URL, TITLE } from '@/constants';
 import { HOME_MARKDOWN_PATH } from '@/lib/markdown/home';
-import { FAQS, markdownToPlainText } from '@/lib/marketing/content';
+import { markdownToPlainText } from '@/lib/markdown/plainText';
+import { FAQS } from '@/lib/marketing/content';
 import { serializeJsonLd } from '@/lib/seo/jsonLd';
 import { ORGANIZATION_ID, organizationJsonLd } from '@/lib/seo/organization';
 

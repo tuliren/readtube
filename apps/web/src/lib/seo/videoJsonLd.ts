@@ -1,4 +1,5 @@
 import { FULL_WEBSITE_URL, TITLE } from '@/constants';
+import { markdownToPlainText } from '@/lib/markdown/plainText';
 import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { ORGANIZATION_ID, organizationJsonLd } from '@/lib/seo/organization';
 import type { VideoData } from '@/lib/types';
@@ -66,18 +67,16 @@ export function toIsoDuration(seconds: number | null | undefined): string | null
 
 /**
  * Turn a stored summary paragraph (markdown, optionally with a
- * frontmatter header) into plain text for a JSON-LD `description`:
- * drops the frontmatter, unwraps links, strips emphasis / code / heading
- * markers, and collapses whitespace. Returns null when nothing is left.
+ * frontmatter header) into one line of plain text for a JSON-LD or
+ * meta `description`: drops the frontmatter, flattens the markdown
+ * with {@link markdownToPlainText}, and collapses whitespace. Returns
+ * null when nothing is left.
  */
 export function toPlainDescription(markdown: string | null | undefined): string | null {
   if (markdown == null) {
     return null;
   }
-  const text = parseMarkdownDocument(markdown)
-    .content.replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/^#{1,6}\s+/gm, '')
-    .replace(/(\*\*|__|\*|`)/g, '')
+  const text = markdownToPlainText(parseMarkdownDocument(markdown).content)
     .replace(/\s+/g, ' ')
     .trim();
   return text.length > 0 ? text : null;

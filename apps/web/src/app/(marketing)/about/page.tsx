@@ -13,6 +13,7 @@ import {
   MAKER_NAME,
   TITLE,
 } from '@/constants';
+import { pageSocialMetadata } from '@/lib/seo/openGraph';
 
 const DESCRIPTION = `What ${TITLE} is, who builds it, and how to reach us.`;
 
@@ -20,6 +21,7 @@ const DESCRIPTION = `What ${TITLE} is, who builds it, and how to reach us.`;
 export const metadata: Metadata = {
   title: 'About',
   description: DESCRIPTION,
+  ...pageSocialMetadata({ path: '/about', title: 'About', description: DESCRIPTION }),
   alternates: {
     canonical: '/about',
   },

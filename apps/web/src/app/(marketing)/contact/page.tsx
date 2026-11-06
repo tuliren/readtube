@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 
 import InfoPage, { ExternalLink } from '@/components/marketing/InfoPage';
 import { CONTACT_EMAIL, GITHUB_ISSUES_URL, TITLE } from '@/constants';
+import { pageSocialMetadata } from '@/lib/seo/openGraph';
 
 const DESCRIPTION = `How to reach the ${TITLE} team: email or GitHub issues.`;
 
@@ -9,6 +10,7 @@ const DESCRIPTION = `How to reach the ${TITLE} team: email or GitHub issues.`;
 export const metadata: Metadata = {
   title: 'Contact',
   description: DESCRIPTION,
+  ...pageSocialMetadata({ path: '/contact', title: 'Contact', description: DESCRIPTION }),
   alternates: {
     canonical: '/contact',
   },

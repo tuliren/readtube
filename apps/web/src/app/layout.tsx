@@ -11,7 +11,7 @@ import { GoogleAdsTag } from '@/components/analytics/GoogleAdsTag';
 import { UtmParamTracker } from '@/components/analytics/UtmParamTracker';
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
 import { DESCRIPTION, FULL_WEBSITE_URL, MAIN_COLOR, TITLE } from '@/constants';
-import { BASE_OPEN_GRAPH } from '@/lib/seo/openGraph';
+import { BASE_OPEN_GRAPH, BASE_TWITTER } from '@/lib/seo/openGraph';
 import '@/styles/globals.css';
 import '@/styles/tailwind.css';
 
@@ -34,11 +34,7 @@ export const metadata: Metadata = {
     'focus',
   ],
   openGraph: BASE_OPEN_GRAPH,
-  twitter: {
-    card: 'summary_large_image',
-    title: TITLE,
-    description: DESCRIPTION,
-  },
+  twitter: BASE_TWITTER,
   robots: {
     index: true,
     follow: true,

@@ -6,16 +6,16 @@ import { cache } from 'react';
 import Footer from '@/components/Footer';
 import Header from '@/components/Header';
 import VideoReader from '@/components/reader/VideoReader';
-import { FULL_WEBSITE_URL } from '@/constants';
+import { DESCRIPTION, FULL_WEBSITE_URL } from '@/constants';
 import { capTitle } from '@/lib/format/title';
 import { ENGLISH_LANGUAGE_CODE } from '@/lib/language/names';
 import { parseShareLanguage } from '@/lib/language/publicShare';
 import { serializeJsonLd } from '@/lib/seo/jsonLd';
-import { BASE_OPEN_GRAPH, DEFAULT_OG_IMAGE } from '@/lib/seo/openGraph';
+import { pageSocialMetadata } from '@/lib/seo/openGraph';
 import { buildVideoJsonLd } from '@/lib/seo/videoJsonLd';
 import { publicVideoMarkdownPath, publicVideoPath } from '@/lib/urls/publicVideoHref';
 import { loadPublicContentMeta } from '@/lib/videos/loadPublicContentMeta';
-import { loadPublicVideo } from '@/lib/videos/loadPublicVideo';
+import { loadPublicVideoWithTranscript } from '@/lib/videos/loadPublicVideo';
 import { resolveVideoSourceId } from '@/lib/videos/resolveVideoSourceId';
 
 interface Props {
@@ -35,10 +35,13 @@ function requestedLanguageOf(sp: SearchParams): string | null | undefined {
   return parseShareLanguage(raw);
 }
 
-// Shared by generateMetadata and the page so a render queries the
-// content rows once.
-const getContentMeta = cache((videoId: string, requested: string | null | undefined) =>
-  loadPublicContentMeta(prisma, videoId, requested)
+// Shared by generateMetadata and the page so a render runs the public
+// gate and the content-row lookups once. Primitive arguments only:
+// `cache` keys on argument identity.
+const getPublicVideo = cache((videoId: string) => loadPublicVideoWithTranscript(prisma, videoId));
+const getContentMeta = cache(
+  (transcriptId: string, transcriptLanguage: string | null, requested: string | null | undefined) =>
+    loadPublicContentMeta(prisma, { id: transcriptId, language: transcriptLanguage }, requested)
 );
 
 export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
@@ -48,36 +51,42 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   if (stub == null) {
     return {};
   }
-  const video = await prisma.video.findUnique({
-    where: { id: stub.id },
-    select: { title: true },
-  });
-  if (video == null) {
+  // A video without public content 404s, so it needs no metadata.
+  const loaded = await getPublicVideo(stub.id);
+  if (loaded == null) {
     return {};
   }
-  const contentMeta = await getContentMeta(stub.id, requested);
+  const contentMeta = await getContentMeta(
+    loaded.transcriptId,
+    loaded.transcriptLanguage,
+    requested
+  );
   // Root layout's title template appends " | ReadTube" automatically.
   // The self-referencing canonical (no query string) is what lets
   // Google index this page: it collapses the ?language= variants into
   // one URL and must match the sitemap entry, which is built from
   // source_id the same way. The text/markdown alternate advertises the
   // agent-readable copy (see "Agent-readable surfaces" in DESIGN.md).
+  // The share card uses the video title and its summary, and the
   // `article` OpenGraph type emits article:published_time and
   // article:modified_time from the rendered content's generated_at.
   const canonical = publicVideoPath(stub.source_id);
+  const title = capTitle(loaded.video.title);
+  const description = contentMeta.description ?? DESCRIPTION;
+  const social = pageSocialMetadata({ path: canonical, title, description });
   return {
-    title: capTitle(video.title),
+    title,
+    description,
     alternates: {
       canonical,
       types: { 'text/markdown': publicVideoMarkdownPath(stub.source_id) },
     },
+    ...social,
     openGraph: {
-      ...BASE_OPEN_GRAPH,
-      images: [DEFAULT_OG_IMAGE],
+      ...social.openGraph,
       type: 'article',
-      url: canonical,
-      publishedTime: contentMeta?.datePublished ?? undefined,
-      modifiedTime: contentMeta?.dateModified ?? undefined,
+      publishedTime: contentMeta.datePublished ?? undefined,
+      modifiedTime: contentMeta.dateModified ?? undefined,
     },
   };
 }
@@ -107,13 +116,12 @@ export default async function PublicVideoPage({ params, searchParams }: Props) {
     notFound();
   }
 
-  const [videoData, contentMeta] = await Promise.all([
-    loadPublicVideo(prisma, stub.id),
-    getContentMeta(stub.id, requestedLanguage),
-  ]);
-  if (videoData == null) {
+  const loaded = await getPublicVideo(stub.id);
+  if (loaded == null) {
     notFound();
   }
+  const { video: videoData, transcriptId, transcriptLanguage } = loaded;
+  const contentMeta = await getContentMeta(transcriptId, transcriptLanguage, requestedLanguage);
   const structuredData = buildVideoJsonLd({
     pageUrl: `${FULL_WEBSITE_URL}${publicVideoPath(stub.source_id)}`,
     video: videoData,

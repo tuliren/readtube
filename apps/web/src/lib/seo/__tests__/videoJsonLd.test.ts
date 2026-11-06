@@ -28,6 +28,7 @@ describe('toPlainDescription', () => {
       input: '## Heading\n\nFirst line.\n  Second line.',
       expected: 'Heading First line. Second line.',
     },
+    { desc: 'keeps a lone star', input: 'Compute 5 * 3.', expected: 'Compute 5 * 3.' },
     { desc: 'empty after stripping', input: '---\nversion: v1\n---\n', expected: null },
     { desc: 'null', input: null, expected: null },
     { desc: 'undefined', input: undefined, expected: null },
