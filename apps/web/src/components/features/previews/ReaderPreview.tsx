@@ -234,6 +234,7 @@ function NotesPanel({
         value={draft}
         onChange={(e) => onDraftChange(e.target.value)}
         placeholder="Add a note…"
+        aria-label="Note"
         rows={2}
         className="mt-1.5 w-full resize-none rounded border border-amber-200 bg-white px-1 py-0.5 text-[9px] leading-snug text-slate-700 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none dark:border-amber-800/60 dark:bg-slate-800 dark:text-slate-200"
       />
