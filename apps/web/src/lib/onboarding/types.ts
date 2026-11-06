@@ -52,3 +52,30 @@ export interface OnboardingResult {
   followedChannels: number;
   addedVideos: number;
 }
+
+/** A recent video listed in a channel preview. */
+export interface ChannelPreviewVideo {
+  id: string;
+  title: string;
+  thumbnailUrl: string | null;
+  durationSeconds: number | null;
+  /** ISO timestamp, or null when the platform didn't give one. */
+  publishedAt: string | null;
+  headline: string | null;
+  /** True when it has a READY summary or article, so it can be previewed. */
+  readable: boolean;
+}
+
+/** Response of `GET /api/onboarding/preview/channels/[id]`. */
+export interface ChannelPreview {
+  id: string;
+  sourceId: string;
+  platform: VideoPlatform;
+  name: string;
+  handle: string | null;
+  logoUrl: string | null;
+  description: string | null;
+  followerCount: number;
+  /** Newest videos, newest first. */
+  videos: ChannelPreviewVideo[];
+}

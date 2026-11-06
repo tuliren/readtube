@@ -2,12 +2,14 @@ import { GenerationStatus } from '@readtube/database';
 import '@tests/integration-tests';
 
 import { applyOnboardingSelection } from '@/lib/onboarding/apply';
+import { CHANNEL_PREVIEW_VIDEOS, loadChannelPreview } from '@/lib/onboarding/preview';
 import {
   MAX_VIDEOS_PER_CHANNEL,
   isNewUser,
   loadNewUserSuggestions,
   loadOnboardingSuggestions,
 } from '@/lib/onboarding/suggestions';
+import { loadPublicVideo } from '@/lib/videos/loadPublicVideo';
 
 // franc is ESM-only; language here comes from transcript rows, and the
 // text fallback is covered by the unit tests.
@@ -314,5 +316,53 @@ describe('applyOnboardingSelection', () => {
       1
     );
     expect(await global.testPrisma.standaloneVideo.count({ where: { user_id: NEW_USER } })).toBe(1);
+  });
+});
+
+describe('loadChannelPreview', () => {
+  it('lists the newest videos, flagging which can be read', async () => {
+    const channelId = await createChannel('preview_ch');
+    const ids: string[] = [];
+    for (let i = 0; i < CHANNEL_PREVIEW_VIDEOS + 1; i++) {
+      ids.push(
+        await createVideo(channelId, `preview_v${i}`, {
+          publishedHoursAgo: i,
+          summary: i === 1 ? null : GenerationStatus.READY,
+        })
+      );
+    }
+
+    const preview = await loadChannelPreview(global.testPrisma, channelId);
+
+    expect(preview).toMatchObject({ id: channelId, followerCount: 1 });
+    expect(preview?.videos.map((v) => [v.id, v.readable])).toEqual(
+      ids.slice(0, CHANNEL_PREVIEW_VIDEOS).map((id, i) => [id, i !== 1])
+    );
+    expect(preview?.videos[0].headline).toBe('Headline preview_v0');
+  });
+
+  it.each([
+    { name: 'a channel that was never hydrated', opts: { checked: false } },
+    { name: 'a channel failing to refresh', opts: { failed: true } },
+  ])('returns null for $name', async ({ opts }) => {
+    const channelId = await createChannel('preview_bad', opts);
+    expect(await loadChannelPreview(global.testPrisma, channelId)).toBeNull();
+  });
+});
+
+describe('loadPublicVideo', () => {
+  it.each([
+    { name: 'a ready summary', summary: GenerationStatus.READY, readable: true },
+    { name: 'only an in-flight summary', summary: GenerationStatus.GENERATING, readable: false },
+    { name: 'no summary', summary: null, readable: false },
+  ])('loads a video with $name only if readable', async ({ summary, readable }) => {
+    const channelId = await createChannel('public_ch');
+    const videoId = await createVideo(channelId, 'public_v', { publishedHoursAgo: 1, summary });
+
+    const video = await loadPublicVideo(global.testPrisma, videoId);
+
+    expect(video == null ? null : { id: video.id, hasSummary: video.hasSummary }).toEqual(
+      readable ? { id: videoId, hasSummary: true } : null
+    );
   });
 });

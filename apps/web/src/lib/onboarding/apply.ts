@@ -3,7 +3,7 @@ import type { PrismaClient } from '@readtube/database';
 import { platformLabel, trackContentAdded } from '@/lib/analytics/events';
 import { computeInitialReadAt } from '@/lib/subscriptions';
 
-import { HAS_GENERATED_CONTENT } from './suggestions';
+import { FOLLOWABLE_CHANNEL, HAS_GENERATED_CONTENT } from './suggestions';
 import type { OnboardingResult, OnboardingSelection } from './types';
 
 /**
@@ -75,8 +75,7 @@ export async function applyOnboardingSelection(
       : prisma.channel.findMany({
           where: {
             id: { in: selection.channelIds },
-            checked_at: { not: null },
-            refresh_failed_at: null,
+            ...FOLLOWABLE_CHANNEL,
           },
           select: {
             id: true,

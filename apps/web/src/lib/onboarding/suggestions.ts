@@ -24,6 +24,16 @@ const CHANNEL_PREVIEW_TITLES = 2;
 const VIDEO_CANDIDATE_LIMIT = VIDEO_SUGGESTION_LIMIT * 4;
 
 /**
+ * Channels whose feed is loaded and refreshing fine: the only ones the
+ * onboarding page can follow (or preview) straight from the database,
+ * since a shadow or failing channel would give the user an empty feed.
+ */
+export const FOLLOWABLE_CHANNEL = {
+  checked_at: { not: null },
+  refresh_failed_at: null,
+} satisfies Prisma.ChannelWhereInput;
+
+/**
  * Videos with a READY summary or article on some transcript: the ones
  * with a public share page. Only these are offered (and accepted back
  * by `POST /api/onboarding`), so a new user always lands on something
