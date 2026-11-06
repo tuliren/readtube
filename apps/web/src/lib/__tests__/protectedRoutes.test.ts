@@ -18,6 +18,10 @@ const PUBLIC_ROUTE_SEGMENTS = [
   // Handlers self-enforce auth so they can return 401 JSON.
   'api',
   'contact',
+  // Agent-readable surfaces.
+  'index.md',
+  'llms-full.txt',
+  'llms.txt',
   'p',
   'privacy',
   'producthunt',

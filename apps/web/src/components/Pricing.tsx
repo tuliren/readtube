@@ -6,83 +6,17 @@ import { useState } from 'react';
 
 import { Container } from '@/components/Container';
 import { GithubIcon } from '@/components/icons/GithubIcon';
-import { GITHUB_REPO_URL } from '@/constants';
+import {
+  PRICING_FREQUENCIES,
+  PRICING_HEADING_LINES,
+  PRICING_INTRO,
+  PRICING_TIERS,
+  type PricingFrequency,
+} from '@/lib/marketing/content';
 import { cn } from '@/lib/utils';
 
-const FREQUENCIES = [
-  { value: 'monthly', label: 'Monthly', priceSuffix: '/ month' },
-  { value: 'annually', label: 'Annually', priceSuffix: '/ year' },
-] as const;
-
-type Frequency = (typeof FREQUENCIES)[number];
-
-type Tier = {
-  name: string;
-  id: string;
-  href: string;
-  price: { monthly: number | null; annually: number | null };
-  free?: boolean;
-  description: string;
-  features: string[];
-  mostPopular?: boolean;
-  available: boolean;
-};
-
-const PRICING_TIERS: Tier[] = [
-  {
-    name: 'Reader',
-    id: 'tier-reader',
-    href: GITHUB_REPO_URL,
-    price: { monthly: 0, annually: 0 },
-    free: true,
-    description: 'Self-host on your own infrastructure with full access.',
-    features: [
-      'Source available on ELv2 license',
-      'Bring your own API keys',
-      'Unlimited videos, channels, playlists',
-    ],
-    available: true,
-  },
-  {
-    name: 'Curator',
-    id: 'tier-curator',
-    href: '/sign-up',
-    price: { monthly: 10, annually: 60 },
-    description:
-      'For people who follow a steady set of channels and want to read instead of watch.',
-    features: [
-      '7 days free trial',
-      'Personal RSS-style inbox',
-      'Summary and article generation',
-      '500 video transcription per month',
-      '5 hours of Gemini transcription per month',
-      'Track 30 channels & playlists',
-      'Save 1,000 standalone videos',
-      'Export as markdown',
-      'Unlimited notes and highlights (coming soon)',
-    ],
-    mostPopular: false,
-    available: false,
-  },
-  {
-    name: 'Scholar',
-    id: 'tier-scholar',
-    href: '/sign-up',
-    price: { monthly: 30, annually: 180 },
-    description: 'For researchers and lifelong learners building a deep personal archive.',
-    features: [
-      'All features included in Curator',
-      '2,000 video transcription per month',
-      '15 hours of Gemini transcription per month',
-      'Track 100 channels and playlists',
-      'Save 10,000 standalone videos',
-    ],
-    available: false,
-  },
-];
-
 export default function Pricing() {
-  const [frequency, setFrequency] = useState<Frequency>(FREQUENCIES[0]);
+  const [frequency, setFrequency] = useState<PricingFrequency>(PRICING_FREQUENCIES[0]);
 
   return (
     <section
@@ -93,12 +27,11 @@ export default function Pricing() {
       <Container>
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="font-display text-4xl font-medium tracking-tight text-slate-700 sm:text-5xl dark:text-slate-100">
-            Pricing that scales with
-            <br /> your reading
+            {PRICING_HEADING_LINES[0]}
+            <br /> {PRICING_HEADING_LINES[1]}
           </h2>
           <p className="mt-6 text-lg leading-relaxed text-slate-500 dark:text-slate-400">
-            ReadTube is source available and free to self-host. Cloud plans are free during the
-            beta. Quotas will kick in later.
+            {PRICING_INTRO}
           </p>
         </div>
 
@@ -109,7 +42,7 @@ export default function Pricing() {
               onChange={setFrequency}
               className="grid grid-cols-2 gap-x-1 rounded-full p-1 text-center text-xs/5 font-semibold ring-1 ring-inset ring-slate-200 dark:ring-slate-700"
             >
-              {FREQUENCIES.map((option) => (
+              {PRICING_FREQUENCIES.map((option) => (
                 <Radio
                   key={option.value}
                   value={option}

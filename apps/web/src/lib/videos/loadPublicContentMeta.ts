@@ -7,18 +7,18 @@ import {
   toPlainDescription,
 } from '@/lib/seo/videoJsonLd';
 import {
-  PUBLIC_DEFAULT_ARTICLE_STYLE,
+  PUBLIC_ARTICLE_STYLE,
   publicArticleWhere,
   publicSummaryWhere,
-} from '@/lib/videos/publicShareRows';
+} from '@/lib/videos/publicContent';
 
 /**
  * Freshness, language, and description of the AI content a public
  * share page renders for `requested` (see `parseShareLanguage`). It
  * resolves the same summary and article rows the public API routes
- * serve, so the dates describe what the visitor actually reads: the
- * earliest `generated_at` is the published date, the latest the
- * modified date. Returns null when the video has no transcript.
+ * serve, using the filters in `publicContent.ts`, so the dates describe
+ * what the visitor actually reads: the earliest `generated_at` is the
+ * published date, the latest the modified date. Returns null when the video has no transcript.
  */
 export async function loadPublicContentMeta(
   prisma: PrismaClient,
@@ -51,7 +51,7 @@ export async function loadPublicContentMeta(
   );
 
   const articleSelect = { select: { language: true, generated_at: true } } as const;
-  const style = PUBLIC_DEFAULT_ARTICLE_STYLE;
+  const style = PUBLIC_ARTICLE_STYLE;
   const article = await resolveShareRow(
     requested,
     (language) =>

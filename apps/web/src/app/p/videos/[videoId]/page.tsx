@@ -13,6 +13,7 @@ import { parseShareLanguage } from '@/lib/language/publicShare';
 import { serializeJsonLd } from '@/lib/seo/jsonLd';
 import { BASE_OPEN_GRAPH, DEFAULT_OG_IMAGE } from '@/lib/seo/openGraph';
 import { buildVideoJsonLd } from '@/lib/seo/videoJsonLd';
+import { publicVideoMarkdownPath, publicVideoPath } from '@/lib/urls/publicVideoHref';
 import { loadPublicContentMeta } from '@/lib/videos/loadPublicContentMeta';
 import { loadPublicVideo } from '@/lib/videos/loadPublicVideo';
 import { resolveVideoSourceId } from '@/lib/videos/resolveVideoSourceId';
@@ -32,10 +33,6 @@ type SearchParams = Awaited<Props['searchParams']>;
 function requestedLanguageOf(sp: SearchParams): string | null | undefined {
   const raw = Array.isArray(sp.language) ? sp.language[0] : sp.language;
   return parseShareLanguage(raw);
-}
-
-function canonicalPathOf(sourceId: string): string {
-  return `/p/videos/${encodeURIComponent(sourceId)}`;
 }
 
 // Shared by generateMetadata and the page so a render queries the
@@ -63,14 +60,16 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   // The self-referencing canonical (no query string) is what lets
   // Google index this page: it collapses the ?language= variants into
   // one URL and must match the sitemap entry, which is built from
-  // source_id the same way.
+  // source_id the same way. The text/markdown alternate advertises the
+  // agent-readable copy (see "Agent-readable surfaces" in DESIGN.md).
   // `article` OpenGraph type emits article:published_time and
   // article:modified_time from the rendered content's generated_at.
-  const canonical = canonicalPathOf(stub.source_id);
+  const canonical = publicVideoPath(stub.source_id);
   return {
     title: capTitle(video.title),
     alternates: {
       canonical,
+      types: { 'text/markdown': publicVideoMarkdownPath(stub.source_id) },
     },
     openGraph: {
       ...BASE_OPEN_GRAPH,
@@ -116,7 +115,7 @@ export default async function PublicVideoPage({ params, searchParams }: Props) {
     notFound();
   }
   const structuredData = buildVideoJsonLd({
-    pageUrl: `${FULL_WEBSITE_URL}${canonicalPathOf(stub.source_id)}`,
+    pageUrl: `${FULL_WEBSITE_URL}${publicVideoPath(stub.source_id)}`,
     video: videoData,
     content: contentMeta,
   });

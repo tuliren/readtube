@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 import { countWords } from '@/lib/format/wordCount';
+import { languageQueryFragment } from '@/lib/language/prompt';
 import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { consumeNdjsonStream } from '@/lib/reader/consumeNdjsonStream';
 import { extractArticleHeadings } from '@/lib/reader/extractArticleHeadings';
@@ -20,7 +21,7 @@ import ArticleMarkdown from './ArticleMarkdown';
 import ExportMarkdownButtons from './ExportMarkdownButtons';
 import FloatingToc from './FloatingToc';
 import GenerationProgressBox from './GenerationProgressBox';
-import LanguagePicker, { languageQueryFragment } from './LanguagePicker';
+import LanguagePicker from './LanguagePicker';
 import RegenerateButton from './RegenerateButton';
 import StreamingArticleBody from './StreamingArticleBody';
 import TranscriptFallbackStep from './TranscriptFallbackStep';
