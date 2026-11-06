@@ -14,8 +14,6 @@ const DASHBOARD_DIR = path.join(APP_DIR, '(dashboard)');
  * instead of defaulting to public.
  */
 const PUBLIC_ROUTE_SEGMENTS = [
-  // Workflow runtime queue; excluded from the proxy matcher entirely.
-  '.well-known',
   // Handlers self-enforce auth so they can return 401 JSON.
   'api',
   'p',
@@ -26,6 +24,15 @@ const PUBLIC_ROUTE_SEGMENTS = [
   'sign-up',
   'terms',
 ];
+
+/**
+ * Left out of the check. `.well-known/workflow` holds the Workflow
+ * runtime's queue handlers, which `next dev` / `next build` generate
+ * (gitignored), so the folder exists on some machines and not in a
+ * fresh CI checkout. The proxy matcher skips that path entirely, and
+ * `.well-known` URIs are public by definition.
+ */
+const UNCHECKED_SEGMENTS = ['.well-known'];
 
 const ROUTE_FILE = /^(page|route)\.[jt]sx?$/;
 // `(.)x`, `(..)x`, `(...)x`, `(..)(..)x`: intercepting routes render at
@@ -128,7 +135,9 @@ describe('PROTECTED_ROUTE_PREFIXES', () => {
 });
 
 describe('app route coverage', () => {
-  const appSegments = topLevelSegments(APP_DIR);
+  const appSegments = topLevelSegments(APP_DIR).filter(
+    (segment) => !UNCHECKED_SEGMENTS.includes(segment)
+  );
 
   it.each(appSegments)(
     'classifies the top-level segment "%s" as protected or deliberately public',
