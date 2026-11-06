@@ -1,13 +1,16 @@
 import { ArticleStyle, prisma } from '@readtube/database';
 import { NextRequest, NextResponse } from 'next/server';
 
-import { parseShareLanguage, resolveShareRow } from '@/lib/language/publicShare';
-
-const DEFAULT_STYLE: ArticleStyle = ArticleStyle.NARRATIVE;
+import { parseShareLanguage } from '@/lib/language/publicShare';
+import {
+  PUBLIC_ARTICLE_STYLE,
+  findPublicTranscript,
+  loadPublicArticle,
+} from '@/lib/videos/publicContent';
 
 function parseStyle(raw: string | null | undefined): ArticleStyle | null {
   if (raw == null) {
-    return DEFAULT_STYLE;
+    return PUBLIC_ARTICLE_STYLE;
   }
   if (Object.values(ArticleStyle).includes(raw as ArticleStyle)) {
     return raw as ArticleStyle;
@@ -17,15 +20,15 @@ function parseStyle(raw: string | null | undefined): ArticleStyle | null {
 
 /**
  * Sharing-intent gate: mirrors the public video page, which only
- * renders when a cached Summary or Article exists. A video without
- * either artifact is treated as 404 even if the internal UUID is
- * guessed correctly.
+ * renders when a cached Summary or Article exists (see
+ * `findPublicTranscript`). A video without either artifact is treated
+ * as 404 even if the internal UUID is guessed correctly.
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const styleParam = request.nextUrl.searchParams.get('style');
   const style = parseStyle(styleParam);
-  if (!style) {
+  if (style == null) {
     console.error(`[public/article/GET] Invalid style: ${styleParam}`);
     return NextResponse.json({ error: 'Invalid style' }, { status: 400 });
   }
@@ -36,78 +39,18 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     `[public/article/GET] Fetching public article for video ${id} (style=${style}, language=${requested === undefined ? 'default' : (requested ?? 'original')})`
   );
 
-  const video = await prisma.video.findFirst({
-    where: { id },
-    select: {
-      id: true,
-      transcripts: {
-        orderBy: { created_at: 'desc' },
-        take: 1,
-        select: {
-          id: true,
-          // Match the public summary route: gate on the existence of
-          // ANY summary or article row. Translations don't always
-          // derive from a pre-existing Original (the user can pick a
-          // target language as their first generation), so a missing
-          // Original isn't the same thing as "no public artifact".
-          // `status: READY` filters out in-flight workflow rows.
-          summaries: {
-            where: { status: 'READY' },
-            take: 1,
-            select: { transcript_id: true },
-          },
-          articles: {
-            where: { status: 'READY' },
-            take: 1,
-            select: { id: true },
-          },
-        },
-      },
-    },
-  });
-  if (!video) {
+  const { videoExists, transcriptId } = await findPublicTranscript(prisma, id);
+  if (!videoExists) {
     console.error(`[public/article/GET] Video ${id} not found`);
     return NextResponse.json({ error: 'Video not found' }, { status: 404 });
   }
-
-  const transcript = video.transcripts[0];
-  const hasAnyPublicArtifact =
-    transcript != null && (transcript.summaries.length > 0 || transcript.articles.length > 0);
-  if (!hasAnyPublicArtifact) {
+  if (transcriptId == null) {
     console.error(`[public/article/GET] Video ${id} has no public artifact`);
     return NextResponse.json({ error: 'Not public' }, { status: 404 });
   }
 
-  const fields = {
-    select: { content: true, style: true, language: true, generated_at: true },
-  } as const;
-
-  // Require `content != null` on every lookup: a READY-with-null-content
-  // row isn't servable (see the private article GET for how those can
-  // arise), so it must not shadow a sibling row that does have content
-  // during the share-language fallback below.
-  const findByLanguage = (language: string | null) =>
-    prisma.article.findFirst({
-      where: {
-        transcript_id: transcript.id,
-        style,
-        language,
-        status: 'READY',
-        content: { not: null },
-      },
-      ...fields,
-    });
-
-  const article = await resolveShareRow(requested, findByLanguage, () =>
-    prisma.article.findFirst({
-      where: { transcript_id: transcript.id, style, status: 'READY', content: { not: null } },
-      orderBy: { generated_at: 'asc' },
-      ...fields,
-    })
-  );
-  // Belt-and-suspenders: the queries above already exclude null content,
-  // but keep the guard so `article.content` type-narrows before use.
-  if (article == null || article.content == null) {
+  const article = await loadPublicArticle(prisma, transcriptId, requested, style);
+  if (article == null) {
     console.info(`[public/article/GET] No cached article for video ${id} (style=${style})`);
     return NextResponse.json({ error: 'Not cached' }, { status: 404 });
   }

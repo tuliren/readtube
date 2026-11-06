@@ -1,136 +1,18 @@
 import { Minus, Plus } from 'lucide-react';
-import { ReactNode } from 'react';
+import type { Components } from 'react-markdown';
 
 import { Container } from '@/components/Container';
+import CustomMarkdown from '@/components/CustomMarkdown';
+import { FAQS, FAQ_HEADING } from '@/lib/marketing/content';
 
-const FAQS: { question: string; answer: ReactNode }[] = [
-  {
-    question: 'What platforms are supported?',
-    answer: (
-      <>
-        <p>ReadTube pulls transcripts from public videos on:</p>
-        <ul className="list-disc space-y-1 pl-5">
-          <li>
-            <span className="font-medium text-slate-700 dark:text-slate-200">YouTube</span>: videos,
-            channels, and playlists
-          </li>
-          <li>
-            <span className="font-medium text-slate-700 dark:text-slate-200">Bilibili</span>: videos
-            and channels
-          </li>
-        </ul>
-        <p>
-          Paste any supported URL and we handle the rest: fetching the transcript, generating
-          headlines, and turning long videos into readable articles.
-        </p>
-      </>
-    ),
-  },
-  {
-    question: 'What videos are not supported?',
-    answer: (
-      <>
-        <p>A few kinds of videos don&apos;t fit ReadTube&apos;s reading-first model:</p>
-        <ul className="list-disc space-y-1 pl-5">
-          <li>
-            <span className="font-medium text-slate-700 dark:text-slate-200">Short videos</span>.
-            YouTube Shorts and other sub-minute clips are skipped. They&apos;re designed for quick
-            visual viewing, and a transcript rarely adds much on top.
-          </li>
-          <li>
-            <span className="font-medium text-slate-700 dark:text-slate-200">
-              Videos without captions
-            </span>
-            . Music videos, silent footage, and anything the platform can&apos;t auto-caption have
-            no transcript for us to read from.
-          </li>
-          <li>
-            <span className="font-medium text-slate-700 dark:text-slate-200">
-              Private or age-restricted videos
-            </span>
-            . We only fetch what&apos;s publicly accessible.
-          </li>
-        </ul>
-      </>
-    ),
-  },
-  {
-    question: 'Who is ReadTube designed for?',
-    answer:
-      'Curious readers who subscribe to thoughtful creators (interviews, lectures, tech talks, essays) and want to consume them without the algorithmic pull of the feed. If you save videos for "later" and rarely return, ReadTube is for you.',
-  },
-  {
-    question: 'Who is ReadTube not designed for?',
-    answer:
-      "If you mostly use YouTube for entertainment, vlogs, music, or visual content, ReadTube probably isn't the right fit. We leave out short videos, autoplay, and the recommendation feed on purpose, so the experience can feel quiet compared to a typical video app. It works best when you come for the ideas and want room to read and think.",
-  },
-  {
-    question: 'How is this different from just watching at 2x speed?',
-    answer: (
-      <>
-        <p>
-          Reading is faster than listening, and reading with structure (headlines, summaries,
-          timestamps) lets you skim, skip, and return. A 20-minute talk becomes a 5-minute read.
-        </p>
-        <p>
-          More importantly, ReadTube turns your subscriptions into a searchable archive you can
-          actually think with: highlight passages, pin notes, and search semantically across every
-          channel you follow. A 2x playback speed can never give you that.
-        </p>
-      </>
-    ),
-  },
-  {
-    question: "How is this different from YouTube's AI summaries or other summarizers?",
-    answer: (
-      <>
-        <p>
-          Most YouTube summarizers, and YouTube&apos;s own AI features, give you a one-off summary
-          for the video you&apos;re currently watching, then forget it the moment you close the tab.
-          The summary is the product, and nothing compounds.
-        </p>
-        <p>
-          ReadTube is built the other way around. Every video you add becomes a durable entry in
-          your own library: searchable across every channel you follow, annotatable, and organized
-          so you can return to an idea weeks or months later. The summary is a starting point, not
-          the destination.
-        </p>
-      </>
-    ),
-  },
-  {
-    question: 'Do I need a YouTube or Bilibili account?',
-    answer:
-      'No. ReadTube uses public video transcripts: no creator account, no importing your subscriptions. Add the channels you want to follow.',
-  },
-  {
-    question: 'What happens to my notes and highlights?',
-    answer:
-      'Everything you highlight or annotate lives in your personal library. Notes are timestamped back to the source video, searchable across your whole archive, and yours to keep.',
-  },
-  {
-    question: 'Does ReadTube work for videos without captions?',
-    answer:
-      'ReadTube relies on transcripts, either creator-provided or auto-generated by the video platforms. Most talks, interviews, and long-form content are covered. Music videos and silent footage are not a good fit.',
-  },
-  {
-    question: 'Is ReadTube free to use?',
-    answer: (
-      <>
-        <p>
-          Yes, in two ways. ReadTube is source available under the Elastic License 2.0, so you can
-          self-host the full product on your own infrastructure with your own AI provider keys for
-          free.
-        </p>
-        <p>
-          The cloud version at read.tube is also free during the beta. Quotas on the paid tiers will
-          start being enforced later, but anything you read, highlight, or annotate during the beta
-          stays in your library.
-        </p>
-      </>
-    ),
-  },
-];
+// The homepage styles each markdown element itself (no `prose`) so
+// the answers keep their hand-tuned look.
+const ANSWER_COMPONENTS: Components = {
+  ul: ({ children }) => <ul className="list-disc space-y-1 pl-5">{children}</ul>,
+  strong: ({ children }) => (
+    <span className="font-medium text-slate-700 dark:text-slate-200">{children}</span>
+  ),
+};
 
 export default function Faq() {
   return (
@@ -142,7 +24,7 @@ export default function Faq() {
       <Container>
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="font-display text-4xl font-medium tracking-tight text-slate-700 sm:text-5xl dark:text-slate-100">
-            Frequently asked questions
+            {FAQ_HEADING}
           </h2>
         </div>
 
@@ -160,9 +42,11 @@ export default function Faq() {
                     <Minus className="hidden h-4 w-4 group-open:block" />
                   </span>
                 </summary>
-                <div className="flex flex-col gap-2.5 mt-4 text-base leading-relaxed text-slate-500 dark:text-slate-400">
-                  {faq.answer}
-                </div>
+                <CustomMarkdown
+                  markdown={faq.answer}
+                  className="flex flex-col gap-2.5 mt-4 text-base leading-relaxed text-slate-500 dark:text-slate-400"
+                  components={ANSWER_COMPONENTS}
+                />
               </details>
             </li>
           ))}

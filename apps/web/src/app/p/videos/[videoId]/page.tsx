@@ -8,6 +8,7 @@ import VideoReader from '@/components/reader/VideoReader';
 import { capTitle } from '@/lib/format/title';
 import { ENGLISH_LANGUAGE_CODE } from '@/lib/language/names';
 import { parseShareLanguage } from '@/lib/language/publicShare';
+import { publicVideoMarkdownPath, publicVideoPath } from '@/lib/urls/publicVideoHref';
 import { loadPublicVideo } from '@/lib/videos/loadPublicVideo';
 import { resolveVideoSourceId } from '@/lib/videos/resolveVideoSourceId';
 
@@ -33,11 +34,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   // The self-referencing canonical (no query string) is what lets
   // Google index this page: it collapses the ?language= variants into
   // one URL and must match the sitemap entry, which is built from
-  // source_id the same way.
+  // source_id the same way. The text/markdown alternate advertises the
+  // agent-readable copy (see "Agent-readable surfaces" in DESIGN.md).
   return {
     title: capTitle(video.title),
     alternates: {
-      canonical: `/p/videos/${encodeURIComponent(stub.source_id)}`,
+      canonical: publicVideoPath(stub.source_id),
+      types: { 'text/markdown': publicVideoMarkdownPath(stub.source_id) },
     },
   };
 }

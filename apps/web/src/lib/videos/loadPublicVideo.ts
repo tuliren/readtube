@@ -14,6 +14,19 @@ export async function loadPublicVideo(
   prisma: PrismaClient,
   videoId: string
 ): Promise<VideoData | null> {
+  return (await loadPublicVideoWithTranscript(prisma, videoId))?.video ?? null;
+}
+
+/**
+ * {@link loadPublicVideo}, plus the id of the latest transcript that
+ * passed the gate, for callers that go on to load that transcript's
+ * summary and article (the markdown rendition). One query, so the gate
+ * and the transcript id can't disagree.
+ */
+export async function loadPublicVideoWithTranscript(
+  prisma: PrismaClient,
+  videoId: string
+): Promise<{ video: VideoData; transcriptId: string } | null> {
   const video = await prisma.video.findUnique({
     where: { id: videoId },
     select: {
@@ -32,6 +45,7 @@ export async function loadPublicVideo(
         orderBy: { created_at: 'desc' },
         take: 1,
         select: {
+          id: true,
           // Only READY rows count: a slot that only has an in-flight
           // workflow row has nothing to read yet.
           summaries: {
@@ -53,13 +67,16 @@ export async function loadPublicVideo(
   }
 
   const latest = video.transcripts[0];
-  const hasSummary = (latest?.summaries.length ?? 0) > 0;
-  const hasArticle = (latest?.articles.length ?? 0) > 0;
+  if (latest == null) {
+    return null;
+  }
+  const hasSummary = latest.summaries.length > 0;
+  const hasArticle = latest.articles.length > 0;
   if (!hasSummary && !hasArticle) {
     return null;
   }
 
-  return decorateVideo(
+  const decorated = decorateVideo(
     video,
     {
       starredIds: new Set(),
@@ -70,4 +87,5 @@ export async function loadPublicVideo(
     },
     null
   );
+  return { video: decorated, transcriptId: latest.id };
 }
