@@ -24,10 +24,11 @@ describe('primaryLanguage', () => {
 describe('languageDisplayName', () => {
   it.each([
     { code: 'en', expected: 'English' },
-    { code: 'zh', expected: 'Chinese' },
-    { code: 'he', expected: 'Hebrew' },
-    { code: 'bg', expected: 'Bulgarian' },
-    { code: 'sw', expected: 'Swahili' },
+    { code: 'zh', expected: '中文' },
+    { code: 'de', expected: 'Deutsch' },
+    { code: 'ja', expected: '日本語' },
+    { code: 'es', expected: 'Español' },
+    { code: 'bg', expected: 'Български' },
     { code: 'xx', expected: null },
     { code: 'not a tag', expected: null },
   ])('names $code as $expected', ({ code, expected }) => {
@@ -36,7 +37,7 @@ describe('languageDisplayName', () => {
 });
 
 describe('languageOptions', () => {
-  it('counts each language, most common first then by name, skipping unknowns', () => {
+  it('counts each language, most common first then by code, skipping unknowns', () => {
     const options = languageOptions([
       { language: 'zh' },
       { language: 'en' },
@@ -46,8 +47,8 @@ describe('languageOptions', () => {
     ]);
     expect(options).toEqual([
       { code: 'en', label: 'English', count: 2 },
-      { code: 'zh', label: 'Chinese', count: 1 },
-      { code: 'ja', label: 'Japanese', count: 1 },
+      { code: 'ja', label: '日本語', count: 1 },
+      { code: 'zh', label: '中文', count: 1 },
     ]);
   });
 

@@ -1,8 +1,4 @@
-import {
-  ENGLISH_LANGUAGE_CODE,
-  languageNameForPrompt,
-  normalizeLanguageTag,
-} from '@/lib/language/names';
+import { ENGLISH_LANGUAGE_CODE, normalizeLanguageTag } from '@/lib/language/names';
 
 /**
  * Language filtering for the new-user onboarding page. Client-safe (no
@@ -26,23 +22,23 @@ export function primaryLanguage(tag: string): string {
   return normalizeLanguageTag(tag.replace(/_/g, '-')).split('-')[0];
 }
 
-const INTL_LANGUAGE_NAMES = new Intl.DisplayNames(['en'], { type: 'language' });
-
 /**
- * The English name for a primary language code, or null when there is
- * none. Chips always spell the language out: the curated names come
- * first, then the runtime's full ISO 639 list (`bg` → "Bulgarian").
- * Both give back the code itself when they don't know it, which counts
- * as no name.
+ * The name of a primary language code in that language itself
+ * (`zh` → "中文", `de` → "Deutsch"), or null when there is none. A new
+ * user looking for content they can read scans for their own language's
+ * name, so chips use the endonym rather than an English name or a code.
+ * `Intl.DisplayNames` gives back the code itself when it doesn't know
+ * it, which counts as no name.
  */
 export function languageDisplayName(code: string): string | null {
-  const curated = languageNameForPrompt(code);
-  if (curated !== code) {
-    return curated;
-  }
   try {
-    const name = INTL_LANGUAGE_NAMES.of(code);
-    return name == null || name.toLowerCase() === code.toLowerCase() ? null : name;
+    const name = new Intl.DisplayNames([code], { type: 'language' }).of(code);
+    if (name == null || name.toLowerCase() === code.toLowerCase()) {
+      return null;
+    }
+    // Many languages lowercase their own name ("español", "български");
+    // a chip reads as a label, so start it with a capital.
+    return name.charAt(0).toLocaleUpperCase(code) + name.slice(1);
   } catch {
     // Not a well-formed language tag.
     return null;
@@ -57,8 +53,9 @@ export interface LanguageOption {
 
 /**
  * The language chips to offer for a set of suggestions: one per language
- * present, most common first, with ties broken by label so the order is
- * stable. Suggestions whose language is unknown, or has no name to show,
+ * present, most common first, with ties broken by code so the order is
+ * stable. (Not by label: labels are in many scripts, and collating
+ * across scripts can differ between the server and the browser.) Suggestions whose language is unknown, or has no name to show,
  * only appear under "All".
  */
 export function languageOptions(items: { language: string | null }[]): LanguageOption[] {
@@ -76,7 +73,9 @@ export function languageOptions(items: { language: string | null }[]): LanguageO
       options.push({ code, label, count });
     }
   });
-  return options.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  return options.sort(
+    (a, b) => b.count - a.count || (a.code < b.code ? -1 : a.code > b.code ? 1 : 0)
+  );
 }
 
 /** Keep the suggestions in `language`, or all of them for {@link ALL_LANGUAGES}. */
