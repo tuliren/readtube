@@ -14,12 +14,13 @@ import type { OnboardingSelection, OnboardingSuggestions } from '@/lib/onboardin
 
 import LanguageChips from './LanguageChips';
 import OnboardingFooter from './OnboardingFooter';
+import OnboardingPreviewDialog, { type PreviewTarget } from './OnboardingPreviewDialog';
 import ShowMoreButton from './ShowMoreButton';
 import SuggestedChannelCard from './SuggestedChannelCard';
 import SuggestedVideoCard from './SuggestedVideoCard';
 
 /** Cards shown per section before "Show more", and added per click. */
-const CHANNEL_PAGE = 9;
+const CHANNEL_PAGE = 8;
 const VIDEO_PAGE = 6;
 
 export interface NewUserOnboardingViewProps {
@@ -45,8 +46,6 @@ export default function NewUserOnboardingView({
   onSubmit,
   submitting,
 }: NewUserOnboardingViewProps) {
-  usePasteToAdd(true, onAdd);
-
   const options = useMemo(
     () => languageOptions([...suggestions.channels, ...suggestions.videos]),
     [suggestions]
@@ -60,6 +59,10 @@ export default function NewUserOnboardingView({
   const [videoLimit, setVideoLimit] = useState(VIDEO_PAGE);
   const [selectedChannels, setSelectedChannels] = useState<Set<string>>(() => new Set());
   const [selectedVideos, setSelectedVideos] = useState<Set<string>>(() => new Set());
+  // Previews opened so far: a channel, then maybe one of its videos.
+  const [previewStack, setPreviewStack] = useState<PreviewTarget[]>([]);
+  // Pasting a link opens the Add dialog, but not over an open preview.
+  usePasteToAdd(previewStack.length === 0, onAdd);
 
   // Captured after mount so the first render matches the server's
   // absolute dates; see `relativeTime`.
@@ -81,6 +84,18 @@ export default function NewUserOnboardingView({
     setLanguage(code);
     setChannelLimit(CHANNEL_PAGE);
     setVideoLimit(VIDEO_PAGE);
+  }
+
+  function isSelected(target: PreviewTarget): boolean {
+    return (target.kind === 'channel' ? selectedChannels : selectedVideos).has(target.id);
+  }
+
+  function toggleTarget(target: PreviewTarget) {
+    if (target.kind === 'channel') {
+      setSelectedChannels((prev) => toggle(prev, target.id));
+    } else {
+      setSelectedVideos((prev) => toggle(prev, target.id));
+    }
   }
 
   function handleContinue() {
@@ -120,13 +135,14 @@ export default function NewUserOnboardingView({
             <EmptySection message="No channels in this language yet." />
           ) : (
             <>
-              <div className="grid grid-cols-1 gap-3 @xl:grid-cols-2 @4xl:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 @xl:grid-cols-2">
                 {channels.slice(0, channelLimit).map((channel) => (
                   <SuggestedChannelCard
                     key={channel.id}
                     channel={channel}
                     selected={selectedChannels.has(channel.id)}
                     onToggle={(id) => setSelectedChannels((prev) => toggle(prev, id))}
+                    onPreview={(id) => setPreviewStack([{ kind: 'channel', id }])}
                   />
                 ))}
               </div>
@@ -158,6 +174,7 @@ export default function NewUserOnboardingView({
                     now={now}
                     selected={selectedVideos.has(video.id)}
                     onToggle={(id) => setSelectedVideos((prev) => toggle(prev, id))}
+                    onPreview={(id) => setPreviewStack([{ kind: 'video', id }])}
                   />
                 ))}
               </div>
@@ -178,6 +195,15 @@ export default function NewUserOnboardingView({
         submitting={submitting}
         onContinue={handleContinue}
         onAddLink={() => onAdd()}
+      />
+
+      <OnboardingPreviewDialog
+        stack={previewStack}
+        onOpenVideo={(id) => setPreviewStack((prev) => [...prev, { kind: 'video', id }])}
+        onBack={() => setPreviewStack((prev) => prev.slice(0, -1))}
+        onClose={() => setPreviewStack([])}
+        isSelected={isSelected}
+        onToggle={toggleTarget}
       />
     </div>
   );

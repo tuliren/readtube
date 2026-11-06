@@ -1,14 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/nextjs';
 import { fn } from 'storybook/test';
+import { SWRConfig } from 'swr';
 
 import NewUserOnboardingView from '@/components/onboarding/NewUserOnboardingView';
 import type { SuggestedChannel, SuggestedVideo } from '@/lib/onboarding/types';
 
-/** Flat-color placeholder image, so the story needs no network. */
-function swatch(hue: number, width: number, height: number): string {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" fill="hsl(${hue},55%,60%)"/></svg>`;
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-}
+import { mockPreviewRequests, swatch } from './previewFixtures';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const NOW = Date.now();
@@ -64,10 +61,12 @@ const meta = {
   component: NewUserOnboardingView,
   parameters: {
     layout: 'fullscreen',
+    // The video preview renders VideoReader, which reads search params.
+    nextjs: { appDirectory: true },
     docs: {
       description: {
         component:
-          'Shown in place of the inbox until the user has added anything. Channels to follow on top, videos to read below, filtered to English by default; one button saves every pick. Pasting a supported link anywhere opens the Add dialog.',
+          'Shown in place of the inbox until the user has added anything. Channels to follow on top, videos to read below, filtered to English by default; one button saves every pick. Each card has a Preview button; preview requests are answered with fixtures here. Pasting a supported link anywhere opens the Add dialog.',
       },
     },
   },
@@ -77,10 +76,13 @@ const meta = {
     onSubmit: fn(),
     submitting: false,
   },
+  beforeEach: mockPreviewRequests,
   render: (args) => (
-    <div className="flex h-screen bg-background">
-      <NewUserOnboardingView {...args} />
-    </div>
+    <SWRConfig value={{ provider: () => new Map() }}>
+      <div className="flex h-screen bg-background">
+        <NewUserOnboardingView {...args} />
+      </div>
+    </SWRConfig>
   ),
 } satisfies Meta<typeof NewUserOnboardingView>;
 
