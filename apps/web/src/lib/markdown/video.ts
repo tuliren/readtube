@@ -8,14 +8,16 @@ export interface VideoMarkdownInput {
   publishedAt: string | null;
   platformName: string;
   watchUrl: string;
-  /** Absolute canonical URL of the public reader page. */
+  /** Absolute URL of the public reader page showing this version. */
   readerUrl: string;
-  /** Human name of the language the summary/article are in. */
-  languageName: string | null;
-  /** Frontmatter-stripped summary fields, or null when there is none. */
-  summary: { headline: string; short: string; full: string } | null;
+  /**
+   * Frontmatter-stripped summary fields, or null when there is none.
+   * `languageName` is the human name of the version served, which the
+   * share-language fallback can pick independently of the article's.
+   */
+  summary: { headline: string; short: string; full: string; languageName: string } | null;
   /** Frontmatter-stripped article markdown, or null when there is none. */
-  article: string | null;
+  article: { content: string; languageName: string } | null;
 }
 
 const ATX_HEADING = /^(#{1,5})(\s)/;
@@ -42,6 +44,20 @@ export function demoteHeadings(markdown: string): string {
 }
 
 /**
+ * One `Language` line when the summary and article are in the same
+ * language (the usual case), otherwise one line per section, so the
+ * label never misdescribes a section the fallback served in another
+ * language.
+ */
+function languageLines(summary: string | undefined, article: string | undefined): string[] {
+  if (summary == null || article == null || summary === article) {
+    const only = summary ?? article;
+    return only == null ? [] : [`- Language: ${only}`];
+  }
+  return [`- Summary language: ${summary}`, `- Article language: ${article}`];
+}
+
+/**
  * Markdown rendition of a public video page (`/p/videos/:id.md`, and
  * the page itself under `Accept: text/markdown`): a metadata block,
  * then the summary and article the HTML reader would show. Pure: the
@@ -56,19 +72,17 @@ export function buildVideoMarkdown(input: VideoMarkdownInput): string {
   }
   lines.push(`- Source video: [Watch on ${input.platformName}](${input.watchUrl})`);
   lines.push(`- Read on ReadTube: ${input.readerUrl}`);
-  if (input.languageName != null) {
-    lines.push(`- Language: ${input.languageName}`);
-  }
+  lines.push(...languageLines(input.summary?.languageName, input.article?.languageName));
   lines.push('');
 
   if (input.summary != null) {
-    lines.push('## Summary', '', `**${input.summary.headline.trim()}**`, '');
+    lines.push('## Summary', '', `**${escapeMarkdownText(input.summary.headline)}**`, '');
     lines.push(input.summary.short.trim(), '');
     lines.push(input.summary.full.trim(), '');
   }
 
   if (input.article != null) {
-    lines.push('## Article', '', demoteHeadings(input.article.trim()), '');
+    lines.push('## Article', '', demoteHeadings(input.article.content.trim()), '');
   }
 
   return lines.join('\n');

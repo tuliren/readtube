@@ -28,7 +28,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const { id } = await params;
   const styleParam = request.nextUrl.searchParams.get('style');
   const style = parseStyle(styleParam);
-  if (!style) {
+  if (style == null) {
     console.error(`[public/article/GET] Invalid style: ${styleParam}`);
     return NextResponse.json({ error: 'Invalid style' }, { status: 400 });
   }

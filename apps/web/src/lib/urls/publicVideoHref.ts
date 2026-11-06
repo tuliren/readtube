@@ -9,7 +9,7 @@ export function publicVideoPath(sourceId: string): string {
 
 /**
  * Path of the markdown rendition of {@link publicVideoPath}. Served by
- * a `next.config.js` rewrite to `app/md/videos/[videoId]/route.ts`.
+ * a `next.config.js` rewrite to `app/p/videos/[videoId]/md/route.ts`.
  */
 export function publicVideoMarkdownPath(sourceId: string): string {
   return `${publicVideoPath(sourceId)}.md`;

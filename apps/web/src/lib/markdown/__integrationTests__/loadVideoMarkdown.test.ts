@@ -108,6 +108,32 @@ describe('loadVideoMarkdown', () => {
     expect(markdown).not.toContain('version: v1');
   });
 
+  it.each([
+    ['no language', null, `https://www.read.tube/p/videos/${SOURCE_ID}`],
+    ['the Original', 'original', `https://www.read.tube/p/videos/${SOURCE_ID}?language=original`],
+    ['a translation', 'zh-Hans', `https://www.read.tube/p/videos/${SOURCE_ID}?language=zh-Hans`],
+  ])('links the reader page for %s', async (_case, language, readerUrl) => {
+    const transcriptId = await seedVideo();
+    await seedSummary(transcriptId, null, 'orig');
+
+    const markdown = await loadVideoMarkdown(global.testPrisma, SOURCE_ID, language);
+
+    expect(markdown).toContain(`- Read on ReadTube: ${readerUrl}\n`);
+  });
+
+  it('labels each section when the fallback serves them in different languages', async () => {
+    const transcriptId = await seedVideo();
+    await seedSummary(transcriptId, 'en', 'en');
+    await seedArticle(transcriptId, 'zh-Hans', 'zh');
+
+    const markdown = await loadVideoMarkdown(global.testPrisma, SOURCE_ID, null);
+
+    expect(markdown).toContain(
+      '- Summary language: English\n- Article language: Simplified Chinese'
+    );
+    expect(markdown).not.toContain('- Language:');
+  });
+
   it('renders the article alone when there is no summary', async () => {
     const transcriptId = await seedVideo();
     await seedArticle(transcriptId, null, 'orig');

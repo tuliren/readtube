@@ -8,6 +8,7 @@ import { Container } from '@/components/Container';
 import { GithubIcon } from '@/components/icons/GithubIcon';
 import {
   PRICING_FREQUENCIES,
+  PRICING_HEADING_LINES,
   PRICING_INTRO,
   PRICING_TIERS,
   type PricingFrequency,
@@ -26,8 +27,8 @@ export default function Pricing() {
       <Container>
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="font-display text-4xl font-medium tracking-tight text-slate-700 sm:text-5xl dark:text-slate-100">
-            Pricing that scales with
-            <br /> your reading
+            {PRICING_HEADING_LINES[0]}
+            <br /> {PRICING_HEADING_LINES[1]}
           </h2>
           <p className="mt-6 text-lg leading-relaxed text-slate-500 dark:text-slate-400">
             {PRICING_INTRO}

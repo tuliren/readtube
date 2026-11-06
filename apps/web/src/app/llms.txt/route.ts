@@ -13,5 +13,5 @@ export async function GET() {
   // Over-fetch so candidates dropped by the latest-transcript re-check
   // (rare) don't leave the list short.
   const rows = await querySitemapVideos(prisma, { take: LLMS_TXT_RECENT_READS * 2 });
-  return markdownResponse(buildLlmsTxt(selectRecentReads(rows)), { contentType: 'text/plain' });
+  return markdownResponse(buildLlmsTxt(selectRecentReads(rows)));
 }

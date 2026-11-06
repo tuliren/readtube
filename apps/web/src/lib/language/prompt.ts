@@ -72,3 +72,17 @@ export function parseLanguageQuery(raw: string | null | undefined): LanguageQuer
   }
   return { kind: 'target', code: trimmed };
 }
+
+/**
+ * Convert a target language to the `?language=` query string fragment
+ * (without the leading `?` or `&`). null → `language=original`.
+ *
+ * The literal "original" matters: the reader picker is always
+ * authoritative, so when the user picks Original we have to explicitly
+ * say so. Sending no param would let the server fall through to the
+ * user's `preferred_language` setting, which would translate against
+ * the user's stated picker choice.
+ */
+export function languageQueryFragment(target: string | null): string {
+  return `language=${encodeURIComponent(target ?? 'original')}`;
+}

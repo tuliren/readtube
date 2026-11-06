@@ -12,7 +12,5 @@ export async function GET() {
     getFileContent('src/legal/terms.md'),
     getFileContent('src/legal/privacy.md'),
   ]);
-  return markdownResponse(buildLlmsFullTxt({ home: buildHomeMarkdown(), terms, privacy }), {
-    contentType: 'text/plain',
-  });
+  return markdownResponse(buildLlmsFullTxt({ home: buildHomeMarkdown(), terms, privacy }));
 }

@@ -2,17 +2,14 @@ import type { PrismaClient } from '@readtube/database';
 
 import { FULL_WEBSITE_URL } from '@/constants';
 import { languageNameForPrompt } from '@/lib/language/names';
+import { languageQueryFragment } from '@/lib/language/prompt';
 import { parseShareLanguage } from '@/lib/language/publicShare';
 import { buildVideoMarkdown } from '@/lib/markdown/video';
 import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { publicVideoPath } from '@/lib/urls/publicVideoHref';
 import { buildChannelLink, buildWatchLink } from '@/lib/urls/watchUrl';
-import { loadPublicVideo } from '@/lib/videos/loadPublicVideo';
-import {
-  findPublicTranscript,
-  loadPublicArticle,
-  loadPublicSummary,
-} from '@/lib/videos/publicContent';
+import { loadPublicVideoWithTranscript } from '@/lib/videos/loadPublicVideo';
+import { loadPublicArticle, loadPublicSummary } from '@/lib/videos/publicContent';
 import { resolveVideoSourceId } from '@/lib/videos/resolveVideoSourceId';
 
 function languageLabel(language: string | null): string {
@@ -38,14 +35,11 @@ export async function loadVideoMarkdown(
   if (stub == null) {
     return null;
   }
-  const video = await loadPublicVideo(prisma, stub.id);
-  if (video == null) {
+  const loaded = await loadPublicVideoWithTranscript(prisma, stub.id);
+  if (loaded == null) {
     return null;
   }
-  const { transcriptId } = await findPublicTranscript(prisma, stub.id);
-  if (transcriptId == null) {
-    return null;
-  }
+  const { video, transcriptId } = loaded;
 
   const requested = parseShareLanguage(rawLanguage);
   const [summary, article] = await Promise.all([
@@ -55,7 +49,13 @@ export async function loadVideoMarkdown(
 
   const watch = buildWatchLink(video.platform, video.sourceId);
   const channel = buildChannelLink(video.platform, video.channelSourceId);
-  const shownLanguage = summary != null ? summary.language : (article?.language ?? null);
+  // Link the reader to the version the URL asked for; the bare URL
+  // means English, so an explicit choice must carry over.
+  const readerPath = publicVideoPath(video.sourceId);
+  const readerUrl =
+    requested === undefined
+      ? `${FULL_WEBSITE_URL}${readerPath}`
+      : `${FULL_WEBSITE_URL}${readerPath}?${languageQueryFragment(requested)}`;
 
   return buildVideoMarkdown({
     title: video.title,
@@ -64,8 +64,7 @@ export async function loadVideoMarkdown(
     publishedAt: video.publishedAt,
     platformName: watch.platformName,
     watchUrl: watch.url,
-    readerUrl: `${FULL_WEBSITE_URL}${publicVideoPath(video.sourceId)}`,
-    languageName: summary == null && article == null ? null : languageLabel(shownLanguage),
+    readerUrl,
     summary:
       summary == null
         ? null
@@ -73,7 +72,14 @@ export async function loadVideoMarkdown(
             headline: summary.headline,
             short: parseMarkdownDocument(summary.short).content,
             full: parseMarkdownDocument(summary.full).content,
+            languageName: languageLabel(summary.language),
           },
-    article: article == null ? null : parseMarkdownDocument(article.content).content,
+    article:
+      article == null
+        ? null
+        : {
+            content: parseMarkdownDocument(article.content).content,
+            languageName: languageLabel(article.language),
+          },
   });
 }

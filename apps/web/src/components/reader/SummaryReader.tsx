@@ -4,6 +4,7 @@ import { type Dispatch, type SetStateAction, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 import { countWords } from '@/lib/format/wordCount';
+import { languageQueryFragment } from '@/lib/language/prompt';
 import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { consumeNdjsonStream } from '@/lib/reader/consumeNdjsonStream';
 import type { GenerationStage } from '@/lib/reader/generationProgress';
@@ -19,7 +20,7 @@ import { isDevelopment } from '@/lib/vercelEnv';
 import ArticleMarkdown from './ArticleMarkdown';
 import ExportMarkdownButtons from './ExportMarkdownButtons';
 import GenerationProgressBox from './GenerationProgressBox';
-import LanguagePicker, { languageQueryFragment } from './LanguagePicker';
+import LanguagePicker from './LanguagePicker';
 import RegenerateButton from './RegenerateButton';
 import TranscriptFallbackStep from './TranscriptFallbackStep';
 import type { TranscriptStatus } from './VideoReader';

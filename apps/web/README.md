@@ -19,13 +19,13 @@ The `production` branch can be fast-forwarded to the `main` branch by running th
 
 These are unauthenticated: `src/proxy.ts` only protects the dashboard prefixes in `src/lib/protectedRoutes.ts`. See "Agent-readable surfaces" in `DESIGN.md`.
 
-| Route                         | Serves                                                                                                                                                         |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/sitemap.xml`, `/robots.txt` | Sitemap of marketing, legal, and public video pages; robots rules                                                                                              |
-| `/index.md`                   | Homepage as markdown (also `/` with `Accept: text/markdown`)                                                                                                   |
-| `/p/videos/:videoId.md`       | Public video summary and article as markdown, honors `?language=` (also `/p/videos/:videoId` with `Accept: text/markdown`); rewritten to `/md/videos/:videoId` |
-| `/llms.txt`                   | llmstxt.org index: product, legal, and recent public videos                                                                                                    |
-| `/llms-full.txt`              | Homepage markdown plus terms and privacy policy                                                                                                                |
+| Route                         | Serves                                                                                                                                                                          |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/sitemap.xml`, `/robots.txt` | Sitemap of marketing, legal, and public video pages; robots rules                                                                                                               |
+| `/index.md`                   | Homepage as markdown (also `/` with `Accept: text/markdown`)                                                                                                                    |
+| `/p/videos/:videoId.md`       | Public video summary and article as markdown, honors `?language=` (also `/p/videos/:videoId` with `Accept: text/markdown`); rewritten to the handler at `/p/videos/:videoId/md` |
+| `/llms.txt`                   | llmstxt.org index: product, legal, and recent public videos                                                                                                                     |
+| `/llms-full.txt`              | Homepage markdown plus terms and privacy policy                                                                                                                                 |
 
 ## Testing
 

@@ -38,7 +38,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   }
 
   const summary = await loadPublicSummary(prisma, transcriptId, requested);
-  if (!summary) {
+  if (summary == null) {
     console.info(`[public/summary/GET] No cached summary for video ${id}`);
     return NextResponse.json({ error: 'Not cached' }, { status: 404 });
   }

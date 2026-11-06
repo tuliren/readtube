@@ -1,5 +1,13 @@
 import { type VideoMarkdownInput, buildVideoMarkdown, demoteHeadings } from '@/lib/markdown/video';
 
+const SUMMARY = {
+  headline: 'One line',
+  short: 'Short paragraph.',
+  full: '- Point one\n- Point two',
+  languageName: 'English',
+};
+const ARTICLE = { content: '## Opening\n\nBody text.', languageName: 'English' };
+
 const BASE: VideoMarkdownInput = {
   title: 'Sample talk',
   channelName: 'Sample channel',
@@ -8,9 +16,8 @@ const BASE: VideoMarkdownInput = {
   platformName: 'YouTube',
   watchUrl: 'https://example.com/watch',
   readerUrl: 'https://example.com/p/videos/sample',
-  languageName: 'English',
-  summary: { headline: 'One line', short: 'Short paragraph.', full: '- Point one\n- Point two' },
-  article: '## Opening\n\nBody text.',
+  summary: SUMMARY,
+  article: ARTICLE,
 };
 
 describe('demoteHeadings', () => {
@@ -61,7 +68,7 @@ describe('buildVideoMarkdown', () => {
 
   it.each([
     ['no publish date', { publishedAt: null }, '- Published:'],
-    ['no language', { languageName: null }, '- Language:'],
+    ['no summary or article', { summary: null, article: null }, '- Language:'],
     ['no summary', { summary: null }, '## Summary'],
     ['no article', { article: null }, '## Article'],
   ])('omits the line or section with %s', (_case, override, absent) => {
@@ -70,13 +77,30 @@ describe('buildVideoMarkdown', () => {
     expect(markdown.startsWith('# Sample talk\n')).toBe(true);
   });
 
-  it('escapes markdown syntax in the title and channel name', () => {
+  it('escapes markdown syntax in the title, channel name, and headline', () => {
     const markdown = buildVideoMarkdown({
       ...BASE,
       title: 'A [bracketed] *title*',
       channelName: 'Chan_nel',
+      summary: { ...SUMMARY, headline: 'Use **bold** wisely' },
     });
     expect(markdown).toContain('# A \\[bracketed\\] \\*title\\*');
     expect(markdown).toContain('[Chan\\_nel](https://example.com/channel)');
+    expect(markdown).toContain('**Use \\*\\*bold\\*\\* wisely**');
+  });
+
+  it.each([
+    ['both sections share a language', BASE, ['- Language: English']],
+    ['only the article exists', { ...BASE, summary: null }, ['- Language: English']],
+    [
+      'the sections differ',
+      { ...BASE, article: { ...ARTICLE, languageName: 'Japanese' } },
+      ['- Summary language: English', '- Article language: Japanese'],
+    ],
+  ])('labels the language when %s', (_case, input, expected) => {
+    const languageLines = buildVideoMarkdown(input)
+      .split('\n')
+      .filter((line) => line.includes('anguage:'));
+    expect(languageLines).toEqual(expected);
   });
 });

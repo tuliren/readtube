@@ -53,7 +53,9 @@ export const FEATURES: readonly FeatureCopy[] = [
   },
 ];
 
-export const PRICING_HEADING = 'Pricing that scales with your reading';
+/** Rendered on two lines on the homepage; joined into one heading elsewhere. */
+export const PRICING_HEADING_LINES = ['Pricing that scales with', 'your reading'] as const;
+export const PRICING_HEADING = PRICING_HEADING_LINES.join(' ');
 export const PRICING_INTRO =
   'ReadTube is source available and free to self-host. Cloud plans are free during the beta. Quotas will kick in later.';
 

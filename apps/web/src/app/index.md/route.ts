@@ -1,3 +1,4 @@
+import { FULL_WEBSITE_URL } from '@/constants';
 import { buildHomeMarkdown } from '@/lib/markdown/home';
 import { markdownResponse } from '@/lib/markdown/response';
 
@@ -10,5 +11,5 @@ export const dynamic = 'force-static';
  * next.config.js.
  */
 export function GET() {
-  return markdownResponse(buildHomeMarkdown());
+  return markdownResponse(buildHomeMarkdown(), { canonicalUrl: `${FULL_WEBSITE_URL}/` });
 }
