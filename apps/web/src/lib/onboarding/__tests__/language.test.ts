@@ -1,6 +1,7 @@
 import {
   ALL_LANGUAGES,
   filterByLanguage,
+  languageDisplayName,
   languageOptions,
   primaryLanguage,
 } from '@/lib/onboarding/language';
@@ -20,6 +21,20 @@ describe('primaryLanguage', () => {
   });
 });
 
+describe('languageDisplayName', () => {
+  it.each([
+    { code: 'en', expected: 'English' },
+    { code: 'zh', expected: 'Chinese' },
+    { code: 'he', expected: 'Hebrew' },
+    { code: 'bg', expected: 'Bulgarian' },
+    { code: 'sw', expected: 'Swahili' },
+    { code: 'xx', expected: null },
+    { code: 'not a tag', expected: null },
+  ])('names $code as $expected', ({ code, expected }) => {
+    expect(languageDisplayName(code)).toBe(expected);
+  });
+});
+
 describe('languageOptions', () => {
   it('counts each language, most common first then by name, skipping unknowns', () => {
     const options = languageOptions([
@@ -36,8 +51,11 @@ describe('languageOptions', () => {
     ]);
   });
 
-  it('returns no options when every language is unknown', () => {
-    expect(languageOptions([{ language: null }])).toEqual([]);
+  it.each([
+    { name: 'unknown', language: null },
+    { name: 'a code with no name', language: 'xx' },
+  ])('offers no chip for $name', ({ language }) => {
+    expect(languageOptions([{ language }])).toEqual([]);
   });
 });
 

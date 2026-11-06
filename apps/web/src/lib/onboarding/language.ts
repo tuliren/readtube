@@ -26,6 +26,29 @@ export function primaryLanguage(tag: string): string {
   return normalizeLanguageTag(tag.replace(/_/g, '-')).split('-')[0];
 }
 
+const INTL_LANGUAGE_NAMES = new Intl.DisplayNames(['en'], { type: 'language' });
+
+/**
+ * The English name for a primary language code, or null when there is
+ * none. Chips always spell the language out: the curated names come
+ * first, then the runtime's full ISO 639 list (`bg` → "Bulgarian").
+ * Both give back the code itself when they don't know it, which counts
+ * as no name.
+ */
+export function languageDisplayName(code: string): string | null {
+  const curated = languageNameForPrompt(code);
+  if (curated !== code) {
+    return curated;
+  }
+  try {
+    const name = INTL_LANGUAGE_NAMES.of(code);
+    return name == null || name.toLowerCase() === code.toLowerCase() ? null : name;
+  } catch {
+    // Not a well-formed language tag.
+    return null;
+  }
+}
+
 export interface LanguageOption {
   code: string;
   label: string;
@@ -35,7 +58,8 @@ export interface LanguageOption {
 /**
  * The language chips to offer for a set of suggestions: one per language
  * present, most common first, with ties broken by label so the order is
- * stable. Suggestions whose language is unknown only appear under "All".
+ * stable. Suggestions whose language is unknown, or has no name to show,
+ * only appear under "All".
  */
 export function languageOptions(items: { language: string | null }[]): LanguageOption[] {
   const counts = new Map<string, number>();
@@ -45,9 +69,14 @@ export function languageOptions(items: { language: string | null }[]): LanguageO
     }
     counts.set(item.language, (counts.get(item.language) ?? 0) + 1);
   }
-  return Array.from(counts.entries())
-    .map(([code, count]) => ({ code, label: languageNameForPrompt(code), count }))
-    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  const options: LanguageOption[] = [];
+  counts.forEach((count, code) => {
+    const label = languageDisplayName(code);
+    if (label != null) {
+      options.push({ code, label, count });
+    }
+  });
+  return options.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 }
 
 /** Keep the suggestions in `language`, or all of them for {@link ALL_LANGUAGES}. */
