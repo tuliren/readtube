@@ -32,7 +32,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 /**
  * Authenticated video reader. Auth is enforced centrally by
- * `proxy.ts`, which protects every non-public route. The dashboard
+ * `proxy.ts`, which protects every dashboard route prefix. The dashboard
  * layout owns the sidebar, so this page just renders the reader.
  *
  * Access control: the `findFirst` below joins through
