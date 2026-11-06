@@ -45,7 +45,7 @@ export function languageOptions(items: { language: string | null }[]): LanguageO
     }
     counts.set(item.language, (counts.get(item.language) ?? 0) + 1);
   }
-  return [...counts.entries()]
+  return Array.from(counts.entries())
     .map(([code, count]) => ({ code, label: languageNameForPrompt(code), count }))
     .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 }

@@ -42,7 +42,7 @@ function parseIdList(value: unknown): string[] | null {
   if (!value.every((id): id is string => typeof id === 'string' && id.trim() !== '')) {
     return null;
   }
-  const unique = [...new Set(value)];
+  const unique = Array.from(new Set(value));
   if (unique.length > MAX_ONBOARDING_SELECTION) {
     return null;
   }

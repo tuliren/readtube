@@ -38,12 +38,12 @@ export function resolveContentLanguage(
   }
   let best: string | null = null;
   let bestCount = 0;
-  for (const [code, count] of counts) {
+  counts.forEach((count, code) => {
     if (count > bestCount) {
       best = code;
       bestCount = count;
     }
-  }
+  });
   if (best != null) {
     return best;
   }
