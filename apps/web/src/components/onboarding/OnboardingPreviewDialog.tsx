@@ -6,7 +6,6 @@ import useSWR from 'swr';
 
 import VideoReader from '@/components/reader/VideoReader';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
-import { ENGLISH_LANGUAGE_CODE } from '@/lib/language/names';
 import type { ChannelPreview } from '@/lib/onboarding/types';
 import type { VideoData } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -163,7 +162,10 @@ function VideoBody({ id }: { id: string }) {
   if (data == null) {
     return <PreviewLoading />;
   }
-  return <VideoReader video={data} publicMode embedded preferredLanguage={ENGLISH_LANGUAGE_CODE} />;
+  // Opens on the Original, the video's own language, matching the
+  // card's headline (the public API falls back to English, then the
+  // earliest version, when there is no Original).
+  return <VideoReader video={data} publicMode embedded preferredLanguage={null} />;
 }
 
 function PreviewLoading() {

@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@readtube/database';
 
+import { resolveContentLanguage } from './resolveLanguage';
 import { FOLLOWABLE_CHANNEL, pickHeadline } from './suggestions';
 import type { ChannelPreview } from './types';
 
@@ -41,6 +42,7 @@ export async function loadChannelPreview(
             orderBy: { created_at: 'desc' },
             take: 1,
             select: {
+              language: true,
               summaries: {
                 where: { status: 'READY' },
                 select: { headline: true, language: true },
@@ -74,7 +76,11 @@ export async function loadChannelPreview(
         thumbnailUrl: video.thumbnail_url,
         durationSeconds: video.duration_seconds,
         publishedAt: video.published_at?.toISOString() ?? null,
-        headline: pickHeadline(summaries),
+        // Same language rule as the video cards.
+        headline: pickHeadline(
+          summaries,
+          resolveContentLanguage([transcript?.language ?? null], video.title)
+        ),
         readable: summaries.length > 0 || (transcript?.articles.length ?? 0) > 0,
       };
     }),

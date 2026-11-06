@@ -22,41 +22,57 @@ describe('capPerKey', () => {
 describe('pickHeadline', () => {
   it.each([
     {
-      name: 'the Original over English',
+      name: 'the Original over a same-language translation',
+      summaries: [
+        { headline: 'Translated', language: 'en-GB' },
+        { headline: 'Original', language: null },
+      ],
+      language: 'en',
+      expected: 'Original',
+    },
+    {
+      name: 'a translation in the card language without an Original',
+      summaries: [
+        { headline: 'French', language: 'fr' },
+        { headline: 'Chinese', language: 'zh-Hans' },
+      ],
+      language: 'zh',
+      expected: 'Chinese',
+    },
+    {
+      name: 'nothing when only other languages exist',
+      summaries: [
+        { headline: 'English', language: 'en' },
+        { headline: 'French', language: 'fr' },
+      ],
+      language: 'pl',
+      expected: null,
+    },
+    {
+      name: 'the Original when the card language is unknown',
       summaries: [
         { headline: 'English', language: 'en' },
         { headline: 'Original', language: null },
       ],
+      language: null,
       expected: 'Original',
     },
     {
-      name: 'English over other translations',
-      summaries: [
-        { headline: 'French', language: 'fr' },
-        { headline: 'English', language: 'en' },
-      ],
-      expected: 'English',
-    },
-    {
-      name: 'any translation as a last resort',
-      summaries: [{ headline: 'French', language: 'fr' }],
-      expected: 'French',
-    },
-    {
-      name: 'a usable headline over a blank Original',
-      summaries: [
-        { headline: '  ', language: null },
-        { headline: 'English', language: 'en' },
-      ],
-      expected: 'English',
-    },
-    { name: 'null with no summaries', summaries: [], expected: null },
-    {
-      name: 'null when every headline is missing',
-      summaries: [{ headline: null, language: null }],
+      name: 'nothing for an unknown language without an Original',
+      summaries: [{ headline: 'English', language: 'en' }],
+      language: null,
       expected: null,
     },
-  ])('picks $name', ({ summaries, expected }) => {
-    expect(pickHeadline(summaries)).toBe(expected);
+    {
+      name: 'past blank headlines',
+      summaries: [
+        { headline: '  ', language: null },
+        { headline: ' English ', language: 'en' },
+      ],
+      language: 'en',
+      expected: 'English',
+    },
+  ])('picks $name', ({ summaries, language, expected }) => {
+    expect(pickHeadline(summaries, language)).toBe(expected);
   });
 });

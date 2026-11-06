@@ -1,5 +1,6 @@
 import type { Prisma, PrismaClient } from '@readtube/database';
 
+import { primaryLanguage } from './language';
 import { resolveContentLanguage } from './resolveLanguage';
 import type { OnboardingSuggestions, SuggestedChannel, SuggestedVideo } from './types';
 
@@ -227,6 +228,10 @@ async function loadSuggestedVideos(prisma: PrismaClient): Promise<SuggestedVideo
     .slice(0, VIDEO_SUGGESTION_LIMIT)
     .map((row) => {
       const transcript = row.transcripts[0];
+      const language = resolveContentLanguage(
+        [transcript?.language ?? null],
+        [row.title, row.description ?? ''].join('\n')
+      );
       return {
         id: row.id,
         sourceId: row.source_id,
@@ -237,11 +242,8 @@ async function loadSuggestedVideos(prisma: PrismaClient): Promise<SuggestedVideo
         publishedAt: row.published_at?.toISOString() ?? null,
         channelName: row.channel.name,
         channelLogoUrl: row.channel.logo_url,
-        headline: pickHeadline(transcript?.summaries ?? []),
-        language: resolveContentLanguage(
-          [transcript?.language ?? null],
-          [row.title, row.description ?? ''].join('\n')
-        ),
+        headline: pickHeadline(transcript?.summaries ?? [], language),
+        language,
       };
     });
 }
@@ -266,15 +268,24 @@ export function capPerKey<T>(items: T[], keyOf: (item: T) => string, max: number
 }
 
 /**
- * The headline to show on a video card: the Original summary (written
- * in the video's own language, so it matches the title beside it), else
- * the English one, else any. Blank headlines are skipped.
+ * The headline to show on a video card, in the card's own language:
+ * the Original summary (written in the video's language), else a
+ * translation labelled with that language, else none. A card only
+ * shows under its own language's chip (or "All languages"), so this
+ * keeps the headline in the language the visitor chose. There is no
+ * English fallback: an English line under, say, a Chinese title is
+ * what the chip was meant to rule out. Labels are trusted as stored.
+ * Blank headlines are skipped.
  */
 export function pickHeadline(
-  summaries: { headline: string | null; language: string | null }[]
+  summaries: { headline: string | null; language: string | null }[],
+  language: string | null
 ): string | null {
   const usable = summaries.filter((s) => s.headline != null && s.headline.trim() !== '');
   const original = usable.find((s) => s.language == null);
-  const english = usable.find((s) => s.language === 'en');
-  return (original ?? english ?? usable[0])?.headline?.trim() ?? null;
+  const sameLanguage =
+    language == null
+      ? undefined
+      : usable.find((s) => s.language != null && primaryLanguage(s.language) === language);
+  return (original ?? sameLanguage)?.headline?.trim() ?? null;
 }
