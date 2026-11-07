@@ -6074,7 +6074,7 @@ __metadata:
     remark-math: "npm:^6.0.0"
     sonner: "npm:^2.0.7"
     storybook: "npm:^10.6.5"
-    svix: "npm:^1.93.0"
+    svix: "npm:^2.9.1"
     swr: "npm:^2.4.1"
     tailwind-merge: "npm:^3.6.0"
     tailwindcss: "npm:^4.3.0"
@@ -20688,13 +20688,23 @@ __metadata:
   languageName: node
   linkType: hard
 
-"standardwebhooks@npm:1.0.0, standardwebhooks@npm:^1.0.0":
+"standardwebhooks@npm:^1.0.0":
   version: 1.0.0
   resolution: "standardwebhooks@npm:1.0.0"
   dependencies:
     "@stablelib/base64": "npm:^1.0.0"
     fast-sha256: "npm:^1.3.0"
   checksum: 10c0/aee097d0f3c05172c19b80df1ed9596a2ce92f8956957650d0bbe47c2ca6d36515796b51d523333cb4a48c889b2ab130d789e7879e14975c4381bc7a61274327
+  languageName: node
+  linkType: hard
+
+"standardwebhooks@npm:^1.1.1":
+  version: 1.1.1
+  resolution: "standardwebhooks@npm:1.1.1"
+  dependencies:
+    "@stablelib/base64": "npm:^1.0.0"
+    fast-sha256: "npm:^1.3.0"
+  checksum: 10c0/6971c8f12a718c26779f03219db62ca7af9f6f584f6810a0d5288cb19946777968f4e3bc2fd71d8e1bf11b5f423c48b6a83f762093a4db4d68ba2cc12095fd4f
   languageName: node
   linkType: hard
 
@@ -21150,12 +21160,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"svix@npm:^1.93.0":
-  version: 1.93.0
-  resolution: "svix@npm:1.93.0"
+"svix@npm:^2.9.1":
+  version: 2.9.1
+  resolution: "svix@npm:2.9.1"
   dependencies:
-    standardwebhooks: "npm:1.0.0"
-  checksum: 10c0/edb2e93c647fd214b5d6f6a1504d109d5cbe1f8c11c0709bca20c6eac4748dc258b5a76bb639926eaf79ebff78975eba4594afdef42c3b288b58d7de7d872d8d
+    standardwebhooks: "npm:^1.1.1"
+  checksum: 10c0/881ccd00abe7b6c717dd7268afb028fdd8dacef26455d16ed2315da11f7abb78ac81f4eac8952238dde7e7f9e4588db474c6b89cccdbe0c8c6d94ff3ca8bbe23
   languageName: node
   linkType: hard
 
