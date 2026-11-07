@@ -4,7 +4,6 @@ import { platformLabel, trackContentAdded } from '@/lib/analytics/events';
 import { hasChannelHandleConflict } from '@/lib/channels/handleConflict';
 import { detectPlatform } from '@/lib/platforms';
 import { MembersOnlyVideoError } from '@/lib/platforms/types';
-import { UNKNOWN_CHANNEL_NAME } from '@/lib/platforms/youtube/constants';
 import { isEmptyString } from '@/lib/string';
 import { persistTranscript } from '@/lib/transcripts/ensureTranscript';
 
@@ -99,9 +98,9 @@ export async function addVideoForUser(args: {
   // degraded fetch. Real names are left alone; renames are the
   // refresh-channels cron's job.
   const healsPlaceholderName =
-    existingChannel?.name === UNKNOWN_CHANNEL_NAME &&
+    existingChannel?.name === platform.placeholderChannelName &&
     !isEmptyString(snapshot.channel.name) &&
-    snapshot.channel.name !== UNKNOWN_CHANNEL_NAME;
+    snapshot.channel.name !== platform.placeholderChannelName;
 
   let channelId: string;
   if (existingChannel != null) {

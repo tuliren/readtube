@@ -307,6 +307,23 @@ describe('addVideoForUser', () => {
       expect(mockFetchVideoSnapshot).not.toHaveBeenCalled();
       expect(mockFetchBilibiliVideoSnapshot).toHaveBeenCalledWith('BV1DgdhBGEq2');
     });
+
+    it('heals the Bilibili placeholder channel name on re-add', async () => {
+      await global.testPrisma.channel.create({
+        data: { source_type: 'BILIBILI', source_id: '12345', name: 'Unknown' },
+      });
+
+      mockFetchBilibiliVideoSnapshot.mockResolvedValueOnce(fakeBilibiliSnapshot());
+      await addVideoForUser({
+        userId: TEST_USER_ID,
+        input: 'https://www.bilibili.com/video/BV1DgdhBGEq2/',
+      });
+
+      const channel = await global.testPrisma.channel.findUniqueOrThrow({
+        where: { channel_unique_source: { source_type: 'BILIBILI', source_id: '12345' } },
+      });
+      expect(channel.name).toBe('Bilibili Channel');
+    });
   });
 
   describe('nullable published_at', () => {

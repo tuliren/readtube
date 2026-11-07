@@ -1,6 +1,5 @@
 import { MembersOnlyVideoError } from '@/lib/platforms/types';
 
-import { YOUTUBE_GENERIC_DESCRIPTION } from '../constants';
 import { extractVideoId, fetchVideoSnapshot, parseIsoDurationSeconds } from '../videoSnapshot';
 
 const VALID_VIDEO_ID = 'dQw4w9WgXcQ';
@@ -13,6 +12,10 @@ function buildWatchPageHtml(overrides?: {
   publishedAt?: string | null;
   ownerProfileUrl?: string;
   author?: string | null;
+  /** Emits a player-response `videoDetails` block for this video. */
+  playerResponse?: { title: string; shortDescription: string };
+  /** Raw JSON appended to the page, e.g. unrelated `"title"` keys. */
+  extraJson?: string;
 }): string {
   const channelId =
     overrides?.channelId === undefined ? 'UCBJycsmduvYEL83R_U4JriQ' : overrides.channelId;
@@ -37,6 +40,16 @@ function buildWatchPageHtml(overrides?: {
   const author = overrides?.author === undefined ? 'Page Author' : overrides.author;
   if (author != null) {
     meta.push(`"author":"${author}"`);
+  }
+  if (overrides?.playerResponse != null) {
+    const { title: playerTitle, shortDescription } = overrides.playerResponse;
+    meta.push(
+      `"videoDetails":{"videoId":"${VALID_VIDEO_ID}","title":${JSON.stringify(playerTitle)},` +
+        `"shortDescription":${JSON.stringify(shortDescription)}}`
+    );
+  }
+  if (overrides?.extraJson != null) {
+    meta.push(overrides.extraJson);
   }
   return `<html><head>${meta.join('\n')}</head><body></body></html>`;
 }
@@ -433,6 +446,11 @@ describe('fetchVideoSnapshot orchestration', () => {
       ['no title anywhere', buildWatchPageHtml({ title: null })],
       ['no channel name', buildWatchPageHtml({ author: null })],
       ['no channel id', buildWatchPageHtml({ channelId: null })],
+      ['a placeholder title', buildWatchPageHtml({ title: '- YouTube' })],
+      [
+        'only an unrelated JSON title',
+        buildWatchPageHtml({ title: null, extraJson: '"title":"Some Related Video"' }),
+      ],
     ])('falls back to TranscriptAPI on %s', async (_label, html) => {
       mockDegradedChain(html);
 
@@ -453,8 +471,26 @@ describe('fetchVideoSnapshot orchestration', () => {
       expect(result.snapshot.channel.name).toBe('Page Author');
     });
 
-    it("drops YouTube's generic site description", async () => {
-      mockDegradedChain(buildWatchPageHtml({ description: YOUTUBE_GENERIC_DESCRIPTION }));
+    it('uses the player response title and description over blank meta tags', async () => {
+      mockDegradedChain(
+        buildWatchPageHtml({
+          title: '',
+          playerResponse: {
+            title: 'Player "Quoted" Title',
+            shortDescription: 'Line one\nLine two & more',
+          },
+        })
+      );
+
+      const result = await fetchVideoSnapshot(VALID_VIDEO_ID);
+
+      expect(result.snapshot.fetchedVia).toBe('scrape');
+      expect(result.snapshot.title).toBe('Player "Quoted" Title');
+      expect(result.snapshot.description).toBe('Line one\nLine two & more');
+    });
+
+    it('ignores meta descriptions when the page has no player response', async () => {
+      mockDegradedChain(buildWatchPageHtml({ description: 'Site-wide boilerplate' }));
 
       const result = await fetchVideoSnapshot(VALID_VIDEO_ID);
 

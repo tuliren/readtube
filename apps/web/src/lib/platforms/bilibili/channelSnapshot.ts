@@ -6,6 +6,9 @@ import { fetchBilibiliChannelViaJustOneApi } from './justOneApi';
 import { buildBilibiliVideoUrl } from './urls';
 import { fetchBilibiliVideoSnapshot } from './videoSnapshot';
 
+/** Fallback channel name when no Bilibili source exposes one. */
+export const BILIBILI_UNKNOWN_CHANNEL_NAME = 'Unknown';
+
 /**
  * Fetch channel meta + recent videos for a Bilibili uploader via
  * JustOneAPI (third-party wrapper at justoneapi.com). We delegate the
@@ -80,7 +83,7 @@ export async function fetchBilibiliChannelSnapshot(
   );
   return {
     channelId: mid,
-    name: channelName ?? 'Unknown',
+    name: channelName ?? BILIBILI_UNKNOWN_CHANNEL_NAME,
     handle: null,
     logoUrl: channelLogo,
     videos: snapshotVideos,

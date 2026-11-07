@@ -30,7 +30,7 @@ import {
 } from '@/lib/platforms/types';
 import { isEmptyString } from '@/lib/string';
 
-import { UNKNOWN_CHANNEL_NAME, YOUTUBE_GENERIC_DESCRIPTION } from './constants';
+import { UNKNOWN_CHANNEL_NAME } from './constants';
 import { fetchVideoViaDataApi, isDataApiConfigured } from './dataApi';
 import { parseIsoDurationSeconds } from './isoDuration';
 import { resolveChannelId } from './transcriptApi';
@@ -62,13 +62,46 @@ function decodeHtmlEntities(s: string): string {
 
 /** Treats empty / whitespace-only strings as absent so `??` chains fall through. */
 function nonEmpty(s: string | null | undefined): string | null {
-  return s == null || s.trim() === '' ? null : s;
+  return isEmptyString(s) ? null : s;
 }
 
 /** First capture group of `re`, decoded; null when absent or blank. */
 function firstMatch(html: string, re: RegExp): string | null {
   const m = html.match(re);
   return m != null ? nonEmpty(decodeHtmlEntities(m[1])) : null;
+}
+
+/**
+ * First capture group of `re`, decoded as the body of a JSON string
+ * literal (the player response escapes quotes, newlines, `\u0026`);
+ * null when absent, blank, or not valid JSON.
+ */
+function firstJsonStringMatch(html: string, re: RegExp): string | null {
+  const m = html.match(re);
+  if (m == null) {
+    return null;
+  }
+  try {
+    return nonEmpty(JSON.parse(`"${m[1]}"`) as string);
+  } catch {
+    return null;
+  }
+}
+
+/** Body of a JSON string literal, escapes included. */
+const JSON_STRING_BODY = '((?:[^"\\\\]|\\\\.)*)';
+
+/**
+ * Site-wide titles a degraded watch page can carry in place of the
+ * video's own ("YouTube", "- YouTube"). Treated as absent.
+ */
+function isPlaceholderTitle(title: string): boolean {
+  return /^(?:-\s*)?YouTube$/i.test(title.trim());
+}
+
+function realTitle(title: string | null | undefined): string | null {
+  const t = nonEmpty(title);
+  return t != null && !isPlaceholderTitle(t) ? t : null;
 }
 
 /**
@@ -144,12 +177,20 @@ async function fetchViaWatchPage(videoId: string): Promise<VideoSnapshot | null>
     return null;
   }
 
-  // ── Title — prefer oEmbed (present unless embedding is disabled) ──
+  // ── Title — prefer oEmbed (present unless embedding is disabled),
+  // then the player response's `videoDetails` for this exact video,
+  // then meta tags. No loose `"title":` match: the page JSON has many
+  // unrelated titles (menus, related videos, chapters).
   const title =
-    nonEmpty(oembed?.title) ??
-    firstMatch(html, /<meta name="title" content="([^"]*)"/) ??
-    firstMatch(html, /<meta property="og:title" content="([^"]*)"/) ??
-    firstMatch(html, /"title":"([^"]+)"/);
+    realTitle(oembed?.title) ??
+    realTitle(
+      firstJsonStringMatch(
+        html,
+        new RegExp(`"videoDetails":\\{"videoId":"${videoId}","title":"${JSON_STRING_BODY}"`)
+      )
+    ) ??
+    realTitle(firstMatch(html, /<meta name="title" content="([^"]*)"/)) ??
+    realTitle(firstMatch(html, /<meta property="og:title" content="([^"]*)"/));
   if (title == null) {
     console.warn(`[videoSnapshot] watch page for ${videoId} has no title`);
     return null;
@@ -162,14 +203,12 @@ async function fetchViaWatchPage(videoId: string): Promise<VideoSnapshot | null>
     return null;
   }
 
-  // ── Description — scrape; oEmbed doesn't include it ──
-  const scrapedDescription =
-    firstMatch(html, /<meta name="description" content="([^"]*)"/) ??
-    firstMatch(html, /<meta property="og:description" content="([^"]*)"/);
+  // ── Description — the player response's `shortDescription` (the
+  // full text; meta tags truncate it). Meta tags aren't consulted: a
+  // degraded page has no player response and puts YouTube's site-wide
+  // description, localized per region, in them instead.
   const description =
-    scrapedDescription == null || scrapedDescription === YOUTUBE_GENERIC_DESCRIPTION
-      ? ''
-      : scrapedDescription;
+    firstJsonStringMatch(html, new RegExp(`"shortDescription":"${JSON_STRING_BODY}"`)) ?? '';
 
   const thumbnailUrl =
     nonEmpty(oembed?.thumbnail_url) ??
