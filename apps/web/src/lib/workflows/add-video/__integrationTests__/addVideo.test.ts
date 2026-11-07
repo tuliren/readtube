@@ -168,6 +168,28 @@ describe('addVideoForUser', () => {
     expect(await global.testPrisma.channel.count()).toBe(1);
   });
 
+  it.each([
+    ['heals a placeholder channel name', 'Unknown channel', 'Test Channel'],
+    ['keeps an existing real channel name', 'Subscribed Name', 'Subscribed Name'],
+  ])('%s on re-add', async (_label, storedName, expectedName) => {
+    await global.testPrisma.channel.create({
+      data: {
+        source_type: 'YOUTUBE',
+        source_id: 'UC_test',
+        name: storedName,
+        rss_url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UC_test',
+      },
+    });
+
+    mockFetchVideoSnapshot.mockResolvedValueOnce(fakeSnapshotResult());
+    await addVideoForUser({ userId: TEST_USER_ID, input: 'dQw4w9WgXcQ' });
+
+    const channel = await global.testPrisma.channel.findUniqueOrThrow({
+      where: { channel_unique_source: { source_type: 'YOUTUBE', source_id: 'UC_test' } },
+    });
+    expect(channel.name).toBe(expectedName);
+  });
+
   it('reuses an existing Video created under a different channel (P2002 avoidance)', async () => {
     // Simulate a video created under the playlist-owner's channel,
     // then the user adds it individually with the actual channel info.

@@ -1,5 +1,6 @@
 import { MembersOnlyVideoError } from '@/lib/platforms/types';
 
+import { YOUTUBE_GENERIC_DESCRIPTION } from '../constants';
 import { extractVideoId, fetchVideoSnapshot, parseIsoDurationSeconds } from '../videoSnapshot';
 
 const VALID_VIDEO_ID = 'dQw4w9WgXcQ';
@@ -11,9 +12,11 @@ function buildWatchPageHtml(overrides?: {
   duration?: string;
   publishedAt?: string | null;
   ownerProfileUrl?: string;
+  author?: string | null;
 }): string {
-  const channelId = overrides?.channelId ?? 'UCBJycsmduvYEL83R_U4JriQ';
-  const title = overrides?.title ?? 'Test Watch Page Video';
+  const channelId =
+    overrides?.channelId === undefined ? 'UCBJycsmduvYEL83R_U4JriQ' : overrides.channelId;
+  const title = overrides?.title === undefined ? 'Test Watch Page Video' : overrides.title;
   const description = overrides?.description ?? 'page description';
   const duration = overrides?.duration ?? 'PT3M33S';
   const published = overrides?.publishedAt ?? '2024-06-01T00:00:00Z';
@@ -31,6 +34,10 @@ function buildWatchPageHtml(overrides?: {
     meta.push(`<meta itemprop="datePublished" content="${published}"/>`);
   }
   meta.push(`"ownerProfileUrl":"${ownerUrl}"`);
+  const author = overrides?.author === undefined ? 'Page Author' : overrides.author;
+  if (author != null) {
+    meta.push(`"author":"${author}"`);
+  }
   return `<html><head>${meta.join('\n')}</head><body></body></html>`;
 }
 
@@ -380,6 +387,80 @@ describe('fetchVideoSnapshot orchestration', () => {
 
     expect(result.snapshot.title).toBe('oEmbed Title');
     expect(result.snapshot.channel.sourceId).toBe('UCBJycsmduvYEL83R_U4JriQ');
+  });
+
+  describe('degraded watch page', () => {
+    const resolveUrl =
+      'https://transcriptapi.com/api/v2/youtube/channel/resolve?input=https%3A%2F%2Fwww.youtube.com%2F%40FallbackChannel';
+
+    // oEmbed answers 401 when the uploader disabled embedding, leaving
+    // the watch page as the only source of title and channel name.
+    function mockDegradedChain(watchHtml: string): void {
+      (globalThis.fetch as jest.Mock).mockImplementation((url: string) => {
+        if (url === oembedUrl) {
+          return Promise.resolve({ ok: false, status: 401, json: async () => ({}) });
+        }
+        if (url === watchUrl) {
+          return Promise.resolve({ ok: true, status: 200, text: async () => watchHtml });
+        }
+        if (url === transcriptUrl) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              video_id: VALID_VIDEO_ID,
+              language: 'en',
+              transcript: [{ text: 'hello', start: 0, duration: 1 }],
+              metadata: {
+                title: 'Fallback Title',
+                author_name: 'Fallback Channel',
+                author_url: 'https://www.youtube.com/@FallbackChannel',
+              },
+            }),
+          });
+        }
+        if (url === resolveUrl) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ channel_id: 'UCuAXFkgsw1L7xaCfnd5JJOw' }),
+          });
+        }
+        throw new Error(`Unexpected fetch URL: ${url}`);
+      });
+    }
+
+    it.each([
+      ['blank title meta', buildWatchPageHtml({ title: '' })],
+      ['no title anywhere', buildWatchPageHtml({ title: null })],
+      ['no channel name', buildWatchPageHtml({ author: null })],
+      ['no channel id', buildWatchPageHtml({ channelId: null })],
+    ])('falls back to TranscriptAPI on %s', async (_label, html) => {
+      mockDegradedChain(html);
+
+      const result = await fetchVideoSnapshot(VALID_VIDEO_ID);
+
+      expect(result.snapshot.fetchedVia).toBe('transcript_api');
+      expect(result.snapshot.title).toBe('Fallback Title');
+      expect(result.snapshot.channel.name).toBe('Fallback Channel');
+    });
+
+    it('uses the page title and author when oEmbed is unavailable', async () => {
+      mockDegradedChain(buildWatchPageHtml());
+
+      const result = await fetchVideoSnapshot(VALID_VIDEO_ID);
+
+      expect(result.snapshot.fetchedVia).toBe('scrape');
+      expect(result.snapshot.title).toBe('Test Watch Page Video');
+      expect(result.snapshot.channel.name).toBe('Page Author');
+    });
+
+    it("drops YouTube's generic site description", async () => {
+      mockDegradedChain(buildWatchPageHtml({ description: YOUTUBE_GENERIC_DESCRIPTION }));
+
+      const result = await fetchVideoSnapshot(VALID_VIDEO_ID);
+
+      expect(result.snapshot.fetchedVia).toBe('scrape');
+      expect(result.snapshot.description).toBe('');
+    });
   });
 
   it('throws on TranscriptAPI fallback when metadata block is missing', async () => {
