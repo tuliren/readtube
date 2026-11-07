@@ -30,7 +30,7 @@ import {
 } from '@/lib/platforms/types';
 import { isEmptyString } from '@/lib/string';
 
-import { UNKNOWN_CHANNEL_NAME } from './constants';
+import { UNKNOWN_CHANNEL_NAME, YOUTUBE_GENERIC_DESCRIPTION } from './constants';
 import { fetchVideoViaDataApi, isDataApiConfigured } from './dataApi';
 import { parseIsoDurationSeconds } from './isoDuration';
 import { resolveChannelId } from './transcriptApi';
@@ -60,9 +60,15 @@ function decodeHtmlEntities(s: string): string {
     .replace(/&gt;/g, '>');
 }
 
+/** Treats empty / whitespace-only strings as absent so `??` chains fall through. */
+function nonEmpty(s: string | null | undefined): string | null {
+  return s == null || s.trim() === '' ? null : s;
+}
+
+/** First capture group of `re`, decoded; null when absent or blank. */
 function firstMatch(html: string, re: RegExp): string | null {
   const m = html.match(re);
-  return m != null ? decodeHtmlEntities(m[1]) : null;
+  return m != null ? nonEmpty(decodeHtmlEntities(m[1])) : null;
 }
 
 /**
@@ -109,9 +115,13 @@ function extractHandleFromAuthorUrl(authorUrl: string | null | undefined): strin
 /**
  * Strategy 1: scrape the YouTube watch page directly. Returns null
  * when the watch page is unavailable (429, 5xx, network blip, etc.)
- * so the orchestrator can fall back to TranscriptAPI. Throws on
- * structural parse failures (page reachable but missing channel id
- * or title) — those are not retryable through the fallback either.
+ * or degraded (reachable but missing channel id, title, or channel
+ * name) so the orchestrator falls back to TranscriptAPI rather than
+ * persisting a blank title or a placeholder channel name.
+ *
+ * oEmbed covers title and channel name for most videos, but returns
+ * 401 when the uploader disabled embedding; then the page itself is
+ * the only source, and a degraded page has neither.
  */
 async function fetchViaWatchPage(videoId: string): Promise<VideoSnapshot | null> {
   const watchUrl = `https://www.youtube.com/watch?v=${videoId}`;
@@ -130,27 +140,39 @@ async function fetchViaWatchPage(videoId: string): Promise<VideoSnapshot | null>
     firstMatch(html, /<meta itemprop="identifier" content="(UC[\w-]{20,})"/) ??
     firstMatch(html, /"channelId":"(UC[\w-]{20,})"/);
   if (channelId == null) {
-    throw new Error('Could not extract channel id from watch page');
+    console.warn(`[videoSnapshot] watch page for ${videoId} has no channel id`);
+    return null;
   }
 
-  // ── Title — prefer oEmbed (always present for public videos) ──
+  // ── Title — prefer oEmbed (present unless embedding is disabled) ──
   const title =
-    oembed?.title ??
+    nonEmpty(oembed?.title) ??
     firstMatch(html, /<meta name="title" content="([^"]*)"/) ??
     firstMatch(html, /<meta property="og:title" content="([^"]*)"/) ??
     firstMatch(html, /"title":"([^"]+)"/);
   if (title == null) {
-    throw new Error('Could not extract video title');
+    console.warn(`[videoSnapshot] watch page for ${videoId} has no title`);
+    return null;
+  }
+
+  // ── Channel name — prefer oEmbed; scrape the player response ──
+  const channelName = nonEmpty(oembed?.author_name) ?? firstMatch(html, /"author":"([^"]+)"/);
+  if (channelName == null) {
+    console.warn(`[videoSnapshot] watch page for ${videoId} has no channel name`);
+    return null;
   }
 
   // ── Description — scrape; oEmbed doesn't include it ──
-  const description =
+  const scrapedDescription =
     firstMatch(html, /<meta name="description" content="([^"]*)"/) ??
-    firstMatch(html, /<meta property="og:description" content="([^"]*)"/) ??
-    '';
+    firstMatch(html, /<meta property="og:description" content="([^"]*)"/);
+  const description =
+    scrapedDescription == null || scrapedDescription === YOUTUBE_GENERIC_DESCRIPTION
+      ? ''
+      : scrapedDescription;
 
   const thumbnailUrl =
-    oembed?.thumbnail_url ??
+    nonEmpty(oembed?.thumbnail_url) ??
     firstMatch(html, /<meta property="og:image" content="([^"]+)"/) ??
     buildThumbnailUrl(videoId);
 
@@ -173,11 +195,9 @@ async function fetchViaWatchPage(videoId: string): Promise<VideoSnapshot | null>
   const durationIso = firstMatch(html, /<meta itemprop="duration" content="([^"]+)"/);
   const durationSeconds = parseIsoDurationSeconds(durationIso);
 
-  // ── Channel metadata — prefer oEmbed for name; scrape for handle ──
-  const channelName =
-    oembed?.author_name ?? firstMatch(html, /"author":"([^"]+)"/) ?? UNKNOWN_CHANNEL_NAME;
-
-  const channelPageUrl = oembed?.author_url ?? firstMatch(html, /"ownerProfileUrl":"([^"]+)"/);
+  // ── Channel handle — prefer oEmbed; scrape the owner profile URL ──
+  const channelPageUrl =
+    nonEmpty(oembed?.author_url) ?? firstMatch(html, /"ownerProfileUrl":"([^"]+)"/);
   const handle = extractHandleFromAuthorUrl(channelPageUrl);
 
   return {
@@ -273,7 +293,7 @@ async function fetchViaTranscriptApi(
     durationSeconds: null,
     channel: {
       sourceId: channelId,
-      name: metadata.author_name ?? UNKNOWN_CHANNEL_NAME,
+      name: nonEmpty(metadata.author_name) ?? UNKNOWN_CHANNEL_NAME,
       handle: extractHandleFromAuthorUrl(metadata.author_url),
       logoUrl: null,
     },
