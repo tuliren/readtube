@@ -6,6 +6,7 @@ import {
   YOUTUBE_GENERIC_DESCRIPTION,
 } from '@/lib/platforms/youtube/constants';
 import { fetchVideoViaDataApi, isDataApiConfigured } from '@/lib/platforms/youtube/dataApi';
+import { isEmptyString } from '@/lib/string';
 
 /**
  * Repairs YouTube rows stored from a degraded watch page before the
@@ -25,13 +26,11 @@ import { fetchVideoViaDataApi, isDataApiConfigured } from '@/lib/platforms/youtu
 const APPLY = process.argv.includes('--apply');
 
 function isBlankTitle(title: string): boolean {
-  return title.trim() === '' || title === UNKNOWN_VIDEO_TITLE;
+  return isEmptyString(title) || title === UNKNOWN_VIDEO_TITLE;
 }
 
 function isBadDescription(description: string | null): boolean {
-  return (
-    description == null || description.trim() === '' || description === YOUTUBE_GENERIC_DESCRIPTION
-  );
+  return isEmptyString(description) || description === YOUTUBE_GENERIC_DESCRIPTION;
 }
 
 async function main() {
@@ -39,11 +38,16 @@ async function main() {
     throw new Error('YOUTUBE_API_KEY is not set');
   }
 
+  // Prisma filters can't trim, so whitespace-only titles are found
+  // with raw SQL and folded into the main query by id.
+  const blankTitleRows = await prisma.$queryRaw<Array<{ id: string }>>`
+    SELECT id FROM "Video" WHERE source_type = 'YOUTUBE' AND btrim(title) = ''`;
+
   const videos = await prisma.video.findMany({
     where: {
       source_type: 'YOUTUBE',
       OR: [
-        { title: '' },
+        { id: { in: blankTitleRows.map((r) => r.id) } },
         { title: UNKNOWN_VIDEO_TITLE },
         { description: YOUTUBE_GENERIC_DESCRIPTION },
         { channel: { name: UNKNOWN_CHANNEL_NAME } },
@@ -62,18 +66,25 @@ async function main() {
   });
   console.info(`${APPLY ? 'Applying' : 'Dry run'}: ${videos.length} candidate video(s)`);
 
-  const healedChannelIds = new Set<string>();
+  // Channels already looked up this run, healed or not: one Data API
+  // fetch per channel is enough, since every video of a channel
+  // returns the same channel title.
+  const attemptedChannelIds = new Set<string>();
+  let healedChannels = 0;
   let updatedVideos = 0;
   let failed = 0;
 
   for (const v of videos) {
     const videoIsBad = isBlankTitle(v.title) || v.description === YOUTUBE_GENERIC_DESCRIPTION;
     const channelIsBad =
-      v.channel.name === UNKNOWN_CHANNEL_NAME && !healedChannelIds.has(v.channel.id);
+      v.channel.name === UNKNOWN_CHANNEL_NAME && !attemptedChannelIds.has(v.channel.id);
     if (!videoIsBad && !channelIsBad) {
       continue;
     }
 
+    if (channelIsBad) {
+      attemptedChannelIds.add(v.channel.id);
+    }
     let snapshot;
     try {
       snapshot = await fetchVideoViaDataApi(v.source_id);
@@ -117,13 +128,13 @@ async function main() {
       updatedVideos++;
     }
     if (channelName != null) {
-      healedChannelIds.add(v.channel.id);
+      healedChannels++;
     }
   }
 
   console.info(
     `${APPLY ? 'Updated' : 'Would update'} ${updatedVideos} video(s) and ` +
-      `${healedChannelIds.size} channel(s); ${failed} fetch failure(s)`
+      `${healedChannels} channel(s); ${failed} fetch failure(s)`
   );
 }
 
