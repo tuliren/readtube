@@ -7,6 +7,7 @@ import {
 } from '@/lib/platforms/base';
 import type { ChannelSnapshot } from '@/lib/platforms/types';
 import { fetchChannelSnapshot } from '@/lib/platforms/youtube/channelSnapshot';
+import { UNKNOWN_CHANNEL_NAME } from '@/lib/platforms/youtube/constants';
 import { detectScheduledVideo } from '@/lib/platforms/youtube/scheduledVideo';
 import { fetchSubtitleViaTranscriptApi } from '@/lib/platforms/youtube/subtitles/fetchViaTranscriptApi';
 import {
@@ -19,6 +20,7 @@ import { parseUrlLoose } from '@/lib/urls/parseLoose';
 
 export class YouTubePlatform extends VideoPlatform {
   readonly type = VideoPlatformType.YOUTUBE;
+  readonly placeholderChannelName = UNKNOWN_CHANNEL_NAME;
 
   matchesUrl(input: string): boolean {
     if (input == null || typeof input !== 'string') {

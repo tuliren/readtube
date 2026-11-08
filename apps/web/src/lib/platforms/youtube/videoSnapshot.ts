@@ -60,9 +60,48 @@ function decodeHtmlEntities(s: string): string {
     .replace(/&gt;/g, '>');
 }
 
+/** Treats empty / whitespace-only strings as absent so `??` chains fall through. */
+function nonEmpty(s: string | null | undefined): string | null {
+  return isEmptyString(s) ? null : s;
+}
+
+/** First capture group of `re`, decoded; null when absent or blank. */
 function firstMatch(html: string, re: RegExp): string | null {
   const m = html.match(re);
-  return m != null ? decodeHtmlEntities(m[1]) : null;
+  return m != null ? nonEmpty(decodeHtmlEntities(m[1])) : null;
+}
+
+/**
+ * First capture group of `re`, decoded as the body of a JSON string
+ * literal (the player response escapes quotes, newlines, `\u0026`);
+ * null when absent, blank, or not valid JSON.
+ */
+function firstJsonStringMatch(html: string, re: RegExp): string | null {
+  const m = html.match(re);
+  if (m == null) {
+    return null;
+  }
+  try {
+    return nonEmpty(JSON.parse(`"${m[1]}"`) as string);
+  } catch {
+    return null;
+  }
+}
+
+/** Body of a JSON string literal, escapes included. */
+const JSON_STRING_BODY = '((?:[^"\\\\]|\\\\.)*)';
+
+/**
+ * Site-wide titles a degraded watch page can carry in place of the
+ * video's own ("YouTube", "- YouTube"). Treated as absent.
+ */
+function isPlaceholderTitle(title: string): boolean {
+  return /^(?:-\s*)?YouTube$/i.test(title.trim());
+}
+
+function realTitle(title: string | null | undefined): string | null {
+  const t = nonEmpty(title);
+  return t != null && !isPlaceholderTitle(t) ? t : null;
 }
 
 /**
@@ -109,9 +148,13 @@ function extractHandleFromAuthorUrl(authorUrl: string | null | undefined): strin
 /**
  * Strategy 1: scrape the YouTube watch page directly. Returns null
  * when the watch page is unavailable (429, 5xx, network blip, etc.)
- * so the orchestrator can fall back to TranscriptAPI. Throws on
- * structural parse failures (page reachable but missing channel id
- * or title) — those are not retryable through the fallback either.
+ * or degraded (reachable but missing channel id, title, or channel
+ * name) so the orchestrator falls back to TranscriptAPI rather than
+ * persisting a blank title or a placeholder channel name.
+ *
+ * oEmbed covers title and channel name for most videos, but returns
+ * 401 when the uploader disabled embedding; then the page itself is
+ * the only source, and a degraded page has neither.
  */
 async function fetchViaWatchPage(videoId: string): Promise<VideoSnapshot | null> {
   const watchUrl = `https://www.youtube.com/watch?v=${videoId}`;
@@ -130,27 +173,45 @@ async function fetchViaWatchPage(videoId: string): Promise<VideoSnapshot | null>
     firstMatch(html, /<meta itemprop="identifier" content="(UC[\w-]{20,})"/) ??
     firstMatch(html, /"channelId":"(UC[\w-]{20,})"/);
   if (channelId == null) {
-    throw new Error('Could not extract channel id from watch page');
+    console.warn(`[videoSnapshot] watch page for ${videoId} has no channel id`);
+    return null;
   }
 
-  // ── Title — prefer oEmbed (always present for public videos) ──
+  // ── Title — prefer oEmbed (present unless embedding is disabled),
+  // then the player response's `videoDetails` for this exact video,
+  // then meta tags. No loose `"title":` match: the page JSON has many
+  // unrelated titles (menus, related videos, chapters).
   const title =
-    oembed?.title ??
-    firstMatch(html, /<meta name="title" content="([^"]*)"/) ??
-    firstMatch(html, /<meta property="og:title" content="([^"]*)"/) ??
-    firstMatch(html, /"title":"([^"]+)"/);
+    realTitle(oembed?.title) ??
+    realTitle(
+      firstJsonStringMatch(
+        html,
+        new RegExp(`"videoDetails":\\{"videoId":"${videoId}","title":"${JSON_STRING_BODY}"`)
+      )
+    ) ??
+    realTitle(firstMatch(html, /<meta name="title" content="([^"]*)"/)) ??
+    realTitle(firstMatch(html, /<meta property="og:title" content="([^"]*)"/));
   if (title == null) {
-    throw new Error('Could not extract video title');
+    console.warn(`[videoSnapshot] watch page for ${videoId} has no title`);
+    return null;
   }
 
-  // ── Description — scrape; oEmbed doesn't include it ──
+  // ── Channel name — prefer oEmbed; scrape the player response ──
+  const channelName = nonEmpty(oembed?.author_name) ?? firstMatch(html, /"author":"([^"]+)"/);
+  if (channelName == null) {
+    console.warn(`[videoSnapshot] watch page for ${videoId} has no channel name`);
+    return null;
+  }
+
+  // ── Description — the player response's `shortDescription` (the
+  // full text; meta tags truncate it). Meta tags aren't consulted: a
+  // degraded page has no player response and puts YouTube's site-wide
+  // description, localized per region, in them instead.
   const description =
-    firstMatch(html, /<meta name="description" content="([^"]*)"/) ??
-    firstMatch(html, /<meta property="og:description" content="([^"]*)"/) ??
-    '';
+    firstJsonStringMatch(html, new RegExp(`"shortDescription":"${JSON_STRING_BODY}"`)) ?? '';
 
   const thumbnailUrl =
-    oembed?.thumbnail_url ??
+    nonEmpty(oembed?.thumbnail_url) ??
     firstMatch(html, /<meta property="og:image" content="([^"]+)"/) ??
     buildThumbnailUrl(videoId);
 
@@ -173,11 +234,9 @@ async function fetchViaWatchPage(videoId: string): Promise<VideoSnapshot | null>
   const durationIso = firstMatch(html, /<meta itemprop="duration" content="([^"]+)"/);
   const durationSeconds = parseIsoDurationSeconds(durationIso);
 
-  // ── Channel metadata — prefer oEmbed for name; scrape for handle ──
-  const channelName =
-    oembed?.author_name ?? firstMatch(html, /"author":"([^"]+)"/) ?? UNKNOWN_CHANNEL_NAME;
-
-  const channelPageUrl = oembed?.author_url ?? firstMatch(html, /"ownerProfileUrl":"([^"]+)"/);
+  // ── Channel handle — prefer oEmbed; scrape the owner profile URL ──
+  const channelPageUrl =
+    nonEmpty(oembed?.author_url) ?? firstMatch(html, /"ownerProfileUrl":"([^"]+)"/);
   const handle = extractHandleFromAuthorUrl(channelPageUrl);
 
   return {
@@ -273,7 +332,7 @@ async function fetchViaTranscriptApi(
     durationSeconds: null,
     channel: {
       sourceId: channelId,
-      name: metadata.author_name ?? UNKNOWN_CHANNEL_NAME,
+      name: nonEmpty(metadata.author_name) ?? UNKNOWN_CHANNEL_NAME,
       handle: extractHandleFromAuthorUrl(metadata.author_url),
       logoUrl: null,
     },

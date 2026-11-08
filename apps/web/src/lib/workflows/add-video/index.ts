@@ -91,9 +91,16 @@ export async function addVideoForUser(args: {
         source_id: snapshot.channel.sourceId,
       },
     },
-    select: { id: true },
+    select: { id: true, name: true },
   });
   const hasHandle = !isEmptyString(snapshot.channel.handle);
+  // Heal a channel row stored with the placeholder name by an earlier
+  // degraded fetch. Real names are left alone; renames are the
+  // refresh-channels cron's job.
+  const healsPlaceholderName =
+    existingChannel?.name === platform.placeholderChannelName &&
+    !isEmptyString(snapshot.channel.name) &&
+    snapshot.channel.name !== platform.placeholderChannelName;
 
   let channelId: string;
   if (existingChannel != null) {
@@ -106,6 +113,7 @@ export async function addVideoForUser(args: {
     await prisma.channel.update({
       where: { id: existingChannel.id },
       data: {
+        ...(healsPlaceholderName ? { name: snapshot.channel.name } : {}),
         ...(snapshot.channel.logoUrl != null ? { logo_url: snapshot.channel.logoUrl } : {}),
         ...(hasHandle && !conflictOnHandle ? { handle: snapshot.channel.handle } : {}),
       },

@@ -6,7 +6,10 @@ import {
   VideoPlatform,
   type VideoSnapshotResult,
 } from '@/lib/platforms/base';
-import { fetchBilibiliChannelSnapshot } from '@/lib/platforms/bilibili/channelSnapshot';
+import {
+  BILIBILI_UNKNOWN_CHANNEL_NAME,
+  fetchBilibiliChannelSnapshot,
+} from '@/lib/platforms/bilibili/channelSnapshot';
 import { fetchBilibiliTranscript } from '@/lib/platforms/bilibili/transcript';
 import {
   BVID_PATTERN,
@@ -19,6 +22,7 @@ import { parseUrlLoose } from '@/lib/urls/parseLoose';
 
 export class BilibiliPlatform extends VideoPlatform {
   readonly type = VideoPlatformType.BILIBILI;
+  readonly placeholderChannelName = BILIBILI_UNKNOWN_CHANNEL_NAME;
 
   matchesUrl(input: string): boolean {
     if (input == null || typeof input !== 'string') {

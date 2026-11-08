@@ -45,6 +45,13 @@ export interface ChannelSnapshotHints {
 export abstract class VideoPlatform {
   abstract readonly type: VideoPlatformType;
 
+  /**
+   * Name stored on a Channel row when a fetch couldn't find the real
+   * one. Lets platform-generic code recognize (and heal) placeholder
+   * rows without knowing each platform's fallback wording.
+   */
+  abstract readonly placeholderChannelName: string;
+
   /** True if this platform recognizes the URL / bare-id input. */
   abstract matchesUrl(input: string): boolean;
 
