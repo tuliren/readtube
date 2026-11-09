@@ -1,4 +1,9 @@
 import { FULL_WEBSITE_URL } from '@/constants';
+import {
+  UNKNOWN_CHANNEL_NAME,
+  UNKNOWN_VIDEO_TITLE,
+  YOUTUBE_GENERIC_DESCRIPTION,
+} from '@/lib/platforms/youtube/constants';
 import { serializeJsonLd } from '@/lib/seo/jsonLd';
 import { ORGANIZATION_ID } from '@/lib/seo/organization';
 import {
@@ -221,12 +226,13 @@ describe('buildVideoJsonLd', () => {
     { desc: 'a blank title', video: { ...video, title: '  ' } },
     { desc: 'no upload date', video: { ...video, publishedAt: null } },
     { desc: 'no thumbnail', video: { ...video, thumbnailUrl: null } },
-  ])('omits the VideoObject for $desc and points the Article at the watch URL', ({ video: v }) => {
+    { desc: 'the placeholder title', video: { ...video, title: UNKNOWN_VIDEO_TITLE } },
+  ])('omits the VideoObject for $desc and bases the Article on the watch URL', ({ video: v }) => {
     const { '@graph': graph } = buildVideoJsonLd({ pageUrl, video: v, content });
     expect(graph.map((n) => n['@type'])).not.toContain('VideoObject');
     const article = nodeOf(graph, 'Article');
     expect(article.isBasedOn).toBe('https://youtube.com/watch?v=VIDEO_ID');
-    expect(article.about).toBe('https://youtube.com/watch?v=VIDEO_ID');
+    expect(article).not.toHaveProperty('about');
   });
 
   it.each<{ desc: string; video: VideoJsonLdVideo; expected: { name: string; item: string }[] }>([
@@ -239,11 +245,11 @@ describe('buildVideoJsonLd', () => {
       ],
     },
     {
-      desc: 'a blank title drops the page crumb',
-      video: { ...video, title: '' },
+      desc: 'the placeholder channel name drops the channel crumb',
+      video: { ...video, channelName: UNKNOWN_CHANNEL_NAME },
       expected: [
         { name: 'ReadTube', item: FULL_WEBSITE_URL },
-        { name: video.channelName, item: 'https://www.youtube.com/channel/CHANNEL_ID' },
+        { name: video.title, item: pageUrl },
       ],
     },
     {
@@ -262,13 +268,22 @@ describe('buildVideoJsonLd', () => {
     );
   });
 
-  it('omits the BreadcrumbList and channel credit when only the home crumb is left', () => {
+  it('omits the BreadcrumbList without a title, since the trail must end at the page', () => {
     const { '@graph': graph } = buildVideoJsonLd({
       pageUrl,
-      video: { ...video, title: '', channelName: ' ' },
+      video: { ...video, title: '' },
       content,
     });
     expect(graph.map((n) => n['@type'])).toEqual(['Article', 'Organization']);
+  });
+
+  it("skips YouTube's generic description in the fallback", () => {
+    const { '@graph': graph } = buildVideoJsonLd({
+      pageUrl,
+      video: { ...video, description: YOUTUBE_GENERIC_DESCRIPTION },
+      content: null,
+    });
+    expect(nodeOf(graph, 'VideoObject')).not.toHaveProperty('description');
   });
 
   it('drops the channel credit from the VideoObject when the channel name is blank', () => {
