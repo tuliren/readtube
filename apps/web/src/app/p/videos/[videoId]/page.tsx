@@ -16,6 +16,7 @@ import { buildVideoJsonLd } from '@/lib/seo/videoJsonLd';
 import { publicVideoMarkdownPath, publicVideoPath } from '@/lib/urls/publicVideoHref';
 import { loadPublicContentMeta } from '@/lib/videos/loadPublicContentMeta';
 import { loadPublicVideoWithTranscript } from '@/lib/videos/loadPublicVideo';
+import { publicChannelName, publicVideoTitle } from '@/lib/videos/publicFields';
 import { resolveVideoSourceId } from '@/lib/videos/resolveVideoSourceId';
 
 interface Props {
@@ -71,7 +72,14 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   // `article` OpenGraph type emits article:published_time and
   // article:modified_time from the rendered content's generated_at.
   const canonical = publicVideoPath(stub.source_id);
-  const title = capTitle(loaded.video.title);
+  // A blank or placeholder title (a degraded scrape) would publish an
+  // empty or "Unknown video" title, so name the channel instead.
+  const { video } = loaded;
+  const channelName = publicChannelName(video.platform, video.channelName);
+  const title = capTitle(
+    publicVideoTitle(video.title) ??
+      (channelName != null ? `A video from ${channelName}` : 'Video summary')
+  );
   const description = contentMeta.description ?? DESCRIPTION;
   const social = pageSocialMetadata({ path: canonical, title, description });
   return {
