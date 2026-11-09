@@ -94,6 +94,7 @@ describe('buildVideoJsonLd', () => {
   const pageUrl = `${FULL_WEBSITE_URL}/p/videos/VIDEO_ID`;
   const video: VideoJsonLdVideo = {
     title: 'Example video title',
+    description: "The video's own\n\ndescription.",
     sourceId: 'VIDEO_ID',
     platform: 'YOUTUBE',
     publishedAt: '2025-12-01T00:00:00.000Z',
@@ -153,6 +154,7 @@ describe('buildVideoJsonLd', () => {
       '@type': 'VideoObject',
       '@id': `${pageUrl}#video`,
       name: video.title,
+      description: content.description,
       thumbnailUrl: video.thumbnailUrl,
       uploadDate: video.publishedAt,
       duration: 'PT12M34S',
@@ -192,11 +194,11 @@ describe('buildVideoJsonLd', () => {
       absentVideoKeys: [],
     },
     {
-      desc: 'missing video metadata drops upload date, duration, and thumbnail',
-      video: { ...video, publishedAt: null, durationSeconds: null, thumbnailUrl: null },
-      content,
-      absentArticleKeys: ['image'],
-      absentVideoKeys: ['uploadDate', 'duration', 'thumbnailUrl'],
+      desc: 'missing optional video metadata drops duration and description',
+      video: { ...video, durationSeconds: null, description: '  ' },
+      content: null,
+      absentArticleKeys: [],
+      absentVideoKeys: ['duration', 'description'],
     },
   ])('$desc', ({ video: v, content: c, absentArticleKeys, absentVideoKeys }) => {
     const { '@graph': graph } = buildVideoJsonLd({ pageUrl, video: v, content: c });
@@ -208,6 +210,76 @@ describe('buildVideoJsonLd', () => {
     for (const key of absentVideoKeys) {
       expect(videoObject).not.toHaveProperty(key);
     }
+  });
+
+  it('falls back to the video description, on one line, without a summary', () => {
+    const { '@graph': graph } = buildVideoJsonLd({ pageUrl, video, content: null });
+    expect(nodeOf(graph, 'VideoObject').description).toBe("The video's own description.");
+  });
+
+  it.each<{ desc: string; video: VideoJsonLdVideo }>([
+    { desc: 'a blank title', video: { ...video, title: '  ' } },
+    { desc: 'no upload date', video: { ...video, publishedAt: null } },
+    { desc: 'no thumbnail', video: { ...video, thumbnailUrl: null } },
+  ])('omits the VideoObject for $desc and points the Article at the watch URL', ({ video: v }) => {
+    const { '@graph': graph } = buildVideoJsonLd({ pageUrl, video: v, content });
+    expect(graph.map((n) => n['@type'])).not.toContain('VideoObject');
+    const article = nodeOf(graph, 'Article');
+    expect(article.isBasedOn).toBe('https://youtube.com/watch?v=VIDEO_ID');
+    expect(article.about).toBe('https://youtube.com/watch?v=VIDEO_ID');
+  });
+
+  it.each<{ desc: string; video: VideoJsonLdVideo; expected: { name: string; item: string }[] }>([
+    {
+      desc: 'a blank channel name drops the channel crumb',
+      video: { ...video, channelName: '' },
+      expected: [
+        { name: 'ReadTube', item: FULL_WEBSITE_URL },
+        { name: video.title, item: pageUrl },
+      ],
+    },
+    {
+      desc: 'a blank title drops the page crumb',
+      video: { ...video, title: '' },
+      expected: [
+        { name: 'ReadTube', item: FULL_WEBSITE_URL },
+        { name: video.channelName, item: 'https://www.youtube.com/channel/CHANNEL_ID' },
+      ],
+    },
+    {
+      desc: 'names are trimmed',
+      video: { ...video, title: ' Example video title ', channelName: ' Example Channel ' },
+      expected: [
+        { name: 'ReadTube', item: FULL_WEBSITE_URL },
+        { name: video.channelName, item: 'https://www.youtube.com/channel/CHANNEL_ID' },
+        { name: video.title, item: pageUrl },
+      ],
+    },
+  ])('$desc', ({ video: v, expected }) => {
+    const { '@graph': graph } = buildVideoJsonLd({ pageUrl, video: v, content });
+    expect(nodeOf(graph, 'BreadcrumbList').itemListElement).toEqual(
+      expected.map((c, i) => ({ '@type': 'ListItem', position: i + 1, ...c }))
+    );
+  });
+
+  it('omits the BreadcrumbList and channel credit when only the home crumb is left', () => {
+    const { '@graph': graph } = buildVideoJsonLd({
+      pageUrl,
+      video: { ...video, title: '', channelName: ' ' },
+      content,
+    });
+    expect(graph.map((n) => n['@type'])).toEqual(['Article', 'Organization']);
+  });
+
+  it('drops the channel credit from the VideoObject when the channel name is blank', () => {
+    const { '@graph': graph } = buildVideoJsonLd({
+      pageUrl,
+      video: { ...video, channelName: '' },
+      content,
+    });
+    const videoObject = nodeOf(graph, 'VideoObject');
+    expect(videoObject).not.toHaveProperty('author');
+    expect(videoObject).not.toHaveProperty('creator');
   });
 
   it.each<{ platform: VideoJsonLdVideo['platform']; embedUrl: string; channelUrl: string }>([
