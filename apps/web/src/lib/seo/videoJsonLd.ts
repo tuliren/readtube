@@ -2,13 +2,20 @@ import { FULL_WEBSITE_URL, TITLE } from '@/constants';
 import { markdownToPlainText } from '@/lib/markdown/plainText';
 import { parseMarkdownDocument } from '@/lib/markdownFrontmatter';
 import { ORGANIZATION_ID, organizationJsonLd } from '@/lib/seo/organization';
+import { isEmptyString, toOneLine } from '@/lib/string';
 import type { VideoData } from '@/lib/types';
 import { buildChannelLink, buildEmbedUrl, buildWatchLink } from '@/lib/urls/watchUrl';
+import {
+  publicChannelName,
+  publicVideoDescription,
+  publicVideoTitle,
+} from '@/lib/videos/publicFields';
 
 /** The video fields the public page's JSON-LD reads. */
 export type VideoJsonLdVideo = Pick<
   VideoData,
   | 'title'
+  | 'description'
   | 'sourceId'
   | 'platform'
   | 'publishedAt'
@@ -76,10 +83,7 @@ export function toPlainDescription(markdown: string | null | undefined): string 
   if (markdown == null) {
     return null;
   }
-  const text = markdownToPlainText(parseMarkdownDocument(markdown).content)
-    .replace(/\s+/g, ' ')
-    .trim();
-  return text.length > 0 ? text : null;
+  return toOneLine(markdownToPlainText(parseMarkdownDocument(markdown).content));
 }
 
 /**
@@ -114,63 +118,81 @@ function compact<T extends Record<string, unknown>>(obj: T): Partial<T> {
  *   - `Article`: the AI-generated reading version. Its author and
  *     publisher are the ReadTube Organization, not a person, since no
  *     human wrote the text. It is based on, and about, the source video.
- *   - `VideoObject`: the source video, credited to its channel.
+ *   - `VideoObject`: the source video, credited to its channel. Google
+ *     rejects a VideoObject without `name`, `thumbnailUrl`, or
+ *     `uploadDate`, so the node is left out when the video lacks any of
+ *     them (a degraded scrape, say); the Article's `isBasedOn` then
+ *     names the watch URL and `about` is dropped. Its `description` is
+ *     the summary paragraph, falling back to the video's own
+ *     description. Titles, channel names, and descriptions go through
+ *     `lib/videos/publicFields`, so blanks and scrape placeholders count
+ *     as missing.
  *   - `BreadcrumbList`: Home → channel → this page. The channel has no
  *     public page on ReadTube, so its crumb points at the platform's
- *     channel page.
+ *     channel page. Google requires a name on every crumb: without a
+ *     channel name the channel crumb is dropped, and without a title the
+ *     list is left out, since the trail must end at this page.
  *   - `Organization`: repeated here so the Article's `@id` references
  *     resolve within the page.
  */
 export function buildVideoJsonLd({ pageUrl, video, content }: VideoJsonLdInput) {
   const videoId = `${pageUrl}#video`;
+  const title = publicVideoTitle(video.title);
+  const thumbnailUrl = isEmptyString(video.thumbnailUrl) ? null : video.thumbnailUrl.trim();
+  const channelName = publicChannelName(video.platform, video.channelName);
   const channelUrl = buildChannelLink(video.platform, video.channelSourceId).url;
-  const channel = {
-    '@type': 'Organization',
-    name: video.channelName,
-    url: channelUrl,
-  };
+  const watchUrl = buildWatchLink(video.platform, video.sourceId).url;
+  const channel =
+    channelName != null ? { '@type': 'Organization', name: channelName, url: channelUrl } : null;
 
-  const videoObject = compact({
-    '@type': 'VideoObject',
-    '@id': videoId,
-    name: video.title,
-    thumbnailUrl: video.thumbnailUrl,
-    uploadDate: video.publishedAt,
-    duration: toIsoDuration(video.durationSeconds),
-    embedUrl: buildEmbedUrl(video.platform, video.sourceId),
-    url: buildWatchLink(video.platform, video.sourceId).url,
-    author: channel,
-    creator: channel,
-  });
+  const videoObject =
+    title != null && thumbnailUrl != null && video.publishedAt != null
+      ? compact({
+          '@type': 'VideoObject',
+          '@id': videoId,
+          name: title,
+          description: content?.description ?? publicVideoDescription(video.description),
+          thumbnailUrl,
+          uploadDate: video.publishedAt,
+          duration: toIsoDuration(video.durationSeconds),
+          embedUrl: buildEmbedUrl(video.platform, video.sourceId),
+          url: watchUrl,
+          author: channel,
+          creator: channel,
+        })
+      : null;
 
   const article = compact({
     '@type': 'Article',
     '@id': `${pageUrl}#article`,
-    headline: video.title,
+    headline: title,
     description: content?.description,
     url: pageUrl,
     mainEntityOfPage: pageUrl,
-    image: video.thumbnailUrl,
+    image: thumbnailUrl,
     inLanguage: content?.language,
     datePublished: content?.datePublished,
     dateModified: content?.dateModified,
     author: { '@id': ORGANIZATION_ID },
     publisher: { '@id': ORGANIZATION_ID },
-    isBasedOn: { '@id': videoId },
-    about: { '@id': videoId },
+    isBasedOn: videoObject != null ? { '@id': videoId } : watchUrl,
+    about: videoObject != null ? { '@id': videoId } : null,
   });
 
-  const breadcrumbs = {
-    '@type': 'BreadcrumbList',
-    itemListElement: [
-      { '@type': 'ListItem', position: 1, name: TITLE, item: FULL_WEBSITE_URL },
-      { '@type': 'ListItem', position: 2, name: video.channelName, item: channelUrl },
-      { '@type': 'ListItem', position: 3, name: video.title, item: pageUrl },
-    ],
-  };
+  const breadcrumbs =
+    title != null
+      ? {
+          '@type': 'BreadcrumbList',
+          itemListElement: [
+            { name: TITLE, item: FULL_WEBSITE_URL },
+            ...(channelName != null ? [{ name: channelName, item: channelUrl }] : []),
+            { name: title, item: pageUrl },
+          ].map((c, i) => ({ '@type': 'ListItem', position: i + 1, ...c })),
+        }
+      : null;
 
   return {
     '@context': 'https://schema.org',
-    '@graph': [article, videoObject, breadcrumbs, organizationJsonLd],
+    '@graph': [article, videoObject, breadcrumbs, organizationJsonLd].filter((n) => n != null),
   };
 }
