@@ -26,11 +26,14 @@ export async function POST(req: Request) {
 
   let event: WebhookEvent;
   try {
-    event = wh.verify(payload, {
+    // svix 2 `verify` throws on a bad signature and returns nothing, so the
+    // event is parsed from the payload only after verification succeeds.
+    wh.verify(payload, {
       'svix-id': svixId,
       'svix-timestamp': svixTimestamp,
       'svix-signature': svixSignature,
-    }) as WebhookEvent;
+    });
+    event = JSON.parse(payload) as WebhookEvent;
   } catch (err) {
     console.error('Error verifying webhook:', err);
     return new Response('Invalid webhook signature', { status: 400 });
