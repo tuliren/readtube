@@ -4,6 +4,7 @@ import {
   languageNameForPrompt,
   languageTagsMatch,
   normalizeLanguageTag,
+  stripCaptionKindPrefix,
 } from '@/lib/language/names';
 
 describe('TARGET_LANGUAGES', () => {
@@ -97,6 +98,9 @@ describe('normalizeLanguageTag', () => {
     { label: 'ISO 639-3 Cantonese collapses to Chinese', input: 'yue', expected: 'zh' },
     { label: 'unknown region drops to primary', input: 'zh-XX', expected: 'zh' },
     { label: 'unknown 3-letter passes through', input: 'epo', expected: 'epo' },
+    { label: 'auto-generated English caption kind', input: 'asr-en', expected: 'en' },
+    { label: 'AI caption kind over Simplified Chinese', input: 'ai-zh-Hans', expected: 'zh-hans' },
+    { label: 'underscore caption kind', input: 'ASR_en', expected: 'en' },
   ])('normalizes $label ($input → $expected)', ({ input, expected }) => {
     expect(normalizeLanguageTag(input)).toBe(expected);
   });
@@ -114,6 +118,8 @@ describe('languageTagsMatch', () => {
     { label: 'cmn (no script) matches Simplified', a: 'cmn', b: 'zh-Hans' },
     { label: 'cmn matches Traditional', a: 'cmn', b: 'zh-Hant' },
     { label: 'ISO 639-3 to 2 letter', a: 'eng', b: 'en' },
+    { label: 'auto-generated English caption kind', a: 'asr-en', b: 'en' },
+    { label: 'AI Chinese caption kind matches Simplified', a: 'ai-zh', b: 'zh-Hans' },
   ])('matches $label', ({ a, b }) => {
     expect(languageTagsMatch(a, b)).toBe(true);
     expect(languageTagsMatch(b, a)).toBe(true);
@@ -125,8 +131,24 @@ describe('languageTagsMatch', () => {
     { label: 'unrelated languages', a: 'en', b: 'zh' },
     { label: 'unrelated languages with script', a: 'en', b: 'zh-Hans' },
     { label: 'French vs English', a: 'fr', b: 'en' },
+    { label: 'AI Chinese caption kind vs English', a: 'ai-zh', b: 'en' },
   ])('does not match $label', ({ a, b }) => {
     expect(languageTagsMatch(a, b)).toBe(false);
     expect(languageTagsMatch(b, a)).toBe(false);
+  });
+});
+
+describe('stripCaptionKindPrefix', () => {
+  it.each([
+    { input: 'asr-en', expected: 'en' },
+    { input: 'ai-zh', expected: 'zh' },
+    { input: 'auto-ja', expected: 'ja' },
+    { input: 'ASR_en', expected: 'en' },
+    { input: ' asr-en-US ', expected: 'en-US' },
+    { input: 'en', expected: 'en' },
+    { input: 'zh-Hans', expected: 'zh-Hans' },
+    { input: 'asr', expected: 'asr' },
+  ])('strips $input to $expected', ({ input, expected }) => {
+    expect(stripCaptionKindPrefix(input)).toBe(expected);
   });
 });

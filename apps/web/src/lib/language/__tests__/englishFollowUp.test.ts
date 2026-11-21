@@ -1,6 +1,20 @@
-import { englishFollowUpSlot } from '@/lib/language/englishFollowUp';
+import { englishFollowUpSlot, isEnglish } from '@/lib/language/englishFollowUp';
 
 const EN = { language: 'en', sourceLanguage: null };
+
+describe('isEnglish', () => {
+  it.each([
+    { tag: 'en', expected: true },
+    { tag: 'en-GB', expected: true },
+    { tag: 'eng', expected: true },
+    { tag: 'asr-en', expected: true },
+    { tag: 'ASR_en-US', expected: true },
+    { tag: 'ai-zh', expected: false },
+    { tag: 'zh-Hans', expected: false },
+  ])('classifies $tag as $expected', ({ tag, expected }) => {
+    expect(isEnglish(tag)).toBe(expected);
+  });
+});
 
 describe('englishFollowUpSlot', () => {
   it.each([
@@ -40,6 +54,24 @@ describe('englishFollowUpSlot', () => {
       expected: null,
     },
     { label: 'Original of an undetectable source', target: null, source: null, expected: null },
+    {
+      label: 'Original of an auto-generated English caption source',
+      target: null,
+      source: 'asr-en',
+      expected: null,
+    },
+    {
+      label: 'Original of an AI Chinese caption source',
+      target: null,
+      source: 'ai-zh',
+      expected: EN,
+    },
+    {
+      label: 'Chinese target over an auto-generated English caption source',
+      target: 'zh-Hans',
+      source: 'asr-en',
+      expected: { language: null, sourceLanguage: 'asr-en' },
+    },
   ])('picks the slot for $label', ({ target, source, expected }) => {
     expect(englishFollowUpSlot(target, source)).toEqual(expected);
   });

@@ -135,12 +135,31 @@ const ZH_REGION_TO_SCRIPT: Record<string, 'hans' | 'hant'> = {
 };
 
 /**
+ * A caption-kind prefix on a stored `Transcript.language` (`asr-en` for
+ * YouTube's auto-generated English track, `ai-zh`): the track kind
+ * joined to the real language, which follows it.
+ */
+const CAPTION_KIND_PREFIX = /^(asr|ai|auto)[-_]/i;
+
+/**
+ * Strip a caption-kind prefix (`asr-en` → `en`, `ai-zh` → `zh`) and
+ * surrounding whitespace. A tag without one comes back trimmed but
+ * otherwise as given, so a bare marker like `asr` is left for the
+ * caller to reject.
+ */
+export function stripCaptionKindPrefix(tag: string): string {
+  return tag.trim().replace(CAPTION_KIND_PREFIX, '');
+}
+
+/**
  * Normalize a language tag for cross-source comparison. The picker
  * sends curated BCP-47 codes (`en`, `zh-Hans`, `zh-Hant`), but stored
  * values come from many sources: the YouTube subtitle fetcher uses
  * BCP-47 region/script tags (`zh-Hans`, `zh-CN`, `zh-TW`, `fr-CA`),
- * franc returns ISO 639-3 macrolanguage codes (`cmn`, `eng`), and
- * user-typed values are unconstrained.
+ * franc returns ISO 639-3 macrolanguage codes (`cmn`, `eng`), stored
+ * transcript tags may carry a caption-kind prefix (`asr-en`, stripped
+ * via {@link stripCaptionKindPrefix}), and user-typed values are
+ * unconstrained.
  *
  * Output:
  * - For Chinese: `zh-hans`, `zh-hant`, or `zh` (ambiguous — primary
@@ -150,7 +169,7 @@ const ZH_REGION_TO_SCRIPT: Record<string, 'hans' | 'hant'> = {
  *   subtags are dropped (no `fr-ca` distinction — French is French).
  */
 export function normalizeLanguageTag(code: string): string {
-  const lower = code.toLowerCase();
+  const lower = stripCaptionKindPrefix(code).toLowerCase();
   const parts = lower.split('-');
   const primary = ISO_6393_TO_1[parts[0]] ?? parts[0];
 
