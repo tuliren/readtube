@@ -2,7 +2,7 @@ import type { Article, ArticleStyle, PrismaClient, Summary } from '@readtube/dat
 import { GenerationStatus, Prisma } from '@readtube/database';
 
 import { detectLanguage } from './detect';
-import { languageTagsMatch } from './names';
+import { languageTagsMatch, stripCaptionKindPrefix } from './names';
 
 function isUniqueViolation(err: unknown): boolean {
   return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
@@ -14,6 +14,10 @@ function isUniqueViolation(err: unknown): boolean {
  * transcript text (the most reliable signal — way more text than any
  * single summary or article body) and the result is cached on
  * `Transcript.language` so future requests skip the work.
+ *
+ * A stored caption-kind prefix is stripped (`asr-en` → `en`), so the
+ * result names the language itself: the Original prompt interpolates
+ * it, and an `asr-en` there would read as no language the model knows.
  *
  * Returns null only when even franc can't decide ("und") — the caller
  * should treat that as "we don't know what this is in" and not try
@@ -33,7 +37,7 @@ export async function resolveTranscriptLanguage(
     return null;
   }
   if (cached.language != null) {
-    return cached.language;
+    return stripCaptionKindPrefix(cached.language);
   }
   const transcript = await prisma.transcript.findUnique({
     where: { id: transcriptId },

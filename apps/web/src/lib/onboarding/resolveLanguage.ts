@@ -1,4 +1,5 @@
 import { detectLanguage } from '@/lib/language/detect';
+import { stripCaptionKindPrefix } from '@/lib/language/names';
 
 import { primaryLanguage } from './language';
 
@@ -26,12 +27,6 @@ const DETECTION_CONFUSIONS: Record<string, string> = { sco: 'en' };
  */
 const NON_LANGUAGE_CODES = new Set(['asr', 'ai', 'auto', 'und', 'mul', 'zxx']);
 
-/**
- * A caption-kind prefix on a stored tag (`asr-en`, `ai-zh`): the track
- * kind joined to the real language, which follows it.
- */
-const TRACK_KIND_PREFIX = /^(asr|ai|auto)[-_]/i;
-
 /** BCP-47-shaped: a 2-3 letter primary subtag plus optional subtags. */
 const LANGUAGE_TAG_PATTERN = /^[a-z]{2,3}([-_][a-z0-9]{2,8})*$/i;
 
@@ -42,7 +37,7 @@ const LANGUAGE_TAG_PATTERN = /^[a-z]{2,3}([-_][a-z0-9]{2,8})*$/i;
  * give null, so the caller falls back to text detection.
  */
 export function transcriptTagLanguage(raw: string): string | null {
-  const tag = raw.trim().replace(TRACK_KIND_PREFIX, '');
+  const tag = stripCaptionKindPrefix(raw);
   if (!LANGUAGE_TAG_PATTERN.test(tag)) {
     return null;
   }
