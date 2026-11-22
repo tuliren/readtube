@@ -5986,7 +5986,7 @@ __metadata:
     "@storybook/addon-links": "npm:^10.6.8"
     "@storybook/nextjs": "npm:^10.6.8"
     "@storybook/react": "npm:^10.6.8"
-    "@storybook/test-runner": "npm:^0.26.0"
+    "@storybook/test-runner": "npm:^0.26.1"
     "@swc/core": "npm:^1.16.18"
     "@tailwindcss/postcss": "npm:^4.3.0"
     "@tailwindcss/typography": "npm:^0.5.19"
@@ -6421,9 +6421,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@storybook/test-runner@npm:^0.26.0":
-  version: 0.26.0
-  resolution: "@storybook/test-runner@npm:0.26.0"
+"@storybook/test-runner@npm:^0.26.1":
+  version: 0.26.1
+  resolution: "@storybook/test-runner@npm:0.26.1"
   dependencies:
     "@babel/core": "npm:^7.22.5"
     "@babel/generator": "npm:^7.22.5"
@@ -6447,10 +6447,10 @@ __metadata:
     rimraf: "npm:^3.0.2"
     uuid: "npm:^8.3.2"
   peerDependencies:
-    storybook: ^0.0.0-0 || ^10.0.0 || ^10.0.0-0 || ^10.1.0-0 || ^10.2.0-0 || ^10.3.0-0 || ^10.4.0-0 || ^10.5.0-0 || ^10.6.0-0 || ^11.0.0-0 || >=11
+    storybook: ^0.0.0-0 || ^10.0.0 || ^10.0.0-0 || ^10.1.0-0 || ^10.2.0-0 || ^10.3.0-0 || ^10.4.0-0 || ^10.5.0-0 || ^10.6.0-0
   bin:
     test-storybook: dist/test-storybook.js
-  checksum: 10c0/6e95019eaa28af54b3cb723831077185d89cb218a9a3cb20e9eaaaf264014ad00544b11f0da3439c642bce52e1b7c6373863bb6c632bbaf691dd8b037c5429d1
+  checksum: 10c0/7d2426ff89d06510c9f437f25ef7849aa1f6911ea5f7b5b1f7b5a9f5aca0975951c51270d5d03c4e4ccf2c3af8f25536cb61259fce224a73d5f667e67cf992ff
   languageName: node
   linkType: hard
 

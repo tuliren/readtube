@@ -84,7 +84,7 @@
     "@storybook/addon-links": "^10.6.8",
     "@storybook/nextjs": "^10.6.8",
     "@storybook/react": "^10.6.8",
-    "@storybook/test-runner": "^0.26.0",
+    "@storybook/test-runner": "^0.26.1",
     "@swc/core": "^1.16.18",
     "@tailwindcss/typography": "^0.5.19",
     "@testcontainers/postgresql": "^11.14.0",
