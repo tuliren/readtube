@@ -6020,7 +6020,7 @@ __metadata:
     postcss: "npm:^8.5.23"
     react: "npm:^19.3.1"
     react-dom: "npm:^19.3.1"
-    react-hotkeys-hook: "npm:^5.3.2"
+    react-hotkeys-hook: "npm:^5.4.0"
     react-markdown: "npm:^10.1.0"
     rehype-external-links: "npm:^3.0.0"
     rehype-katex: "npm:^7.0.1"
@@ -19164,13 +19164,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-hotkeys-hook@npm:^5.3.2":
-  version: 5.3.2
-  resolution: "react-hotkeys-hook@npm:5.3.2"
+"react-hotkeys-hook@npm:^5.4.0":
+  version: 5.4.0
+  resolution: "react-hotkeys-hook@npm:5.4.0"
   peerDependencies:
     react: ">=16.8.0"
     react-dom: ">=16.8.0"
-  checksum: 10c0/a1e9edf31dc7c9804153e9ce2b64cdde5e997190b429354d8e561163f692b1cabad911343ef7e192a498160742608c53a7b9c5bb9cfa2ca832c4b482c33d8c83
+  checksum: 10c0/32cb7f8c5107d78e10a6568bb3f0613a725466ebdcbfa6cc3c4dbb9131ffcd1039aa78b76d600d7bdbf65185a0143868ec335117a6307be908ee12c53816737e
   languageName: node
   linkType: hard
 
