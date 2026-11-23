@@ -16,7 +16,7 @@
     "@readtube/eslint-config": "*",
     "@readtube/jest-presets": "*",
     "@readtube/typescript-config": "*",
-    "@turbo/gen": "^2.9.12",
+    "@turbo/gen": "^2.11.13",
     "@types/eslint": "^9.6.1",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.19.2",
