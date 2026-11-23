@@ -5996,7 +5996,7 @@ __metadata:
     "@types/react": "npm:^19.3.0"
     "@types/react-dom": "npm:^19.3.0"
     "@vercel/analytics": "npm:^2.0.1"
-    "@vercel/functions": "npm:^3.8.0"
+    "@vercel/functions": "npm:^3.11.3"
     ai: "npm:^7.0.150"
     class-variance-authority: "npm:^0.7.1"
     clsx: "npm:^2.1.1"
@@ -8272,12 +8272,39 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@vercel/cli-config@npm:0.4.0":
+  version: 0.4.0
+  resolution: "@vercel/cli-config@npm:0.4.0"
+  dependencies:
+    xdg-app-paths: "npm:5.1.0"
+    zod: "npm:^4.6.6"
+  checksum: 10c0/61e6675c01919c1540dd9e93d9d0a81c20b681ee9ed70d7ad096ca5fe3105ffc6ea86e36c48a2d469ddf94aa25016a327a0a79d6d3d7dd46815527b0e324e350
+  languageName: node
+  linkType: hard
+
 "@vercel/cli-exec@npm:1.0.1":
   version: 1.0.1
   resolution: "@vercel/cli-exec@npm:1.0.1"
   dependencies:
     execa: "npm:5.1.1"
   checksum: 10c0/4063e59898e5984249a933ace889b152e392f64640fe4d9f6edb8b9bf4c76d43216f561c3774e30a0fe17248ff2732b44dfed017bd73de79a3a245bb0769f0ea
+  languageName: node
+  linkType: hard
+
+"@vercel/functions@npm:^3.11.3":
+  version: 3.11.3
+  resolution: "@vercel/functions@npm:3.11.3"
+  dependencies:
+    "@vercel/oidc": "npm:4.0.9"
+  peerDependencies:
+    "@aws-sdk/credential-provider-web-identity": "*"
+    ws: ">=8"
+  peerDependenciesMeta:
+    "@aws-sdk/credential-provider-web-identity":
+      optional: true
+    ws:
+      optional: true
+  checksum: 10c0/1d40e05878cbe2ef980d72fa15b735a9901335c257aad45c6875be712c954138b5aeddf8d0b0381944016bbc588f808383bda88885dd7d3cfba187c5b79a66b5
   languageName: node
   linkType: hard
 
@@ -8313,6 +8340,17 @@ __metadata:
     "@vercel/cli-exec": "npm:1.0.1"
     jose: "npm:^5.9.6"
   checksum: 10c0/d99c5c476153f7145278d009cd2762084840c87338762828d285361186b9a05ee56bdf4bb37558c797faa61dad320bbfa78e0e41570f61686084b4e8fbe7127d
+  languageName: node
+  linkType: hard
+
+"@vercel/oidc@npm:4.0.9":
+  version: 4.0.9
+  resolution: "@vercel/oidc@npm:4.0.9"
+  dependencies:
+    "@vercel/cli-config": "npm:0.4.0"
+    "@vercel/cli-exec": "npm:1.0.1"
+    jose: "npm:^5.9.6"
+  checksum: 10c0/23ec03a9d762725a29a07b5cb83c0594a9594016cf2dac2471df38eaafe277e9f88a6cf8dcfc37932aa333a0e8b014c56f8017acf4aecab15ea9b79ec5c99719
   languageName: node
   linkType: hard
 
@@ -23037,7 +23075,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"zod@npm:^4.6.7":
+"zod@npm:^4.6.6, zod@npm:^4.6.7":
   version: 4.6.7
   resolution: "zod@npm:4.6.7"
   checksum: 10c0/4ce2eb14034317b7254e347ca37b5ad591cf8333147030cf05b9b5d31692d45073f7f2747aa50cf8c6b29012194d2b22978cecc89969cf34a0d18e89d0ee7d7b
