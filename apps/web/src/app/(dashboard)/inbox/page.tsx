@@ -1,10 +1,9 @@
-import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@readtube/database';
 import type { Metadata } from 'next';
-import { redirect } from 'next/navigation';
 
 import VideoListView from '@/components/inbox/VideoListView';
 import NewUserOnboarding from '@/components/onboarding/NewUserOnboarding';
+import { requireDashboardUserId } from '@/lib/dashboardUser';
 import { parseInboxQuery } from '@/lib/inbox/filter';
 import { loadInboxVideos, searchParamsToInboxQuery } from '@/lib/inbox/loadVideos';
 import { resolveInboxView } from '@/lib/inbox/views';
@@ -35,12 +34,7 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
 }
 
 export default async function InboxPage({ searchParams }: Props) {
-  const { userId } = await auth();
-  // The (dashboard) layout already redirects unauthenticated users;
-  // this guard narrows `userId` for the DB calls below.
-  if (userId == null) {
-    redirect('/');
-  }
+  const userId = await requireDashboardUserId();
 
   const query = searchParamsToInboxQuery(await searchParams);
 

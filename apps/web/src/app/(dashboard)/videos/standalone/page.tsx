@@ -1,11 +1,10 @@
-import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@readtube/database';
 import type { Metadata } from 'next';
-import { redirect } from 'next/navigation';
 
 import VideoListView from '@/components/inbox/VideoListView';
 import LibraryEmptyState from '@/components/library/LibraryVideoList';
 import NewUserOnboarding from '@/components/onboarding/NewUserOnboarding';
+import { requireDashboardUserId } from '@/lib/dashboardUser';
 import { loadInboxVideos, searchParamsToInboxQuery } from '@/lib/inbox/loadVideos';
 import { loadCachedOnboardingSuggestions } from '@/lib/onboarding/cachedSuggestions';
 import { loadNewUserSuggestions } from '@/lib/onboarding/suggestions';
@@ -23,10 +22,7 @@ interface Props {
  * into the inbox query before `loadInboxVideos` / `/api/videos` see it.
  */
 export default async function VideosStandalonePage({ searchParams }: Props) {
-  const { userId } = await auth();
-  if (userId == null) {
-    redirect('/');
-  }
+  const userId = await requireDashboardUserId();
 
   const baseQuery = searchParamsToInboxQuery(await searchParams);
   const query = { ...baseQuery, library: 'standalone' as const };
