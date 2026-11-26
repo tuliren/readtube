@@ -1,9 +1,9 @@
-import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@readtube/database';
 import type { Metadata } from 'next';
-import { notFound, redirect } from 'next/navigation';
+import { notFound } from 'next/navigation';
 
 import VideoReader from '@/components/reader/VideoReader';
+import { requireDashboardUserId } from '@/lib/dashboardUser';
 import { capTitle } from '@/lib/format/title';
 import { decorateVideo, loadTriageContext } from '@/lib/inbox/triage';
 import type { VideoData } from '@/lib/types';
@@ -41,12 +41,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
  */
 export default async function VideoPage({ params }: Props) {
   const { videoId } = await params;
-  const { userId } = await auth();
-  // Middleware (`proxy.ts`) guarantees an authenticated session by
-  // the time this runs; the null check is purely a type narrow.
-  if (userId == null) {
-    redirect('/');
-  }
+  const userId = await requireDashboardUserId();
 
   const stub = await resolveVideoSourceId(prisma, videoId);
   if (stub == null) {

@@ -1,19 +1,15 @@
-import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@readtube/database';
-import { redirect } from 'next/navigation';
 
 import PreferredLanguageForm from '@/components/settings/PreferredLanguageForm';
 import ThemeForm from '@/components/settings/ThemeForm';
+import { requireDashboardUserId } from '@/lib/dashboardUser';
 
 export const metadata = {
   title: 'Settings — Read Tube',
 };
 
 export default async function SettingsPage() {
-  const { userId } = await auth();
-  if (userId == null) {
-    redirect('/');
-  }
+  const userId = await requireDashboardUserId();
 
   const user = await prisma.user.findUnique({
     where: { source_id: userId },

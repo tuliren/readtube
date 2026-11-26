@@ -1,8 +1,7 @@
-import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@readtube/database';
-import { redirect } from 'next/navigation';
 
 import UsageOverview from '@/components/usage/UsageOverview';
+import { requireDashboardUserId } from '@/lib/dashboardUser';
 import { getGenerationUsage, getLifetimeUsage } from '@/lib/usage/quota';
 
 export const metadata = {
@@ -10,10 +9,7 @@ export const metadata = {
 };
 
 export default async function UsagePage() {
-  const { userId } = await auth();
-  if (userId == null) {
-    redirect('/');
-  }
+  const userId = await requireDashboardUserId();
 
   const [usage, lifetime] = await Promise.all([
     getGenerationUsage(prisma, userId, new Date()),

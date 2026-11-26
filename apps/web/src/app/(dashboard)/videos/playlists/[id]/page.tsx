@@ -1,11 +1,11 @@
-import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@readtube/database';
 import type { Metadata } from 'next';
-import { notFound, redirect } from 'next/navigation';
+import { notFound } from 'next/navigation';
 
 import ExternalLinkActions from '@/components/ExternalLinkActions';
 import RefreshPlaylistButton from '@/components/inbox/RefreshPlaylistButton';
 import VideoListView from '@/components/inbox/VideoListView';
+import { requireDashboardUserId } from '@/lib/dashboardUser';
 import { loadInboxVideos, searchParamsToInboxQuery } from '@/lib/inbox/loadVideos';
 
 interface Props {
@@ -14,10 +14,7 @@ interface Props {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { userId } = await auth();
-  if (userId == null) {
-    return {};
-  }
+  const userId = await requireDashboardUserId();
   const { id } = await params;
   const playlist = await prisma.playlist.findFirst({
     where: { id, user_id: userId },
@@ -41,10 +38,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
  * library branch of `loadInboxVideos`.
  */
 export default async function PlaylistPage({ params, searchParams }: Props) {
-  const { userId } = await auth();
-  if (userId == null) {
-    redirect('/');
-  }
+  const userId = await requireDashboardUserId();
   const { id } = await params;
 
   const playlist = await prisma.playlist.findFirst({

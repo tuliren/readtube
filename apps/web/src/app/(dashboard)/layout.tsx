@@ -1,11 +1,9 @@
-import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@readtube/database';
-import { redirect } from 'next/navigation';
 import { ReactNode } from 'react';
 
 import DashboardShell from '@/components/dashboard/DashboardShell';
 import { toChannelData } from '@/lib/channels/channelData';
-import { ensureUserExists } from '@/lib/db/user';
+import { requireDashboardUserId } from '@/lib/dashboardUser';
 import { getSubscribedChannelsWithUnread } from '@/lib/subscriptions';
 import type { ChannelData, FolderData } from '@/lib/types';
 
@@ -18,16 +16,13 @@ import type { ChannelData, FolderData } from '@/lib/types';
  *
  * Auth is enforced centrally by `proxy.ts`: every route under this
  * group is a protected prefix and goes through `auth.protect()` before
- * this layout runs. The null check below is a second guard (and the
- * TypeScript narrow for the DB calls that follow).
+ * this layout runs. `requireDashboardUserId` is a second guard, and
+ * makes sure the user's row is in place before any user data is read.
+ * Pages render in parallel with this layout, so each page calls it too
+ * (deduped per request) instead of relying on the layout having run.
  */
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
-  const { userId } = await auth();
-  if (userId == null) {
-    redirect('/');
-  }
-
-  await ensureUserExists(userId);
+  const userId = await requireDashboardUserId();
 
   const [subscriptionRows, folderRows] = await Promise.all([
     getSubscribedChannelsWithUnread(prisma, userId),
